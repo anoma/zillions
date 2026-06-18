@@ -30,25 +30,20 @@ function HomeRoute() {
 
   return (
     <div className="p-10">
-      <header>
-        <h1 className="text-2xl font-bold">Zillions</h1>
-      </header>
-      <main>
-        {loading ? (
-          <div className="font-light">Loading...</div>
-        ) : (
-          <>
-            <div>Shielded Balance: {shieldedBalance} ZEC</div>
-            <div>UnshieldedBalance: {unshieldedBalance} ZEC</div>
-            {saplingBalance > 0 && (
-              <div>
-                <div>Sapling balance: {saplingBalance} ZEC</div>
-                <button>Migrate sapling balance to orchard</button>
-              </div>
-            )}
-          </>
-        )}
-      </main>
+      {loading ? (
+        <div className="font-light">Loading...</div>
+      ) : (
+        <>
+          <div>Shielded Balance: {shieldedBalance} ZEC</div>
+          <div>UnshieldedBalance: {unshieldedBalance} ZEC</div>
+          {saplingBalance > 0 && (
+            <div>
+              <div>Sapling balance: {saplingBalance} ZEC</div>
+              <button>Migrate sapling balance to orchard</button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

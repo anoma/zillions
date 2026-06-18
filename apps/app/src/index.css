@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+@theme {
+  --color-surface: #ecebe7;
+  --color-gold: #ceb462;
+}
+
 body {
-  @apply bg-[#ECEBE7];
+  @apply bg-surface;
 }
