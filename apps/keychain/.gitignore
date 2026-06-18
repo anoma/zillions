@@ -1,0 +1,12 @@
+# dependencies
+.env
+/node_modules
+
+# WXT
+.output
+.wxt
+stats.html
+stats-*.json
+
+# WebZjs source clone (cache for `npm run build:webzjs`)
+.webzjs-src

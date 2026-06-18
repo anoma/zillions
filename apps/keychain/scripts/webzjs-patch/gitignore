@@ -1,0 +1,8 @@
+# Build outputs produced by `npm run build:webzjs` (wasm-pack). The runtime
+# artifacts are not committed; run the build to generate them.
+webzjs_keys.js
+webzjs_keys_bg.wasm
+webzjs_keys_bg.wasm.d.ts
+snippets/
+
+# Committed (do NOT ignore): package.json, README.md, webzjs_keys.d.ts

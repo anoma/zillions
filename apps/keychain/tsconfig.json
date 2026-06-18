@@ -1,0 +1,40 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "lib": ["dom", "dom.iterable", "esnext", "webworker"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "noFallthroughCasesInSwitch": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2015",
+    "paths": {
+      "@vitejs/plugin-react": [".types-shims/vitejs-plugin-react.d.ts"],
+      "@zillions/components": ["src/packages/components/src"],
+      "@zillions/components/*": ["src/packages/components/src/*"],
+      "@zillions/crypto": ["src/packages/crypto/src/crypto/crypto"],
+      "@zillions/crypto/*": ["src/packages/crypto/src/*"],
+      "@zillions/storage": ["src/packages/storage/src"],
+      "@zillions/storage/*": ["src/packages/storage/src/*"],
+      "@zillions/types": ["src/packages/types/src"],
+      "@zillions/types/*": ["src/packages/types/src/*"],
+      "@zillions/utils": ["src/packages/utils/src"],
+      "@zillions/utils/*": ["src/packages/utils/src/*"],
+      "@zillions/webzjs-keys": ["src/packages/webzjs-keys/webzjs_keys"],
+      "@zillions/webzjs-keys/*": ["src/packages/webzjs-keys/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "entrypoints/**/*", ".wxt/**/*"],
+  "exclude": ["node_modules", ".output"]
+}

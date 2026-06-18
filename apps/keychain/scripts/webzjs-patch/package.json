@@ -1,0 +1,17 @@
+{
+  "name": "@zillions/webzjs-keys",
+  "version": "0.1.0",
+  "description": "Vendored WebZjs keys WASM built from source with added offline address bindings (get_unified_address / from_seed_phrase). Distinct name from @chainsafe/webzjs-keys so the legacy app's npm dependency is untouched. Run `npm run build:webzjs` in apps/z-extension to (re)generate the .js/.wasm.",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "module": "webzjs_keys.js",
+  "main": "webzjs_keys.js",
+  "types": "webzjs_keys.d.ts",
+  "files": [
+    "webzjs_keys.js",
+    "webzjs_keys.d.ts",
+    "webzjs_keys_bg.wasm"
+  ],
+  "sideEffects": false,
+  "private": true
+}

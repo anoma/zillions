@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zillions Test dApp</title>
+  </head>
+  <body>
+    <main>
+      <h1>Zillions Test dApp</h1>
+      <p class="sub">Minimal harness for debugging the extension's approvals (connect) flow.</p>
+
+      <div class="card">
+        <div class="row" style="justify-content: space-between">
+          <span class="pill"><span id="providerDot" class="dot"></span><span id="providerStatus">Detecting <code>window.zc</code>…</span></span>
+          <span class="pill"><span id="connDot" class="dot"></span><span id="connStatus">unknown</span></span>
+        </div>
+        <div class="row" style="margin-top: 16px">
+          <button id="connectBtn" class="primary" disabled>Connect</button>
+          <button id="disconnectBtn" disabled>Disconnect</button>
+          <button id="refreshBtn" disabled>Refresh accounts</button>
+        </div>
+      </div>
+
+      <div class="card" id="accountsCard" style="display: none">
+        <div class="label">Default account</div>
+        <div id="defaultAccount" class="mono" style="margin-bottom: 16px">—</div>
+        <div class="label">All accounts</div>
+        <div id="accountsList"></div>
+      </div>
+
+      <div class="card" id="signCard" style="display: none">
+        <div class="label">Sign PCZT</div>
+        <p class="hint">
+          Paste a base64 PCZT (postcard bytes from <code>pczt.serialize()</code>).
+          The keychain only signs — it can't build a PCZT, so this expects one
+          produced elsewhere.
+        </p>
+        <textarea id="pcztInput" rows="4" placeholder="base64 PCZT…"></textarea>
+        <div class="row" style="margin-top: 12px">
+          <label class="label" for="signerSelect" style="margin: 0">Signer</label>
+          <select id="signerSelect">
+            <option value="">Active account (default)</option>
+          </select>
+          <button id="signBtn" class="primary">Sign</button>
+        </div>
+        <div id="signedWrap" style="display: none; margin-top: 16px">
+          <div class="row" style="justify-content: space-between; margin-bottom: 4px">
+            <span class="label" style="margin: 0">Signed PCZT</span>
+            <button id="copySignedBtn" style="padding: 4px 10px; font-size: 12px">Copy</button>
+          </div>
+          <textarea id="signedOutput" rows="4" class="mono" readonly></textarea>
+        </div>
+      </div>
+
+      <div class="card" id="signArbCard" style="display: none">
+        <div class="label">Sign message (arbitrary)</div>
+        <p class="hint">
+          Signs with the account's transparent secp256k1 key in the Bitcoin/Zcash
+          "signed message" format (verifiable by <code>zcashd verifymessage</code>).
+        </p>
+        <textarea id="arbInput" rows="2" placeholder="message to sign…">Hello from the Zillions Keychain</textarea>
+        <div class="row" style="margin-top: 12px">
+          <label class="label" for="arbSignerSelect" style="margin: 0">Signer</label>
+          <select id="arbSignerSelect"></select>
+          <button id="signArbBtn" class="primary">Sign message</button>
+        </div>
+        <div id="arbResultWrap" style="display: none; margin-top: 16px">
+          <div class="label">Public key</div>
+          <div id="arbPubkey" class="mono" style="margin-bottom: 8px">—</div>
+          <div class="label">Hash</div>
+          <div id="arbHash" class="mono" style="margin-bottom: 8px">—</div>
+          <div class="label">Signature</div>
+          <div id="arbSig" class="mono" style="margin-bottom: 12px">—</div>
+          <div class="row">
+            <button id="verifyArbBtn">Verify signature</button>
+            <span id="arbVerifyResult" class="mono"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content: space-between; margin-bottom: 8px">
+          <span class="label" style="margin: 0">Debug log</span>
+          <button id="clearLogBtn" style="padding: 4px 10px; font-size: 12px">Clear</button>
+        </div>
+        <pre id="log"></pre>
+      </div>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
