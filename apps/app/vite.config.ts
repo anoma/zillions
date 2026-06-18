@@ -1,4 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import type { Connect } from "vite";
 import { defineConfig, type Plugin } from "vite";
@@ -29,5 +30,13 @@ const crossOriginIsolationPlugin: Plugin = {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [tailwindcss(), react(), crossOriginIsolationPlugin],
+  plugins: [
+    tanstackRouter({
+      target: "react",
+      autoCodeSplitting: true,
+    }),
+    tailwindcss(),
+    react(),
+    crossOriginIsolationPlugin,
+  ],
 });
