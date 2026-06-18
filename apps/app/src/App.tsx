@@ -1,28 +1,27 @@
-import { useEffect, useState } from 'react'
-import './App.css'
-import { initSdk } from './lib/sdk'
-import { zillionsWallet } from './lib/wallet'
+import { useEffect, useState } from "react";
+import { initSdk } from "./lib/sdk";
+import { zillionsWallet } from "./lib/wallet";
 
 function App() {
-  const [loading, setIsLoading] = useState(true)
-  const [shieldedBalance, setShieldedBalance] = useState(0)
-  const [unshieldedBalance, setUnshieldedBalance] = useState(0)
-  const [saplingBalance, setSaplingBalance] = useState(0)
+  const [loading, setIsLoading] = useState(true);
+  const [shieldedBalance, setShieldedBalance] = useState(0);
+  const [unshieldedBalance, setUnshieldedBalance] = useState(0);
+  const [saplingBalance, setSaplingBalance] = useState(0);
 
   useEffect(() => {
-    ;(async () => {
-      await initSdk()
+    (async () => {
+      await initSdk();
 
-      await zillionsWallet.sync()
+      await zillionsWallet.sync();
 
-      const balances = await zillionsWallet.getBalances()
-      setShieldedBalance(balances.orchardBalance)
-      setUnshieldedBalance(balances.unshieldedBalance)
-      setSaplingBalance(balances.saplingBalance)
+      const balances = await zillionsWallet.getBalances();
+      setShieldedBalance(balances.orchardBalance);
+      setUnshieldedBalance(balances.unshieldedBalance);
+      setSaplingBalance(balances.saplingBalance);
 
-      setIsLoading(false)
-    })()
-  }, [])
+      setIsLoading(false);
+    })();
+  }, []);
 
   return (
     <div className="p-10">
@@ -46,7 +45,7 @@ function App() {
         )}
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
