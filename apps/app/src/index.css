@@ -6,6 +6,17 @@
 
   --color-surface: #ecebe7;
   --color-gold: #ceb462;
+
+  @keyframes loading {
+    from {
+      transform: rotate(0turn);
+    }
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  --animate-loading-spinner: loading 1s ease infinite;
 }
 
 body {
