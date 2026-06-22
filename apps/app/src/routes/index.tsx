@@ -7,8 +7,8 @@ export const Route = createFileRoute("/")({
 
 function HomeRoute() {
   return (
-    <div className="p-10">
+    <>
       <TotalBalance />
-    </div>
+    </>
   );
 }

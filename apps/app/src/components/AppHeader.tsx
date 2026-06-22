@@ -13,14 +13,14 @@ function AccountProfile() {
   return (
     <div className="relative group/tooltip">
       <div className="flex items-center gap-2 p-2">
-        <span className="text-sm">{account.keychain.alias}</span>
+        <span className="text-sm">{account.alias}</span>
       </div>
       <Tooltip position="left" className="z-20">
         <CopyToClipboardControl
-          value={account.keychain.address}
+          value={account.address}
           className="py-2 font-mono"
         >
-          {shortenAddress(account.keychain.address)}
+          {shortenAddress(account.address)}
         </CopyToClipboardControl>
       </Tooltip>
     </div>
@@ -41,7 +41,7 @@ function SwitchAccountButton() {
           {accounts.data
             ?.filter((a) => !a.parentId)
             .map((a) => {
-              const isSelected = a.alias === account.keychain.alias;
+              const isSelected = a.alias === account.alias;
               return (
                 <button
                   key={a.id}
@@ -50,7 +50,7 @@ function SwitchAccountButton() {
                     isSelected && "font-semibold pointer-events-none",
                   )}
                   onClick={() =>
-                    keychain().updateDefaultAccount(account.keychain.address)
+                    keychain().updateDefaultAccount(account.address)
                   }
                 >
                   <div

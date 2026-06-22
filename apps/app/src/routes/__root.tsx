@@ -3,6 +3,7 @@ import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { AppLayout } from "../components/AppLayout";
 import { AppLoader } from "../components/AppLoader";
 import { KeychainWall } from "../components/KeychainWall";
+import { WalletProvider } from "../components/WalletProvider";
 
 export const Route = createRootRoute({ component: RootLayout });
 
@@ -13,9 +14,11 @@ function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <AppLoader>
         <KeychainWall>
-          <AppLayout>
-            <Outlet />
-          </AppLayout>
+          <WalletProvider>
+            <AppLayout>
+              <Outlet />
+            </AppLayout>
+          </WalletProvider>
         </KeychainWall>
       </AppLoader>
     </QueryClientProvider>

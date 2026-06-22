@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
+import { AccountContext } from "../context/account";
 import { useKeychainAccounts } from "../hooks/useKeychainAccounts";
 import { useKeychainDefaultAccount } from "../hooks/useKeychainDefaultAccount";
 import {
@@ -8,7 +9,6 @@ import {
   KeychainEvent,
 } from "../lib/keychain/keychain";
 import { keychainUrl } from "../lib/urls";
-import { AccountProvider } from "./AccountProvider";
 import { ActionButton } from "./ActionButton";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -75,9 +75,9 @@ function Account({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AccountProvider keychainAccount={keychainAccount}>
+    <AccountContext.Provider value={keychainAccount}>
       {children}
-    </AccountProvider>
+    </AccountContext.Provider>
   );
 }
 

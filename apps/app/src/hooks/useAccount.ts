@@ -1,8 +1,9 @@
 import { useContext } from "react";
-import { AccountContext, type Account } from "../context/account";
+import { AccountContext } from "../context/account";
 import { invariant } from "../lib/invariant";
+import type { KeychainAccount } from "../lib/keychain/keychain";
 
-export function useAccount(): Account {
+export function useAccount(): KeychainAccount {
   const account = useContext(AccountContext);
   invariant(account, "account is not defined");
   return account;
