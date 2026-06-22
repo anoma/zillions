@@ -1,9 +1,11 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
+import { useKeychainAccounts } from "../hooks/useKeychainAccounts";
+import { useKeychainDefaultAccount } from "../hooks/useKeychainDefaultAccount";
 import {
   isKeychainAvailable,
   keychain,
   KeychainEvent,
-  type KeychainAccount,
 } from "../lib/keychain/keychain";
 import { keychainUrl } from "../lib/urls";
 import { AccountProvider } from "./AccountProvider";
@@ -22,31 +24,18 @@ function Content({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function Account({ children }: { children: ReactNode }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [keychainAccount, setKeychainAccount] = useState<KeychainAccount>();
+  const queryClient = useQueryClient();
+  const accounts = useKeychainAccounts();
+  const defaultAccount = useKeychainDefaultAccount();
 
   useEffect(() => {
     const onAccountChanged = async () => {
-      try {
-        const accounts = await keychain().accounts();
-        const selected = await keychain().defaultAccount();
-        if (selected) {
-          const shielded = accounts?.find((a) => a.parentId === selected.id);
-          setKeychainAccount(shielded);
-        } else {
-          setKeychainAccount(undefined);
-        }
-      } catch (error) {
-        setError(String(error));
-      } finally {
-        setLoading(false);
-      }
+      queryClient.invalidateQueries({ queryKey: ["useKeychainAccounts"] });
+      queryClient.invalidateQueries({
+        queryKey: ["useKeychainDefaultAccount"],
+      });
     };
-
     window.addEventListener(KeychainEvent.AccountChanged, onAccountChanged);
-    onAccountChanged();
-
     return () => {
       window.removeEventListener(
         KeychainEvent.AccountChanged,
@@ -55,18 +44,32 @@ function Account({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  if (loading) {
+  if (accounts.isPending || defaultAccount.isPending) {
     return <PageLoader />;
   }
 
-  if (error) {
-    return <PageError>{error}</PageError>;
+  if (accounts.error || defaultAccount.error) {
+    return (
+      <PageError>{String(accounts.error || defaultAccount.error)}</PageError>
+    );
   }
 
-  if (!keychainAccount) {
+  if (!accounts.data.length) {
     return (
       <Content title="Create account">
         Open the keychain and create a new account.
+      </Content>
+    );
+  }
+
+  const keychainAccount = accounts.data?.find(
+    (a) => a.parentId === defaultAccount.data?.id,
+  );
+
+  if (!keychainAccount) {
+    return (
+      <Content title="Select account">
+        Open the keychain and select one account.
       </Content>
     );
   }

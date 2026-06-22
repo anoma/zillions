@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useAccount } from "../hooks/useAccount";
+import { useKeychainAccounts } from "../hooks/useKeychainAccounts";
 import { ArrowsLeftRight } from "../icons/ArrowsLeftRight";
 import { ExitIcon } from "../icons/ExitIcon";
-import { keychain, type KeychainAccount } from "../lib/keychain/keychain";
+import { keychain } from "../lib/keychain/keychain";
 import { shortenAddress } from "../lib/utils";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
 import { Tooltip } from "./Tooltip";
@@ -29,47 +29,40 @@ function AccountProfile() {
 
 function SwitchAccountButton() {
   const account = useAccount();
-  const [accounts, setAccounts] = useState<readonly KeychainAccount[]>([]);
-
-  useEffect(() => {
-    (async () => {
-      setAccounts(
-        (await keychain().accounts())?.filter((a) => !a.parentId) ?? [],
-      );
-    })();
-  }, []);
+  const accounts = useKeychainAccounts();
 
   return (
     <div className="relative group/tooltip">
-      <button
-        className="p-2 hover:text-gold transition-all cursor-pointer"
-        onClick={() => keychain().disconnect()}
-      >
+      <button className="p-2 hover:text-gold transition-all cursor-pointer">
         <ArrowsLeftRight className="w-4 h-4" />
       </button>
       <Tooltip position="bottom" className="z-20">
         <div className="my-2 w-20">
-          {accounts.map((a) => {
-            const isSelected = a.alias === account.keychain.alias;
-            return (
-              <button
-                key={a.id}
-                className={twMerge(
-                  "p-2 -mx-2 flex items-center gap-1.5 text-left hover:font-semibold transition-all cursor-pointer",
-                  isSelected && "font-semibold pointer-events-none",
-                )}
-                onClick={() => keychain().updateDefaultAccount(a.address)}
-              >
-                <div
+          {accounts.data
+            ?.filter((a) => !a.parentId)
+            .map((a) => {
+              const isSelected = a.alias === account.keychain.alias;
+              return (
+                <button
+                  key={a.id}
                   className={twMerge(
-                    "w-3 h-3 rounded-full",
-                    isSelected ? "bg-gold" : "border border-gray-500",
+                    "p-2 -mx-2 flex items-center gap-1.5 text-left hover:font-semibold transition-all cursor-pointer",
+                    isSelected && "font-semibold pointer-events-none",
                   )}
-                />
-                {a.alias}
-              </button>
-            );
-          })}
+                  onClick={() =>
+                    keychain().updateDefaultAccount(account.keychain.address)
+                  }
+                >
+                  <div
+                    className={twMerge(
+                      "w-3 h-3 rounded-full",
+                      isSelected ? "bg-gold" : "border border-gray-500",
+                    )}
+                  />
+                  {a.alias}
+                </button>
+              );
+            })}
         </div>
       </Tooltip>
     </div>
