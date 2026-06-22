@@ -3,9 +3,9 @@ import { twMerge } from "tailwind-merge";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { HouseIcon } from "../icons/HouseIcon";
-import { LogoIcon } from "../icons/LogoIcon";
 import { RotateCcwIcon } from "../icons/RotateCcwIcon";
 import { XIcon } from "../icons/XLogo";
+import { ZillionsIcon } from "../icons/ZillionsIcon";
 import { helpUrl, privacyPolicyUrl, xUrl } from "../lib/urls";
 import { SmartLink } from "./SmartLink";
 
@@ -17,7 +17,7 @@ export function MainNav() {
       <nav>
         <div className="h-20 flex items-center">
           <SmartLink href="/" className="hover:text-gold transition-all">
-            <LogoIcon className="h-11" />
+            <ZillionsIcon className="h-11" />
           </SmartLink>
         </div>
         <ul className="mt-8">

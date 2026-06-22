@@ -1,6 +1,6 @@
-import type { SVGProps } from "react";
+import type { ComponentProps } from "react";
 
-export function RotateCcwIcon(props: SVGProps<SVGSVGElement>) {
+export function RotateCcwIcon(props: ComponentProps<"svg">) {
   return (
     <svg
       viewBox="0 0 20 20"

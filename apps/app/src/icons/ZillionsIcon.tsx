@@ -1,6 +1,6 @@
-import type { SVGProps } from "react";
+import type { ComponentProps } from "react";
 
-export function LogoIcon(props: SVGProps<SVGSVGElement>) {
+export function ZillionsIcon(props: ComponentProps<"svg">) {
   return (
     <svg viewBox="0 0 72 39" fill="currentColor" {...props}>
       <path d="M10.8898 30.7824L51.6694 0H0V0.428795H37.0287C41.7551 0.428795 44.1225 4.74261 40.7804 7.26537L0 38.0478H51.6694V37.619H14.6407C9.91431 37.619 7.54691 33.3052 10.889 30.7824H10.8898Z" />

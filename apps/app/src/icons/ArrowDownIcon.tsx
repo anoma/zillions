@@ -1,6 +1,6 @@
-import type { SVGProps } from "react";
+import type { ComponentProps } from "react";
 
-export function ArrowDownIcon(props: SVGProps<SVGSVGElement>) {
+export function ArrowDownIcon(props: ComponentProps<"svg">) {
   return (
     <svg
       viewBox="0 0 20 20"

@@ -1,6 +1,6 @@
-import type { SVGProps } from "react";
+import type { ComponentProps } from "react";
 
-export function XIcon(props: SVGProps<SVGSVGElement>) {
+export function XIcon(props: ComponentProps<"svg">) {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" {...props}>
       <path d="M11.8064 8.51939L18.8739 0.335938H17.1991L11.0624 7.44151L6.161 0.335938H0.507812L7.91969 11.0808L0.507812 19.6624H2.18269L8.66325 12.1587L13.8395 19.6624H19.4927L11.806 8.51939H11.8064ZM9.51241 11.1755L8.76143 10.1055L2.78617 1.59185H5.35868L10.1808 8.46267L10.9318 9.53262L17.1999 18.4636H14.6274L9.51241 11.1759V11.1755Z" />
