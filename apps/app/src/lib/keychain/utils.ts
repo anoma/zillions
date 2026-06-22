@@ -1,3 +1,5 @@
+// Resolves with the value once document is ready, or undefined if the key is still absent.
+// Needed because extensions inject into window after document load.
 export function waitForWindowProp<K extends keyof Window>(
   key: K,
 ): Promise<Window[K] | undefined> {

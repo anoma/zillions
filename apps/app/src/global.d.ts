@@ -1,10 +1,7 @@
-export type ZillionsKeychain = {
-  isConnected: () => Promise<boolean>;
-  connect: () => Promise<void>;
-};
+import type { Keychain } from "./lib/keychain/keychain";
 
 declare global {
   interface Window {
-    zc?: ZillionsKeychain;
+    zc?: Keychain;
   }
 }

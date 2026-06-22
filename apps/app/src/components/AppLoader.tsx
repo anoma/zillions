@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { waitForKeychainInjection } from "../lib/keychain/keychain";
 import { initSdk } from "../lib/sdk";
-import { waitForWindowProp } from "../lib/window";
 import { PageLoader } from "./PageLoader";
 
 // Initializes third-party libs and waits for window injections before rendering the app.
@@ -10,10 +10,7 @@ export function AppLoader({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      await Promise.all([
-        initSdk(),
-        waitForWindowProp("zc"), // keychain injection
-      ]);
+      await Promise.all([initSdk(), waitForKeychainInjection()]);
       setLoading(false);
     })();
   }, []);

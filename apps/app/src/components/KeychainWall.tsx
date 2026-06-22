@@ -1,7 +1,14 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { keychain, KeychainEvent } from "../lib/keychain";
+import {
+  isKeychainAvailable,
+  keychain,
+  KeychainEvent,
+  type KeychainAccount,
+} from "../lib/keychain/keychain";
 import { keychainUrl } from "../lib/urls";
+import { AccountProvider } from "./AccountProvider";
 import { ActionButton } from "./ActionButton";
+import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { SmartLink } from "./SmartLink";
 
@@ -14,21 +21,84 @@ function Content({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+function Account({ children }: { children: ReactNode }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [keychainAccount, setKeychainAccount] = useState<KeychainAccount>();
+
+  useEffect(() => {
+    const onAccountChanged = async () => {
+      try {
+        const accounts = await keychain().accounts();
+        const selected = await keychain().defaultAccount();
+        if (selected) {
+          const shielded = accounts?.find((a) => a.parentId === selected.id);
+          setKeychainAccount(shielded);
+        } else {
+          setKeychainAccount(undefined);
+        }
+      } catch (error) {
+        setError(String(error));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    window.addEventListener(KeychainEvent.AccountChanged, onAccountChanged);
+    onAccountChanged();
+
+    return () => {
+      window.removeEventListener(
+        KeychainEvent.AccountChanged,
+        onAccountChanged,
+      );
+    };
+  }, []);
+
+  if (loading) {
+    return <PageLoader />;
+  }
+
+  if (error) {
+    return <PageError>{error}</PageError>;
+  }
+
+  if (!keychainAccount) {
+    return (
+      <Content title="Create account">
+        Open the keychain and create a new account.
+      </Content>
+    );
+  }
+
+  return (
+    <AccountProvider keychainAccount={keychainAccount}>
+      {children}
+    </AccountProvider>
+  );
+}
+
 function Connect({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState("");
+  const [isConnected, setIsConnected] = useState<boolean | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     (async () => {
-      setIsConnected(await keychain().isConnected());
-      setLoading(false);
+      try {
+        setIsConnected(await keychain().isConnected());
+      } catch (error) {
+        setError(String(error));
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
   useEffect(() => {
-    const onRevoke = () => {
-      setIsConnected(false);
-    };
+    const onRevoke = () => setIsConnected(false);
     window.addEventListener(KeychainEvent.ConnectionRevoked, onRevoke);
     return () => {
       window.removeEventListener(KeychainEvent.ConnectionRevoked, onRevoke);
@@ -37,6 +107,10 @@ function Connect({ children }: { children: ReactNode }) {
 
   if (loading) {
     return <PageLoader />;
+  }
+
+  if (error) {
+    return <PageError>{error}</PageError>;
   }
 
   if (!isConnected) {
@@ -58,7 +132,7 @@ function Connect({ children }: { children: ReactNode }) {
 }
 
 function Download({ children }: { children: ReactNode }) {
-  if (!window.zc) {
+  if (!isKeychainAvailable()) {
     return (
       <Content title="Keychain not installed">
         <SmartLink href={keychainUrl}>
@@ -74,7 +148,9 @@ function Download({ children }: { children: ReactNode }) {
 export function KeychainWall({ children }: { children: ReactNode }) {
   return (
     <Download>
-      <Connect>{children}</Connect>
+      <Connect>
+        <Account>{children}</Account>
+      </Connect>
     </Download>
   );
 }
