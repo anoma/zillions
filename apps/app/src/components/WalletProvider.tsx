@@ -14,9 +14,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      invariant(account.viewingKey, "viewingKey is not available");
+      // flush stale wallet state before switching accounts
+      setWallet(undefined);
+      setError("");
 
       try {
+        invariant(account.viewingKey, "viewingKey is not available");
         const instance = await SdkWallet.build({
           id: account.id,
           ufvk: account.viewingKey,
@@ -28,7 +31,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         setError(String(error));
       }
     })();
-  }, []);
+  }, [account]);
 
   if (error) {
     return <PageError>{error}</PageError>;

@@ -49,9 +49,7 @@ function SwitchAccountButton() {
                     "p-2 -mx-2 flex items-center gap-1.5 text-left hover:font-semibold transition-all cursor-pointer",
                     isSelected && "font-semibold pointer-events-none",
                   )}
-                  onClick={() =>
-                    keychain().updateDefaultAccount(account.address)
-                  }
+                  onClick={() => keychain().updateDefaultAccount(a.address)}
                 >
                   <div
                     className={twMerge(
