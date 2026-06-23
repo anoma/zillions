@@ -25,7 +25,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           ufvk: account.viewingKey,
           birthday: 3337500, // TODO explore the best way to get the birthday
         });
-        instance.sync();
         setWallet(instance);
       } catch (error) {
         setError(String(error));

@@ -18,7 +18,7 @@ export function Tooltip({
         "flex bg-surface text-xs absolute opacity-0 pointer-events-none",
         "text-black px-4 py-1",
         "border border-gray-600",
-        "transition-all duration-500 ease-out-expo",
+        "transition-all",
         "group-hover/tooltip:visible group-hover/tooltip:opacity-100",
         "group-hover/tooltip:pointer-events-auto",
         "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",

@@ -38,7 +38,7 @@ export function MainNav() {
               >
                 <item.icon
                   className={twMerge(
-                    "w-5 h-5 transition-all",
+                    "size-5 transition-all",
                     item.href === pathname && "text-gold",
                   )}
                 />
@@ -76,7 +76,7 @@ export function MainNav() {
             href={xUrl}
             className="inline-flex hover:text-gold transition-all"
           >
-            <XIcon className="h-5 w-5" />
+            <XIcon className="size-5" />
           </SmartLink>
         </div>
       </footer>

@@ -6,16 +6,17 @@ import { ExitIcon } from "../icons/ExitIcon";
 import { keychain } from "../lib/keychain/keychain";
 import { shortenAddress } from "../lib/utils";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
+import { SyncIndicator } from "./SyncIndicator";
 import { Tooltip } from "./Tooltip";
 
 function AccountProfile() {
   const account = useAccount();
   return (
     <div className="relative group/tooltip">
-      <div className="flex items-center gap-2 p-2">
+      <div className="h-10 flex items-center gap-2 p-2">
         <span className="text-sm">{account.alias}</span>
       </div>
-      <Tooltip position="left" className="z-20">
+      <Tooltip position="bottom" className="z-20">
         <CopyToClipboardControl
           value={account.address}
           className="py-2 font-mono"
@@ -33,8 +34,8 @@ function SwitchAccountButton() {
 
   return (
     <div className="relative group/tooltip">
-      <button className="p-2 hover:text-gold transition-all cursor-pointer">
-        <ArrowsLeftRight className="w-4 h-4" />
+      <button className="h-10 p-2 hover:text-gold transition-all">
+        <ArrowsLeftRight className="size-4" />
       </button>
       <Tooltip position="bottom" className="z-20">
         <div className="my-2 w-20">
@@ -46,14 +47,14 @@ function SwitchAccountButton() {
                 <button
                   key={a.id}
                   className={twMerge(
-                    "p-2 -mx-2 flex items-center gap-1.5 text-left hover:font-semibold transition-all cursor-pointer",
+                    "p-2 -mx-2 flex items-center gap-2 text-left hover:font-semibold transition-all cursor-pointer",
                     isSelected && "font-semibold pointer-events-none",
                   )}
                   onClick={() => keychain().updateDefaultAccount(a.address)}
                 >
                   <div
                     className={twMerge(
-                      "w-3 h-3 rounded-full",
+                      "size-2",
                       isSelected ? "bg-gold" : "border border-gray-500",
                     )}
                   />
@@ -70,10 +71,10 @@ function SwitchAccountButton() {
 function DisconnectButton() {
   return (
     <button
-      className="-mr-2 p-2 hover:text-gold transition-all cursor-pointer"
+      className="h-10 -mr-2 p-2 hover:text-gold transition-all cursor-pointer"
       onClick={() => keychain().disconnect()}
     >
-      <ExitIcon className="w-4 h-4" />
+      <ExitIcon className="size-4" />
     </button>
   );
 }
@@ -81,6 +82,7 @@ function DisconnectButton() {
 export function AppHeader() {
   return (
     <header className="h-full flex items-center justify-end border-b border-gray-300 bg-surface px-6">
+      <SyncIndicator />
       <AccountProfile />
       <SwitchAccountButton />
       <DisconnectButton />
