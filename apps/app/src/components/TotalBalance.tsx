@@ -5,7 +5,7 @@ import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 
 function Label({ children }: { children: ReactNode }) {
-  return <div className="text-sm mb-1 lg:mb-6">{children}</div>;
+  return <div className="text-sm mb-1 xl:mb-6">{children}</div>;
 }
 
 function Amount({
@@ -17,7 +17,7 @@ function Amount({
 }) {
   return (
     <div
-      className={twMerge("whitespace-nowrap text-2xl lg:text-4xl", className)}
+      className={twMerge("whitespace-nowrap text-2xl xl:text-4xl", className)}
     >
       <span>{children}</span>
       <span className="text-[0.5em]"> ZEC</span>
@@ -44,7 +44,7 @@ export function TotalBalance() {
     <div className="p-10 flex max-lg:flex-col lg:items-center justify-between gap-6 lg:gap-10 font-medium border-b border-gray-300 overflow-auto">
       <div>
         <Label>Total Balance in Zillions</Label>
-        <Amount className="text-6xl lg:text-8xl">
+        <Amount className="text-6xl xl:text-8xl">
           {(shieldedBalance + transparentBalance).toLocaleString()}
         </Amount>
       </div>

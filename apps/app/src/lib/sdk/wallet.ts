@@ -1,8 +1,26 @@
-import { WebWallet } from "@chainsafe/webzjs-wallet";
+import {
+  TransactionHistoryEntry,
+  TransactionHistoryResponse,
+  WalletSummary,
+  WebWallet,
+} from "@chainsafe/webzjs-wallet";
 import { db } from "../db";
 import { dedupe } from "../utils";
 
 type Network = "main" | "test";
+
+type SummaryAccountBalances = Array<
+  [
+    number, // account id
+    {
+      sapling_balance: number;
+      orchard_balance: number;
+      unshielded_balance: number;
+      pending_change: number;
+      pending_spendable: number;
+    },
+  ]
+>;
 
 const defaultNetwork: Network = "main";
 const minConfirmationsTrusted = 10;
@@ -51,7 +69,7 @@ export class SdkWallet {
     this.updateWalletCache();
   });
 
-  updateWalletCache = dedupe(async () => {
+  private updateWalletCache = dedupe(async () => {
     try {
       const bytes = await this.wallet.db_to_bytes();
       await db.set("wallets", this.id, bytes);
@@ -61,27 +79,52 @@ export class SdkWallet {
   });
 
   async getBalance() {
-    const summary = await this.wallet.get_wallet_summary();
-    const totalBalance = {
-      orchardBalance: 0,
-      pendingChange: 0,
-      pendingSpendable: 0,
-      saplingBalance: 0,
-      unshieldedBalance: 0,
-    };
-    if (!summary) {
-      console.error("Wallet summary is undefined");
+    let summary: WalletSummary | undefined;
+    try {
+      summary = await this.wallet.get_wallet_summary();
+      const totalBalance = {
+        orchardBalance: 0,
+        pendingChange: 0,
+        pendingSpendable: 0,
+        saplingBalance: 0,
+        unshieldedBalance: 0,
+      };
+      (summary?.account_balances as SummaryAccountBalances).forEach(
+        ([, balance]) => {
+          totalBalance.orchardBalance += balance.orchard_balance;
+          totalBalance.pendingChange += balance.pending_change;
+          totalBalance.pendingSpendable += balance.pending_spendable;
+          totalBalance.saplingBalance += balance.sapling_balance;
+          totalBalance.unshieldedBalance += balance.unshielded_balance;
+        },
+      );
       return totalBalance;
+    } finally {
+      summary?.free();
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    summary.account_balances.forEach(([, balance]: any) => {
-      totalBalance.orchardBalance += balance.orchard_balance;
-      totalBalance.pendingChange += balance.pending_change;
-      totalBalance.pendingSpendable += balance.pending_spendable;
-      totalBalance.saplingBalance += balance.sapling_balance;
-      totalBalance.unshieldedBalance += balance.unshielded_balance;
-    });
-    summary.free();
-    return totalBalance;
+  }
+
+  // TODO implement pagination
+  async getTransactionHistory() {
+    let summary: WalletSummary | undefined;
+    let histories: TransactionHistoryResponse[] = [];
+    try {
+      summary = await this.wallet.get_wallet_summary();
+      histories = await Promise.all(
+        (summary?.account_balances as SummaryAccountBalances).map(([id]) =>
+          this.wallet.get_transaction_history(id),
+        ),
+      );
+      return histories.flatMap(
+        (r) => r.transactions as TransactionHistoryEntry[],
+      );
+    } finally {
+      summary?.free();
+      histories.forEach((r) => r.free());
+    }
+  }
+
+  free() {
+    this.wallet.free();
   }
 }

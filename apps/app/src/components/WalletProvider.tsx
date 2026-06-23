@@ -15,6 +15,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     (async () => {
       // flush stale wallet state before switching accounts
+      wallet?.free();
       setWallet(undefined);
       setError("");
 
