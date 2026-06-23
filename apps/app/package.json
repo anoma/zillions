@@ -11,7 +11,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@chainsafe/webzjs-wallet": "./packages/chainsafe-webzjs-wallet-0.1.0.tgz",
+    "@chainsafe/webzjs-wallet": "file:packages/chainsafe-webzjs-wallet-0.1.0.tgz",
     "@fontsource-variable/montserrat": "^5.2.8",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-router": "^1.170.16",
