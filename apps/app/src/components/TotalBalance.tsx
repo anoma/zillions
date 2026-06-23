@@ -4,15 +4,21 @@ import { useGetBalance } from "../hooks/useGetBalance";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 
+function Label({ children }: { children: ReactNode }) {
+  return <div className="text-sm mb-1 lg:mb-6">{children}</div>;
+}
+
 function Amount({
   className,
   children,
 }: {
-  className: string;
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <div className={twMerge(className)}>
+    <div
+      className={twMerge("whitespace-nowrap text-2xl lg:text-4xl", className)}
+    >
       <span>{children}</span>
       <span className="text-[0.5em]"> ZEC</span>
     </div>
@@ -35,24 +41,20 @@ export function TotalBalance() {
     balance.data.orchardBalance + balance.data.saplingBalance;
 
   return (
-    <div className="p-10 flex items-center justify-between font-medium border-b border-gray-300">
+    <div className="p-10 flex max-lg:flex-col lg:items-center justify-between gap-6 lg:gap-10 font-medium border-b border-gray-300 overflow-auto">
       <div>
-        <div className="text-sm">Total Balance in Zillions</div>
-        <Amount className="text-7xl mt-6">
+        <Label>Total Balance in Zillions</Label>
+        <Amount className="text-6xl lg:text-8xl">
           {(shieldedBalance + transparentBalance).toLocaleString()}
         </Amount>
       </div>
       <div>
-        <div className="text-sm">Shielded balance</div>
-        <Amount className="text-4xl mt-6">
-          {shieldedBalance.toLocaleString()}
-        </Amount>
+        <Label>Shielded balance</Label>
+        <Amount>{shieldedBalance.toLocaleString()}</Amount>
       </div>
-      <div className="mr-25">
-        <div className="text-sm">Transparent balance</div>
-        <Amount className="text-4xl mt-6">
-          {transparentBalance.toLocaleString()}
-        </Amount>
+      <div className="mr-15">
+        <Label>Total Transparent balance</Label>
+        <Amount>{transparentBalance.toLocaleString()}</Amount>
       </div>
     </div>
   );

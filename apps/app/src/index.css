@@ -31,5 +31,5 @@
 }
 
 body {
-  @apply bg-surface min-h-svh;
+  @apply bg-surface;
 }
