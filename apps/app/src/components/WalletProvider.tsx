@@ -17,7 +17,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     const safeSetWallet = (value: SdkWallet | undefined) => {
       setWallet((prev) => {
-        prev?.free();
+        try {
+          prev?.free();
+        } catch {
+          // prev may already be freed if this updater ran twice; ignore the double-free error
+        }
         return value;
       });
     };
