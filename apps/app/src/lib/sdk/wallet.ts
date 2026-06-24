@@ -1,5 +1,4 @@
 import {
-  TransactionHistoryEntry,
   TransactionHistoryResponse,
   WalletSummary,
   WebWallet,
@@ -22,13 +21,27 @@ type SummaryAccountBalances = Array<
   ]
 >;
 
+type Transaction = {
+  txid: string;
+  tx_type: "Received" | "Sent" | "Shielded";
+  value: bigint;
+  fee: bigint;
+  block_height: number;
+  confirmations: number;
+  status: "Confirmed" | "Pending" | "Expired";
+  memo: string | undefined;
+  timestamp: number;
+  pool: "orchard" | "sapling";
+};
+
 const defaultNetwork: Network = "main";
 const minConfirmationsTrusted = 10;
 const minConfirmationsUntrusted = 10;
 
 export class SdkWallet {
   public id: string;
-  private wallet: WebWallet;
+  // TODO make it private
+  public wallet: WebWallet;
 
   static async build({
     id,
@@ -83,19 +96,19 @@ export class SdkWallet {
     try {
       summary = await this.wallet.get_wallet_summary();
       const totalBalance = {
-        orchardBalance: 0,
-        pendingChange: 0,
-        pendingSpendable: 0,
-        saplingBalance: 0,
-        unshieldedBalance: 0,
+        orchardBalance: 0n,
+        pendingChange: 0n,
+        pendingSpendable: 0n,
+        saplingBalance: 0n,
+        unshieldedBalance: 0n,
       };
       (summary?.account_balances as SummaryAccountBalances).forEach(
         ([, balance]) => {
-          totalBalance.orchardBalance += balance.orchard_balance;
-          totalBalance.pendingChange += balance.pending_change;
-          totalBalance.pendingSpendable += balance.pending_spendable;
-          totalBalance.saplingBalance += balance.sapling_balance;
-          totalBalance.unshieldedBalance += balance.unshielded_balance;
+          totalBalance.orchardBalance += BigInt(balance.orchard_balance);
+          totalBalance.pendingChange += BigInt(balance.pending_change);
+          totalBalance.pendingSpendable += BigInt(balance.pending_spendable);
+          totalBalance.saplingBalance += BigInt(balance.sapling_balance);
+          totalBalance.unshieldedBalance += BigInt(balance.unshielded_balance);
         },
       );
       return totalBalance;
@@ -115,9 +128,16 @@ export class SdkWallet {
           this.wallet.get_transaction_history(id),
         ),
       );
-      return histories.flatMap(
-        (r) => r.transactions as TransactionHistoryEntry[],
-      );
+      return histories
+        .flatMap((r) => r.transactions)
+        .map(
+          (t) =>
+            ({
+              ...t,
+              value: BigInt(t.value),
+              fee: BigInt(t.fee ?? 0),
+            }) as Transaction,
+        );
     } finally {
       summary?.free();
       histories.forEach((r) => r.free());

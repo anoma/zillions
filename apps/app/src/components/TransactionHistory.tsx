@@ -1,8 +1,8 @@
-import { TransactionType } from "@chainsafe/webzjs-wallet";
 import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
+import { zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 
@@ -40,15 +40,17 @@ export function TransactionHistory() {
             <tr key={item.txid} className="mb-10">
               <td>
                 <div className="flex items-center gap-2">
-                  {item.tx_type === TransactionType.Sent ? (
+                  {item.tx_type === "Sent" ? (
                     <ArrowUpIcon className="size-4" />
-                  ) : (
+                  ) : item.tx_type === "Received" ? (
                     <ArrowDownIcon className="size-4" />
+                  ) : (
+                    <div />
                   )}
                   {item.tx_type}
                 </div>
               </td>
-              <td>{item.value.toLocaleString()} ZEC</td>
+              <td>{zatoshiToZec(item.value)} ZEC</td>
               <td>{item.status}</td>
               <td>
                 {item.timestamp &&

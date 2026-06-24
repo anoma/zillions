@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { useGetBalance } from "../hooks/useGetBalance";
+import { zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 
@@ -45,16 +46,16 @@ export function TotalBalance() {
       <div>
         <Label>Total Balance in Zillions</Label>
         <Amount className="text-6xl xl:text-8xl">
-          {(shieldedBalance + transparentBalance).toLocaleString()}
+          {zatoshiToZec(shieldedBalance + transparentBalance)}
         </Amount>
       </div>
       <div>
         <Label>Shielded balance</Label>
-        <Amount>{shieldedBalance.toLocaleString()}</Amount>
+        <Amount>{zatoshiToZec(shieldedBalance)}</Amount>
       </div>
       <div className="mr-15">
         <Label>Total Transparent balance</Label>
-        <Amount>{transparentBalance.toLocaleString()}</Amount>
+        <Amount>{zatoshiToZec(transparentBalance)}</Amount>
       </div>
     </div>
   );
