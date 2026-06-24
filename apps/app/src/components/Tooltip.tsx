@@ -16,8 +16,8 @@ export function Tooltip({
     <span
       className={twMerge(
         "flex bg-surface text-xs absolute opacity-0 pointer-events-none",
-        "text-black px-4 py-1",
-        "border border-gray-600",
+        "text-black",
+        "border border-gray-300 rounded-2xl",
         "transition-all",
         "group-hover/tooltip:visible group-hover/tooltip:opacity-100",
         "group-hover/tooltip:pointer-events-auto",

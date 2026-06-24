@@ -16,10 +16,10 @@ function AccountProfile() {
       <div className="h-10 flex items-center gap-2 p-2">
         <span className="text-sm">{account.alias}</span>
       </div>
-      <Tooltip position="bottom" className="z-20">
+      <Tooltip position="bottom">
         <CopyToClipboardControl
           value={account.address}
-          className="py-2 font-mono"
+          className="px-4 py-2 font-medium"
         >
           {shortenAddress(account.address)}
         </CopyToClipboardControl>
@@ -37,8 +37,8 @@ function SwitchAccountButton() {
       <button className="h-10 p-2 hover:text-gold transition-all">
         <ArrowsLeftRight className="size-4" />
       </button>
-      <Tooltip position="bottom" className="z-20">
-        <div className="my-2 w-20">
+      <Tooltip position="bottom">
+        <div className="py-2 max-w-30 overflow-clip">
           {accounts.data
             ?.filter((a) => !a.parentId)
             .map((a) => {
@@ -47,17 +47,11 @@ function SwitchAccountButton() {
                 <button
                   key={a.id}
                   className={twMerge(
-                    "p-2 -mx-2 flex items-center gap-2 text-left hover:font-semibold transition-all cursor-pointer",
+                    "px-4 py-2 flex items-center gap-2 text-left hover:font-semibold transition-all cursor-pointer",
                     isSelected && "font-semibold pointer-events-none",
                   )}
                   onClick={() => keychain().updateDefaultAccount(a.address)}
                 >
-                  <div
-                    className={twMerge(
-                      "size-2",
-                      isSelected ? "bg-gold" : "border border-gray-500",
-                    )}
-                  />
                   {a.alias}
                 </button>
               );
