@@ -13,12 +13,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    (async () => {
-      // flush stale wallet state before switching accounts
-      wallet?.free();
-      setWallet(undefined);
-      setError("");
+    let cancelled = false;
 
+    const safeSetWallet = (value: SdkWallet | undefined) => {
+      setWallet((prev) => {
+        prev?.free();
+        return value;
+      });
+    };
+
+    (async () => {
       try {
         invariant(account.viewingKey, "viewingKey is not available");
         const instance = await SdkWallet.build({
@@ -26,11 +30,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           ufvk: account.viewingKey,
           birthday: 3337500, // TODO explore the best way to get the birthday
         });
-        setWallet(instance);
-      } catch (error) {
-        setError(String(error));
+        if (cancelled) {
+          instance.free();
+        } else {
+          safeSetWallet(instance);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(String(err));
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+      safeSetWallet(undefined);
+      setError("");
+    };
   }, [account]);
 
   if (error) {

@@ -1,6 +1,6 @@
 import { twMerge } from "tailwind-merge";
 import { useAccount } from "../hooks/useAccount";
-import { useKeychainAccounts } from "../hooks/useKeychainAccounts";
+import { useGetKeychainAccounts } from "../hooks/useGetKeychainAccounts";
 import { ArrowsLeftRight } from "../icons/ArrowsLeftRight";
 import { ExitIcon } from "../icons/ExitIcon";
 import { keychain } from "../lib/keychain/keychain";
@@ -30,7 +30,7 @@ function AccountProfile() {
 
 function SwitchAccountButton() {
   const account = useAccount();
-  const accounts = useKeychainAccounts();
+  const accounts = useGetKeychainAccounts();
 
   return (
     <div className="relative group/tooltip">

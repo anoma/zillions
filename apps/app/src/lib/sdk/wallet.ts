@@ -27,7 +27,7 @@ const minConfirmationsTrusted = 10;
 const minConfirmationsUntrusted = 10;
 
 export class SdkWallet {
-  private id: string;
+  public id: string;
   private wallet: WebWallet;
 
   static async build({

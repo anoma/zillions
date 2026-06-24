@@ -15,8 +15,19 @@ export default defineConfig([
       tseslint.configs.recommended,
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
-      pluginQuery.configs.recommendedStrict,
+      pluginQuery.configs["flat/recommended-strict"],
     ],
+    rules: {
+      "@tanstack/query/exhaustive-deps": [
+        "error",
+        {
+          allowlist: {
+            variables: ["wallet"],
+            types: ["SdkWallet"],
+          },
+        },
+      ],
+    },
     languageOptions: {
       globals: globals.browser,
     },

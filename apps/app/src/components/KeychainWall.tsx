@@ -1,8 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { AccountContext } from "../context/account";
-import { useKeychainAccounts } from "../hooks/useKeychainAccounts";
-import { useKeychainDefaultAccount } from "../hooks/useKeychainDefaultAccount";
+import {
+  getKeychainAccounts,
+  useGetKeychainAccounts,
+} from "../hooks/useGetKeychainAccounts";
+import {
+  getKeychainDefaultAccount,
+  useGetKeychainDefaultAccount,
+} from "../hooks/useGetKeychainDefaultAccount";
 import {
   isKeychainAvailable,
   keychain,
@@ -25,14 +31,16 @@ function Content({ title, children }: { title: string; children: ReactNode }) {
 
 function Account({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const accounts = useKeychainAccounts();
-  const defaultAccount = useKeychainDefaultAccount();
+  const accounts = useGetKeychainAccounts();
+  const defaultAccount = useGetKeychainDefaultAccount();
 
   useEffect(() => {
     const onAccountChanged = async () => {
-      queryClient.invalidateQueries({ queryKey: ["useKeychainAccounts"] });
       queryClient.invalidateQueries({
-        queryKey: ["useKeychainDefaultAccount"],
+        queryKey: getKeychainAccounts().queryKey,
+      });
+      queryClient.invalidateQueries({
+        queryKey: getKeychainDefaultAccount().queryKey,
       });
     };
     window.addEventListener(KeychainEvent.AccountChanged, onAccountChanged);
@@ -42,7 +50,7 @@ function Account({ children }: { children: ReactNode }) {
         onAccountChanged,
       );
     };
-  }, []);
+  }, [queryClient]);
 
   if (accounts.isPending || defaultAccount.isPending) {
     return <PageLoader />;

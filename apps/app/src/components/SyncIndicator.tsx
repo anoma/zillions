@@ -1,26 +1,27 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useWallet } from "../hooks/useWallet";
 import { Tooltip } from "./Tooltip";
 
 export function SyncIndicator() {
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(true);
   const wallet = useWallet();
 
-  // TODO allow to call sync from other components, this is fundamentally important for transfers
-  const sync = useCallback(async () => {
-    setIsSyncing(true);
-    await wallet.sync();
-    setIsSyncing(false);
-  }, []);
-
   useEffect(() => {
-    sync();
-  }, []);
+    // TODO allow to call sync from other components, this is fundamentally important for transfers
+    wallet.sync().then(() => setIsSyncing(false));
+  }, [wallet]);
 
   return (
     <div className="group/tooltip relative">
-      <button className="h-10 p-2 text-left cursor-pointer" onClick={sync}>
+      <button
+        className="h-10 p-2 text-left cursor-pointer"
+        onClick={async () => {
+          setIsSyncing(true);
+          await wallet.sync();
+          setIsSyncing(false);
+        }}
+      >
         {isSyncing && (
           <div className="absolute size-2.5 -m-px animate-ping rounded-full bg-gold opacity-75" />
         )}
