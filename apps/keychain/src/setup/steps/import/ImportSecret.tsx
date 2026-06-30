@@ -36,7 +36,7 @@ const optionToKind = (opt: Option): { kind: SecretKind; length: MnemonicLength }
 
 export const ImportSecret = (): JSX.Element => {
   const { state, dispatch, client } = useWizard();
-  const { secretKind, mnemonicLength, privateKey, spendingKey } = state;
+  const { secretKind, mnemonicLength, privateKey, spendingKey, birthday } = state;
 
   const [option, setOption] = useState<Option>("12");
   const [words, setWords] = useState<string[]>(Array.from({ length: LONG }, () => ""));
@@ -199,6 +199,22 @@ export const ImportSecret = (): JSX.Element => {
             />
           )}
         </Stack>
+
+        <Input
+          label="Birthday block height (optional)"
+          variant="Text"
+          value={birthday === undefined ? "" : String(birthday)}
+          placeholder="e.g. 2500000"
+          hint="The block height when this account first received funds. Keep 0 to scan from genesis (safe but slow), or enter a known height to speed up the initial sync."
+          onChange={(e) => {
+            const raw = e.target.value.trim();
+            const parsed = parseInt(raw, 10);
+            dispatch({
+              type: "setBirthday",
+              birthday: raw === "" ? undefined : Number.isFinite(parsed) ? parsed : undefined,
+            });
+          }}
+        />
 
         <ActionButton
           size="lg"

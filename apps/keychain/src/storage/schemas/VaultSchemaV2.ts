@@ -71,6 +71,12 @@ export const KeyStore = t.exact(
       }),
       timestamp: t.number,
     }),
+    t.type({
+      /** ZIP-32 seed fingerprint (hex). Empty string for accounts with no seed (private-key/spending-key imports). */
+      seedFingerprint: t.string,
+      /** Block height at which this account was created/imported. Used by the app wallet to skip scanning earlier blocks. */
+      birthday: t.number,
+    }),
     t.partial({
       modifiedZip32Path: t.string,
       publicKey: t.string,

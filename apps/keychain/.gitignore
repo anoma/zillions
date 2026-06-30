@@ -8,5 +8,4 @@
 stats.html
 stats-*.json
 
-# WebZjs source clone (cache for `npm run build:webzjs`)
-.webzjs-src
+.DS_Store

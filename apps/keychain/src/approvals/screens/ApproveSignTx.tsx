@@ -122,7 +122,7 @@ export const ApproveSignTx = ({ details, setDetails }: Props): JSX.Element => {
             <ActionButton>Approve</ActionButton>
             <ActionButton
               onClick={(e: React.FormEvent) => void handleReject(e)}
-              outlineColor="neutral"
+              outlineColor="black"
             >
               Reject
             </ActionButton>

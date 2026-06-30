@@ -7,7 +7,7 @@
  *   3. persist the parent (+ shielded) account  → background/keyring
  *
  * Address derivation must run here (page context) — the façade uses
- * `@zillions/webzjs-keys`. Returns a typed result and reports progress via
+ * `@zillions-sdk/keys`. Returns a typed result and reports progress via
  * `onProgress`.
  */
 import type { BackgroundClient } from "../../ipc/client";
@@ -28,6 +28,53 @@ export type CreateAccountInput = {
   zip32Path: Zip32Path;
   passwordRequired: boolean;
   password?: string;
+  /** Block height at which the account was created/imported. undefined = auto-fetch chain tip. */
+  birthday: number | undefined;
+};
+
+/**
+ * Fetch the current chain tip height from lightwalletd via a minimal gRPC-web
+ * call to `GetLatestBlock`. Returns 0 if the request fails so callers can fall
+ * back gracefully (scan from genesis rather than crashing).
+ *
+ * The request body is a 5-byte gRPC-web frame with an empty `ChainSpec` proto.
+ * The response contains a `BlockID` proto; field 1 (height) is a varint uint64.
+ */
+const fetchChainTipHeight = async (): Promise<number> => {
+  const url = process.env.Z_INTERFACE_LIGHTWALLETD_URL;
+  if (!url) return 0;
+
+  try {
+    const body = new Uint8Array([0x00, 0x00, 0x00, 0x00, 0x00]);
+    // CompactTxStreamer is the lightwalletd gRPC service; GetLatestBlock returns the chain tip as a BlockID.
+    const res = await fetch(
+      `${url}/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLatestBlock`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/grpc-web+proto",
+          "X-Grpc-Web": "1",
+        },
+        body,
+      }
+    );
+
+    if (!res.ok) return 0;
+
+    // Parse: skip 5-byte gRPC-web frame header, then read BlockID field 1 varint.
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    let height = 0;
+    let shift = 0;
+    // bytes[5] = 0x08 (field 1, wire type 0); height varint starts at bytes[6]
+    for (let i = 6; i < bytes.length; i++) {
+      height |= (bytes[i] & 0x7f) << shift;
+      shift += 7;
+      if ((bytes[i] & 0x80) === 0) break;
+    }
+    return height;
+  } catch {
+    return 0;
+  }
 };
 
 export type CreateAccountResult =
@@ -57,6 +104,7 @@ export const createAccount = async (
     zip32Path,
     passwordRequired,
     password,
+    birthday,
   } = input;
 
   try {
@@ -74,6 +122,12 @@ export const createAccount = async (
     const { transparentAddress, shieldedAddress, publicKey, viewingKey } =
       await deriveAddresses(wallet, accountSecret, bip44Path.account);
 
+    // Auto-fetch the chain tip when no birthday was provided. For the "create"
+    // flow this is always correct (new account, no prior history). For the
+    // "import" flow it's the right conservative default when the user didn't
+    // enter a known birthday.
+    const resolvedBirthday = birthday ?? await fetchChainTipHeight();
+
     onProgress(`Encrypting and storing ${prettySecret(accountSecret)}.`);
     const parentAccount = await client.saveAccountSecret({
       accountSecret,
@@ -84,6 +138,7 @@ export const createAccount = async (
       shieldedAddress,
       publicKey,
       viewingKey,
+      birthday: resolvedBirthday,
     });
 
     // A spending-key import is itself the shielded account; nothing to derive.
@@ -99,6 +154,7 @@ export const createAccount = async (
       source: flow === "create" ? "generated" : "imported",
       shieldedAddress,
       viewingKey,
+      birthday: resolvedBirthday,
     });
 
     return { ok: true, parentAccount, shieldedAccount };

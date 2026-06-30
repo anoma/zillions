@@ -21,11 +21,11 @@ import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
 import { LocalStorage } from "../../storage";
-import { buildPcztSummary, initWebzjs, pcztFromBase64 } from "../crypto/webzjs";
+import { buildPcztSummary, initZillionsSdk, pcztFromBase64 } from "../crypto/zillions";
 import { Keyring } from "../keyring";
+import { VaultService } from "../vault";
 import { AccountRepository } from "../vault/accounts";
 import type { ActiveAccountStore } from "../vault/types";
-import { VaultService } from "../vault";
 import { toPublicAccount } from "./publicAccount";
 
 type Resolver = {
@@ -230,14 +230,14 @@ export class ApprovalsService {
 
   // ---- trusted-UI-facing (approval popup + Connected Sites) ----
 
-  /** Display summary for a pending PCZT (parsed via webzjs `to_json()`). */
+  /** Display summary for a pending PCZT (parsed via Zillions SDK to_json()`). */
   async queryPcztSummary(msgId: string): Promise<PcztSummary> {
     const pending = this.pendingTxs.get(msgId);
     if (!pending) {
       throw new Error(`Transaction data not found for ${msgId}`);
     }
 
-    await initWebzjs();
+    await initZillionsSdk();
     const pczt = pcztFromBase64(pending.pczt);
     try {
       return buildPcztSummary(pczt);

@@ -191,7 +191,7 @@ export type IpcContract = {
       path: Bip44Path;
       /**
        * Key material derived OFFLINE in the setup tab by the wallet façade
-       * (@zillions/webzjs-keys). Persisted so storage reflects the real
+       * (@zillions-sdk/keys). Persisted so storage reflects the real
        * receivers / viewing key rather than re-deriving in the (vault) backend.
        */
       transparentAddress: string;
@@ -200,6 +200,8 @@ export type IpcContract = {
       publicKey: string;
       /** Encoded UFVK (`uview1…`) — the account's viewing key (NOT a public key). */
       viewingKey: string;
+      /** Block height at which this account was created/imported. */
+      birthday: number;
     };
     res: AccountStore;
   };
@@ -213,6 +215,8 @@ export type IpcContract = {
       shieldedAddress: string;
       /** Encoded UFVK (`uview1…`) — stored as the derived account's owner. */
       viewingKey: string;
+      /** Block height at which the parent account was created/imported. */
+      birthday: number;
     };
     res: DerivedAccount;
   };

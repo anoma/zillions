@@ -15,11 +15,12 @@ import { generateId } from "../../utils/id";
 import {
   generateMnemonic,
   mnemonicToSeed,
-  validateMnemonic,
   PhraseSize,
+  validateMnemonic,
 } from "../crypto/mnemonic";
 import {
-  initWebzjs,
+  computeSeedFingerprint,
+  initZillionsSdk,
   pcztFromBase64,
   pcztToBase64,
   signArbitraryWithKey,
@@ -28,7 +29,7 @@ import {
   verifyArbitrary,
   type ArbitrarySignature,
   type SpendingKeys,
-} from "../crypto/webzjs";
+} from "../crypto/zillions";
 import { AccountRepository, VaultService } from "../vault";
 import { AccountSource, SensitiveAccountStoreData } from "./types";
 
@@ -46,7 +47,7 @@ const LOOKS_LIKE_BIP39_WORD = /^[a-z]{3,8}$/;
  *
  * Persistence is delegated: `VaultService` is the custodian of encrypted
  * sensitive data, `AccountRepository` of the public account records.
- * Address/key derivation runs in the page (webzjs façade) and arrives via the
+ * Address/key derivation runs in the page (Zillions SDK façade) and arrives via the
  * IPC payload.
  */
 export class Keyring {
@@ -123,7 +124,7 @@ export class Keyring {
    */
   public async sign(pczt: string, signer?: string): Promise<string> {
     await this.vaultService.assertIsUnlocked();
-    await initWebzjs();
+    await initZillionsSdk();
 
     let record: KeyStoreType | undefined;
     if (signer) {
@@ -142,16 +143,19 @@ export class Keyring {
     const { seed, hdIndex } = await this.resolveSeed(record);
 
     const parsed = pcztFromBase64(pczt);
-    try {
-      const signed = await signPczt(parsed, seed, hdIndex);
-      try {
-        return pcztToBase64(signed);
-      } finally {
-        signed.free();
-      }
-    } finally {
-      parsed.free();
+    const signed = await signPczt(parsed, seed, hdIndex);
+    const result = pcztToBase64(signed);
+    
+    // Don't call parsed.free() (null pointer): pczt_sign already destroys `parsed` and zeroes its pointer.
+    signed.free();
+
+    // signPczt fails silently on a key mismatch, it just returns the PCZT unchanged
+    // (output === input means no key matched).
+    if (result === pczt) {
+      throw new Error("Unable to sign this transaction with the selected account");
     }
+    
+    return result
   }
 
   /**
@@ -166,7 +170,7 @@ export class Keyring {
     data: string
   ): Promise<ArbitrarySignature> {
     await this.vaultService.assertIsUnlocked();
-    await initWebzjs();
+    await initZillionsSdk();
 
     const record = await this.accounts.findByAddress(signer);
     if (!record) {
@@ -186,7 +190,7 @@ export class Keyring {
     hash: string,
     signature: string
   ): Promise<boolean> {
-    await initWebzjs();
+    await initZillionsSdk();
     return verifyArbitrary(publicKey, hash, signature);
   }
 
@@ -199,7 +203,7 @@ export class Keyring {
    */
   public async revealSpendingKey(accountId: string): Promise<SpendingKeys> {
     await this.vaultService.assertIsUnlocked();
-    await initWebzjs();
+    await initZillionsSdk();
 
     const record = await this.accounts.findById(accountId);
     if (!record) {
@@ -262,6 +266,7 @@ export class Keyring {
     shieldedAddress: string;
     publicKey: string;
     viewingKey: string;
+    birthday: number;
   }): Promise<AccountStore> {
     await this.vaultService.assertIsUnlocked();
 
@@ -314,6 +319,19 @@ export class Keyring {
     const publicKey =
       accountType === "shielded-keys" ? undefined : input.publicKey;
 
+    // Compute the seed fingerprint for mnemonic accounts so the app can call
+    // create_account_ufvk (needs fingerprint + hdIndex to embed zip32_derivation
+    // in the PCZT, enabling the extension to sign). Non-mnemonic accounts have
+    // no seed, so the fingerprint is stored as an empty string.
+    let seedFingerprint: string;
+    if (accountType === "mnemonic") {
+      await initZillionsSdk();
+      const seed = await mnemonicToSeed(text, passphrase);
+      seedFingerprint = computeSeedFingerprint(seed);
+    } else {
+      seedFingerprint = "";
+    }
+
     const vaultLength = await this.accounts.count();
 
     // Deterministic id: shielded accounts key on the viewing key, others on path.
@@ -349,6 +367,8 @@ export class Keyring {
       type: accountType as KeyStoreType["type"],
       source,
       timestamp,
+      seedFingerprint,
+      birthday: input.birthday,
     };
 
     // Check whether keys already exist for this account
@@ -398,6 +418,7 @@ export class Keyring {
     source: AccountSource;
     shieldedAddress: string;
     viewingKey: string;
+    birthday: number;
   }): Promise<DerivedAccount> {
     await this.vaultService.assertIsUnlocked();
 
@@ -432,6 +453,8 @@ export class Keyring {
       type: "shielded-keys" as KeyStoreType["type"],
       source: input.source,
       timestamp,
+      seedFingerprint: parent.seedFingerprint,
+      birthday: input.birthday,
     };
 
     const sensitive = await this.vaultService.encryptSensitiveData({

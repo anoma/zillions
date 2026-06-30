@@ -31,8 +31,6 @@
       "@zillions/types/*": ["src/packages/types/src/*"],
       "@zillions/utils": ["src/packages/utils/src"],
       "@zillions/utils/*": ["src/packages/utils/src/*"],
-      "@zillions/webzjs-keys": ["src/packages/webzjs-keys/webzjs_keys"],
-      "@zillions/webzjs-keys/*": ["src/packages/webzjs-keys/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "entrypoints/**/*", ".wxt/**/*"],

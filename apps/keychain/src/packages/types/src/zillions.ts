@@ -51,7 +51,7 @@ export interface Zillions {
   /**
    * Sign a PCZT. Returns the signed PCZT as base64 (postcard bytes).
    */
-  sign(props: SignProps): Promise<PcztBase64 | undefined>;
+  sign(props: SignProps): Promise<PcztBase64>;
   signArbitrary(
     props: SignArbitraryProps
   ): Promise<SignArbitraryResponse | undefined>;

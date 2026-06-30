@@ -172,3 +172,7 @@ export const sanitizeUrl = (url: string): string => {
   const trimmedUrl = url.trim();
   return trimmedUrl.endsWith("/") ? trimmedUrl.slice(0, -1) : url;
 };
+
+/** JSON replacer that serializes BigInt values as strings, since JSON.stringify can't handle BigInt natively. */
+export const bigintReplacer = (_: string, v: unknown): unknown =>
+  typeof v === "bigint" ? v.toString() : v;

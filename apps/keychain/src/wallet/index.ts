@@ -1,12 +1,12 @@
 /**
  * Wallet façade entry point. `getZcashWallet()` resolves the single offline
- * façade (backed by `@zillions/webzjs-keys`); call it from the setup tab.
+ * façade (backed by `@zillions-sdk/keys`); call it from the setup tab.
  *
- * NOTE: `@zillions/webzjs-keys` is a vendored package built from WebZjs source
- * with custom address bindings — run `npm run build:webzjs` to produce it.
+ * NOTE: `@zillions-sdk/keys` is a vendored package built from Zillions SDK source
+ * with custom address bindings — run `npm run build:zillions-sdk` to produce it.
  */
 import type { ZcashNetwork, ZcashWallet } from "./types";
-import { WebzjsKeysAdapter } from "./webzjsKeysAdapter";
+import { ZillionsKeysAdapter } from "./zillionsKeysAdapter";
 
 export type {
   AccountRef,
@@ -30,7 +30,7 @@ const resolveNetwork = (): ZcashNetwork => {
 /** Get the singleton wallet façade (wasm is lazily initialized on first use). */
 export const getZcashWallet = (): ZcashWallet => {
   if (!cached) {
-    cached = new WebzjsKeysAdapter(resolveNetwork());
+    cached = new ZillionsKeysAdapter(resolveNetwork());
   }
   return cached;
 };

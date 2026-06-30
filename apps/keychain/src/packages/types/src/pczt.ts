@@ -14,7 +14,7 @@ export type PcztBase64 = string;
 
 /**
  * A single transparent input/output as surfaced by `pczt.to_json()`.
- * Fields are best-effort: the webzjs JSON structure is rendered as-is, so we
+ * Fields are best-effort: the Zillions SDK JSON structure is rendered as-is, so we
  * only type the values we reliably read.
  */
 export type PcztTransparentIo = {

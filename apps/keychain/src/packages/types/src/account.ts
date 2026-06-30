@@ -64,6 +64,12 @@ export type Account = Pick<
 export type ZCashKeychainAccount = Account & {
   id: string;
   parentId?: string;
+  /** ZIP-32 account index used to derive this account's keys. */
+  hdIndex: number;
+  /** ZIP-32 seed fingerprint (hex). Empty string for accounts with no seed. */
+  seedFingerprint: string;
+  /** Block height at which this account was created/imported. Used to skip scanning earlier blocks. */
+  birthday: number;
 };
 
 /**

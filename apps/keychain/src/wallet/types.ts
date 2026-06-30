@@ -2,10 +2,10 @@
  * Wallet façade types.
  *
  * The façade turns a seed phrase into Zcash addresses, FULLY OFFLINE (pure key
- * math via `@zillions/webzjs-keys` — librustzcash `default_address`; no
+ * math via `@zillions-sdk/keys` — librustzcash `default_address`; no
  * lightwalletd, no sync, no wallet DB). Runs in the setup tab.
  */
-import type { UnifiedFullViewingKey } from "@zillions/webzjs-keys";
+import type { UnifiedFullViewingKey } from "@zillions-sdk/keys";
 
 /** Zcash network the addresses are encoded for. */
 export type ZcashNetwork = "main" | "test";

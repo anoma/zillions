@@ -1,33 +1,34 @@
 /**
- * Background webzjs bindings: PCZT parsing, signing, and summary building.
+ * Background Zillions SDK bindings: PCZT parsing, signing, and summary building.
  * Address derivation lives in the page façade, not here.
  *
  * This is the background's second wasm module (next to @zillions/crypto):
  * signing must run here so the revealed seed never leaves the worker.
  */
-import type { PcztSummary, PcztTransparentIo } from "@zillions/types";
 import initWasm, {
   Pczt,
   pczt_sign,
   SeedFingerprint,
-  UnifiedSpendingKey,
-} from "@zillions/webzjs-keys";
+  UnifiedSpendingKey
+} from "@zillions-sdk/keys";
+import type { PcztSummary, PcztTransparentIo } from "@zillions/types";
+import { bigintReplacer } from "@zillions/utils";
 
-export type { Pczt } from "@zillions/webzjs-keys";
+export type { Pczt } from "@zillions-sdk/keys";
 
 let initialized: Promise<unknown> | undefined;
 
 /**
- * Initialize the `@zillions/webzjs-keys` wasm module. Idempotent.
+ * Initialize the @zillions-sdk/keys wasm module. Idempotent.
  * Must be awaited before any PCZT call. (Same default-URL resolution the
  * setup-tab façade uses: the bundler emits the wasm as an asset.)
  */
-export const initWebzjs = (): Promise<unknown> => {
+export const initZillionsSdk = (): Promise<unknown> => {
   return (initialized ??= initWasm());
 };
 
 /**
- * Resolve the webzjs network string ("main" | "test") from the build env,
+ * Resolve the Zillions SDK network string ("main" | "test") from the build env,
  * exactly like `src/wallet` does for address derivation.
  */
 export const getNetwork = (): string => {
@@ -67,7 +68,7 @@ export const pcztFromBase64 = (s: string): Pczt =>
 /**
  * Sign a PCZT with the unified spending key derived from `seed` at `hdIndex`.
  *
- * Wires `@zillions/webzjs-keys` `pczt_sign`. The offline signer matches spends
+ * Wires `@zillions-sdk/keys` `pczt_sign`. The offline signer matches spends
  * to the key across transparent/sapling/orchard and adds signatures.
  */
 export const signPczt = async (
@@ -78,12 +79,8 @@ export const signPczt = async (
   const network = getNetwork();
   const usk = new UnifiedSpendingKey(network, seed, hdIndex);
   const seedFp = new SeedFingerprint(seed);
-  try {
-    return await pczt_sign(network, pczt, usk, seedFp);
-  } finally {
-    usk.free();
-    seedFp.free();
-  }
+  // Don't call .free() (null pointer): pczt_sign takes ownership of all three WASM args via __destroy_into_raw
+  return pczt_sign(network, pczt, usk, seedFp);
 };
 
 /** A Bitcoin/Zcash signed-message result (see `signArbitraryWithKey`). */
@@ -127,6 +124,21 @@ export const verifyArbitrary = (
   signature: string
 ): boolean => UnifiedSpendingKey.verify_arbitrary(publicKey, hash, signature);
 
+/**
+ * Compute the ZIP-32 seed fingerprint for a seed as a lowercase hex string.
+ * Safe to store publicly — it identifies the seed without revealing it.
+ */
+export const computeSeedFingerprint = (seed: Uint8Array): string => {
+  const fp = new SeedFingerprint(seed);
+  try {
+    return Array.from(fp.to_bytes())
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } finally {
+    fp.free();
+  }
+};
+
 /** Both encodings of an account's spending secret (see `spendingKeys`). */
 export type SpendingKeys = {
   /**
@@ -166,16 +178,16 @@ export const spendingKeys = (
 /**
  * Build a human-readable summary from a PCZT's `to_json()` structure.
  *
- * The exact JSON shape produced by webzjs is not part of a stable contract,
+ * The exact JSON shape produced by Zillions SDK is not part of a stable contract,
  * so this reads defensively: it pulls transparent inputs/outputs,
  * sapling/orchard value flows, and a fee where present, and always keeps the
  * full `to_json()` for the raw expandable view. Anything we are not sure
  * about is simply surfaced through `raw`.
  */
 export const buildPcztSummary = (pczt: Pczt): PcztSummary => {
+  // Stringify converts the WASM object to a plain JS object and coerces BigInts to strings in one pass.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const json = pczt.to_json() as any;
-
+  const json = JSON.parse(JSON.stringify(pczt.to_json(), bigintReplacer)) as any;
   const asArray = (v: unknown): unknown[] =>
     Array.isArray(v) ? v : v ? [v] : [];
 

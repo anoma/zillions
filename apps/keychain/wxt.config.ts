@@ -1,7 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
+import { config as loadDotenv } from "dotenv";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { config as loadDotenv } from "dotenv";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 import svgr from "vite-plugin-svgr";
 import { defineConfig } from "wxt";
@@ -44,7 +44,7 @@ const buildProcessEnv = (
 // `@zillions/*` -> the vendored package sources under `src/packages/*`
 // (bare package + `/src/...` subpaths).
 //
-// `crypto` and `webzjs-keys` are special-cased: their entry is a prebuilt
+// `crypto` is special-cased: its entry is a prebuilt
 // wasm-bindgen `.js` glue file (not an `src/index`), so the bare import must
 // point at that file — otherwise the generic rule resolves it to a DIRECTORY
 // and the bundler fails with "Is a directory". The `/src/...` subpath rule
@@ -74,23 +74,18 @@ const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
     },
   ];
 
-  const webzjs = [
-    {
-      find: /^@zillions\/webzjs-keys$/,
-      replacement: r(`src/packages/webzjs-keys/webzjs_keys.js`),
-    },
-    {
-      find: /^@zillions\/webzjs-keys\/(.*)$/,
-      replacement: r(`src/packages/webzjs-keys/$1`),
-    },
-  ];
-
-  return [...crypto, ...webzjs, ...generic];
+  return [...crypto, ...generic];
 };
 
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   srcDir: ".",
+  
+  runner: {
+    // This forces the dev browser to reuse the same profile directory
+    // keeping cookies, localStorage, and IndexedDB safe between sessions.
+    chromiumArgs: ['--user-data-dir=./.wxt/dev-profile'],
+  },
 
   manifest: ({ browser }) => ({
     name: "Zillions Keychain (z)",
@@ -106,7 +101,7 @@ export default defineConfig({
     action: {
       default_title: "Zillions Keychain",
     },
-    // WebAssembly (@zillions/crypto, @zillions/webzjs-keys) compiles in the
+    // WebAssembly (@zillions/crypto, @zillions-sdk/keys) compiles in the
     // service worker and extension pages, which the default MV3 CSP
     // (`script-src 'self'`) forbids. `'wasm-unsafe-eval'` is the only addition
     // Chrome MV3 allows for this and is what enables WASM instantiation.
@@ -115,12 +110,12 @@ export default defineConfig({
     },
     // `injected.js` is the MAIN-world provider script the content script
     // injects into pages (sets `window.zc`). WASM: `crypto_bg.wasm`
-    // (@zillions/crypto) is small and inlined; `webzjs_keys_bg.wasm`
-    // (@zillions/webzjs-keys, ~2 MB) is emitted as a file the page fetches —
+    // (@zillions/crypto) is small and inlined; `zillions_sdk_keys_bg.wasm`
+    // (@zillions-sdk/keys, ~2 MB) is emitted as a file the page fetches —
     // list both so resolution is explicit.
     web_accessible_resources: [
       {
-        resources: ["injected.js", "crypto_bg.wasm", "webzjs_keys_bg.wasm"],
+        resources: ["injected.js", "crypto_bg.wasm", "zillions_sdk_keys_bg.wasm"],
         matches: ["<all_urls>"],
       },
     ],

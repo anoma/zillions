@@ -15,10 +15,11 @@
     "zip": "wxt zip",
     "compile": "tsc --noEmit",
     "lint": "eslint src entrypoints --ext .ts,.tsx",
-    "build:webzjs": "bash ./scripts/build-webzjs-keys.sh"
+    "sdk:update": "bash ./scripts/update-sdk.sh"
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.2.8",
+    "@zillions-sdk/keys": "file:src/packages/zillions-sdk/zillions-sdk-keys-0.1.0.tgz",
     "clsx": "^2.1.1",
     "fp-ts": "^2.16.1",
     "framer-motion": "^11.18.2",
@@ -37,14 +38,14 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
-    "@typescript-eslint/eslint-plugin": "^8.4.0",
-    "@typescript-eslint/parser": "^8.4.0",
     "@types/node": "^24",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@types/uuid": "^8.3.4",
     "@types/webextension-polyfill": "^0.12",
     "@types/zxcvbn": "^4.4.1",
+    "@typescript-eslint/eslint-plugin": "^8.4.0",
+    "@typescript-eslint/parser": "^8.4.0",
     "@vitejs/plugin-react": "^6.0.2",
     "@wxt-dev/module-react": "^1.2.2",
     "dotenv": "^17",

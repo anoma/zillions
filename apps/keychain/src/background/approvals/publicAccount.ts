@@ -11,7 +11,16 @@ export const toPublicAccount = (record: KeyStoreType): ZCashKeychainAccount => {
   const { id, alias, address, parentId, publicKey, owner } = record;
   const type = record.type as AccountType;
 
-  const account: ZCashKeychainAccount = { id, alias, address, parentId, type };
+  const account: ZCashKeychainAccount = {
+    id,
+    alias,
+    address,
+    parentId,
+    type,
+    hdIndex: record.path.account,
+    seedFingerprint: record.seedFingerprint,
+    birthday: record.birthday,
+  };
 
   if (type === AccountType.ShieldedKeys) {
     account.viewingKey = owner;
