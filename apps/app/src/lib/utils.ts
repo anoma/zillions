@@ -69,3 +69,7 @@ export const shortenAddress = (
   );
   return [prefix, delimiter, suffix].join("");
 };
+
+export const isTransparentAddress = (s: string): boolean => s.startsWith("t");
+
+export const isShieldedAddress = (s: string): boolean => s.startsWith("u");

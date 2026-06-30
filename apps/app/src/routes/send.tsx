@@ -1,77 +1,155 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { twMerge } from "tailwind-merge";
 import { ActionButton } from "../components/ActionButton";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
+import { useAccount } from "../hooks/useAccount";
 import { useGetBalance } from "../hooks/useGetBalance";
+import { useTransfer } from "../hooks/useTransfer";
+import { invariant } from "../lib/invariant";
+import { isTransparentAddress, zatoshiToZec, zecToZatoshi } from "../lib/utils";
 
 export const Route = createFileRoute("/send")({
   component: SendRoute,
 });
 
 function SendRoute() {
+  const account = useAccount();
   const balance = useGetBalance();
-  const [isTransparent, setIsTransparent] = useState(false);
 
-  const onSubmit = () => {
-    // TODO
+  const transfer = useTransfer();
+
+  const [isFromTransparent, setIsFromTransparent] = useState(false);
+  const [amountString, setAmountString] = useState("");
+  const [to, setTo] = useState("");
+  const [validationMessage, setValidationMessage] = useState("");
+  const [isPending, setIsPending] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  const onSubmit = async () => {
+    try {
+      setIsPending(true);
+      setValidationMessage("");
+
+      invariant(amountString, "Set an amount");
+      invariant(to, "Set an recipient");
+
+      const amount = zecToZatoshi(amountString);
+      invariant(amount > 0, "Set an amount");
+      invariant(amount <= availableBalance, "Insufficient balance");
+
+      const from = isFromTransparent
+        ? account.transparent.address
+        : account.shielded.address;
+
+      await transfer.mutateAsync({ from, to, amount });
+      setIsSuccess(true);
+    } catch (error) {
+      setValidationMessage(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setIsPending(false);
+    }
   };
 
   const availableBalance = (() => {
     if (!balance.data) {
-      return 0;
+      return 0n;
     }
-    if (isTransparent) {
+    if (isFromTransparent) {
       return balance.data.unshieldedBalance;
     }
-    return balance.data.orchardBalance + balance.data.saplingBalance;
+    // TODO support for sapling
+    return balance.data.orchardBalance;
   })();
+
+  const isToTransparent = isTransparentAddress(to);
+
+  if (isSuccess) {
+    return (
+      <div className="p-10">
+        <div>Transaction Success</div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-10">
       <h1 className="text-center text-lg font-bold">Send</h1>
       <form
-        className="w-full max-w-125 mx-auto mt-10 flex flex-col gap-4"
-        onSubmit={onSubmit}
+        className="w-full max-w-125 mx-auto mt-10 flex flex-col"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
       >
         <label>
           <div className="text-xs font-medium mb-1">From</div>
           <div>
             <ShieldedTransparentToggle
-              isTransparent={isTransparent}
-              setIsTransparent={setIsTransparent}
+              isTransparent={isFromTransparent}
+              setIsTransparent={setIsFromTransparent}
             />
           </div>
         </label>
-        <div className="text-xs font-medium text-center">
-          Available: {availableBalance.toLocaleString()} ZEC
+
+        <div className="mt-4 text-xs font-medium text-center">
+          Available: {zatoshiToZec(availableBalance)} ZEC
         </div>
-        <div>
+
+        <input
+          name="amount"
+          type="text"
+          placeholder="0"
+          autoComplete="off"
+          className="mt-2 w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
+          value={amountString}
+          onChange={(e) => setAmountString(e.target.value)}
+        />
+
+        <label className="mt-4">
+          <div className="text-xs font-medium mb-1">To</div>
           <input
-            name="amount"
+            name="to"
             type="text"
-            placeholder="0"
-            autoComplete="off"
-            className="w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
+            placeholder="Enter Zcash address..."
+            className="w-full px-4 py-2 font-medium rounded-lg border border-gray-300 outline-none placeholder:text-black focus:border-gray-600 focus:placeholder:text-transparent"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
           />
-        </div>
-        <div>
-          <label>
-            <div className="text-xs font-medium mb-1">To</div>
-            <input
-              name="to"
-              type="text"
-              placeholder="Enter Zcash address..."
-              className="w-full px-4 py-2 font-medium rounded-lg border border-gray-300 outline-none placeholder:text-black focus:border-gray-600 focus:placeholder:text-transparent"
-            />
-          </label>
-        </div>
-        <div className="flex items-center justify-between text-xs font-medium">
+        </label>
+
+        <div className="mt-4 flex items-center justify-between text-xs font-medium">
           <div>Fee</div>
-          <div>{0.00001} ZEC</div>
+          {/* TODO get the fee value */}
+          <div>{0.0001} ZEC</div>
         </div>
-        <div>
-          <ActionButton className="w-full">Send</ActionButton>
+
+        <ActionButton
+          className={twMerge(
+            "mt-4 w-full h-13",
+            (isFromTransparent || isToTransparent) && "bg-black text-white",
+            isPending && "pointer-events-none opacity-50",
+          )}
+          disabled={isPending}
+        >
+          {isPending ? "Sending..." : "Send"}
+        </ActionButton>
+
+        <div className="mt-2 text-sm text-center font-medium">
+          {isFromTransparent && isToTransparent
+            ? "This transfer is transparent"
+            : isFromTransparent || isToTransparent
+              ? "This transfer is partly shielded"
+              : "This transfer is shielded"}
         </div>
+
+        {validationMessage && (
+          <div className="mt-4 text-red-500 text-center">
+            {validationMessage}
+          </div>
+        )}
       </form>
     </div>
   );

@@ -33,6 +33,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           id: account.shielded.id,
           ufvk: account.shielded.viewingKey,
           birthday: account.shielded.birthday,
+          seedFingerprint: account.shielded.seedFingerprint,
+          hdIndex: account.shielded.hdIndex,
         });
         if (cancelled) {
           instance.free();

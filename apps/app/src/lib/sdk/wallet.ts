@@ -1,10 +1,17 @@
 import {
+  Pczt,
+  SeedFingerprint,
   TransactionHistoryResponse,
   WalletSummary,
   WebWallet,
 } from "@zillions-sdk/wallet";
 import { db } from "../db";
 import { dedupe } from "../utils";
+
+const hexToBytes = (hex: string): Uint8Array =>
+  Uint8Array.from({ length: hex.length / 2 }, (_, i) =>
+    parseInt(hex.substring(i * 2, i * 2 + 2), 16),
+  );
 
 type Network = "main" | "test";
 
@@ -34,25 +41,29 @@ type Transaction = {
   pool: "orchard" | "sapling";
 };
 
-const defaultNetwork: Network = "main";
+const defaultNetwork: Network = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 const minConfirmationsTrusted = 10;
 const minConfirmationsUntrusted = 10;
 
 export class SdkWallet {
   public id: string;
-  // TODO make it private
-  public wallet: WebWallet;
+  private accountId: number;
+  private wallet: WebWallet;
 
   static async build({
     id,
     ufvk,
     birthday,
+    seedFingerprint,
+    hdIndex,
     network = defaultNetwork,
     lightwalletdUrl = import.meta.env.VITE_GRPC_WEB_GATEWAY_URL,
   }: {
     id: string;
     ufvk: string;
     birthday: number;
+    seedFingerprint: string;
+    hdIndex: number;
     network?: Network;
     lightwalletdUrl?: string;
   }): Promise<SdkWallet> {
@@ -64,17 +75,44 @@ export class SdkWallet {
       minConfirmationsUntrusted,
       bytes,
     );
-    // Skip create_account when restoring from cache — the account already
-    // exists in the bytes. Calling it again would add a duplicate account.
+
+    let accountId: number;
     if (!bytes) {
-      await wallet.create_account_view_ufvk(id, ufvk, birthday);
+      const fp = SeedFingerprint.from_bytes(hexToBytes(seedFingerprint));
+      // create_account_ufvk takes ownership of fp — do NOT call fp.free().
+      accountId = await wallet.create_account_ufvk(
+        id,
+        ufvk,
+        fp,
+        hdIndex,
+        birthday,
+      );
+    } else {
+      // Restoring from cache: the account already exists; read its ID from
+      // the wallet summary rather than re-creating it.
+      const summary = await wallet.get_wallet_summary();
+      const balances = summary?.account_balances as
+        | SummaryAccountBalances
+        | undefined;
+      accountId = balances?.[0]?.[0] ?? 0;
+      summary?.free();
     }
-    return new SdkWallet({ id, wallet });
+
+    return new SdkWallet({ id, wallet, accountId });
   }
 
-  constructor({ id, wallet }: { id: string; wallet: WebWallet }) {
+  constructor({
+    id,
+    wallet,
+    accountId,
+  }: {
+    id: string;
+    wallet: WebWallet;
+    accountId: number;
+  }) {
     this.id = id;
     this.wallet = wallet;
+    this.accountId = accountId;
   }
 
   sync = dedupe(async () => {
@@ -102,6 +140,7 @@ export class SdkWallet {
         saplingBalance: 0n,
         unshieldedBalance: 0n,
       };
+
       (summary?.account_balances as SummaryAccountBalances).forEach(
         ([, balance]) => {
           totalBalance.orchardBalance += BigInt(balance.orchard_balance);
@@ -142,6 +181,16 @@ export class SdkWallet {
       summary?.free();
       histories.forEach((r) => r.free());
     }
+  }
+
+  async prepareShildedTransfer(to: string, amount: bigint): Promise<Pczt> {
+    return this.wallet.pczt_create(this.accountId, to, amount);
+  }
+
+  async submitTransfer(signedPczt: Pczt): Promise<void> {
+    const provedPczt = await this.wallet.pczt_prove(signedPczt);
+    await this.wallet.pczt_send(provedPczt);
+    this.updateWalletCache();
   }
 
   free() {
