@@ -2,7 +2,7 @@ import {
   TransactionHistoryResponse,
   WalletSummary,
   WebWallet,
-} from "@chainsafe/webzjs-wallet";
+} from "@zillions-sdk/wallet";
 import { db } from "../db";
 import { dedupe } from "../utils";
 

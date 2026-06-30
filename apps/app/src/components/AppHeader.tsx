@@ -14,15 +14,28 @@ function AccountProfile() {
   return (
     <div className="relative group/tooltip">
       <div className="h-10 flex items-center gap-2 p-2">
-        <span className="text-sm">{account.alias}</span>
+        <span className="text-sm">{account.transparent.alias}</span>
       </div>
       <Tooltip position="bottom">
-        <CopyToClipboardControl
-          value={account.address}
-          className="px-4 py-2 font-medium"
-        >
-          {shortenAddress(account.address)}
-        </CopyToClipboardControl>
+        <div className="p-4 space-y-3 w-55">
+          {[
+            ["Shielded address", account.shielded.address],
+            ["Transparent address", account.transparent.address],
+          ].map(([label, value]) => (
+            <CopyToClipboardControl
+              key={value}
+              value={value}
+              className="justify-between"
+            >
+              <div>
+                <div className="text-xs">{label}:</div>
+                <div className="font-semibold">
+                  {shortenAddress(value, 9, 9)}
+                </div>
+              </div>
+            </CopyToClipboardControl>
+          ))}
+        </div>
       </Tooltip>
     </div>
   );
@@ -38,16 +51,16 @@ function SwitchAccountButton() {
         <ArrowsLeftRight className="size-4" />
       </button>
       <Tooltip position="bottom">
-        <div className="py-2 max-w-30 overflow-clip">
+        <div className="py-2 w-30 overflow-clip">
           {accounts.data
             ?.filter((a) => !a.parentId)
             .map((a) => {
-              const isSelected = a.alias === account.alias;
+              const isSelected = a.id === account.transparent.id;
               return (
                 <button
                   key={a.id}
                   className={twMerge(
-                    "px-4 py-2 flex items-center gap-2 text-left hover:font-semibold transition-all cursor-pointer",
+                    "px-4 py-1.5 w-full flex items-center gap-2 text-left hover:font-semibold transition-all cursor-pointer",
                     isSelected && "font-semibold pointer-events-none",
                   )}
                   onClick={() => keychain().updateDefaultAccount(a.address)}

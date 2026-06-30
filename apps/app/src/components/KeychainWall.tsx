@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { AccountContext } from "../context/account";
+import { type Account } from "../context/account";
 import {
   getKeychainAccounts,
   useGetKeychainAccounts,
@@ -15,6 +15,7 @@ import {
   KeychainEvent,
 } from "../lib/keychain/keychain";
 import { keychainUrl } from "../lib/urls";
+import { AccountProvider } from "./AccountProvider";
 import { ActionButton } from "./ActionButton";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -70,11 +71,12 @@ function Account({ children }: { children: ReactNode }) {
     );
   }
 
-  const keychainAccount = accounts.data?.find(
-    (a) => a.parentId === defaultAccount.data?.id,
+  const transparentAccount = defaultAccount.data;
+  const shieldedAccount = accounts.data?.find(
+    (a) => a.parentId === transparentAccount?.id,
   );
 
-  if (!keychainAccount) {
+  if (!transparentAccount || !shieldedAccount) {
     return (
       <Content title="Select account">
         Open the keychain and select one account.
@@ -83,9 +85,12 @@ function Account({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AccountContext.Provider value={keychainAccount}>
+    <AccountProvider
+      transparentAccount={transparentAccount}
+      shieldedAccount={shieldedAccount}
+    >
       {children}
-    </AccountContext.Provider>
+    </AccountProvider>
   );
 }
 

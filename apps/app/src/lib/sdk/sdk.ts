@@ -1,4 +1,4 @@
-import initWasm, { initThreadPool } from "@chainsafe/webzjs-wallet";
+import initWasm, { initThreadPool } from "@zillions-sdk/wallet";
 import { singleton } from "../utils";
 
 export const initSdk = singleton(async () => {

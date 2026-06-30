@@ -33,7 +33,7 @@ export function SyncIndicator() {
         />
       </button>
       <Tooltip position="bottom" className="z-10 w-47 py-3">
-        <div className="space-y-3 w-full text-xs font-medium">
+        <div className="px-4 space-y-3 w-full text-xs font-medium">
           {isSyncing ? (
             <div className="font-normal">
               Syncing your shielded assets now. Balances will update in a few

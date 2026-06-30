@@ -28,11 +28,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
-        invariant(account.viewingKey, "viewingKey is not available");
+        invariant(account.shielded.viewingKey, "viewingKey is not available");
         const instance = await SdkWallet.build({
-          id: account.id,
-          ufvk: account.viewingKey,
-          birthday: 3337500, // TODO explore the best way to get the birthday
+          id: account.shielded.id,
+          ufvk: account.shielded.viewingKey,
+          birthday: account.shielded.birthday,
         });
         if (cancelled) {
           instance.free();

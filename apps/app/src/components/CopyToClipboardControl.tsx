@@ -42,9 +42,9 @@ export function CopyToClipboardControl({
     >
       {children}
       {copied ? (
-        <GoCheckCircle className="size-5 animate-pop-in" />
+        <GoCheckCircle className="shrink-0 size-5 animate-pop-in" />
       ) : (
-        <GoCopy className="size-5" />
+        <GoCopy className="shrink-0 size-5" />
       )}
     </div>
   );

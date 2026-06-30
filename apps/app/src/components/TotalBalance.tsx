@@ -39,7 +39,10 @@ export function TotalBalance() {
 
   const transparentBalance = balance.data.unshieldedBalance;
   const shieldedBalance =
-    balance.data.orchardBalance + balance.data.saplingBalance;
+    balance.data.orchardBalance +
+    balance.data.saplingBalance +
+    balance.data.pendingChange +
+    balance.data.pendingSpendable;
 
   return (
     <div className="p-10 flex max-lg:flex-col lg:items-center justify-between gap-6 lg:gap-10 font-medium border-b border-gray-300 overflow-auto">

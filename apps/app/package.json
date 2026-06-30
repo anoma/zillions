@@ -7,14 +7,16 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "typecheck": "tsc -b",
     "preview": "vite preview",
-    "prepare": "husky"
+    "prepare": "husky",
+    "sdk:update": "bash ./scripts/update-sdk.sh"
   },
   "dependencies": {
-    "@chainsafe/webzjs-wallet": "file:packages/chainsafe-webzjs-wallet-0.1.0.tgz",
     "@fontsource-variable/montserrat": "^5.2.8",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-router": "^1.170.16",
+    "@zillions-sdk/wallet": "file:packages/zillions-sdk/zillions-sdk-wallet-0.1.0.tgz",
     "idb": "^8.0.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

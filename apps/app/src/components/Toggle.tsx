@@ -3,7 +3,7 @@ import { twMerge } from "tailwind-merge";
 
 type ToggleProps = Omit<ComponentPropsWithoutRef<"button">, "onChange"> & {
   active?: boolean;
-  toggleClassList?: string;
+  toggleClassname?: string;
   onChange?: (active: boolean) => void;
 };
 
@@ -11,7 +11,7 @@ export const Toggle = ({
   active = false,
   onChange,
   className,
-  toggleClassList,
+  toggleClassname,
   disabled,
   children,
   ...props
@@ -46,7 +46,7 @@ export const Toggle = ({
           "h-[calc(100%)] aspect-square rounded-full bg-gold",
           "transition-all duration-200 ease-decelerate",
           active && "translate-x-[calc(100cqw-100%)]",
-          toggleClassList,
+          toggleClassname,
         )}
       />
       <div className="absolute inset-0">{children}</div>

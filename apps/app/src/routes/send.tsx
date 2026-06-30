@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ActionButton } from "../components/ActionButton";
-import { Toggle } from "../components/Toggle";
+import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { useGetBalance } from "../hooks/useGetBalance";
 
 export const Route = createFileRoute("/send")({
@@ -36,17 +36,10 @@ function SendRoute() {
         <label>
           <div className="text-xs font-medium mb-1">From</div>
           <div>
-            <Toggle
-              className="h-11 w-full border border-gray-300"
-              toggleClassList="w-1/2"
-              active={isTransparent}
-              onChange={(v) => setIsTransparent(v)}
-            >
-              <div className="h-full grid grid-cols-2 items-center font-medium">
-                <div>Shielded</div>
-                <div>Transparent</div>
-              </div>
-            </Toggle>
+            <ShieldedTransparentToggle
+              isTransparent={isTransparent}
+              setIsTransparent={setIsTransparent}
+            />
           </div>
         </label>
         <div className="text-xs font-medium text-center">
