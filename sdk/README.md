@@ -1,19 +1,19 @@
-# WebZjs
+# Zillions SDK
 
-![GitHub License](https://img.shields.io/github/license/ChainSafe/WebZjs)
-![Static Badge](https://img.shields.io/badge/ReadTheDocs-green?link=https%3A%2F%2Fchainsafe.github.io%2FWebZjs%2F)
+![GitHub License](https://img.shields.io/github/license/ChainSafe/Zillions SDK)
+![Static Badge](https://img.shields.io/badge/ReadTheDocs-green?link=https%3A%2F%2Fchainsafe.github.io%2FZillions SDK%2F)
 
 A javascript client library for building Zcash browser wallets
 
 ## Overview
 
-WebZjs aims to make it simple to securely interact with Zcash from within the browser. This is primarily to support the development of web wallets and browser plugins. 
+Zillions SDK aims to make it simple to securely interact with Zcash from within the browser. This is primarily to support the development of web wallets and browser plugins. 
 
-Being a private blockchain Zcash places a lot more demands on the wallet than a public blockchain like Ethereum. WebZjs uses everything at its disposal to give efficient sync times and a good user experience.
+Being a private blockchain Zcash places a lot more demands on the wallet than a public blockchain like Ethereum. Zillions SDK uses everything at its disposal to give efficient sync times and a good user experience.
 
 ## Quickstart
 
-Add the `@chainsafe/webzjs-wallet` package to your javascript project.
+Add the `@zillions-sdk/wallet` package to your javascript project.
 
 Before using the library it is important to initialize the Wasm module and the thread pool.
 
@@ -22,7 +22,7 @@ Before using the library it is important to initialize the Wasm module and the t
 > Failing to call them or calling them more than once per page load will result in an error
 
 ```javascript
-import initWasm, { initThreadPool, WebWallet } from "@chainsafe/webzjs-wallet";
+import initWasm, { initThreadPool, WebWallet } from "@zillions-sdk/wallet";
 
 initWasm();
 initThreadPool(8); // can set any number of threads here, ideally match it to window.navigator.hardwareConcurrency
@@ -53,7 +53,7 @@ await wallet.sync();
 
 The sync process can take a long time depending on the wallet age and usage. This runs in a webworker so will not block the main. It is safe to trigger the sync process and then interact with the wallet using other methods while the sync runs in the background.
 
-For more details check out the hosted docs at https://chainsafe.github.io/WebZjs/
+For more details check out the hosted docs at https://github.com/heliaxdev/zillions-sdk
 
 ## Building
 
@@ -66,9 +66,9 @@ For more details check out the hosted docs at https://chainsafe.github.io/WebZjs
     - On Mac this can be installed by updating LLVM using your preferred package manager (e.g. macports, brew)
 - Tested with Rust nightly-2024-08-07
 
-### Building WebZjs
+### Building Zillions SDK
 
-This just script uses wasm-pack to build a web-ready copy of `webzjs-wallet` and `webzjs-keys` into the `packages` directory 
+This just script uses wasm-pack to build a web-ready copy of `zillions-sdk-wallet` and `zillions-sdk-keys` into the `packages` directory 
 
 ```shell
 just build
@@ -80,7 +80,7 @@ just build
 
 ### Building
 
-First build WebZjs with
+First build Zillions SDK with
 
 ```shell
 just build
@@ -94,7 +94,7 @@ yarn
 
 ## Development
 
-### Building and running WebZjs Zcash Snap locally
+### Building and running Zillions SDK Zcash Snap locally
 
 ```shell
 cd packages/snap
@@ -102,7 +102,7 @@ yarn build:local
 yarn serve
 ```
 
-### Building and running WebZjs Web-wallet locally
+### Building and running Zillions SDK Web-wallet locally
 
 ```shell
 cd packages/web-wallet
@@ -112,7 +112,7 @@ yarn dev
 
 ### Dev Build
 
-![webzjs.chainsafe.dev](https://webzjs.chainsafe.dev/)
+![zillions-sdk.chainsafe.dev](https://github.com/heliaxdev/zillions-sdk)
 
 ### Testing
 

@@ -2,10 +2,11 @@
 resolver = "2"
 
 members = [
-    "crates/webzjs-common",
-    "crates/webzjs-keys",
-    "crates/webzjs-requests",
-    "crates/webzjs-wallet",
+    "crates/zillions-sdk-common",
+    "crates/zillions-sdk-keys",
+    "crates/zillions-sdk-requests",
+    "crates/zillions-sdk-wallet",
+    "crates/zcash_client_memory",
 ]
 
 [profile.release]
@@ -16,7 +17,7 @@ codegen-units = 1
 
 [workspace.dependencies]
 ## Web dependencies
-wasm-bindgen = "=0.2.100" # PINNED: 0.2.108+ has TextEncoder.encodeInto issues with MetaMask Snap sandbox
+wasm-bindgen = "=0.2.100"
 js-sys = "=0.3.77"
 wasm-bindgen-futures = "=0.4.50"
 web-sys = { version = "=0.3.77", features = [
@@ -30,27 +31,47 @@ console_error_panic_hook = { version = "0.1.7" }
 tonic-web-wasm-client = "0.8.0"
 tokio_with_wasm = { version = "0.7.1", features = ["rt", "rt-multi-thread", "sync", "macros", "time"] }
 
-## Zcash dependencies - Using ChainSafe/librustzcash-nu61 fork with NU6.1 fixes
-zcash_keys = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61", features = ["transparent-inputs", "orchard", "sapling", "unstable"] }
-zcash_client_backend = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61", default-features = false, features = ["sync", "lightwalletd-tonic", "orchard"] }
-zcash_client_memory = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61", features = ["orchard", "transparent-inputs"] }
-zcash_primitives = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61" }
-zcash_transparent = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61", default-features = false }
-zcash_address = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61" }
-zcash_proofs = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61", default-features = false, features = ["bundled-prover", "multicore"] }
-zip321 = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61" }
+## Zcash dependencies - upstream zcash/librustzcash (NU6.2, branch ID 0x5437f330)
+zcash_keys = { git = "https://github.com/zcash/librustzcash", branch = "main", features = ["transparent-inputs", "orchard", "sapling", "unstable"] }
+zcash_client_backend = { git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false, features = ["sync", "lightwalletd-tonic", "orchard"] }
+zcash_client_memory = { path = "crates/zcash_client_memory", features = ["orchard", "transparent-inputs"] }
+zcash_primitives = { git = "https://github.com/zcash/librustzcash", branch = "main" }
+zcash_transparent = { git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false }
+# Alias used by zcash_client_memory (zcash_transparent package, shorter name)
+transparent = { package = "zcash_transparent", git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false }
+zcash_encoding = { git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false }
+zcash_address = { git = "https://github.com/zcash/librustzcash", branch = "main" }
+zcash_proofs = { git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false, features = ["bundled-prover", "multicore"] }
+zip321 = { git = "https://github.com/zcash/librustzcash", branch = "main" }
 zip32 = { version = "0.2" }
-zcash_protocol = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61", default-features = false }
-pczt = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61", default-features = false, features = ["orchard", "sapling", "transparent"] }
-sapling = { package = "sapling-crypto", version = "0.6", default-features = false }
+zcash_protocol = { git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false }
+pczt = { git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false, features = ["orchard", "sapling", "transparent"] }
+sapling = { package = "sapling-crypto", version = "0.7", default-features = false }
+orchard = { version = "0.14", default-features = false, features = ["circuit"] }
 bip32 = { version = "=0.6.0-pre.1", default-features = false, features = ["alloc"] }
+
+# Extra deps required by zcash_client_memory (not in the zillions-sdk-wallet/keys crates directly)
+incrementalmerkletree = { version = "0.8.2", default-features = false }
+shardtree = { version = "0.6.1" }
+bs58 = { version = "0.5", default-features = false, features = ["alloc", "check"] }
+byteorder = "1"
+group = "0.13"
+jubjub = "0.10"
+secp256k1 = { version = "0.29", default-features = false, features = ["alloc"] }
+zcash_script = { version = "0.4.2", default-features = false }
+serde_json = "1"
+static_assertions = "1.1"
+time = "0.3"
+which = "8"
+proptest = { version = "1", default-features = false, features = ["std"] }
+
 ## gRPC Web dependencies
 prost = { version = "0.14", default-features = false }
+prost-build = "0.14"
 tonic = { version = "0.14", default-features = false }
 
-
-# Used in Native tests
-zcash_client_sqlite = { git = "https://github.com/ChainSafe/librustzcash-nu61", branch = "feat/snap-nu61", default-features = false, features = ["unstable", "orchard"] }
+# Used in native tests only
+zcash_client_sqlite = { git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false, features = ["unstable", "orchard"] }
 
 getrandom = { version = "0.2", features = ["js"] }
 thiserror = "1.0.63"
@@ -80,11 +101,6 @@ tempfile = "3.12"
 tokio = { version = "1.0", features = ["rt", "macros"] }
 byte-unit = { version = "5.1.4", features = ["byte"] }
 
-[patch.crates-io]
-# Also patching for pczt improvments
-# See: https://github.com/zcash/librustzcash/pull/1661
-# orchard = { git = "https://github.com/zcash/orchard.git", rev = "4fa6d3b549f8803016a309281404eab095d04de8" }
-# sapling = { package = "sapling-crypto", git = "https://github.com/zcash/sapling-crypto.git", rev = "3c2235747553da642fb142d1eeb9b1afa8391987" }
 
 [workspace.lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wasm_bindgen)', 'cfg(wasm_bindgen_unstable_test_coverage)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wasm_bindgen)', 'cfg(wasm_bindgen_unstable_test_coverage)', 'cfg(zcash_unstable, values("nu7", "zfuture"))'] }

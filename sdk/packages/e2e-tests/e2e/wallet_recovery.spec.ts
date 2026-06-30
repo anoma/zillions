@@ -11,15 +11,15 @@
  * verify the recovery mechanisms work correctly.
  */
 import { test, expect } from '@playwright/test';
-import { WebWallet } from '@chainsafe/webzjs-wallet';
-import type * as WebZJSWallet from '@chainsafe/webzjs-wallet';
-import type * as WebZJSKeys from '@chainsafe/webzjs-keys';
+import { WebWallet } from '@zillions-sdk/wallet';
+import type * as ZillionsWallet from '@zillions-sdk/wallet';
+import type * as ZillionsKeys from '@zillions-sdk/keys';
 
 declare global {
   interface Window {
     webWallet: WebWallet;
-    WebZJSKeys: typeof WebZJSKeys;
-    WebZJSWallet: typeof WebZJSWallet;
+    ZillionsKeys: typeof ZillionsKeys;
+    ZillionsWallet: typeof ZillionsWallet;
   }
 }
 
@@ -49,7 +49,7 @@ test.describe('Wallet Recovery Tests', () => {
       const bytes = await window.webWallet.db_to_bytes();
 
       // Create new wallet from bytes
-      const restoredWallet = window.WebZJSWallet.WebWallet.new_from_bytes(
+      const restoredWallet = window.ZillionsWallet.WebWallet.new_from_bytes(
         'main',
         'https://zcash-mainnet.chainsafe.dev',
         1,
@@ -78,7 +78,7 @@ test.describe('Wallet Recovery Tests', () => {
       const birthday = 2657762;
 
       // Create fresh wallet (simulating full resync)
-      const freshWallet = new window.WebZJSWallet.WebWallet(
+      const freshWallet = new window.ZillionsWallet.WebWallet(
         'main',
         'https://zcash-mainnet.chainsafe.dev',
         1,
@@ -123,18 +123,18 @@ test.describe('Wallet Recovery Tests', () => {
     const result = await page.evaluate(async () => {
       // Generate UFVK from seed
       const seed = new Uint8Array(Array.from({ length: 32 }, (_, i) => i + 1));
-      const usk = new window.WebZJSKeys.UnifiedSpendingKey('main', seed, 0);
+      const usk = new window.ZillionsKeys.UnifiedSpendingKey('main', seed, 0);
       const ufvk = usk.to_unified_full_viewing_key();
       const ufvkEncoded = ufvk.encode('main');
 
       // Create seed fingerprint
-      const keysSeedFingerprint = new window.WebZJSKeys.SeedFingerprint(seed);
-      const seedFingerprint = window.WebZJSWallet.SeedFingerprint.from_bytes(
+      const keysSeedFingerprint = new window.ZillionsKeys.SeedFingerprint(seed);
+      const seedFingerprint = window.ZillionsWallet.SeedFingerprint.from_bytes(
         keysSeedFingerprint.to_bytes()
       );
 
       // Create fresh wallet and import UFVK
-      const freshWallet = new window.WebZJSWallet.WebWallet(
+      const freshWallet = new window.ZillionsWallet.WebWallet(
         'main',
         'https://zcash-mainnet.chainsafe.dev',
         1,
@@ -166,7 +166,7 @@ test.describe('Wallet Recovery Tests', () => {
     // Test the birthday auto-detection helper (PR4)
     const result = await page.evaluate(async () => {
       const seed = new Uint8Array(Array.from({ length: 32 }, (_, i) => i + 1));
-      const usk = new window.WebZJSKeys.UnifiedSpendingKey('main', seed, 0);
+      const usk = new window.ZillionsKeys.UnifiedSpendingKey('main', seed, 0);
       const ufvk = usk.to_unified_full_viewing_key();
 
       // Get transparent address from UFVK

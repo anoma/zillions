@@ -14,13 +14,12 @@
   },
   "packageManager": "yarn@4.5.1",
   "scripts": {
-    "dev": "yarn workspace @chainsafe/webzjs-web-wallet run dev & yarn run snap:start",
-    "web-wallet:dev": "yarn workspace @chainsafe/webzjs-web-wallet run dev & yarn run snap:start",
-    "web-wallet:build": "yarn workspace @chainsafe/webzjs-web-wallet run build",
-    "test:e2e": "yarn workspace @chainsafe/webzjs-e2e-tests test",
-    "snap:start": "yarn workspace @chainsafe/webzjs-zcash-snap run start",
-    "snap:build": "yarn workspace @chainsafe/webzjs-zcash-snap run build",
+    "test:e2e": "yarn workspace @zillions-sdk/e2e-tests test",
     "just:build": "just build",
-    "just:build-keys": "just build-keys"
+    "just:build-keys": "just build-keys",
+    "just:mac": "just build-mac",
+    "just:pack": "just pack",
+    "just:ship-mac": "just ship-mac",
+    "build": "just ship-mac"
   }
 }

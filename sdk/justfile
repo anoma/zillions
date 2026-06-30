@@ -6,15 +6,43 @@ build:
     just build-keys
     just build-requests
 
+build-mac:
+    #!/usr/bin/env bash
+    export LLVM_PREFIX=$(brew --prefix llvm)
+    export CC="$LLVM_PREFIX/bin/clang"
+    export AR="$LLVM_PREFIX/bin/llvm-ar"
+    export PATH="$LLVM_PREFIX/bin:$(brew --prefix binaryen)/bin:$PATH"
+    just build
+
+pack:
+    #!/usr/bin/env bash
+    mkdir -p dist
+    for pkg in zillions-sdk-wallet zillions-sdk-keys zillions-sdk-requests; do
+        tarball=$(cd packages/$pkg && npm pack 2>/dev/null | tail -1)
+        mv packages/$pkg/$tarball dist/
+        echo "✓ dist/$tarball"
+    done
+
+ship-mac:
+    just build-mac
+    just pack
+
 build-wallet *features:
-    cd crates/webzjs-wallet && wasm-pack build -t web --release --scope chainsafe --out-dir ../../packages/webzjs-wallet --no-default-features --features="wasm wasm-parallel {{features}}" -Z build-std="panic_abort,std"
+    cd crates/zillions-sdk-wallet && wasm-pack build -t web --release --scope zillions-sdk --out-dir ../../packages/zillions-sdk-wallet --no-default-features --features="wasm wasm-parallel {{features}}" -Z build-std="panic_abort,std"
     ./add-worker-module.sh
+    node patch-workers.js
+    cp js/vite-plugin.js packages/zillions-sdk-wallet/
+    cp js/vite-plugin.d.ts packages/zillions-sdk-wallet/
+    cp js/wallet-package.json packages/zillions-sdk-wallet/package.json
 
 build-keys *features:
-    cd crates/webzjs-keys && wasm-pack build -t web --release --scope chainsafe --out-dir ../../packages/webzjs-keys --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"
+    cd crates/zillions-sdk-keys && wasm-pack build -t web --release --scope zillions-sdk --out-dir ../../packages/zillions-sdk-keys --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"
+    cp js/keys-package.json packages/zillions-sdk-keys/package.json
+
 
 build-requests *features:
-    cd crates/webzjs-requests && wasm-pack build -t web --release --scope chainsafe --out-dir ../../packages/webzjs-requests --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"
+    cd crates/zillions-sdk-requests && wasm-pack build -t web --release --scope zillions-sdk --out-dir ../../packages/zillions-sdk-requests --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"
+    cp js/requests-package.json packages/zillions-sdk-requests/package.json
 
 # All Wasm Tests
 test-web *features:

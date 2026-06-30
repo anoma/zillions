@@ -1,11 +1,11 @@
-import initWasm, * as WebZJSWallet from '@chainsafe/webzjs-wallet';
-import { initThreadPool, WebWallet } from '@chainsafe/webzjs-wallet';
-import initKeys, * as WebZJSKeys from '@chainsafe/webzjs-keys';
-import initRequests, * as WebZJSRequests from '@chainsafe/webzjs-requests';
+import initWasm, * as ZillionsWallet from '@zillions-sdk/wallet';
+import { initThreadPool, WebWallet } from '@zillions-sdk/wallet';
+import initKeys, * as ZillionsKeys from '@zillions-sdk/keys';
+import initRequests, * as ZillionsRequests from '@zillions-sdk/requests';
 
-window.WebZJSWallet = WebZJSWallet;
-window.WebZJSKeys = WebZJSKeys;
-window.WebZJSRequests = WebZJSRequests;
+window.ZillionsWallet = ZillionsWallet;
+window.ZillionsKeys = ZillionsKeys;
+window.ZillionsRequests = ZillionsRequests;
 
 const N_THREADS = 10;
 const MAINNET_LIGHTWALLETD_PROXY = 'https://zcash-mainnet.chainsafe.dev';

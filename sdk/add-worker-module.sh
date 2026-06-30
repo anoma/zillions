@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Find the wasm_thread directory regardless of the hash
-WASM_THREAD_DIR=$(find packages/webzjs-wallet/snippets -type d -name "wasm_thread-*" | head -n 1)
+WASM_THREAD_DIR=$(find packages/zillions-sdk-wallet/snippets -type d -name "wasm_thread-*" | head -n 1)
 
 if [ -z "$WASM_THREAD_DIR" ]; then
     echo "Error: Could not find wasm_thread directory"
@@ -12,30 +12,38 @@ fi
 mkdir -p "$WASM_THREAD_DIR/src/wasm32/js"
 
 # Create the worker module file
+# Uses dynamic import with /* @vite-ignore */ so Vite does not follow the import
+# chain into zillions_sdk_wallet.js and trigger a circular worker import error.
+# The wallet URL is received via a __wallet_init message sent by module_worker_start.js.
 cat > "$WASM_THREAD_DIR/src/wasm32/js/web_worker_module.bundler.js" << 'EOL'
-// synchronously, using the browser, import wasm_bindgen shim JS scripts
-import init, { wasm_thread_entry_point } from "../../../../../";
-// Wait for the main thread to send us the shared module/memory and work context.
-// Once we've got it, initialize it all with the `wasm_bindgen` global we imported via
-// `importScripts`.
-self.onmessage = event => {
-     let [ module, memory, work, thread_key ] = event.data;
+let _resolveWalletUrl;
+const _walletUrlReady = new Promise(resolve => { _resolveWalletUrl = resolve; });
+
+self.onmessage = async function(event) {
+    const data = event.data;
+
+    if (data?.type === '__wallet_init') {
+        _resolveWalletUrl(data.walletUrl);
+        return;
+    }
+
+    // Ignore unknown messages (e.g. Vite's module-runner init in dev mode)
+    if (!Array.isArray(data)) return;
+
+    const walletUrl = await _walletUrlReady;
+    const [module, memory, work, thread_key] = data;
+    const { default: init, wasm_thread_entry_point } = await import(/* @vite-ignore */ walletUrl);
     init(module, memory).catch(err => {
         console.log(err);
         const error = new Error(err.message);
         error.customProperty = "This error right here!";
-        // Propagate to main `onerror`:
-        setTimeout(() => {
-            throw error;
-        });
-        // Rethrow to keep promise rejected and prevent execution of further commands:
+        setTimeout(() => { throw error; });
         throw error;
     }).then(() => {
-        // Enter rust code by calling entry point defined in `lib.rs`.
-        // This executes closure defined by work context.
         wasm_thread_entry_point(work);
     });
 };
+
 self.onunhandledrejection = function(e) {
     console.error('Worker unhandled rejection:', e.reason);
     throw e.reason;
@@ -44,11 +52,10 @@ self.onerror = function(e) {
     console.error('Worker error:', e.message);
     throw e;
 };
-
 self.onended = function(e) {
     console.error('Worker ended:', e.message);
     throw e;
-}
+};
 EOL
 
 echo "Added worker module to: $WASM_THREAD_DIR/src/wasm32/js/web_worker_module.bundler.js"
