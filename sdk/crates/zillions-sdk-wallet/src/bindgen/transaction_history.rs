@@ -201,6 +201,7 @@ pub fn extract_transaction_history(
             entry.status = Some(tx_entry.status());
             entry.block_height = tx_entry.mined_height();
             entry.expiry_height = tx_entry.expiry_height();
+            entry.fee = tx_entry.fee().map(|fee| fee.into_u64());
         }
     }
 
@@ -248,13 +249,14 @@ pub fn extract_transaction_history(
             }
         }
 
-        // Get transaction status from tx_table if not already set
-        if entry.status.is_none() {
-            if let Some(tx_entry) = db.tx_table().get(&txid) {
+        // Get transaction status (if not already set) and fee from tx_table
+        if let Some(tx_entry) = db.tx_table().get(&txid) {
+            if entry.status.is_none() {
                 entry.status = Some(tx_entry.status());
                 entry.block_height = tx_entry.mined_height();
                 entry.expiry_height = tx_entry.expiry_height();
             }
+            entry.fee = entry.fee.or_else(|| tx_entry.fee().map(|fee| fee.into_u64()));
         }
     }
 

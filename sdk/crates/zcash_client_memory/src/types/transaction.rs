@@ -69,8 +69,7 @@ impl TransactionEntry {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn fee(&self) -> Option<Zatoshis> {
+    pub fn fee(&self) -> Option<Zatoshis> {
         self.fee
     }
 
@@ -173,7 +172,7 @@ impl TransactionTable {
     ) {
         match self.0.entry(tx.txid()) {
             Entry::Occupied(mut entry) => {
-                entry.get_mut().fee = fee;
+                entry.get_mut().fee = fee.or(entry.get().fee);
                 entry.get_mut().expiry_height = Some(tx.expiry_height());
 
                 let mut raw = Vec::new();

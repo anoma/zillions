@@ -31,6 +31,7 @@ use zcash_protocol::{
     ShieldedProtocol::{self, Sapling},
     TxId,
     consensus::{self, BlockHeight, NetworkUpgrade},
+    value::Zatoshis,
 };
 use zip32::{DiversifierIndex, fingerprint::SeedFingerprint};
 
@@ -621,7 +622,20 @@ impl<P: consensus::Parameters> WalletWrite for MemoryWalletDb<P> {
         d_tx: DecryptedTransaction<zcash_primitives::transaction::Transaction, Self::AccountId>,
     ) -> Result<(), Self::Error> {
         tracing::debug!("store_decrypted_tx");
-        self.tx_table.put_tx_data(d_tx.tx(), None, None);
+        // The shielded value balance is public, so fee is derivable from `tx` alone once any
+        // spent transparent inputs are resolved via previously-seen outputs; unresolvable
+        // prevouts leave fee as `None`.
+        let fee = d_tx
+            .tx()
+            .fee_paid(|prevout: &OutPoint| -> Result<Option<Zatoshis>, Error> {
+                Ok(self
+                    .transparent_received_outputs
+                    .get(prevout)
+                    .map(|txo| txo.txout.value()))
+            })
+            .ok()
+            .flatten();
+        self.tx_table.put_tx_data(d_tx.tx(), fee, None);
         if let Some(height) = d_tx.mined_height() {
             self.set_transaction_status(d_tx.tx().txid(), TransactionStatus::Mined(height))?
         }
