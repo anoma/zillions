@@ -10,7 +10,8 @@
     "typecheck": "tsc -b",
     "preview": "vite preview",
     "prepare": "husky",
-    "sdk:update": "bash ./scripts/update-sdk.sh"
+    "sdk:update": "bash ./scripts/update-sdk.sh",
+    "keychain:update": "bash ./scripts/update-keychain-types.sh"
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.2.8",

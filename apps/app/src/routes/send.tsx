@@ -4,6 +4,7 @@ import { twMerge } from "tailwind-merge";
 import { ActionButton } from "../components/ActionButton";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { useAccount } from "../hooks/useAccount";
+import { useFee } from "../hooks/useFee";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useTransfer } from "../hooks/useTransfer";
 import { invariant } from "../lib/invariant";
@@ -17,14 +18,23 @@ function SendRoute() {
   const account = useAccount();
   const balance = useGetBalance();
 
-  const transfer = useTransfer();
-
   const [isFromTransparent, setIsFromTransparent] = useState(false);
   const [amountString, setAmountString] = useState("");
   const [to, setTo] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+
+  const transfer = useTransfer();
+
+  const amount = (() => {
+    try {
+      return zecToZatoshi(amountString);
+    } catch {
+      return 0n;
+    }
+  })();
+  const fee = useFee(to, amount);
 
   const onSubmit = async () => {
     try {
@@ -34,7 +44,6 @@ function SendRoute() {
       invariant(amountString, "Set an amount");
       invariant(to, "Set an recipient");
 
-      const amount = zecToZatoshi(amountString);
       invariant(amount > 0, "Set an amount");
       invariant(amount <= availableBalance, "Insufficient balance");
 
@@ -122,8 +131,13 @@ function SendRoute() {
 
         <div className="mt-4 flex items-center justify-between text-xs font-medium">
           <div>Fee</div>
-          {/* TODO get the fee value */}
-          <div>{0.0001} ZEC</div>
+          <div>
+            {fee.data
+              ? `${zatoshiToZec(fee.data)} ZEC`
+              : fee.isLoading
+                ? "..."
+                : "-"}
+          </div>
         </div>
 
         <ActionButton

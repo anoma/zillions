@@ -28,7 +28,7 @@ export const AccountType = {
   Ledger: "ledger",
   // Disposable
   Disposable: "disposable",
-};
+} as const;
 
 export type AccountType = (typeof AccountType)[keyof typeof AccountType];
 

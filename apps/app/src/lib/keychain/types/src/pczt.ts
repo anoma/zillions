@@ -50,8 +50,8 @@ export type PcztSummary = {
   /** Orchard value flows (spends + outputs/actions). */
   orchardInputs: PcztShieldedIo[];
   orchardOutputs: PcztShieldedIo[];
-  /** Fee in zatoshis, if present in the PCZT. */
-  fee?: string;
+  /** Fee in zatoshis, derived from the PCZT's bundle balances. */
+  fee: string;
   /** The full `to_json()` structure for the raw expandable view. */
   raw: unknown;
 };

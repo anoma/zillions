@@ -7,4 +7,6 @@ export const Events = {
   ExtensionLocked: "zc-extension-locked",
   ExtensionUnlocked: "zc-extension-unlocked",
   ConnectionRevoked: "zc-connection-revoked",
-};
+} as const;
+
+export type Events = (typeof Events)[keyof typeof Events];
