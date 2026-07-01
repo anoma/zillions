@@ -9,14 +9,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UnshieldRouteImport } from './routes/unshield'
 import { Route as TransactionsRouteImport } from './routes/transactions'
+import { Route as ShieldRouteImport } from './routes/shield'
 import { Route as SendRouteImport } from './routes/send'
 import { Route as ReceiveRouteImport } from './routes/receive'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UnshieldRoute = UnshieldRouteImport.update({
+  id: '/unshield',
+  path: '/unshield',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TransactionsRoute = TransactionsRouteImport.update({
   id: '/transactions',
   path: '/transactions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShieldRoute = ShieldRouteImport.update({
+  id: '/shield',
+  path: '/shield',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SendRoute = SendRouteImport.update({
@@ -39,43 +51,78 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
+  '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
+  '/unshield': typeof UnshieldRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
+  '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
+  '/unshield': typeof UnshieldRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
+  '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
+  '/unshield': typeof UnshieldRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/receive' | '/send' | '/transactions'
+  fullPaths:
+    | '/'
+    | '/receive'
+    | '/send'
+    | '/shield'
+    | '/transactions'
+    | '/unshield'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/receive' | '/send' | '/transactions'
-  id: '__root__' | '/' | '/receive' | '/send' | '/transactions'
+  to: '/' | '/receive' | '/send' | '/shield' | '/transactions' | '/unshield'
+  id:
+    | '__root__'
+    | '/'
+    | '/receive'
+    | '/send'
+    | '/shield'
+    | '/transactions'
+    | '/unshield'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ReceiveRoute: typeof ReceiveRoute
   SendRoute: typeof SendRoute
+  ShieldRoute: typeof ShieldRoute
   TransactionsRoute: typeof TransactionsRoute
+  UnshieldRoute: typeof UnshieldRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/unshield': {
+      id: '/unshield'
+      path: '/unshield'
+      fullPath: '/unshield'
+      preLoaderRoute: typeof UnshieldRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/transactions': {
       id: '/transactions'
       path: '/transactions'
       fullPath: '/transactions'
       preLoaderRoute: typeof TransactionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shield': {
+      id: '/shield'
+      path: '/shield'
+      fullPath: '/shield'
+      preLoaderRoute: typeof ShieldRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/send': {
@@ -106,7 +153,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ReceiveRoute: ReceiveRoute,
   SendRoute: SendRoute,
+  ShieldRoute: ShieldRoute,
   TransactionsRoute: TransactionsRoute,
+  UnshieldRoute: UnshieldRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

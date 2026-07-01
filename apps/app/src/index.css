@@ -1,11 +1,15 @@
 @import "tailwindcss";
 @import "@fontsource-variable/montserrat";
 
+@source inline("{bg,text,border,before:bg,before:border}-neutral-{500,800}");
+
 @theme {
   --font-sans: "Montserrat Variable", sans-serif;
 
   --color-surface: #ecebe7;
   --color-gold: #ceb462;
+
+  --ease-out-circ: cubic-bezier(0.075, 0.82, 0.165, 1);
 
   --animate-loading-spinner: loading 1s ease infinite;
   @keyframes loading {

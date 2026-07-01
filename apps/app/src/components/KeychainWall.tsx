@@ -16,10 +16,10 @@ import {
 } from "../lib/keychain/keychain";
 import { keychainUrl } from "../lib/urls";
 import { AccountProvider } from "./AccountProvider";
-import { ActionButton } from "./ActionButton";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { SmartLink } from "./SmartLink";
+import { ActionButton } from "./ui/ActionButton";
 
 function Content({ title, children }: { title: string; children: ReactNode }) {
   return (

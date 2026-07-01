@@ -1,14 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
-import { ActionButton } from "../components/ActionButton";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
+import { ActionButton } from "../components/ui/ActionButton";
 import { useAccount } from "../hooks/useAccount";
 import { useFee } from "../hooks/useFee";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useTransfer } from "../hooks/useTransfer";
 import { invariant } from "../lib/invariant";
-import { isTransparentAddress, zatoshiToZec, zecToZatoshi } from "../lib/utils";
+import {
+  isShieldedAddress,
+  isTransparentAddress,
+  zatoshiToZec,
+  zecToZatoshi,
+} from "../lib/utils";
 
 export const Route = createFileRoute("/send")({
   component: SendRoute,
@@ -18,7 +23,7 @@ function SendRoute() {
   const account = useAccount();
   const balance = useGetBalance();
 
-  const [isFromTransparent, setIsFromTransparent] = useState(false);
+  const [isTransparentFrom, setIsTransparentFrom] = useState(false);
   const [amountString, setAmountString] = useState("");
   const [to, setTo] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
@@ -47,7 +52,7 @@ function SendRoute() {
       invariant(amount > 0, "Set an amount");
       invariant(amount <= availableBalance, "Insufficient balance");
 
-      const from = isFromTransparent
+      const from = isTransparentFrom
         ? account.transparent.address
         : account.shielded.address;
 
@@ -66,14 +71,15 @@ function SendRoute() {
     if (!balance.data) {
       return 0n;
     }
-    if (isFromTransparent) {
+    if (isTransparentFrom) {
       return balance.data.unshieldedBalance;
     }
     // TODO support for sapling
     return balance.data.orchardBalance;
   })();
 
-  const isToTransparent = isTransparentAddress(to);
+  const isTransparentTo = isTransparentAddress(to);
+  const isShieldedTo = isShieldedAddress(to);
 
   if (isSuccess) {
     return (
@@ -97,8 +103,8 @@ function SendRoute() {
           <div className="text-xs font-medium mb-1">From</div>
           <div>
             <ShieldedTransparentToggle
-              isTransparent={isFromTransparent}
-              setIsTransparent={setIsFromTransparent}
+              isTransparent={isTransparentFrom}
+              setIsTransparent={setIsTransparentFrom}
             />
           </div>
         </label>
@@ -123,14 +129,18 @@ function SendRoute() {
             name="to"
             type="text"
             placeholder="Enter Zcash address..."
-            className="w-full px-4 py-2 font-medium rounded-lg border border-gray-300 outline-none placeholder:text-black focus:border-gray-600 focus:placeholder:text-transparent"
+            className={twMerge(
+              "w-full px-4 py-2 font-medium rounded-lg border border-gray-300 outline-none placeholder:text-black focus:placeholder:text-transparent",
+              isTransparentTo && "border-black",
+              isShieldedTo && "border-gold",
+            )}
             value={to}
             onChange={(e) => setTo(e.target.value)}
           />
         </label>
 
         <div className="mt-4 flex items-center justify-between text-xs font-medium">
-          <div>Fee</div>
+          <div>Transaction fee</div>
           <div>
             {fee.data
               ? `${zatoshiToZec(fee.data)} ZEC`
@@ -141,20 +151,21 @@ function SendRoute() {
         </div>
 
         <ActionButton
-          className={twMerge(
-            "mt-4 w-full h-13",
-            (isFromTransparent || isToTransparent) && "bg-black text-white",
-            isPending && "pointer-events-none opacity-50",
-          )}
+          size="lg"
+          className="mt-4 w-full"
+          backgroundColor={
+            isTransparentFrom || isTransparentTo ? "black" : undefined
+          }
+          textColor={isTransparentFrom || isTransparentTo ? "white" : undefined}
           disabled={isPending}
         >
           {isPending ? "Sending..." : "Send"}
         </ActionButton>
 
         <div className="mt-2 text-sm text-center font-medium">
-          {isFromTransparent && isToTransparent
+          {isTransparentFrom && isTransparentTo
             ? "This transfer is transparent"
-            : isFromTransparent || isToTransparent
+            : isTransparentFrom || isTransparentTo
               ? "This transfer is partly shielded"
               : "This transfer is shielded"}
         </div>
