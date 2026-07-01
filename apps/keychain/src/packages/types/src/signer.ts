@@ -1,4 +1,4 @@
-import { PcztBase64 } from "./pczt";
+import type { PcztBase64 } from "./pczt";
 
 export type SignArbitraryResponse = {
   hash: string;

@@ -7,12 +7,13 @@
  */
 import initWasm, {
   Pczt,
+  type PcztJson,
   pczt_sign,
   SeedFingerprint,
   UnifiedSpendingKey
 } from "@zillions-sdk/keys";
 import type { PcztSummary, PcztTransparentIo } from "@zillions/types";
-import { bigintReplacer } from "@zillions/utils";
+import { jsonify } from "@zillions/utils";
 
 export type { Pczt } from "@zillions-sdk/keys";
 
@@ -176,49 +177,65 @@ export const spendingKeys = (
 };
 
 /**
- * Build a human-readable summary from a PCZT's `to_json()` structure.
+ * Build a human-readable summary from a PCZT's `to_json()` structure (typed as
+ * `PcztJson`, see `@zillions-sdk/keys`).
  *
- * The exact JSON shape produced by Zillions SDK is not part of a stable contract,
- * so this reads defensively: it pulls transparent inputs/outputs,
- * sapling/orchard value flows, and a fee where present, and always keeps the
- * full `to_json()` for the raw expandable view. Anything we are not sure
- * about is simply surfaced through `raw`.
+ * Transparent and Sapling spends/outputs are flat entries with their own `value`/
+ * `user_address` fields. Orchard bundles a spend and an output together into each
+ * `action`, so `role` picks which side of the action to read - the two sides
+ * legitimately carry different values (what's being consumed vs. what's newly
+ * created), so listing both is correct, not duplicative.
+ *
+ * Fields not read here are still surfaced through `raw` for the expandable view.
+ * The fee is read via `pczt.fee()` instead of anything in this JSON, since it's a
+ * stable method on the shared `Pczt` wasm type rather than a JSON field.
  */
 export const buildPcztSummary = (pczt: Pczt): PcztSummary => {
-  // Stringify converts the WASM object to a plain JS object and coerces BigInts to strings in one pass.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const json = JSON.parse(JSON.stringify(pczt.to_json(), bigintReplacer)) as any;
-  const asArray = (v: unknown): unknown[] =>
+  // Read directly off the typed `PcztJson` - none of the fields this function extracts
+  // (`user_address`, `value`) are ever bigint, so there's no need for `jsonify`'s
+  // bigint-to-string pass here. `jsonify` is used once below, only for `raw`, which does
+  // need to be JSON-safe (it crosses the IPC boundary to the approval popup and includes
+  // `sapling.value_sum`, the one field in this shape that's a real bigint).
+  const pcztJson: PcztJson = pczt.to_json();
+  const asArray = <T>(v: T | T[] | undefined): T[] =>
     Array.isArray(v) ? v : v ? [v] : [];
 
-  const transparent = json?.transparent ?? {};
-  const sapling = json?.sapling ?? {};
-  const orchard = json?.orchard ?? {};
+  const transparent = pcztJson.transparent ?? {};
+  const sapling = pcztJson.sapling ?? {};
+  const orchard = pcztJson.orchard ?? {};
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapIo = (item: any): PcztTransparentIo => {
-    const recipient =
-      item?.recipient_address ?? item?.address ?? item?.recipient ?? undefined;
+  const mapIo = (
+    item: Record<string, unknown>,
+    role: "spend" | "output",
+  ): PcztTransparentIo => {
+    // Orchard actions nest spend/output data under `item[role]`; transparent and
+    // Sapling entries are already flat, so `item[role]` isn't an object and we
+    // fall back to reading `item` itself.
+    const nested = item[role];
+    const source =
+      typeof nested === "object" && nested !== null
+        ? (nested as Record<string, unknown>)
+        : item;
+    const address =
+      typeof source.user_address === "string" ? source.user_address : undefined;
     const value =
-      item?.value ?? item?.value_sum ?? item?.note?.value ?? undefined;
-    return { ...item, address: recipient, value };
+      typeof source.value === "number" || typeof source.value === "string"
+        ? source.value
+        : undefined;
+    return { ...item, address, value };
   };
 
-  const fee =
-    json?.fee !== undefined ? String(json.fee)
-    : transparent?.fee !== undefined ? String(transparent.fee)
-    : json?.global?.fee !== undefined ? String(json.global.fee)
-    : undefined;
+  const fee = String(pczt.fee());
 
   return {
-    network: json?.network ?? json?.global?.network ?? getNetwork(),
-    transparentInputs: asArray(transparent?.inputs).map(mapIo),
-    transparentOutputs: asArray(transparent?.outputs).map(mapIo),
-    saplingInputs: asArray(sapling?.spends).map(mapIo),
-    saplingOutputs: asArray(sapling?.outputs).map(mapIo),
-    orchardInputs: asArray(orchard?.spends ?? orchard?.actions).map(mapIo),
-    orchardOutputs: asArray(orchard?.outputs ?? orchard?.actions).map(mapIo),
+    network: getNetwork(),
+    transparentInputs: asArray(transparent.inputs).map((i) => mapIo(i, "spend")),
+    transparentOutputs: asArray(transparent.outputs).map((i) => mapIo(i, "output")),
+    saplingInputs: asArray(sapling.spends).map((i) => mapIo(i, "spend")),
+    saplingOutputs: asArray(sapling.outputs).map((i) => mapIo(i, "output")),
+    orchardInputs: asArray(orchard.actions).map((i) => mapIo(i, "spend")),
+    orchardOutputs: asArray(orchard.actions).map((i) => mapIo(i, "output")),
     fee,
-    raw: json,
+    raw: jsonify(pcztJson),
   };
 };

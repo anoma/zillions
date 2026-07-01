@@ -17,18 +17,20 @@ export type Path = {
 };
 
 // Type of account for storage
-export enum AccountType {
+export const AccountType = {
   // A stored mnemonic phrase
-  Mnemonic = "mnemonic",
+  Mnemonic: "mnemonic",
   // A stored private key
-  PrivateKey = "private-key",
+  PrivateKey: "private-key",
   // Stored, stringified spending and viewing keys
-  ShieldedKeys = "shielded-keys",
+  ShieldedKeys: "shielded-keys",
   // Ledger account
-  Ledger = "ledger",
+  Ledger: "ledger",
   // Disposable
-  Disposable = "disposable",
-}
+  Disposable: "disposable",
+} as const;
+
+export type AccountType = (typeof AccountType)[keyof typeof AccountType];
 
 export type DerivedAccount = {
   id: string;

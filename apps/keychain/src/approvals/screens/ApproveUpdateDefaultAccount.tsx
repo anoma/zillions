@@ -49,7 +49,7 @@ export const ApproveUpdateDefaultAccount = (): JSX.Element => {
             <div className="leading-[1.2]">
               <div className="text-base text-black">{alias}</div>
               <p className="text-sm text-neutral-400 font-medium">
-                {address && shortenAddress(address, 24)}
+                {address && shortenAddress(address)}
               </p>
             </div>
           </div>

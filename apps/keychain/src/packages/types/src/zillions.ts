@@ -1,6 +1,6 @@
-import { ZCashKeychainAccount } from "./account";
-import { PcztBase64 } from "./pczt";
-import {
+import type { ZCashKeychainAccount } from "./account";
+import type { PcztBase64 } from "./pczt";
+import type {
   GenDisposableSignerResponse,
   SignArbitraryResponse,
   Signer,

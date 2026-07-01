@@ -3,7 +3,6 @@
   "compilerOptions": {
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
-    "baseUrl": ".",
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
@@ -18,21 +17,21 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "target": "es2015",
+    "target": "es2023",
     "paths": {
-      "@vitejs/plugin-react": [".types-shims/vitejs-plugin-react.d.ts"],
-      "@zillions/components": ["src/packages/components/src"],
-      "@zillions/components/*": ["src/packages/components/src/*"],
-      "@zillions/crypto": ["src/packages/crypto/src/crypto/crypto"],
-      "@zillions/crypto/*": ["src/packages/crypto/src/*"],
-      "@zillions/storage": ["src/packages/storage/src"],
-      "@zillions/storage/*": ["src/packages/storage/src/*"],
-      "@zillions/types": ["src/packages/types/src"],
-      "@zillions/types/*": ["src/packages/types/src/*"],
-      "@zillions/utils": ["src/packages/utils/src"],
-      "@zillions/utils/*": ["src/packages/utils/src/*"],
+      "@vitejs/plugin-react": ["./.types-shims/vitejs-plugin-react.d.ts"],
+      "@zillions/components": ["./src/packages/components/src"],
+      "@zillions/components/*": ["./src/packages/components/src/*"],
+      "@zillions/crypto": ["./src/packages/crypto/src/crypto/crypto"],
+      "@zillions/crypto/*": ["./src/packages/crypto/src/*"],
+      "@zillions/storage": ["./src/packages/storage/src"],
+      "@zillions/storage/*": ["./src/packages/storage/src/*"],
+      "@zillions/types": ["./src/packages/types/src"],
+      "@zillions/types/*": ["./src/packages/types/src/*"],
+      "@zillions/utils": ["./src/packages/utils/src"],
+      "@zillions/utils/*": ["./src/packages/utils/src/*"],
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "entrypoints/**/*", ".wxt/**/*"],
-  "exclude": ["node_modules", ".output"]
+  "exclude": ["node_modules", ".output", ".wxt/dev-profile"]
 }

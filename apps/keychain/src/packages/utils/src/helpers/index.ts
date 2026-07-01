@@ -45,7 +45,7 @@ export const getTimeStamp = (): number => Math.floor(Date.now() / 1000);
  */
 export const shortenAddress = (
   address: string,
-  prefixLength = 32,
+  prefixLength = 8,
   suffixLength = 6,
   delimiter = "..."
 ): string => {
@@ -176,3 +176,48 @@ export const sanitizeUrl = (url: string): string => {
 /** JSON replacer that serializes BigInt values as strings, since JSON.stringify can't handle BigInt natively. */
 export const bigintReplacer = (_: string, v: unknown): unknown =>
   typeof v === "bigint" ? v.toString() : v;
+
+/**
+ * Type-level counterpart of `bigintReplacer`: the shape of `T` after
+ * `JSON.parse(JSON.stringify(value, bigintReplacer))`, i.e. every `bigint`
+ * recursively replaced with `string`. Note this widens fixed-length tuples
+ * (e.g. `[bigint, boolean]`) to arrays, since JSON round-tripping doesn't
+ * preserve tuple arity at the type level.
+ */
+export type Jsonify<T> = T extends bigint
+  ? string
+  : T extends readonly (infer U)[]
+    ? Jsonify<U>[]
+    : T extends object
+      ? { [K in keyof T]: Jsonify<T[K]> }
+      : T;
+
+/**
+ * Deep-clones `value` into a plain, JSON-safe object via `bigintReplacer`,
+ * converting every `bigint` into a `string` in the process. Useful for turning
+ * a wasm-bindgen result (which may carry BigInts and live wasm-memory views)
+ * into an independent plain object safe to store or pass across an IPC boundary.
+ */
+export const jsonify = <T>(value: T): Jsonify<T> =>
+  JSON.parse(JSON.stringify(value, bigintReplacer));
+
+const ZATOSHI_PER_ZEC = 100_000_000n;
+const ZEC_DECIMALS = 8;
+
+/** Convert zatoshi (bigint, or its number/string form off the IPC boundary) → ZEC decimal string. */
+export const zatoshiToZec = (zatoshi: bigint | number | string): string => {
+  const value = typeof zatoshi === "bigint" ? zatoshi : BigInt(zatoshi);
+  const negative = value < 0n;
+  const abs = negative ? -value : value;
+
+  const whole = abs / ZATOSHI_PER_ZEC;
+  const frac = abs % ZATOSHI_PER_ZEC;
+
+  const fracStr = frac
+    .toString()
+    .padStart(ZEC_DECIMALS, "0")
+    .replace(/0+$/, "");
+  const result = fracStr ? `${whole}.${fracStr}` : `${whole}`;
+
+  return negative ? `-${result}` : result;
+};
