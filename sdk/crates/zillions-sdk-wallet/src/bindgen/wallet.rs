@@ -86,12 +86,12 @@ pub type NoteRef = <MemoryWalletDb<Network> as InputSource>::NoteRef;
 ///
 /// PCZT (Partially Constructed Zcash Transaction)
 ///
-/// 1. **`pczt_create`** - Creates a PCZT which designates how funds from this account can be spent to realize the requested transfer (does NOT sign, generate proofs, or send)
+/// 1. **`pczt_create_from_shielded`** - Creates a PCZT which designates how funds from this account can be spent to realize the requested transfer (does NOT sign, generate proofs, or send)
 /// 2. **`pczt_sign`** - Signs the PCZT using USK (should be done in secure environment)
 /// 3. **`pczt_prove`** - Creates and inserts proofs for the PCZT
 ///
 /// The full flow looks like
-/// The full PCZT flow: `pczt_create` → `pczt_sign` → `pczt_prove` → `pczt_send`
+/// The full PCZT flow: `pczt_create_from_shielded` → `pczt_sign` → `pczt_prove` → `pczt_send`
 /// ```
 ///
 #[wasm_bindgen]
@@ -470,10 +470,14 @@ impl WebWallet {
     /// # Arguments
     ///
     /// * `account_id` - The ID of the account which transparent funds will be shielded.
+    /// * `value` - (Optional) Amount to shield in Zatoshis. When omitted, all
+    ///   transparent funds above the shielding threshold are swept. When given,
+    ///   whole UTXOs are selected to cover at least this amount, so the shielded
+    ///   value may exceed it; no transparent change is created.
     ///
-    pub async fn pczt_shield(&self, account_id: u32) -> Result<Pczt, Error> {
+    pub async fn pczt_shield(&self, account_id: u32, value: Option<u64>) -> Result<Pczt, Error> {
         self.inner
-            .pczt_shield(account_id.into())
+            .pczt_shield(account_id.into(), value)
             .await
             .map(Into::into)
     }
@@ -491,7 +495,7 @@ impl WebWallet {
     /// * `to_address` - [ZIP316](https://zips.z.cash/zip-0316) encoded address to send funds to
     /// * `value` - Amount to send in Zatoshis (1 ZEC = 100_000_000 Zatoshis)
     ///
-    pub async fn pczt_create(
+    pub async fn pczt_create_from_shielded(
         &self,
         account_id: u32,
         to_address: String,
@@ -499,7 +503,33 @@ impl WebWallet {
     ) -> Result<Pczt, Error> {
         let to_address = ZcashAddress::try_from_encoded(&to_address)?;
         self.inner
-            .pczt_create(AccountId::from(account_id), to_address, value)
+            .pczt_create_from_shielded(AccountId::from(account_id), to_address, value)
+            .await
+            .map(Into::into)
+    }
+
+    /// Creates a PCZT spending transparent funds.
+    ///
+    /// Selects transparent UTXOs to cover the requested value plus the ZIP-317 fee.
+    /// For transparent recipients, change returns to the funding transparent address;
+    /// for shielded recipients, change is auto-shielded into the account's Orchard pool.
+    /// Like `pczt_create_from_shielded`, this does NOT sign, prove, or send.
+    ///
+    /// # Arguments
+    ///
+    /// * `account_id` - The ID of the account in this wallet to send funds from
+    /// * `to_address` - [ZIP316](https://zips.z.cash/zip-0316) encoded address to send funds to (transparent or shielded)
+    /// * `value` - Amount to send in Zatoshis (1 ZEC = 100_000_000 Zatoshis)
+    ///
+    pub async fn pczt_create_from_transparent(
+        &self,
+        account_id: u32,
+        to_address: String,
+        value: u64,
+    ) -> Result<Pczt, Error> {
+        let to_address = ZcashAddress::try_from_encoded(&to_address)?;
+        self.inner
+            .pczt_create_from_transparent(AccountId::from(account_id), to_address, value)
             .await
             .map(Into::into)
     }

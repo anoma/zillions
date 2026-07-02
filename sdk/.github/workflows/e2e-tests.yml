@@ -1,8 +1,8 @@
 name: Playwright Tests
-# on:
-#     pull_request:
-#     push:
-#       branches: main
+# Manual-only for now: workflow_dispatch never auto-triggers, but keeps the
+# workflow runnable from the Actions tab. Restore pull_request/push when
+# the e2e suite is ready.
+on: workflow_dispatch
 
 jobs:
   test:

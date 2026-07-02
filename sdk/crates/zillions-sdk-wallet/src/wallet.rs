@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 
 use bip0039::{English, Mnemonic};
@@ -26,33 +27,40 @@ use std::sync::Arc;
 use subtle::ConditionallySelectable;
 use tokio::sync::RwLock;
 use zcash_address::ZcashAddress;
+use zcash_client_backend::data_api::wallet::TargetHeight;
 use zcash_client_backend::data_api::wallet::{
     create_pczt_from_proposal, create_proposed_transactions,
     extract_and_store_transaction_from_pczt, input_selection::GreedyInputSelector,
     propose_shielding, propose_transfer, ConfirmationsPolicy, SpendingKeys,
 };
 use zcash_client_backend::data_api::{
-    Account, AccountBirthday, AccountPurpose, InputSource, WalletRead, WalletSummary, WalletWrite,
+    Account, AccountBirthday, AccountPurpose, InputSource, TransparentOutputFilter, WalletRead,
+    WalletSummary, WalletWrite,
 };
 use zcash_client_backend::data_api::{WalletCommitmentTrees, Zip32Derivation};
 use zcash_client_backend::fees::standard::MultiOutputChangeStrategy;
-use zcash_client_backend::fees::{DustOutputPolicy, SplitPolicy, StandardFeeRule};
+use zcash_client_backend::fees::{
+    ChangeValue, DustOutputPolicy, SplitPolicy, StandardFeeRule, TransactionBalance,
+};
 use zcash_client_backend::proposal::Proposal;
 use zcash_client_backend::proto::service::{
     self, compact_tx_streamer_client::CompactTxStreamerClient,
 };
-use zcash_client_backend::wallet::OvkPolicy;
+use zcash_client_backend::wallet::{OvkPolicy, WalletTransparentOutput};
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
 use zcash_client_memory::{MemBlockCache, MemoryWalletDb};
+use zcash_keys::address::Address;
 use zcash_keys::keys::{UnifiedFullViewingKey, UnifiedSpendingKey};
+use zcash_primitives::transaction::fees::transparent as transparent_fees;
+use zcash_primitives::transaction::fees::zip317::P2PKH_STANDARD_OUTPUT_SIZE;
 use zcash_primitives::transaction::fees::FeeRule;
 use zcash_primitives::transaction::TxId;
 use zcash_proofs::prover::LocalTxProver;
-use zcash_protocol::ShieldedProtocol;
+use zcash_protocol::{PoolType, ShieldedProtocol};
 
 use zcash_client_backend::sync::run;
 
-use zcash_protocol::consensus::Parameters;
+use zcash_protocol::consensus::{BlockHeight, Parameters};
 use zcash_protocol::value::Zatoshis;
 use zip32;
 use zip32::fingerprint::SeedFingerprint;
@@ -309,17 +317,7 @@ where
     ) -> Result<Proposal<StandardFeeRule, NoteRef>, Error> {
         let input_selector = GreedyInputSelector::new();
 
-        let change_strategy = MultiOutputChangeStrategy::new(
-            StandardFeeRule::Zip317,
-            None,
-            ShieldedProtocol::Orchard,
-            DustOutputPolicy::default(),
-            SplitPolicy::with_min_output_value(
-                NonZeroUsize::new(self.target_note_count)
-                    .ok_or(Error::FailedToCreateTransaction)?,
-                Zatoshis::from_u64(self.min_split_output_value)?,
-            ),
-        );
+        let change_strategy = self.default_change_strategy()?;
         let request = TransactionRequest::new(vec![Payment::without_memo(
             to_address,
             Zatoshis::from_u64(value)?,
@@ -450,11 +448,10 @@ where
         self.send_authorized_transactions(&txids).await
     }
 
-    pub async fn pczt_shield(&self, account_id: AccountId) -> Result<Pczt, Error> {
-        tracing::info!("pczt_shield: Starting for account {:?}", account_id);
-
-        // Ensure wallet is synced to latest block before creating transaction
-        // This prevents anchor mismatch errors where the commitment tree is out of sync
+    /// Ensure the wallet is synced to near the chain tip before creating a
+    /// transaction; prevents expiry and anchor-mismatch errors. Errors if the
+    /// wallet has never been synced.
+    async fn ensure_synced(&self, op: &str) -> Result<(), Error> {
         let mut client = self.client.clone();
         let chain_tip: u32 = client
             .get_latest_block(service::ChainSpec::default())
@@ -464,27 +461,25 @@ where
             .try_into()
             .expect("block heights must fit into u32");
 
-        let wallet_height = self.db.read().await.chain_height()?;
-        if let Some(wallet_height) = wallet_height {
-            let wallet_height_u32: u32 = wallet_height.into();
-            if chain_tip.saturating_sub(wallet_height_u32) > 10 {
-                tracing::warn!(
-                    "Wallet not fully synced: wallet={} < chain_tip={}. Syncing now...",
-                    wallet_height_u32,
-                    chain_tip
-                );
-                // Trigger sync before proceeding to ensure valid anchors
-                drop(client); // Release client before sync
-                self.sync().await?;
-                tracing::info!("pczt_shield: Sync completed, proceeding with transaction creation");
-            }
-        } else {
-            return Err(Error::Generic(
-                "Wallet has not been synced yet. Please sync before shielding.".to_string(),
-            ));
+        let wallet_height = self.db.read().await.chain_height()?.ok_or_else(|| {
+            Error::Generic("Wallet has not been synced yet. Please sync first.".to_string())
+        })?;
+        let wallet_height_u32: u32 = wallet_height.into();
+        if chain_tip.saturating_sub(wallet_height_u32) > 10 {
+            tracing::warn!(
+                "{op}: Wallet not fully synced: wallet={wallet_height_u32} < chain_tip={chain_tip}. Syncing now..."
+            );
+            drop(client);
+            self.sync().await?;
+            tracing::info!("{op}: Sync completed, proceeding with transaction creation");
         }
+        Ok(())
+    }
 
-        let change_strategy = MultiOutputChangeStrategy::new(
+    /// The shared change strategy: ZIP-317 fees with change split into
+    /// `target_note_count` Orchard notes.
+    fn default_change_strategy(&self) -> Result<MultiOutputChangeStrategy<W>, Error> {
+        Ok(MultiOutputChangeStrategy::new(
             StandardFeeRule::Zip317,
             None,
             ShieldedProtocol::Orchard,
@@ -494,8 +489,207 @@ where
                     .ok_or(Error::FailedToCreateTransaction)?,
                 Zatoshis::from_u64(self.min_split_output_value)?,
             ),
-        );
+        ))
+    }
 
+    /// Create a PCZT from a proposal, sharing the generic plumbing and error
+    /// logging across the pczt_* entry points.
+    fn pczt_from_proposal<NR: Copy + Eq + Ord + Debug>(
+        &self,
+        db: &mut W,
+        account_id: AccountId,
+        proposal: &Proposal<StandardFeeRule, NR>,
+        op: &str,
+    ) -> Result<Pczt, Error> {
+        create_pczt_from_proposal::<
+            _,
+            _,
+            <MemoryWalletDb<Network> as InputSource>::Error,
+            _,
+            <StandardFeeRule as FeeRule>::Error,
+            _,
+        >(db, &self.network, account_id, OvkPolicy::Sender, proposal)
+        .map_err(|e| {
+            tracing::error!("{op}: create_pczt_from_proposal failed: {:?}", e);
+            Error::PcztCreate(format!("{:?}", e))
+        })
+    }
+
+    /// Gather spendable transparent UTXOs across the account's addresses,
+    /// sorted largest first (stable tiebreaker by outpoint for determinism).
+    fn gather_spendable_utxos(
+        &self,
+        db: &W,
+        account_id: AccountId,
+        chain_tip_height: BlockHeight,
+        target_height: TargetHeight,
+    ) -> Result<Vec<WalletTransparentOutput<AccountId>>, Error> {
+        let transparent_balances = db.get_transparent_balances(
+            account_id,
+            chain_tip_height.into(),
+            self.min_confirmations,
+        )?;
+        let mut utxos = Vec::new();
+        for addr in transparent_balances.into_keys() {
+            utxos.extend(db.get_spendable_transparent_outputs(
+                &addr,
+                target_height,
+                self.min_confirmations,
+                TransparentOutputFilter::All,
+            )?);
+        }
+        utxos.sort_by(|a, b| {
+            b.value()
+                .cmp(&a.value())
+                .then_with(|| a.outpoint().cmp(b.outpoint()))
+        });
+        Ok(utxos)
+    }
+
+    /// Greedily select UTXOs, largest first, until they cover `value` plus the
+    /// ZIP-317 fee for the given output shape. Returns the selection, its
+    /// total input value, and the fee.
+    fn select_utxos_for(
+        &self,
+        utxos: Vec<WalletTransparentOutput<AccountId>>,
+        value: Zatoshis,
+        target_height: TargetHeight,
+        transparent_output_sizes: &[usize],
+        sapling_output_count: usize,
+        orchard_action_count: usize,
+    ) -> Result<(Vec<WalletTransparentOutput<AccountId>>, Zatoshis, Zatoshis), Error> {
+        let fee_rule = StandardFeeRule::Zip317;
+        let mut selected = Vec::new();
+        let mut input_total = Zatoshis::ZERO;
+        for utxo in utxos {
+            input_total = (input_total + utxo.value()).ok_or(Error::FailedToCreateTransaction)?;
+            selected.push(utxo);
+            let fee = fee_rule
+                .fee_required(
+                    &self.network,
+                    BlockHeight::from(target_height),
+                    selected
+                        .iter()
+                        .map(transparent_fees::InputView::serialized_size),
+                    transparent_output_sizes.iter().copied(),
+                    0,
+                    sapling_output_count,
+                    orchard_action_count,
+                )
+                .map_err(|e| Error::Generic(format!("Fee calculation failed: {:?}", e)))?;
+            let required = (value + fee).ok_or(Error::FailedToCreateTransaction)?;
+            if input_total >= required {
+                return Ok((selected, input_total, fee));
+            }
+        }
+        Err(Error::Generic(format!(
+            "Insufficient transparent balance: have {:?}, need {:?} plus fee",
+            input_total, value
+        )))
+    }
+
+    /// Proposals carry account-agnostic transparent inputs; equivalent of the
+    /// crate-private `redact_account_data`.
+    fn redact_utxos(
+        utxos: Vec<WalletTransparentOutput<AccountId>>,
+    ) -> Vec<WalletTransparentOutput<()>> {
+        utxos
+            .into_iter()
+            .map(|utxo| {
+                WalletTransparentOutput::from_parts(
+                    utxo.outpoint().clone(),
+                    utxo.txout().clone(),
+                    utxo.mined_height(),
+                    utxo.recipient_account().map(|_| ()),
+                    utxo.recipient_key_scope(),
+                    None,
+                )
+                .expect("recipient address was already recognized for these UTXOs")
+            })
+            .collect()
+    }
+
+    /// Shield transparent funds into the account's Orchard pool.
+    ///
+    /// With `value: None`, sweeps all transparent funds above the shielding
+    /// threshold. With `Some(value)`, shields at least `value`: UTXOs are
+    /// selected greedily and shielded whole, so the shielded amount may exceed
+    /// the request; no transparent change is created (UTXO-granular, which
+    /// avoids the linkability of exact-amount partial shields).
+    pub async fn pczt_shield(
+        &self,
+        account_id: AccountId,
+        value: Option<u64>,
+    ) -> Result<Pczt, Error> {
+        match value {
+            None => self.pczt_shield_all(account_id).await,
+            Some(value) => self.pczt_shield_partial(account_id, value).await,
+        }
+    }
+
+    async fn pczt_shield_partial(&self, account_id: AccountId, value: u64) -> Result<Pczt, Error> {
+        tracing::info!(
+            "pczt_shield: partial shield of {value} zatoshi for account {:?}",
+            account_id
+        );
+        self.ensure_synced("pczt_shield").await?;
+
+        let value = Zatoshis::from_u64(value)?;
+        if value == Zatoshis::ZERO {
+            return Err(Error::Generic(
+                "Amount to shield must be greater than zero".to_string(),
+            ));
+        }
+
+        // The shielded value lands in a single Orchard change output (the
+        // bundle is padded to 2 actions); there are no transparent outputs.
+        let orchard_action_count = orchard::builder::BundleType::DEFAULT
+            .num_actions(0, 1)
+            .expect("orchard DEFAULT bundle type permits any (spends, outputs) count");
+
+        let mut db = self.db.write().await;
+        let chain_tip_height = db
+            .chain_height()?
+            .ok_or_else(|| Error::Generic("Havent scanned yet, cant shield".to_string()))?;
+        let target_height: TargetHeight = (chain_tip_height + 1).into();
+
+        let utxos =
+            self.gather_spendable_utxos(&db, account_id, chain_tip_height, target_height)?;
+        let (selected, input_total, fee) =
+            self.select_utxos_for(utxos, value, target_height, &[], 0, orchard_action_count)?;
+
+        let shielded_value = (input_total - fee).ok_or(Error::FailedToCreateTransaction)?;
+        let balance = TransactionBalance::new(
+            vec![ChangeValue::shielded(
+                ShieldedProtocol::Orchard,
+                shielded_value,
+                None,
+            )],
+            fee,
+        )
+        .map_err(|_| Error::FailedToCreateTransaction)?;
+
+        let proposal: Proposal<StandardFeeRule, std::convert::Infallible> = Proposal::single_step(
+            TransactionRequest::empty(),
+            BTreeMap::new(),
+            Self::redact_utxos(selected),
+            None,
+            balance,
+            StandardFeeRule::Zip317,
+            target_height,
+            true,
+        )
+        .map_err(|e| Error::Generic(format!("Failed to build proposal: {:?}", e)))?;
+        tracing::info!("pczt_shield: partial shielding proposal created");
+
+        self.pczt_from_proposal(&mut db, account_id, &proposal, "pczt_shield")
+    }
+
+    async fn pczt_shield_all(&self, account_id: AccountId) -> Result<Pczt, Error> {
+        tracing::info!("pczt_shield: Starting for account {:?}", account_id);
+        self.ensure_synced("pczt_shield").await?;
+
+        let change_strategy = self.default_change_strategy()?;
         let input_selector = GreedyInputSelector::new();
         let mut db = self.db.write().await;
 
@@ -551,80 +745,20 @@ where
         })?;
         tracing::info!("pczt_shield: proposal created successfully");
 
-        tracing::info!("pczt_shield: Creating PCZT from proposal");
-        let pczt = create_pczt_from_proposal::<
-            _,
-            _,
-            <MemoryWalletDb<Network> as InputSource>::Error,
-            _,
-            <StandardFeeRule as FeeRule>::Error,
-            _,
-        >(
-            &mut *db,
-            &self.network,
-            account_id,
-            OvkPolicy::Sender,
-            &proposal,
-        )
-        .map_err(|e| {
-            tracing::error!("pczt_shield: create_pczt_from_proposal failed: {:?}", e);
-            Error::PcztCreate(format!("{:?}", e))
-        })?;
-        tracing::info!("pczt_shield: PCZT created from proposal successfully");
-
-        Ok(pczt)
+        self.pczt_from_proposal(&mut db, account_id, &proposal, "pczt_shield")
     }
     ///
     /// Create a PCZT
     ///
-    pub async fn pczt_create(
+    pub async fn pczt_create_from_shielded(
         &self,
         account_id: AccountId,
         to_address: ZcashAddress,
         value: u64,
     ) -> Result<Pczt, Error> {
-        // Ensure wallet is synced before creating transaction to prevent expiry errors
-        let mut client = self.client.clone();
-        let chain_tip: u32 = client
-            .get_latest_block(service::ChainSpec::default())
-            .await?
-            .into_inner()
-            .height
-            .try_into()
-            .expect("block heights must fit into u32");
+        self.ensure_synced("pczt_create_from_shielded").await?;
 
-        let wallet_height = self.db.read().await.chain_height()?;
-        if let Some(wallet_height) = wallet_height {
-            let wallet_height_u32: u32 = wallet_height.into();
-            if chain_tip.saturating_sub(wallet_height_u32) > 10 {
-                tracing::warn!(
-                    "pczt_create: Wallet not fully synced: wallet={} < chain_tip={}. Syncing now...",
-                    wallet_height_u32,
-                    chain_tip
-                );
-                drop(client);
-                self.sync().await?;
-                tracing::info!("pczt_create: Sync completed, proceeding with transaction creation");
-            }
-        } else {
-            return Err(Error::Generic(
-                "Wallet has not been synced yet. Please sync before transferring.".to_string(),
-            ));
-        }
-
-        // Create the PCZT.
-        let change_strategy = MultiOutputChangeStrategy::new(
-            StandardFeeRule::Zip317,
-            None,
-            ShieldedProtocol::Orchard,
-            DustOutputPolicy::default(),
-            SplitPolicy::with_min_output_value(
-                NonZeroUsize::new(self.target_note_count)
-                    .ok_or(Error::FailedToCreateTransaction)?,
-                Zatoshis::from_u64(self.min_split_output_value)?,
-            ),
-        );
-
+        let change_strategy = self.default_change_strategy()?;
         let input_selector = GreedyInputSelector::new();
         let request = TransactionRequest::new(vec![Payment::without_memo(
             to_address,
@@ -642,25 +776,144 @@ where
         )
             .map_err(|e| Error::Generic(format!("something bad happened when calling propose transfer. Possibly insufficient balance... {:?}", e)))?;
         tracing::info!("PCZT proposal created");
-        let pczt = create_pczt_from_proposal::<
-            _,
-            _,
-            <MemoryWalletDb<Network> as InputSource>::Error,
-            _,
-            <StandardFeeRule as FeeRule>::Error,
-            _,
-        >(
-            &mut *db,
-            &self.network,
-            account_id,
-            OvkPolicy::Sender,
-            &proposal,
+        self.pczt_from_proposal(&mut db, account_id, &proposal, "pczt_create_from_shielded")
+    }
+
+    ///
+    /// Create a PCZT spending transparent funds.
+    ///
+    /// Upstream `propose_transfer` only selects shielded notes, so this builds the
+    /// proposal by hand: greedily select transparent UTXOs to cover `value` plus the
+    /// ZIP-317 fee and pay `to_address` (transparent or shielded). For transparent
+    /// recipients, change returns to the transparent address that funded the
+    /// transaction; for shielded recipients, change is auto-shielded into Orchard.
+    ///
+    pub async fn pczt_create_from_transparent(
+        &self,
+        account_id: AccountId,
+        to_address: ZcashAddress,
+        value: u64,
+    ) -> Result<Pczt, Error> {
+        self.ensure_synced("pczt_create_from_transparent").await?;
+
+        let value = Zatoshis::from_u64(value)?;
+
+        // Fee inputs depend on the recipient pool. Transparent recipients get
+        // transparent change back to the source address (payment + change = two
+        // t-outs, no shielded actions); shielded recipients get an Orchard
+        // change action, keeping change shielded.
+        let recipient = Address::try_from_zcash_address(&self.network, to_address.clone())
+            .map_err(|e| Error::Generic(format!("Unsupported recipient address: {:?}", e)))?;
+        let (payment_pool, transparent_output_sizes, sapling_output_count, orchard_output_count) =
+            match recipient {
+                Address::Transparent(_) => (
+                    PoolType::Transparent,
+                    vec![P2PKH_STANDARD_OUTPUT_SIZE; 2],
+                    0,
+                    0,
+                ),
+                Address::Sapling(_) => (PoolType::SAPLING, vec![], 1, 1),
+                Address::Unified(ua) if ua.orchard().is_some() => (PoolType::ORCHARD, vec![], 0, 2),
+                Address::Unified(ua) if ua.sapling().is_some() => (PoolType::SAPLING, vec![], 1, 1),
+                Address::Unified(ua) if ua.transparent().is_some() => (
+                    PoolType::Transparent,
+                    vec![P2PKH_STANDARD_OUTPUT_SIZE; 2],
+                    0,
+                    0,
+                ),
+                _ => {
+                    return Err(Error::Generic(
+                        "Unsupported recipient address type".to_string(),
+                    ));
+                }
+            };
+        let sapling_output_count = ::sapling::builder::BundleType::DEFAULT
+            .num_outputs(0, sapling_output_count)
+            .expect("sapling DEFAULT bundle type permits any (spends, outputs) count");
+        let orchard_action_count = orchard::builder::BundleType::DEFAULT
+            .num_actions(0, orchard_output_count)
+            .expect("orchard DEFAULT bundle type permits any (spends, outputs) count");
+
+        let mut db = self.db.write().await;
+        let chain_tip_height = db
+            .chain_height()?
+            .ok_or_else(|| Error::Generic("Havent scanned yet, cant transfer".to_string()))?;
+        let target_height: TargetHeight = (chain_tip_height + 1).into();
+
+        let utxos =
+            self.gather_spendable_utxos(&db, account_id, chain_tip_height, target_height)?;
+        let (selected, input_total, fee) = self.select_utxos_for(
+            utxos,
+            value,
+            target_height,
+            &transparent_output_sizes,
+            sapling_output_count,
+            orchard_action_count,
+        )?;
+
+        // Change below the ZIP-317 marginal fee is not worth a transparent
+        // output; it gets absorbed into the fee instead.
+        const CHANGE_DUST_THRESHOLD: Zatoshis = Zatoshis::const_from_u64(5_000);
+
+        let mut payments = vec![Payment::without_memo(to_address, value)];
+        let mut payment_pools = BTreeMap::new();
+        payment_pools.insert(0usize, payment_pool);
+
+        let change = (input_total - value).and_then(|v| v - fee);
+        let balance = match change {
+            // t->t: return change to the transparent address we spent from, as
+            // an explicit second output, so the funds stay transparent.
+            Some(change)
+                if payment_pool == PoolType::Transparent && change >= CHANGE_DUST_THRESHOLD =>
+            {
+                let change_address = Address::Transparent(*selected[0].recipient_address())
+                    .to_zcash_address(&self.network);
+                payments.push(Payment::without_memo(change_address, change));
+                payment_pools.insert(1usize, PoolType::Transparent);
+                TransactionBalance::new(vec![], fee)
+            }
+            // Shielded recipient: change is auto-shielded into Orchard.
+            Some(change) if payment_pool != PoolType::Transparent && change > Zatoshis::ZERO => {
+                TransactionBalance::new(
+                    vec![ChangeValue::shielded(
+                        ShieldedProtocol::Orchard,
+                        change,
+                        None,
+                    )],
+                    fee,
+                )
+            }
+            // Inputs cover the payment (almost) exactly: absorb the leftover
+            // into the fee instead of creating a dust output.
+            _ => TransactionBalance::new(
+                vec![],
+                (input_total - value).ok_or(Error::FailedToCreateTransaction)?,
+            ),
+        }
+        .map_err(|_| Error::FailedToCreateTransaction)?;
+
+        let request = TransactionRequest::new(payments)
+            .map_err(|e| Error::Generic(format!("Invalid payment request: {:?}", e)))?;
+
+        let proposal: Proposal<StandardFeeRule, std::convert::Infallible> = Proposal::single_step(
+            request,
+            payment_pools,
+            Self::redact_utxos(selected),
+            None,
+            balance,
+            StandardFeeRule::Zip317,
+            target_height,
+            false,
         )
-        .map_err(|e| {
-            tracing::error!("pczt_create: create_pczt_from_proposal failed: {:?}", e);
-            Error::PcztCreate(format!("{:?}", e))
-        })?;
-        Ok(pczt)
+        .map_err(|e| Error::Generic(format!("Failed to build proposal: {:?}", e)))?;
+        tracing::info!("pczt_create_from_transparent: proposal created");
+
+        self.pczt_from_proposal(
+            &mut db,
+            account_id,
+            &proposal,
+            "pczt_create_from_transparent",
+        )
     }
 
     ///
