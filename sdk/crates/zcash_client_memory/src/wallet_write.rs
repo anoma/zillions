@@ -10,34 +10,34 @@ use ::transparent::bundle::OutPoint;
 use incrementalmerkletree::{Marking, Position, Retention};
 use shardtree::store::ShardStore;
 use zcash_client_backend::{
-    TransferType,
     address::UnifiedAddress,
+    data_api::{
+        chain::ChainState,
+        error::RewindError,
+        scanning::{ScanPriority, ScanRange},
+        AccountPurpose, AccountSource, TransactionStatus, WalletCommitmentTrees as _,
+        Zip32Derivation, SAPLING_SHARD_HEIGHT,
+    },
     data_api::{
         AccountBirthday, DecryptedTransaction, ScannedBlock, SentTransaction,
         SentTransactionOutput, WalletRead, WalletWrite,
     },
-    data_api::{
-        AccountPurpose, AccountSource, SAPLING_SHARD_HEIGHT, TransactionStatus,
-        WalletCommitmentTrees as _, Zip32Derivation,
-        chain::ChainState,
-        error::RewindError,
-        scanning::{ScanPriority, ScanRange},
-    },
     keys::{UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey},
     wallet::{NoteId, Recipient, WalletTransparentOutput},
+    TransferType,
 };
 use zcash_protocol::{
+    consensus::{self, BlockHeight, NetworkUpgrade},
+    value::Zatoshis,
     PoolType,
     ShieldedProtocol::{self, Sapling},
     TxId,
-    consensus::{self, BlockHeight, NetworkUpgrade},
-    value::Zatoshis,
 };
-use zip32::{DiversifierIndex, fingerprint::SeedFingerprint};
+use zip32::{fingerprint::SeedFingerprint, DiversifierIndex};
 
 use crate::{
-    MemoryWalletBlock, MemoryWalletDb, Nullifier, PRUNING_DEPTH, ReceivedNote, VERIFY_LOOKAHEAD,
-    error::Error,
+    error::Error, MemoryWalletBlock, MemoryWalletDb, Nullifier, ReceivedNote, PRUNING_DEPTH,
+    VERIFY_LOOKAHEAD,
 };
 
 #[cfg(feature = "orchard")]
@@ -724,10 +724,8 @@ impl<P: consensus::Parameters> WalletWrite for MemoryWalletDb<P> {
                 }
                 TransferType::AccountInternal | TransferType::Incoming => {
                     // Store incoming Sapling note
-                    let received_note = ReceivedNote::from_decrypted_sapling_output(
-                        d_tx.tx().txid(),
-                        output,
-                    )?;
+                    let received_note =
+                        ReceivedNote::from_decrypted_sapling_output(d_tx.tx().txid(), output)?;
                     self.received_notes.insert_received_note(received_note);
                 }
             }
@@ -800,10 +798,8 @@ impl<P: consensus::Parameters> WalletWrite for MemoryWalletDb<P> {
                 }
                 TransferType::AccountInternal | TransferType::Incoming => {
                     // Store incoming Orchard note
-                    let received_note = ReceivedNote::from_decrypted_orchard_output(
-                        d_tx.tx().txid(),
-                        output,
-                    )?;
+                    let received_note =
+                        ReceivedNote::from_decrypted_orchard_output(d_tx.tx().txid(), output)?;
                     self.received_notes.insert_received_note(received_note);
                 }
             }

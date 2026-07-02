@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::str::FromStr;
 use wasm_bindgen::prelude::wasm_bindgen;
-use zillions_sdk_common::{Network, Pczt};
 use zcash_protocol::consensus::{NetworkConstants, Parameters};
 use zcash_transparent::keys::{NonHardenedChildIndex, TransparentKeyScope};
+use zillions_sdk_common::{Network, Pczt};
 
 /// Signs and applies signatures to a PCZT.
 /// Should in a secure environment (e.g. Metamask snap).

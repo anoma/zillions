@@ -12,8 +12,6 @@ use crate::wallet::usk_from_seed_str;
 use crate::{bindgen::proposal::Proposal, Wallet, PRUNING_DEPTH};
 use futures_util::TryStreamExt;
 use wasm_thread as thread;
-use zillions_sdk_common::{Network, Pczt};
-use zillions_sdk_keys::{ProofGenerationKey, SeedFingerprint};
 use zcash_address::ZcashAddress;
 use zcash_client_backend::data_api::{AccountPurpose, InputSource, WalletRead, Zip32Derivation};
 use zcash_client_backend::proto::service::{
@@ -24,6 +22,8 @@ use zcash_client_memory::MemoryWalletDb;
 use zcash_keys::encoding::AddressCodec;
 use zcash_keys::keys::{UnifiedAddressRequest, UnifiedFullViewingKey};
 use zcash_primitives::transaction::TxId;
+use zillions_sdk_common::{Network, Pczt};
+use zillions_sdk_keys::{ProofGenerationKey, SeedFingerprint};
 
 pub type MemoryWallet<T> = Wallet<MemoryWalletDb<Network>, T>;
 pub type AccountId = <MemoryWalletDb<Network> as WalletRead>::AccountId;

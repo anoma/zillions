@@ -6,5 +6,9 @@ use wasm_bindgen::prelude::*;
 /// Example: `"zillions-sdk-keys git=bf0769b"`
 #[wasm_bindgen]
 pub fn zillions_build_info() -> String {
-    format!("{} git={}", env!("CARGO_PKG_NAME"), env!("ZILLIONS_GIT_HASH"))
+    format!(
+        "{} git={}",
+        env!("CARGO_PKG_NAME"),
+        env!("ZILLIONS_GIT_HASH")
+    )
 }

@@ -10,7 +10,7 @@ use ::transparent::{
 use transparent::keys::TransparentKeyScope;
 use zcash_client_backend::wallet::WalletTransparentOutput;
 
-use zcash_protocol::{TxId, consensus::BlockHeight};
+use zcash_protocol::{consensus::BlockHeight, TxId};
 
 use super::AccountId;
 use crate::Error;
@@ -166,8 +166,8 @@ impl Deref for TransparentSpendCache {
 
 mod serialization {
     use super::*;
-    use bip32::ChildNumber;
     use crate::{proto::memwallet as proto, read_optional, Error};
+    use bip32::ChildNumber;
     use transparent::address::Script;
     use zcash_keys::encoding::AddressCodec;
     use zcash_protocol::{consensus::Network::MainNetwork as EncodingParams, value::Zatoshis};
@@ -191,11 +191,13 @@ mod serialization {
         fn try_from(output: proto::ReceivedTransparentOutput) -> Result<Self, Self::Error> {
             // Handle key_scope with backwards compatibility
             let key_scope = match output.key_scope {
-                Some(scope_value) => TransparentKeyScope::custom(scope_value)
-                    .ok_or_else(|| Error::CorruptedData(
-                        format!("Invalid TransparentKeyScope value: {} (must be < 2^31)", scope_value)
-                    ))?,
-                None => TransparentKeyScope::EXTERNAL,  // Default for old data without key_scope
+                Some(scope_value) => TransparentKeyScope::custom(scope_value).ok_or_else(|| {
+                    Error::CorruptedData(format!(
+                        "Invalid TransparentKeyScope value: {} (must be < 2^31)",
+                        scope_value
+                    ))
+                })?,
+                None => TransparentKeyScope::EXTERNAL, // Default for old data without key_scope
             };
 
             Ok(Self {
@@ -212,7 +214,7 @@ mod serialization {
     impl From<TxOut> for proto::TxOut {
         fn from(txout: TxOut) -> Self {
             Self {
-                script: txout.script_pubkey().0.0.clone(),
+                script: txout.script_pubkey().0 .0.clone(),
                 value: u64::from(txout.value()),
             }
         }

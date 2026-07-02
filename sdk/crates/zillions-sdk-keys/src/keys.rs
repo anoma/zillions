@@ -9,6 +9,14 @@ use bip0039::{Count, English, Mnemonic};
 use zillions_sdk_common::Network;
 use zip32::AccountId;
 
+fn to_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    bytes.iter().fold(String::new(), |mut acc, b| {
+        let _ = write!(acc, "{:02x}", b);
+        acc
+    })
+}
+
 /// A ZIP32 seed fingerprint. Essentially a Blake2b hash of the seed.
 ///
 /// This is a wrapper around the `zip32::fingerprint::SeedFingerprint` type.
@@ -128,8 +136,7 @@ impl UnifiedSpendingKey {
         use secp256k1::ecdsa::{RecoverableSignature, RecoveryId};
         use secp256k1::{Message, PublicKey, Secp256k1};
 
-        let hash_bytes =
-            hex::decode(hash_hex).map_err(|e| Error::KeyDecoding(e.to_string()))?;
+        let hash_bytes = hex::decode(hash_hex).map_err(|e| Error::KeyDecoding(e.to_string()))?;
         let hash: [u8; 32] = hash_bytes
             .as_slice()
             .try_into()
@@ -262,7 +269,7 @@ impl UnifiedSpendingKey {
     /// importable by other wallets.
     pub fn to_bytes_hex(&self) -> String {
         let bytes = self.inner.to_bytes(zcash_keys::keys::Era::Orchard);
-        bytes.iter().map(|b| format!("{:02x}", b)).collect()
+        to_hex(&bytes)
     }
 
     /// Construct a UnifiedSpendingKey directly from a BIP39 mnemonic phrase.
@@ -383,14 +390,9 @@ impl UnifiedFullViewingKey {
             None => return Ok(None),
         };
         let pubkey = account_pubkey
-            .derive_address_pubkey(
-                zip32::Scope::External.into(),
-                NonHardenedChildIndex::ZERO,
-            )
+            .derive_address_pubkey(zip32::Scope::External.into(), NonHardenedChildIndex::ZERO)
             .map_err(|_| Error::TransparentAddressDerivation)?;
-        Ok(Some(
-            pubkey.serialize().iter().map(|b| format!("{:02x}", b)).collect(),
-        ))
+        Ok(Some(to_hex(&pubkey.serialize())))
     }
 
     /// Decisive "is this MY address?" test for an external unified address.
@@ -403,11 +405,7 @@ impl UnifiedFullViewingKey {
     ///
     /// Result format: `"orchard:<j>"` or `"sapling:<j>"` (j as decimal u128), or
     /// `None`.
-    pub fn ua_diversifier_index(
-        &self,
-        network: &str,
-        addr: &str,
-    ) -> Result<Option<String>, Error> {
+    pub fn ua_diversifier_index(&self, network: &str, addr: &str) -> Result<Option<String>, Error> {
         use zcash_keys::address::Address;
 
         let network = Network::from_str(network)?;
@@ -478,10 +476,7 @@ impl UnifiedFullViewingKey {
     /// # Arguments
     ///
     /// * `network` - Must be either "main" or "test"
-    pub fn get_external_transparent_address(
-        &self,
-        network: &str,
-    ) -> Result<Option<String>, Error> {
+    pub fn get_external_transparent_address(&self, network: &str) -> Result<Option<String>, Error> {
         use zcash_transparent::keys::{IncomingViewingKey, NonHardenedChildIndex};
         let network = Network::from_str(network)?;
         let account_pubkey = match self.inner.transparent() {

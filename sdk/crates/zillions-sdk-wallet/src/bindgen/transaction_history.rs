@@ -256,7 +256,9 @@ pub fn extract_transaction_history(
                 entry.block_height = tx_entry.mined_height();
                 entry.expiry_height = tx_entry.expiry_height();
             }
-            entry.fee = entry.fee.or_else(|| tx_entry.fee().map(|fee| fee.into_u64()));
+            entry.fee = entry
+                .fee
+                .or_else(|| tx_entry.fee().map(|fee| fee.into_u64()));
         }
     }
 

@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, hash_map::Entry},
+    collections::{hash_map::Entry, HashMap},
     num::NonZeroU32,
 };
 
@@ -7,44 +7,41 @@ use nonempty::NonEmpty;
 use secrecy::{ExposeSecret, SecretVec};
 use shardtree::store::ShardStore as _;
 use zcash_client_backend::data_api::{
-    AddressInfo, AddressSource, BlockMetadata, NullifierQuery, ReceivedTransactionOutput, WalletRead,
-    WalletSummary, Zip32Derivation,
     error::FindAccountForAddressError,
     scanning::ScanRange,
     wallet::{ConfirmationsPolicy, TargetHeight},
+    AddressInfo, AddressSource, BlockMetadata, NullifierQuery, ReceivedTransactionOutput,
+    WalletRead, WalletSummary, Zip32Derivation,
 };
-use zcash_keys::address::Address;
 use zcash_client_backend::{
     data_api::{
-        Account as _, AccountBalance, AccountSource, Balance, Progress, Ratio, SeedRelevance,
-        TransactionDataRequest, TransactionStatus, scanning::ScanPriority,
+        scanning::ScanPriority, Account as _, AccountBalance, AccountSource, Balance, Progress,
+        Ratio, SeedRelevance, TransactionDataRequest, TransactionStatus,
     },
     keys::{UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey},
     wallet::NoteId,
 };
+use zcash_keys::address::Address;
 use zcash_keys::{address::UnifiedAddress, keys::UnifiedIncomingViewingKey};
 use zcash_primitives::{
     block::BlockHash,
     transaction::{Transaction, TransactionData, TxId},
 };
 use zcash_protocol::{
-    PoolType,
     consensus::{self, BlockHeight, BranchId},
     memo::Memo,
+    PoolType,
 };
 use zip32::fingerprint::SeedFingerprint;
 
 #[cfg(feature = "transparent-inputs")]
 use {
-    transparent::{
-        address::TransparentAddress,
-        keys::{NonHardenedChildIndex, TransparentKeyScope},
-    },
+    transparent::{address::TransparentAddress, keys::NonHardenedChildIndex},
     zcash_client_backend::wallet::{Exposure, TransparentAddressMetadata},
     zip32::Scope,
 };
 
-use crate::{Account, AccountId, MemoryWalletBlock, MemoryWalletDb, Nullifier, error::Error};
+use crate::{error::Error, Account, AccountId, MemoryWalletBlock, MemoryWalletDb, Nullifier};
 
 impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
     type Error = Error;
@@ -225,12 +222,13 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
                 continue;
             }
             // don't count notes in unscanned ranges
-            let in_unscanned = unscanned.iter().any(
-                |(_, _, start_position, end_position_exclusive)| {
-                    note.commitment_tree_position >= *start_position
-                        && note.commitment_tree_position < *end_position_exclusive
-                },
-            );
+            let in_unscanned =
+                unscanned
+                    .iter()
+                    .any(|(_, _, start_position, end_position_exclusive)| {
+                        note.commitment_tree_position >= *start_position
+                            && note.commitment_tree_position < *end_position_exclusive
+                    });
             if in_unscanned {
                 continue;
             }
@@ -410,8 +408,7 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
                 .iter()
                 .filter(|(_, _, p)| p == &ScanPriority::Scanned)
                 .min_by_key(|(start, _, _)| *start)
-                .and_then(
-                |(block_range_start, block_range_end, _priority)| {
+                .and_then(|(block_range_start, block_range_end, _priority)| {
                     // If the start of the earliest scanned range is greater than
                     // the birthday height, then there is an unscanned range between
                     // the wallet birthday and that range, so there is no fully
@@ -422,8 +419,8 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
                     } else {
                         None
                     }
-                },
-            ) {
+                })
+            {
                 self.block_metadata(fully_scanned_height)
             } else {
                 Ok(None)
@@ -717,9 +714,12 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
         }) {
             if self.utxo_is_spendable(outpoint, target_height, confirmations_policy)? {
                 let address = txo.address;
-                let entry = balances
-                    .entry(address)
-                    .or_insert((TransparentKeyOrigin::Derived { scope: txo.key_scope }, Balance::ZERO));
+                let entry = balances.entry(address).or_insert((
+                    TransparentKeyOrigin::Derived {
+                        scope: txo.key_scope,
+                    },
+                    Balance::ZERO,
+                ));
 
                 entry.1.add_spendable_value(txo.txout.value())?;
             }
@@ -822,7 +822,7 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
 
     fn find_account_for_address<Params: consensus::Parameters>(
         &self,
-        params: &Params,
+        _params: &Params,
         address: &zcash_keys::address::Address,
     ) -> Result<Option<Self::AccountId>, FindAccountForAddressError<Self::Error>> {
         use zcash_keys::address::Address;
@@ -831,10 +831,9 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
             // Check if the address matches this account's default unified address.
             if let Address::Unified(ua) = address {
                 if let Some(ufvk) = account.ufvk() {
-                    if let Ok((default_ua, _)) = ufvk.find_address(
-                        Default::default(),
-                        UnifiedAddressRequest::AllAvailableKeys,
-                    ) {
+                    if let Ok((default_ua, _)) = ufvk
+                        .find_address(Default::default(), UnifiedAddressRequest::AllAvailableKeys)
+                    {
                         if &default_ua == ua {
                             return Ok(Some(*account_id));
                         }

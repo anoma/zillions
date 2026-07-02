@@ -1,11 +1,11 @@
 use std::convert::Infallible;
 
 use incrementalmerkletree::Address;
-use shardtree::{ShardTree, error::ShardTreeError, store::memory::MemoryShardStore};
+use shardtree::{error::ShardTreeError, store::memory::MemoryShardStore, ShardTree};
 #[cfg(feature = "orchard")]
 use zcash_client_backend::data_api::ORCHARD_SHARD_HEIGHT;
 use zcash_client_backend::data_api::{
-    SAPLING_SHARD_HEIGHT, WalletCommitmentTrees, chain::CommitmentTreeRoot,
+    chain::CommitmentTreeRoot, WalletCommitmentTrees, SAPLING_SHARD_HEIGHT,
 };
 use zcash_protocol::consensus::{self, BlockHeight};
 
@@ -105,13 +105,13 @@ pub(crate) mod serialization {
 
     use incrementalmerkletree::{Address, Level};
     use shardtree::{
+        store::{memory::MemoryShardStore, Checkpoint, ShardStore},
         LocatedPrunableTree, ShardTree,
-        store::{Checkpoint, ShardStore, memory::MemoryShardStore},
     };
     use zcash_client_backend::serialization::shardtree::{read_shard, write_shard};
     use zcash_protocol::consensus::BlockHeight;
 
-    use crate::{Error, proto::memwallet as proto};
+    use crate::{proto::memwallet as proto, Error};
 
     pub(crate) fn tree_to_protobuf<
         H: Clone
@@ -134,7 +134,10 @@ pub(crate) mod serialization {
             .iter()
             .map(|shard_root| {
                 let shard = tree.store().get_shard(*shard_root)?.ok_or_else(|| {
-                    Error::Other(format!("Missing shard for root index {}", shard_root.index()))
+                    Error::Other(format!(
+                        "Missing shard for root index {}",
+                        shard_root.index()
+                    ))
                 })?;
 
                 let mut shard_data = Vec::new();
