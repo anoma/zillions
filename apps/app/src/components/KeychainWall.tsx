@@ -18,7 +18,6 @@ import { keychainUrl } from "../lib/urls";
 import { AccountProvider } from "./AccountProvider";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
-import { SmartLink } from "./SmartLink";
 import { ActionButton } from "./ui/ActionButton";
 
 function Content({ title, children }: { title: string; children: ReactNode }) {
@@ -151,9 +150,9 @@ function Download({ children }: { children: ReactNode }) {
   if (!isKeychainAvailable()) {
     return (
       <Content title="Keychain not installed">
-        <SmartLink href={keychainUrl}>
+        <a download href={keychainUrl}>
           <ActionButton>Download Keychain</ActionButton>
-        </SmartLink>
+        </a>
       </Content>
     );
   }
