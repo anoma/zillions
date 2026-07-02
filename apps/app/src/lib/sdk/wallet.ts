@@ -183,7 +183,8 @@ export class SdkWallet {
     }
   }
 
-  async prepareShildedTransfer(to: string, amount: bigint): Promise<Pczt> {
+  /** Prepare a transfer spending shielded funds; `to` may be shielded or transparent. */
+  async prepareTransfer(to: string, amount: bigint): Promise<Pczt> {
     return this.wallet.pczt_create(this.accountId, to, amount);
   }
 

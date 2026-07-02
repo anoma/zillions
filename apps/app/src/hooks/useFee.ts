@@ -1,6 +1,6 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { SdkWallet } from "../lib/sdk/wallet";
-import { isShieldedAddress } from "../lib/utils";
+import { isShieldedAddress, isTransparentAddress } from "../lib/utils";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { useWallet } from "./useWallet";
 
@@ -8,14 +8,14 @@ export function fee(wallet: SdkWallet, to: string, amount: bigint) {
   return queryOptions({
     queryKey: ["fee", wallet.id, to, amount.toString()],
     queryFn: async () => {
-      const pczt = await wallet.prepareShildedTransfer(to, amount);
+      const pczt = await wallet.prepareTransfer(to, amount);
       try {
         return pczt.fee();
       } finally {
         pczt.free();
       }
     },
-    enabled: isShieldedAddress(to) && amount > 0n,
+    enabled: (isShieldedAddress(to) || isTransparentAddress(to)) && amount > 0n,
     retry: false,
   });
 }

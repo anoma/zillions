@@ -17,10 +17,10 @@ export function useTransfer() {
       to: string;
       amount: bigint;
     }) {
-      if (isTransparentAddress(from) || isTransparentAddress(to)) {
-        throw new Error("Transparent transfers is not supported yet.");
+      if (isTransparentAddress(from)) {
+        throw new Error("Transfers from transparent are not supported yet.");
       }
-      const pczt = await sdkWallet.prepareShildedTransfer(to, amount);
+      const pczt = await sdkWallet.prepareTransfer(to, amount);
       const signed = await keychain().sign({
         signer: from,
         pczt: pcztToBase64(pczt),

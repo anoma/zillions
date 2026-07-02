@@ -104,7 +104,10 @@ function SendRoute() {
           <div>
             <ShieldedTransparentToggle
               isTransparent={isTransparentFrom}
-              setIsTransparent={setIsTransparentFrom}
+              setIsTransparent={(value) => {
+                setIsTransparentFrom(value);
+                setValidationMessage("");
+              }}
             />
           </div>
         </label>
@@ -120,7 +123,11 @@ function SendRoute() {
           autoComplete="off"
           className="mt-2 w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
           value={amountString}
-          onChange={(e) => setAmountString(e.target.value)}
+          onFocus={() => setValidationMessage("")}
+          onChange={(e) => {
+            setAmountString(e.target.value);
+            setValidationMessage("");
+          }}
         />
 
         <label className="mt-4">
@@ -135,7 +142,11 @@ function SendRoute() {
               isShieldedTo && "border-gold",
             )}
             value={to}
-            onChange={(e) => setTo(e.target.value)}
+            onFocus={() => setValidationMessage("")}
+            onChange={(e) => {
+              setTo(e.target.value);
+              setValidationMessage("");
+            }}
           />
         </label>
 
