@@ -36,7 +36,6 @@ export type DerivedAccount = {
   id: string;
   address: string;
   owner?: string;
-  publicKey?: string;
   alias: string;
   parentId?: string;
   path: Path;
@@ -53,7 +52,6 @@ export type Account = Pick<
   | "address"
   | "alias"
   | "type"
-  | "publicKey"
   | "owner"
   | "pseudoExtendedKey"
   | "source"

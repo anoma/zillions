@@ -51,7 +51,6 @@ export const ViewAccount = (): JSX.Element => {
       <PageHeader title={parent.alias} />
       <Stack gap={2} full>
         <ViewKeys
-          publicKeyAddress={parent.publicKey ?? ""}
           transparentAccountAddress={transparentAddress}
           shieldedAccountAddress={shieldedAddress}
           trimCharacters={16}

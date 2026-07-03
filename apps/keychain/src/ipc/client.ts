@@ -183,21 +183,6 @@ export class BackgroundClient {
   submitUpdateDefaultAccount(address: string): Promise<void> {
     return this.send("approvals/submitUpdateDefaultAccount", { address });
   }
-
-  /** Signer + message for the pending arbitrary-sign request. */
-  querySignArbitrary(msgId: string): Promise<{ signer: string; data: string }> {
-    return this.send("approvals/querySignArbitrary", { msgId });
-  }
-
-  /** Confirm the pending arbitrary-sign request owned by this popup's tab. */
-  submitSignArbitrary(msgId: string): Promise<void> {
-    return this.send("approvals/submitSignArbitrary", { msgId });
-  }
-
-  /** Reject the pending arbitrary-sign request owned by this popup's tab. */
-  rejectSignArbitrary(msgId: string): Promise<void> {
-    return this.send("approvals/rejectSignArbitrary", { msgId });
-  }
 }
 
 /** Default client wired to the real extension transport. */

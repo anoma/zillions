@@ -5,7 +5,6 @@ import clsx from "clsx";
 import { useState } from "react";
 
 type ViewKeysProps = {
-  publicKeyAddress?: string;
   privateKey?: string;
   privateKeyLoading?: boolean;
   transparentAccountAddress?: string;
@@ -22,7 +21,6 @@ const Path = ({ path }: { path: string }): React.ReactNode => (
 );
 
 export const ViewKeys = ({
-  publicKeyAddress,
   privateKey,
   privateKeyLoading,
   transparentAccountAddress,
@@ -65,15 +63,6 @@ export const ViewKeys = ({
             sensitive={true}
             valueToDisplay={shortenAddress(privateKey, trimCharacters)}
             value={privateKey}
-            theme={"primary"}
-          />
-        )}
-        {publicKeyAddress && (
-          <Input
-            label="Public Key"
-            variant="ReadOnlyCopy"
-            valueToDisplay={shortenAddress(publicKeyAddress, trimCharacters)}
-            value={publicKeyAddress}
             theme={"primary"}
           />
         )}

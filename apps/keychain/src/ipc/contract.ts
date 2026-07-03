@@ -20,11 +20,7 @@
  * sender, never the payload. Every other channel is restricted to trusted
  * extension pages (popup/setup/approvals). See `background/server.ts`.
  */
-import type {
-  PcztSummary,
-  SignArbitraryResponse,
-  ZCashKeychainAccount,
-} from "@zillions/types";
+import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 
 // ---------------------------------------------------------------------------
 // Domain types (declared locally to avoid importing background/*; the
@@ -58,9 +54,6 @@ export type AccountStore = {
   id: string;
   alias: string;
   address: string;
-  /** Encoded UFVK (`uview1…`) — NOT a transparent pubkey; same value as the
-   *  `viewingKey` supplied on creation. */
-  publicKey?: string;
   owner: string;
   type: AccountType;
   path: Bip44Path;
@@ -90,8 +83,6 @@ export type StoredAccount = {
   address: string;
   /** For a transparent parent: its address. For a shielded account: the UFVK. */
   owner: string;
-  /** Encoded UFVK (`uview1…`); present on parent accounts. */
-  publicKey?: string;
   type: AccountType;
   /** Set on derived (child) accounts; absent on parents. */
   parentId?: string;
@@ -196,8 +187,6 @@ export type IpcContract = {
        */
       transparentAddress: string;
       shieldedAddress: string;
-      /** Transparent secp256k1 public key (compressed hex) — the real public key. */
-      publicKey: string;
       /** Encoded UFVK (`uview1…`) — the account's viewing key (NOT a public key). */
       viewingKey: string;
       /** Block height at which this account was created/imported. */
@@ -295,23 +284,6 @@ export type IpcContract = {
     req: { pczt: string; signer?: string };
     res: string;
   };
-  /**
-   * Sign an arbitrary message with `signer`'s transparent key. Resolves once
-   * the user approves in the popup; requires connection and an unlocked vault.
-   */
-  "dapp/signArbitrary": {
-    req: { signer: string; data: string };
-    res: SignArbitraryResponse;
-  };
-  /**
-   * Verify a signed-message signature against `publicKey`. Pure public-key
-   * crypto — no approval/unlock. Resolves to whether the signature is valid.
-   */
-  "dapp/verify": {
-    req: { publicKey: string; hash: string; signature: string };
-    res: boolean;
-  };
-
   // --- approvals (trusted UIs only: the approval popup + settings) ---
   /** Whether `origin` is already approved (approval popup auto-approve check). */
   "approvals/isConnectionApproved": {
@@ -359,21 +331,6 @@ export type IpcContract = {
    */
   "approvals/submitUpdateDefaultAccount": {
     req: { address: string };
-    res: void;
-  };
-  /** Signer + message for the pending arbitrary-sign request (approval popup). */
-  "approvals/querySignArbitrary": {
-    req: { msgId: string };
-    res: { signer: string; data: string };
-  };
-  /** Confirm the pending arbitrary-sign request owned by the calling popup's tab. */
-  "approvals/submitSignArbitrary": {
-    req: { msgId: string };
-    res: void;
-  };
-  /** Reject the pending arbitrary-sign request owned by the calling popup's tab. */
-  "approvals/rejectSignArbitrary": {
-    req: { msgId: string };
     res: void;
   };
 };

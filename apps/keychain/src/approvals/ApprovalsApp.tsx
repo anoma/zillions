@@ -20,10 +20,8 @@ import { BackgroundClient, createBackgroundClient } from "../ipc/client";
 import routes from "./routes";
 import { ApproveConnection } from "./screens/ApproveConnection";
 import { ApproveDisconnection } from "./screens/ApproveDisconnection";
-import { ApproveSignArbitrary } from "./screens/ApproveSignArbitrary";
 import { ApproveSignTx } from "./screens/ApproveSignTx";
 import { ApproveUpdateDefaultAccount } from "./screens/ApproveUpdateDefaultAccount";
-import { ConfirmSignArbitrary } from "./screens/ConfirmSignArbitrary";
 import { ConfirmSignTx } from "./screens/ConfirmSignTx";
 import { WithAuth } from "./WithAuth";
 
@@ -45,22 +43,10 @@ export type ApprovalDetails = {
   summary: PcztSummary;
 };
 
-/**
- * The pending arbitrary-message request, threaded from ApproveSignArbitrary to
- * ConfirmSignArbitrary.
- */
-export type ArbitraryDetails = {
-  msgId: string;
-  signer: string;
-  data: string;
-  origin: string;
-};
-
 export const ApprovalsApp = (): JSX.Element => {
   const client = useMemo(() => createBackgroundClient(), []);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [details, setDetails] = useState<ApprovalDetails>();
-  const [arbitraryDetails, setArbitraryDetails] = useState<ArbitraryDetails>();
 
   useEffect(() => {
     client
@@ -110,24 +96,6 @@ export const ApprovalsApp = (): JSX.Element => {
               <Route
                 path={routes.confirmSignTx()}
                 element={details && <ConfirmSignTx details={details} />}
-              />
-              <Route
-                path={routes.approveSignArbitrary()}
-                element={
-                  <WithAuth>
-                    <ApproveSignArbitrary
-                      setArbitraryDetails={setArbitraryDetails}
-                    />
-                  </WithAuth>
-                }
-              />
-              <Route
-                path={routes.confirmSignArbitrary()}
-                element={
-                  arbitraryDetails && (
-                    <ConfirmSignArbitrary details={arbitraryDetails} />
-                  )
-                }
               />
             </Routes>
           </ExtensionLockContext.Provider>

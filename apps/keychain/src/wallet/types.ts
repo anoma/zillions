@@ -54,14 +54,6 @@ export interface ZcashWallet {
   createShielded(account: AccountRef): Promise<ShieldedAddress>;
 
   /**
-   * The account's transparent PUBLIC key (secp256k1, compressed hex) at the
-   * index-0 external receive path — the public key matching the transparent
-   * address. DISTINCT from the viewing key. Empty string when the account has
-   * no transparent component.
-   */
-  publicKey(account: AccountRef): string;
-
-  /**
    * The account's encoded Unified Full Viewing Key (`uview1…`) — a VIEWING key
    * (it lets the holder see shielded activity), NOT a public key and NOT an
    * address.

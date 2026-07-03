@@ -84,47 +84,6 @@ export const signPczt = async (
   return pczt_sign(network, pczt, usk, seedFp);
 };
 
-/** A Bitcoin/Zcash signed-message result (see `signArbitraryWithKey`). */
-export type ArbitrarySignature = {
-  /** 32-byte double-SHA256 digest of the wrapped message, hex. */
-  hash: string;
-  /** 65-byte Bitcoin-style `[header||r||s]` recoverable signature, base64. */
-  signature: string;
-  /** Compressed secp256k1 public key (33 bytes) of the signing key, hex. */
-  publicKey: string;
-};
-
-/**
- * Sign an arbitrary message with the transparent secp256k1 key derived from
- * `seed` at `hdIndex` (external index 0). Bitcoin/Zcash "signed message"
- * format — interoperable with `zcashd verifymessage`. See the Rust binding
- * `UnifiedSpendingKey::sign_arbitrary`.
- */
-export const signArbitraryWithKey = (
-  seed: Uint8Array,
-  hdIndex: number,
-  message: string
-): ArbitrarySignature => {
-  const usk = new UnifiedSpendingKey(getNetwork(), seed, hdIndex);
-  try {
-    const [hash, signature, publicKey] = usk.sign_arbitrary(message).split(":");
-    return { hash, signature, publicKey };
-  } finally {
-    usk.free();
-  }
-};
-
-/**
- * Verify a signed-message signature against an expected compressed public key.
- * Pure public-key crypto (recovers the signer and compares) — no secret. See
- * the Rust binding `UnifiedSpendingKey::verify_arbitrary`.
- */
-export const verifyArbitrary = (
-  publicKey: string,
-  hash: string,
-  signature: string
-): boolean => UnifiedSpendingKey.verify_arbitrary(publicKey, hash, signature);
-
 /**
  * Compute the ZIP-32 seed fingerprint for a seed as a lowercase hex string.
  * Safe to store publicly — it identifies the seed without revealing it.

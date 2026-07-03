@@ -22,7 +22,6 @@ const toStoredAccount = (a: KeyStoreType): StoredAccount => ({
   alias: a.alias,
   address: a.address,
   owner: a.owner,
-  publicKey: a.publicKey,
   type: a.type as AccountType,
   parentId: a.parentId,
   source: a.source as StoredAccount["source"],
@@ -234,35 +233,6 @@ export const handlers: HandlerMap = {
     return approvals.approveSignTx(pczt, requireOrigin(ctx), signer);
   },
 
-  "dapp/signArbitrary": async (payload, ctx) => {
-    const { signer, data } = payload as { signer?: unknown; data?: unknown };
-    if (typeof signer !== "string" || typeof data !== "string") {
-      throw new Error("zc.signArbitrary: invalid arguments");
-    }
-    const { approvals } = await getServices();
-    return approvals.approveSignArbitrary(requireOrigin(ctx), signer, data);
-  },
-
-  "dapp/verify": async (payload, ctx) => {
-    const { publicKey, hash, signature } = payload as {
-      publicKey?: unknown;
-      hash?: unknown;
-      signature?: unknown;
-    };
-    if (
-      typeof publicKey !== "string" ||
-      typeof hash !== "string" ||
-      typeof signature !== "string"
-    ) {
-      throw new Error("zc.verify: invalid arguments");
-    }
-    // Pure public-key crypto, but still a dapp channel — derive (and require)
-    // the sender origin so only content scripts reach it.
-    requireOrigin(ctx);
-    const { keyring } = await getServices();
-    return keyring.verifyArbitrary(publicKey, hash, signature);
-  },
-
   // --- approvals (trusted UIs) ---
 
   "approvals/isConnectionApproved": async ({ origin }) => {
@@ -311,20 +281,5 @@ export const handlers: HandlerMap = {
     const { approvals, broadcaster } = await getServices();
     await approvals.submitUpdateDefaultAccount(requireTabId(ctx), address);
     void broadcaster.accountChanged();
-  },
-
-  "approvals/querySignArbitrary": async ({ msgId }) => {
-    const { approvals } = await getServices();
-    return approvals.querySignArbitrary(msgId);
-  },
-
-  "approvals/submitSignArbitrary": async ({ msgId }, ctx) => {
-    const { approvals } = await getServices();
-    await approvals.submitSignArbitrary(requireTabId(ctx), msgId);
-  },
-
-  "approvals/rejectSignArbitrary": async ({ msgId }, ctx) => {
-    const { approvals } = await getServices();
-    await approvals.rejectSignArbitrary(requireTabId(ctx), msgId);
   },
 };

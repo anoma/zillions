@@ -14,10 +14,4 @@ export default {
     signer: string = ":signer"
   ): string => `/approve-sign-tx/${msgId}/${origin}/${accountType}/${signer}`,
   confirmSignTx: (): string => "/confirm-sign-tx",
-  approveSignArbitrary: (
-    msgId: string = ":msgId",
-    origin: string = ":origin",
-    signer: string = ":signer"
-  ): string => `/approve-sign-arbitrary/${msgId}/${origin}/${signer}`,
-  confirmSignArbitrary: (): string => "/confirm-sign-arbitrary",
 };

@@ -1,10 +1,9 @@
 /**
  * The provider object dapps see as `window.zc` (MAIN world). Implements the
  * full shared `Zillions` interface so dapps typed against @zillions/types work
- * unchanged: the connection lifecycle, account queries, PCZT signing, arbitrary
- * message signing/verification, default-account updates, and `getSigner` are
- * all live. Only the disposable-keypair methods reject with a clear "not
- * supported yet" error.
+ * unchanged: the connection lifecycle, account queries, PCZT signing,
+ * default-account updates, and `getSigner` are all live. Only the
+ * disposable-keypair methods reject with a clear "not supported yet" error.
  *
  * `chainId` arguments are accepted for interface compatibility and ignored —
  * Zcash is the only chain.
@@ -16,10 +15,7 @@ import type {
   Signer as ISigner,
   PcztBase64,
   PersistDisposableSignerProps,
-  SignArbitraryProps,
-  SignArbitraryResponse,
   SignProps,
-  VerifyArbitraryProps,
   ZCashKeychainAccount,
 } from "@zillions/types";
 
@@ -71,25 +67,6 @@ export class InjectedZillions implements IZillions {
       "sign",
       props
     );
-  }
-
-  public async signArbitrary(
-    props: SignArbitraryProps
-  ): Promise<SignArbitraryResponse | undefined> {
-    return await InjectedProxy.requestMethod<
-      SignArbitraryProps,
-      SignArbitraryResponse
-    >("signArbitrary", props);
-  }
-
-  public async verify(props: VerifyArbitraryProps): Promise<void> {
-    const valid = await InjectedProxy.requestMethod<VerifyArbitraryProps, boolean>(
-      "verify",
-      props
-    );
-    if (!valid) {
-      throw new Error("Signature verification failed");
-    }
   }
 
   public async genDisposableKeypair(): Promise<

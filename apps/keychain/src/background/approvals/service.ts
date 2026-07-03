@@ -1,7 +1,6 @@
 /**
  * ApprovalsService: the background side of dapp requests (connection lifecycle,
- * PCZT + arbitrary signing, default-account changes). Chain ids are ignored —
- * Zcash only.
+ * PCZT signing, default-account changes). Chain ids are ignored — Zcash only.
  *
  * Flow: a `dapp/*` request launches an `approvals.html` popup window and
  * parks its promise in `resolverMap` keyed by the popup's tab id. The popup UI
@@ -12,11 +11,7 @@
 import { v4 as uuid } from "uuid";
 import browser, { Windows } from "webextension-polyfill";
 
-import type {
-  PcztSummary,
-  SignArbitraryResponse,
-  ZCashKeychainAccount,
-} from "@zillions/types";
+import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
@@ -39,12 +34,6 @@ type PendingSignTx = {
   signer?: string;
 };
 
-/** A dapp's arbitrary-message sign request awaiting approval, parked by `msgId`. */
-type PendingSignArbitrary = {
-  signer: string;
-  data: string;
-};
-
 export class ApprovalsService {
   /** Pending dapp requests, keyed by their approval popup's tab id. */
   protected resolverMap: Record<number, Resolver> = {};
@@ -54,9 +43,6 @@ export class ApprovalsService {
    * with the worker anyway (its resolver lives in `resolverMap`).
    */
   protected readonly pendingTxs = new Map<string, PendingSignTx>();
-
-  /** Arbitrary-message sign requests awaiting approval, keyed by msgId. */
-  protected readonly pendingArbitrary = new Map<string, PendingSignArbitrary>();
 
   constructor(
     protected readonly localStorage: LocalStorage,
@@ -177,38 +163,6 @@ export class ApprovalsService {
   }
 
   /**
-   * Resolve a `signArbitrary(signer, data)` call: park the message under a
-   * msgId and open the approval popup; resolves with the signed-message result
-   * once the user confirms. Requires an unlocked vault and a connected origin.
-   */
-  async approveSignArbitrary(
-    origin: string,
-    signer: string,
-    data: string
-  ): Promise<SignArbitraryResponse> {
-    if (await this.vaultService.isLocked()) {
-      throw new Error("Keychain is locked");
-    }
-    await this.assertConnected(origin);
-
-    const record = await this.accounts.findByAddress(signer);
-    if (!record) {
-      throw new Error(`Account for ${signer} not found!`);
-    }
-
-    const msgId = uuid();
-    this.pendingArbitrary.set(msgId, { signer, data });
-
-    return this.launchApprovalPopup(
-      approvalRoutes.approveSignArbitrary(
-        msgId,
-        encodeURIComponent(origin),
-        signer
-      )
-    );
-  }
-
-  /**
    * Resolve an `updateDefaultAccount(address)` call: require a connected,
    * unlocked origin and an existing account, then open the approval popup. The
    * popup confirms via `submitUpdateDefaultAccount`.
@@ -279,46 +233,6 @@ export class ApprovalsService {
     const resolvers = this.getResolver(popupTabId);
     this.pendingTxs.delete(msgId);
     resolvers.reject(new Error("Sign Tx rejected"));
-  }
-
-  /** Pending arbitrary-message details for the approval popup to display. */
-  async querySignArbitrary(
-    msgId: string
-  ): Promise<{ signer: string; data: string }> {
-    const pending = this.pendingArbitrary.get(msgId);
-    if (!pending) {
-      throw new Error(`Sign-arbitrary data not found for ${msgId}`);
-    }
-    return { signer: pending.signer, data: pending.data };
-  }
-
-  /** The approval popup confirmed: sign the message and settle the dapp's promise. */
-  async submitSignArbitrary(popupTabId: number, msgId: string): Promise<void> {
-    const pending = this.pendingArbitrary.get(msgId);
-    const resolvers = this.getResolver(popupTabId);
-
-    if (!pending) {
-      throw new Error(`Pending sign-arbitrary data not found for ${msgId}`);
-    }
-
-    try {
-      const result = await this.keyring.signArbitrary(
-        pending.signer,
-        pending.data
-      );
-      resolvers.resolve(result);
-    } catch (e) {
-      resolvers.reject(e);
-    }
-
-    this.pendingArbitrary.delete(msgId);
-  }
-
-  /** The approval popup rejected: drop the message and fail the dapp's promise. */
-  async rejectSignArbitrary(popupTabId: number, msgId: string): Promise<void> {
-    const resolvers = this.getResolver(popupTabId);
-    this.pendingArbitrary.delete(msgId);
-    resolvers.reject(new Error("Sign arbitrary rejected"));
   }
 
   /**

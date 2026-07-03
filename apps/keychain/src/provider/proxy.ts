@@ -50,31 +50,6 @@ const relayMethod = async (
       }
       return client.send("dapp/sign", { pczt, signer });
     }
-    case "signArbitrary": {
-      const { signer, data } = (args ?? {}) as {
-        signer?: unknown;
-        data?: unknown;
-      };
-      if (typeof signer !== "string" || typeof data !== "string") {
-        throw new Error("zc.signArbitrary: invalid arguments");
-      }
-      return client.send("dapp/signArbitrary", { signer, data });
-    }
-    case "verify": {
-      const { publicKey, hash, signature } = (args ?? {}) as {
-        publicKey?: unknown;
-        hash?: unknown;
-        signature?: unknown;
-      };
-      if (
-        typeof publicKey !== "string" ||
-        typeof hash !== "string" ||
-        typeof signature !== "string"
-      ) {
-        throw new Error("zc.verify: invalid arguments");
-      }
-      return client.send("dapp/verify", { publicKey, hash, signature });
-    }
     default:
       // Unsupported methods reject in the page provider before reaching here;
       // this also covers a hand-crafted postMessage.

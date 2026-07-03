@@ -58,7 +58,7 @@ export const AppHeaderNavigation = ({
         <i
           className={clsx(
             "text-[1.85em] cursor-pointer leading-[0] absolute right-0 px-5 py-8 not-italic",
-            "top-0 transition-colors duration-100 ease-out select-none hover:text-white/80 active:top-px"
+            "top-0 transition-colors duration-100 ease-out select-none hover:text-neutral-500 active:top-px"
           )}
           role="button"
           aria-label="Close menu"

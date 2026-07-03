@@ -68,13 +68,6 @@ export class ZillionsKeysAdapter implements ZcashWallet {
     return { kind: "shielded", address };
   }
 
-  publicKey(account: AccountRef): string {
-    // The index-0 transparent secp256k1 public key (compressed hex) — the
-    // signing identity used by sign_arbitrary/verify_arbitrary. Stays at index
-    // 0 even when the displayed t-addr sits at a higher diversifier index.
-    return account.ufvk.get_external_transparent_pubkey() ?? "";
-  }
-
   viewingKey(account: AccountRef): string {
     return account.ufvk.encode(this.network);
   }

@@ -36,7 +36,6 @@ export const Complete = (): JSX.Element => {
             Here are the accounts generated from your keys
           </p>
           <ViewKeys
-            publicKeyAddress={parentAccount?.publicKey}
             transparentAccountAddress={parentAccount?.address}
             shieldedAccountAddress={shieldedAccount?.address}
             trimCharacters={35}

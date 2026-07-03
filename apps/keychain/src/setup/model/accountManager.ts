@@ -85,8 +85,6 @@ export type CreateAccountResult =
 type DerivedAddresses = {
   transparentAddress: string;
   shieldedAddress: string;
-  /** Transparent secp256k1 public key (compressed hex) — the real public key. */
-  publicKey: string;
   /** Encoded UFVK (`uview1…`) — the account's viewing key (NOT a public key). */
   viewingKey: string;
 };
@@ -119,7 +117,7 @@ export const createAccount = async (
 
     onProgress("Deriving your Zcash addresses.");
     const wallet = getZcashWallet();
-    const { transparentAddress, shieldedAddress, publicKey, viewingKey } =
+    const { transparentAddress, shieldedAddress, viewingKey } =
       await deriveAddresses(wallet, accountSecret, bip44Path.account);
 
     // Auto-fetch the chain tip when no birthday was provided. For the "create"
@@ -136,7 +134,6 @@ export const createAccount = async (
       path: bip44Path,
       transparentAddress,
       shieldedAddress,
-      publicKey,
       viewingKey,
       birthday: resolvedBirthday,
     });
@@ -187,7 +184,6 @@ const deriveAddresses = async (
       return {
         transparentAddress: transparent.address,
         shieldedAddress: shielded.address,
-        publicKey: wallet.publicKey(account),
         viewingKey: wallet.viewingKey(account),
       };
     }

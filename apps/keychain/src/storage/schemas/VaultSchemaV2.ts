@@ -79,7 +79,6 @@ export const KeyStore = t.exact(
     }),
     t.partial({
       modifiedZip32Path: t.string,
-      publicKey: t.string,
       parentId: t.string,
       pseudoExtendedKey: t.string,
       diversifierIndex: t.number,

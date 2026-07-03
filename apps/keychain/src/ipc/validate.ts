@@ -121,8 +121,6 @@ export const validateResponse = <K extends IpcKind>(
     case "approvals/submitSignTx":
     case "approvals/rejectSignTx":
     case "approvals/submitUpdateDefaultAccount":
-    case "approvals/submitSignArbitrary":
-    case "approvals/rejectSignArbitrary":
       // void — accept undefined/null
       return undefined as IpcResponse<K>;
 
@@ -135,28 +133,9 @@ export const validateResponse = <K extends IpcKind>(
     case "vault/checkPassword":
     case "vault/requiresAuth":
     case "dapp/isConnected":
-    case "dapp/verify":
     case "approvals/isConnectionApproved":
       if (typeof value !== "boolean")
         throw new ResponseShapeError(kind, "expected boolean");
-      return value as IpcResponse<K>;
-
-    case "dapp/signArbitrary":
-      if (
-        !isRecord(value) ||
-        typeof value.hash !== "string" ||
-        typeof value.signature !== "string"
-      )
-        throw new ResponseShapeError(kind, "expected SignArbitraryResponse");
-      return value as IpcResponse<K>;
-
-    case "approvals/querySignArbitrary":
-      if (
-        !isRecord(value) ||
-        typeof value.signer !== "string" ||
-        typeof value.data !== "string"
-      )
-        throw new ResponseShapeError(kind, "expected { signer, data }");
       return value as IpcResponse<K>;
 
     case "dapp/sign":

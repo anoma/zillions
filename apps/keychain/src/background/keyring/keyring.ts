@@ -23,11 +23,8 @@ import {
   initZillionsSdk,
   pcztFromBase64,
   pcztToBase64,
-  signArbitraryWithKey,
   signPczt,
   spendingKeys,
-  verifyArbitrary,
-  type ArbitrarySignature,
   type SpendingKeys,
 } from "../crypto/zillions";
 import { AccountRepository, VaultService } from "../vault";
@@ -159,42 +156,6 @@ export class Keyring {
   }
 
   /**
-   * Sign an arbitrary message with `signer`'s transparent secp256k1 key
-   * (Bitcoin/Zcash "signed message" format). Like `sign`, only mnemonic-backed
-   * accounts can sign and the secret is resolved from the parent for derived
-   * shielded children. Returns the digest, recoverable signature, and the
-   * signing public key (so the caller can `verifyArbitrary` without it).
-   */
-  public async signArbitrary(
-    signer: string,
-    data: string
-  ): Promise<ArbitrarySignature> {
-    await this.vaultService.assertIsUnlocked();
-    await initZillionsSdk();
-
-    const record = await this.accounts.findByAddress(signer);
-    if (!record) {
-      throw new Error(`Account for ${signer} not found!`);
-    }
-
-    const { seed, hdIndex } = await this.resolveSeed(record);
-    return signArbitraryWithKey(seed, hdIndex, data);
-  }
-
-  /**
-   * Verify a signed-message signature against an expected public key. Pure
-   * public-key crypto — no vault unlock or account lookup required.
-   */
-  public async verifyArbitrary(
-    publicKey: string,
-    hash: string,
-    signature: string
-  ): Promise<boolean> {
-    await initZillionsSdk();
-    return verifyArbitrary(publicKey, hash, signature);
-  }
-
-  /**
    * Reveal the account's spending keys — the secrets that can spend all funds
    * in this shielded account, in both the Sapling (Bech32) and unified/Orchard
    * (hex) encodings. Requires an unlocked vault; the caller (popup) re-verifies
@@ -264,7 +225,6 @@ export class Keyring {
     path: Bip44Path;
     transparentAddress: string;
     shieldedAddress: string;
-    publicKey: string;
     viewingKey: string;
     birthday: number;
   }): Promise<AccountStore> {
@@ -303,21 +263,14 @@ export class Keyring {
     })();
 
     // Field semantics:
-    // - address:    shielded receiver for a spending-key import, else transparent
-    // - owner:      viewing key for a spending-key import, else the address
-    // - publicKey:  the transparent secp256k1 public key (default accounts).
-    //               A spending-key import is shielded-only and has no
-    //               transparent public key, so it is left unset there. The
-    //               viewing key (UFVK) lives on `owner` for shielded accounts /
-    //               the shielded child — NOT in `publicKey`.
+    // - address: shielded receiver for a spending-key import, else transparent
+    // - owner:   viewing key (UFVK) for a spending-key import, else the address
     const address =
       accountType === "shielded-keys"
         ? input.shieldedAddress
         : input.transparentAddress;
     const owner =
       accountType === "shielded-keys" ? input.viewingKey : address;
-    const publicKey =
-      accountType === "shielded-keys" ? undefined : input.publicKey;
 
     // Compute the seed fingerprint for mnemonic accounts so the app can call
     // create_account_ufvk (needs fingerprint + hdIndex to embed zip32_derivation
@@ -362,7 +315,6 @@ export class Keyring {
       alias,
       address,
       owner,
-      publicKey,
       path,
       type: accountType as KeyStoreType["type"],
       source,
@@ -393,7 +345,6 @@ export class Keyring {
       id,
       alias,
       address,
-      publicKey,
       owner,
       type: accountType,
       path,

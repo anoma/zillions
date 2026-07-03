@@ -8,7 +8,6 @@ import {
   GenDisposableSignerResponse,
   Signer as ISigner,
   PcztBase64,
-  SignArbitraryResponse,
   Zillions as IZillions,
 } from "@zillions/types";
 
@@ -20,21 +19,6 @@ export class Signer implements ISigner {
     signer?: string
   ): Promise<PcztBase64 | undefined> {
     return await this._zc.sign({ signer, pczt });
-  }
-
-  public async signArbitrary(
-    signer: string,
-    data: string
-  ): Promise<SignArbitraryResponse | undefined> {
-    return await this._zc.signArbitrary({ signer, data });
-  }
-
-  public async verify(
-    publicKey: string,
-    hash: string,
-    signature: string
-  ): Promise<void> {
-    return await this._zc.verify({ publicKey, hash, signature });
   }
 
   public async genDisposableKeypair(): Promise<
