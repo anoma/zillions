@@ -54,7 +54,9 @@ export function zillionsWallet() {
           modulePreload: { polyfill: false },
           rollupOptions: {
             // Wallet is served as static files — keep it out of the Rollup graph.
-            external: ['@zillions-sdk/wallet'],
+            // The /params subpath must be listed too: bundling it would inline a
+            // second, never-initialized copy of the wasm-bindgen glue.
+            external: ['@zillions-sdk/wallet', '@zillions-sdk/wallet/params'],
           },
         },
       };
@@ -73,6 +75,7 @@ export function zillionsWallet() {
           children: JSON.stringify({
             imports: {
               '@zillions-sdk/wallet': `${WALLET_PREFIX}/zillions_sdk_wallet.js`,
+              '@zillions-sdk/wallet/params': `${WALLET_PREFIX}/params.js`,
             },
           }),
           injectTo: 'head-prepend',

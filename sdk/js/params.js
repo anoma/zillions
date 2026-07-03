@@ -12,7 +12,10 @@
  * or wrong URLs must be caught here, in recoverable JS, instead.
  */
 
-import { initSaplingParams, saplingParamsLoaded } from './zillions_sdk_wallet.js';
+import {
+  initSaplingParams,
+  saplingParamsLoaded,
+} from './zillions_sdk_wallet.js';
 
 // Where the vite plugin serves @zillions-sdk/sapling-params from.
 const DEFAULT_BASE_URL = '/zillions-sdk-sapling-params/';
@@ -65,7 +68,9 @@ async function load(baseUrl) {
   // Best-effort: reduce the odds of the browser evicting the cached params.
   navigator.storage?.persist?.().catch(() => {});
 
-  const [spend, output] = await Promise.all(FILES.map((f) => loadFile(baseUrl, f)));
+  const [spend, output] = await Promise.all(
+    FILES.map((f) => loadFile(baseUrl, f)),
+  );
   initSaplingParams(new Uint8Array(spend), new Uint8Array(output));
 }
 
@@ -73,14 +78,18 @@ async function loadFile(baseUrl, file) {
   const cached = await cacheGet(file.cacheKey);
   if (cached && (await sha256Hex(cached)) === file.sha256) return cached;
 
-  const url = new URL(file.name, new URL(baseUrl, globalThis.location?.href)).href;
+  const url = new URL(file.name, new URL(baseUrl, globalThis.location?.href))
+    .href;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
+  if (!res.ok)
+    throw new Error(`Failed to fetch ${url}: ${res.status} ${res.statusText}`);
   const bytes = await res.arrayBuffer();
 
   const digest = await sha256Hex(bytes);
   if (digest !== file.sha256) {
-    throw new Error(`${file.name} from ${url} failed SHA-256 verification (got ${digest})`);
+    throw new Error(
+      `${file.name} from ${url} failed SHA-256 verification (got ${digest})`,
+    );
   }
 
   await cachePut(file.cacheKey, bytes).catch(() => {}); // caching is best-effort
@@ -89,7 +98,9 @@ async function loadFile(baseUrl, file) {
 
 async function sha256Hex(bytes) {
   const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, '0'),
+  ).join('');
 }
 
 function openDb() {
