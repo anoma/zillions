@@ -3,3 +3,9 @@
   [headers.values]
     Cross-Origin-Opener-Policy = "same-origin"
     Cross-Origin-Embedder-Policy = "require-corp"
+
+# Sapling proving params are immutable (2018 ceremony output) — cache forever.
+[[headers]]
+  for = "/zillions-sdk-sapling-params/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

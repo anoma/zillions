@@ -7,6 +7,7 @@ import {
 } from "@zillions-sdk/wallet";
 import { db } from "../db";
 import { dedupe } from "../utils";
+import { awaitProverParams } from "./sdk";
 
 const hexToBytes = (hex: string): Uint8Array =>
   Uint8Array.from({ length: hex.length / 2 }, (_, i) =>
@@ -202,6 +203,7 @@ export class SdkWallet {
   }
 
   async submitTransfer(signedPczt: Pczt): Promise<void> {
+    await awaitProverParams();
     const provedPczt = await this.wallet.pczt_prove(signedPczt);
     await this.wallet.pczt_send(provedPczt);
     this.updateWalletCache();
