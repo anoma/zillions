@@ -42,7 +42,7 @@ type Transaction = {
 };
 
 const defaultNetwork: Network = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
-const minConfirmationsTrusted = 10;
+const minConfirmationsTrusted = 3;
 const minConfirmationsUntrusted = 10;
 
 export class SdkWallet {
@@ -184,8 +184,21 @@ export class SdkWallet {
   }
 
   /** Prepare a transfer spending shielded funds; `to` may be shielded or transparent. */
-  async prepareTransfer(to: string, amount: bigint): Promise<Pczt> {
-    return this.wallet.pczt_create(this.accountId, to, amount);
+  async prepareTransferFromShielded(to: string, amount: bigint): Promise<Pczt> {
+    return this.wallet.pczt_create_from_shielded(this.accountId, to, amount);
+  }
+
+  /** Prepare a transfer spending transparent funds; `to` may be shielded or transparent. */
+  async prepareTransferFromTransparent(
+    to: string,
+    amount: bigint,
+  ): Promise<Pczt> {
+    return this.wallet.pczt_create_from_transparent(this.accountId, to, amount);
+  }
+
+  /** Prepare a shielding PCZT; sweeps all transparent funds, or at least `amount` when given. */
+  async prepareShield(amount?: bigint): Promise<Pczt> {
+    return this.wallet.pczt_shield(this.accountId, amount);
   }
 
   async submitTransfer(signedPczt: Pczt): Promise<void> {

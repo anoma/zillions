@@ -30,7 +30,11 @@ function UnshieldRoute() {
       return 0n;
     }
   })();
-  const fee = useFee(account.transparent.address, amount);
+  const fee = useFee(
+    account.shielded.address,
+    account.transparent.address,
+    amount,
+  );
 
   // TODO support for sapling
   const availableBalance = balance.data?.orchardBalance ?? 0n;

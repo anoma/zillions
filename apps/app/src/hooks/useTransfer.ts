@@ -17,10 +17,9 @@ export function useTransfer() {
       to: string;
       amount: bigint;
     }) {
-      if (isTransparentAddress(from)) {
-        throw new Error("Transfers from transparent are not supported yet.");
-      }
-      const pczt = await sdkWallet.prepareTransfer(to, amount);
+      const pczt = isTransparentAddress(from)
+        ? await sdkWallet.prepareTransferFromTransparent(to, amount)
+        : await sdkWallet.prepareTransferFromShielded(to, amount);
       const signed = await keychain().sign({
         signer: from,
         pczt: pcztToBase64(pczt),

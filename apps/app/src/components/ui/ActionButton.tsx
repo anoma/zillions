@@ -33,7 +33,7 @@ const actionButtonShape = tv({
     outlined: {
       true: twMerge(
         "before:transition-colors before:border before:border-[var(--outline)] before:absolute",
-        "before:left-0 before:top-0 before:w-full before:h-full before:z-20",
+        "before:left-0 before:top-0 before:w-full before:h-full",
       ),
     },
   },
@@ -45,7 +45,7 @@ const actionButtonShape = tv({
 
 const actionButtonBackground = tv({
   base: twMerge(
-    "absolute left-0 top-0 w-full h-full z-10 overflow-hidden",
+    "absolute left-0 top-0 w-full h-full -z-1 overflow-hidden",
     "grid grid-rows-[100%_100%] group-hover:grid-rows-[0%_100%]",
     "before:bg-[var(--color)] after:bg-[var(--hover)]",
     "transition-all duration-[0.500s] ease-[var(--ease-out-circ)]",
@@ -63,12 +63,12 @@ const actionButtonBackground = tv({
 const actionButtonText = tv({
   base: twMerge(
     "relative transition-colors duration-100",
-    "z-20 text-center w-full",
+    "text-center w-full",
   ),
 });
 
 const actionButtonIcon = tv({
-  base: "flex items-center justify-center absolute top-1/2 -translate-y-1/2 w-6 z-20",
+  base: "flex items-center justify-center absolute top-1/2 -translate-y-1/2 w-6",
   variants: {
     position: {
       left: "left-3",

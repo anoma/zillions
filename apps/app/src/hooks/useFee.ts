@@ -1,21 +1,28 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { SdkWallet } from "../lib/sdk/wallet";
-import { isShieldedAddress, isTransparentAddress } from "../lib/utils";
+import { isTransparentAddress } from "../lib/utils";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { useWallet } from "./useWallet";
 
-export function fee(wallet: SdkWallet, to: string, amount: bigint) {
+export function fee(
+  wallet: SdkWallet,
+  from: string,
+  to: string,
+  amount: bigint,
+) {
   return queryOptions({
-    queryKey: ["fee", wallet.id, to, amount.toString()],
+    queryKey: ["fee", wallet.id, from, to, amount.toString()],
     queryFn: async () => {
-      const pczt = await wallet.prepareTransfer(to, amount);
+      const pczt = isTransparentAddress(from)
+        ? await wallet.prepareTransferFromTransparent(to, amount)
+        : await wallet.prepareTransferFromShielded(to, amount);
       try {
         return pczt.fee();
       } finally {
         pczt.free();
       }
     },
-    enabled: (isShieldedAddress(to) || isTransparentAddress(to)) && amount > 0n,
+    enabled: Boolean(from && to && amount > 0n),
     retry: false,
   });
 }
@@ -26,10 +33,11 @@ export function fee(wallet: SdkWallet, to: string, amount: bigint) {
  * transaction actually submitted on send is built fresh and may differ slightly if
  * wallet state (spendable notes, chain tip) changes in between.
  */
-export function useFee(to: string, amount: bigint) {
+export function useFee(from: string, to: string, amount: bigint) {
   const sdkWallet = useWallet();
+  const debouncedFrom = useDebouncedValue(from);
   const debouncedTo = useDebouncedValue(to);
   const debouncedAmount = useDebouncedValue(amount);
 
-  return useQuery(fee(sdkWallet, debouncedTo, debouncedAmount));
+  return useQuery(fee(sdkWallet, debouncedFrom, debouncedTo, debouncedAmount));
 }

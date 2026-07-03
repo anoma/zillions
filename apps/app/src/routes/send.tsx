@@ -39,7 +39,11 @@ function SendRoute() {
       return 0n;
     }
   })();
-  const fee = useFee(to, amount);
+  const fee = useFee(
+    isTransparentFrom ? account.transparent.address : account.shielded.address,
+    to,
+    amount,
+  );
 
   const onSubmit = async () => {
     try {
