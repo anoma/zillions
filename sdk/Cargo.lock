@@ -4080,7 +4080,6 @@ dependencies = [
 name = "zillions-sdk-keys"
 version = "0.1.0"
 dependencies = [
- "base64",
  "bip0039",
  "bip32",
  "getrandom 0.2.17",
@@ -4089,8 +4088,6 @@ dependencies = [
  "orchard",
  "pczt",
  "sapling-crypto",
- "secp256k1",
- "sha2 0.10.9",
  "thiserror 1.0.69",
  "wasm-bindgen",
  "wasm-bindgen-futures",

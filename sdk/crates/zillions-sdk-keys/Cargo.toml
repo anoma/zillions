@@ -14,10 +14,7 @@ crate-type = ["cdylib", "rlib"]
 wasm-opt = ["-O4", "-O4"]
 
 [dependencies]
-secp256k1 = { version = "0.29", default-features = false, features = ["alloc", "recovery"] }
-sha2 = "0.10"
 hex = "0.4"
-base64 = "0.22"
 zillions-sdk-common = { path = "../zillions-sdk-common" }
 
 js-sys.workspace = true
