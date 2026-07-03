@@ -29,9 +29,7 @@ function AccountProfile() {
             >
               <div>
                 <div className="text-xs">{label}:</div>
-                <div className="font-semibold">
-                  {shortenAddress(value, 9, 9)}
-                </div>
+                <div className="font-semibold">{shortenAddress(value)}</div>
               </div>
             </CopyToClipboardControl>
           ))}

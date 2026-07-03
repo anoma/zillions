@@ -55,7 +55,7 @@ export function dedupe<T>(fn: () => Promise<T>): () => Promise<T> {
 
 export const shortenAddress = (
   address: string,
-  prefixLength = 6,
+  prefixLength = 8,
   suffixLength = 6,
   delimiter = "...",
 ): string => {
