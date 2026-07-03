@@ -1,15 +1,6 @@
 import type { ZCashKeychainAccount } from "./account";
 import type { PcztBase64 } from "./pczt";
-import type {
-  GenDisposableSignerResponse,
-  SignArbitraryResponse,
-  Signer,
-} from "./signer";
-
-export type SignArbitraryProps = {
-  signer: string;
-  data: string;
-};
+import type { GenDisposableSignerResponse, Signer } from "./signer";
 
 /**
  * Props for the PCZT sign flow.
@@ -20,12 +11,6 @@ export type SignArbitraryProps = {
 export type SignProps = {
   signer?: string;
   pczt: PcztBase64;
-};
-
-export type VerifyArbitraryProps = {
-  publicKey: string;
-  hash: string;
-  signature: string;
 };
 
 export type BalancesProps = {
@@ -52,10 +37,6 @@ export interface Zillions {
    * Sign a PCZT. Returns the signed PCZT as base64 (postcard bytes).
    */
   sign(props: SignProps): Promise<PcztBase64>;
-  signArbitrary(
-    props: SignArbitraryProps,
-  ): Promise<SignArbitraryResponse | undefined>;
-  verify(props: VerifyArbitraryProps): Promise<void>;
   genDisposableKeypair(): Promise<GenDisposableSignerResponse | undefined>;
   persistDisposableKeypair(props: PersistDisposableSignerProps): Promise<void>;
   clearDisposableKeypair(props: ClearDisposableSignerProps): Promise<void>;
