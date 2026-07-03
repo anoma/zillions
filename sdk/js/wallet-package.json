@@ -15,7 +15,9 @@
     "zillions_sdk_wallet.d.ts",
     "snippets",
     "vite-plugin.js",
-    "vite-plugin.d.ts"
+    "vite-plugin.d.ts",
+    "params.js",
+    "params.d.ts"
   ],
   "module": "zillions_sdk_wallet.js",
   "types": "zillions_sdk_wallet.d.ts",
@@ -28,6 +30,10 @@
     "./vite-plugin": {
       "import": "./vite-plugin.js",
       "types": "./vite-plugin.d.ts"
+    },
+    "./params": {
+      "import": "./params.js",
+      "types": "./params.d.ts"
     }
   }
 }

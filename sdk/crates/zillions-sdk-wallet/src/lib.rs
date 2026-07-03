@@ -8,6 +8,7 @@ pub mod bindgen;
 
 mod error;
 pub mod init;
+pub mod proofs;
 pub mod validation;
 
 pub mod wallet;

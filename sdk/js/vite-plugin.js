@@ -20,11 +20,24 @@
  */
 
 import { cpSync, createReadStream, statSync } from 'fs';
+import { createRequire } from 'module';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const WALLET_PREFIX = '/zillions-sdk-wallet';
+const PARAMS_PREFIX = '/zillions-sdk-sapling-params';
+
+// Optional sibling package holding the Sapling proving params; consumers that
+// self-host the params (loadProverParams(url)) may not install it.
+function resolveParamsDir() {
+  try {
+    const require = createRequire(import.meta.url);
+    return dirname(require.resolve('@zillions-sdk/sapling-params/package.json'));
+  } catch {
+    return undefined;
+  }
+}
 
 export function zillionsWallet() {
   let outDir = 'dist';
@@ -70,6 +83,10 @@ export function zillionsWallet() {
     // Copy wallet files to dist/zillions-sdk-wallet/ after the bundle is written.
     closeBundle() {
       cpSync(__dirname, join(outDir, 'zillions-sdk-wallet'), { recursive: true });
+      const paramsDir = resolveParamsDir();
+      if (paramsDir) {
+        cpSync(paramsDir, join(outDir, 'zillions-sdk-sapling-params'), { recursive: true });
+      }
     },
 
     configureServer(server) {
@@ -79,11 +96,17 @@ export function zillionsWallet() {
 
         // In dev mode Vite serves the wallet via /@fs/... but workers may also
         // request it through the /zillions-sdk-wallet/ prefix — serve it from the
-        // package directory so those requests resolve correctly.
+        // package directory so those requests resolve correctly. The Sapling
+        // params package is served the same way under its own prefix.
         const url = req.url ?? '';
-        if (url.startsWith(WALLET_PREFIX + '/')) {
-          const relPath = decodeURIComponent(url.slice(WALLET_PREFIX.length + 1).split('?')[0]);
-          const filePath = join(__dirname, relPath);
+        const roots = [
+          [WALLET_PREFIX, __dirname],
+          [PARAMS_PREFIX, resolveParamsDir()],
+        ];
+        for (const [prefix, dir] of roots) {
+          if (!dir || !url.startsWith(prefix + '/')) continue;
+          const relPath = decodeURIComponent(url.slice(prefix.length + 1).split('?')[0]);
+          const filePath = join(dir, relPath);
           try {
             if (statSync(filePath).isFile()) {
               const ext = relPath.split('.').pop() ?? '';

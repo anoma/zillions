@@ -1,0 +1,15 @@
+{
+  "name": "@zillions-sdk/sapling-params",
+  "collaborators": ["Heliax"],
+  "description": "Zcash Sapling proving parameters (2018 MPC ceremony output) for @zillions-sdk/wallet",
+  "version": "1.0.0",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heliaxdev/zillions-sdk"
+  },
+  "files": [
+    "sapling-spend.params",
+    "sapling-output.params"
+  ]
+}

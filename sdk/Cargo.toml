@@ -41,6 +41,8 @@ zcash_transparent = { git = "https://github.com/zcash/librustzcash", branch = "m
 transparent = { package = "zcash_transparent", git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false }
 zcash_encoding = { git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false }
 zcash_address = { git = "https://github.com/zcash/librustzcash", branch = "main" }
+# bundled-prover only un-gates zcash_proofs::prover on wasm; LocalTxProver::bundled()
+# is never called, so the embedded params are dead-code-eliminated from the binary.
 zcash_proofs = { git = "https://github.com/zcash/librustzcash", branch = "main", default-features = false, features = ["bundled-prover", "multicore"] }
 zip321 = { git = "https://github.com/zcash/librustzcash", branch = "main" }
 zip32 = { version = "0.2" }

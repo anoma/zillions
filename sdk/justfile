@@ -5,6 +5,7 @@ build:
     just build-wallet
     just build-keys
     just build-requests
+    just build-sapling-params
 
 build-mac:
     #!/usr/bin/env bash
@@ -17,7 +18,7 @@ build-mac:
 pack:
     #!/usr/bin/env bash
     mkdir -p dist
-    for pkg in zillions-sdk-wallet zillions-sdk-keys zillions-sdk-requests; do
+    for pkg in zillions-sdk-wallet zillions-sdk-keys zillions-sdk-requests zillions-sdk-sapling-params; do
         tarball=$(cd packages/$pkg && npm pack 2>/dev/null | tail -1)
         mv packages/$pkg/$tarball dist/
         echo "✓ dist/$tarball"
@@ -33,7 +34,15 @@ build-wallet *features:
     node patch-workers.js
     cp js/vite-plugin.js packages/zillions-sdk-wallet/
     cp js/vite-plugin.d.ts packages/zillions-sdk-wallet/
+    cp js/params.js packages/zillions-sdk-wallet/
+    cp js/params.d.ts packages/zillions-sdk-wallet/
     cp js/wallet-package.json packages/zillions-sdk-wallet/package.json
+
+# Assemble the (immutable) Sapling proving params into their own npm package
+build-sapling-params:
+    ./scripts/assemble-sapling-params.sh
+    cp js/sapling-params-package.json packages/zillions-sdk-sapling-params/package.json
+    cp js/sapling-params-README.md packages/zillions-sdk-sapling-params/README.md
 
 build-keys *features:
     cd crates/zillions-sdk-keys && wasm-pack build -t web --release --scope zillions-sdk --out-dir ../../packages/zillions-sdk-keys --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"

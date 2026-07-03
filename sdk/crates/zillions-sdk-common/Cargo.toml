@@ -1,7 +1,7 @@
 [package]
 name = "zillions-sdk-common"
 version = "0.1.0"
-authors = ["ChainSafe Systems"]
+authors = ["Heliax", "ChainSafe Systems"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/heliaxdev/zillions-sdk"
 description = "A browser client-side library for generating and manipulating zcash keys"
