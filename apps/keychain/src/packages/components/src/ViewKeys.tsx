@@ -29,7 +29,7 @@ export const ViewKeys = ({
   shieldedAccountPath,
   viewingKeys,
   footer,
-  trimCharacters = 16,
+  trimCharacters,
 }: ViewKeysProps): JSX.Element => {
   const [seeViewingKey, setSeeViewingKey] = useState(false);
   return (
@@ -39,6 +39,21 @@ export const ViewKeys = ({
       gap={GapPatterns.TitleContent}
     >
       <Stack gap={GapPatterns.FormFields}>
+        {shieldedAccountAddress && (
+          <div>
+            <Input
+              label="Your Shielded Address"
+              variant="ReadOnlyCopy"
+              readOnly={true}
+              valueToDisplay={shortenAddress(
+                shieldedAccountAddress,
+                trimCharacters
+              )}
+              value={shieldedAccountAddress}
+            />
+            {shieldedAccountPath && <Path path={shieldedAccountPath} />}
+          </div>
+        )}
         {transparentAccountAddress && (
           <div>
             <Input
@@ -65,21 +80,6 @@ export const ViewKeys = ({
             value={privateKey}
             theme={"primary"}
           />
-        )}
-        {shieldedAccountAddress && (
-          <div>
-            <Input
-              label="Your Shielded Address"
-              variant="ReadOnlyCopy"
-              readOnly={true}
-              valueToDisplay={shortenAddress(
-                shieldedAccountAddress,
-                trimCharacters
-              )}
-              value={shieldedAccountAddress}
-            />
-            {shieldedAccountPath && <Path path={shieldedAccountPath} />}
-          </div>
         )}
         {viewingKeys &&
           (seeViewingKey ?

@@ -53,7 +53,6 @@ export const ViewAccount = (): JSX.Element => {
         <ViewKeys
           transparentAccountAddress={transparentAddress}
           shieldedAccountAddress={shieldedAddress}
-          trimCharacters={16}
         />
         <Stack gap={2} full className="mt-5">
           <ActionButton
