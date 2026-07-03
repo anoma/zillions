@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "prepare": "husky",
     "sdk:update": "bash ./scripts/update-sdk.sh",
-    "keychain:update": "bash ./scripts/update-keychain-types.sh"
+    "keychain:update": "bash ./scripts/update-keychain.sh"
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.2.8",
