@@ -1,0 +1,30 @@
+/*
+ * Tailwind + theme entry for z-extension HTML entrypoints. Loads the shared
+ * Zillions design system (gold/light theme + Space Grotesk fonts) from
+ * @zillions/components so the new app matches the existing visual identity.
+ */
+@import "tailwindcss";
+
+@import "@zillions/components/src/theme.css";
+@import "@zillions/components/src/base.css";
+
+/*
+ * v4 usage-based purging scans the app source (including the vendored
+ * packages under src/packages) so utility classes are not dropped.
+ */
+@source "../src";
+@source "../entrypoints";
+
+@source inline("rounded-buttonBorderRadius");
+
+body,
+html {
+  min-width: 380px;
+  min-height: 420px;
+  background-color: #ecebe7;
+}
+
+body {
+  min-width: 360px;
+  overflow-x: hidden;
+}

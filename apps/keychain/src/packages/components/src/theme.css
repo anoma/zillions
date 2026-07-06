@@ -1,0 +1,197 @@
+/**
+ * Tailwind v4 CSS-first theme for the Zillions design system.
+ *
+ * This is the v4-native port of the legacy JS preset (`theme.ts`). It is
+ * imported by every app's Tailwind entry CSS (after `@import "tailwindcss"`)
+ * so the design tokens (colors, radii, font sizes, spacing 13->98, animations,
+ * easing) are available as utilities. `theme.ts` is kept for any non-Tailwind
+ * JS consumers but is no longer the source of truth for utility generation.
+ *
+ * Notes on v4 semantics:
+ * - `--color-*` defines the color palette. We `--color-*: initial` first only
+ *   where we want to fully replace a default ramp; here we keep Tailwind's
+ *   default palette and ADD/OVERRIDE the brand ramps (primary, cyan, pink,
+ *   neutral) plus the flat status colors.
+ * - `--radius-*`, `--text-*`, `--spacing-*`, `--animate-*`, `--ease-*` map to
+ *   rounded-*, text-*, spacing utilities (p-*, m-*, w-*, ...), animate-*, and
+ *   ease-* respectively.
+ */
+
+@theme {
+  /* ---- flat status / misc colors (v3 top-level color keys) ---- */
+  --color-success: #15dd89;
+  --color-intermediate: #f48708;
+  --color-orange: #ff8a00;
+  --color-fail: #dd1539;
+  --color-white: #fff;
+  --color-black: #0f0f0f;
+  --color-neutral: #292929;
+  --color-rblack: #000000;
+  --color-upcoming: #7da0a8;
+  --color-transparent: #00000000;
+  --color-yay: #15dd89;
+  --color-nay: #dd1599;
+  --color-abstain: #8a8a8a;
+
+  /* ---- primary (brand accent) ---- */
+  --color-primary: oklch(77.526% 0.10643 92.197);
+  --color-primary-50: oklch(97.598% 0.01231 91.516);
+  --color-primary-100: oklch(95.224% 0.02338 90.752);
+  --color-primary-200: oklch(90.898% 0.04611 93.526);
+  --color-primary-300: oklch(86.386% 0.06747 93.365);
+  --color-primary-400: oklch(81.983% 0.08808 92.458);
+  --color-primary-500: oklch(77.526% 0.10643 92.197);
+  --color-primary-600: oklch(70.897% 0.12126 91.386);
+  --color-primary-700: oklch(58.724% 0.09861 91.387);
+  --color-primary-800: oklch(45.868% 0.07532 91.598);
+  --color-primary-900: oklch(32.415% 0.04993 92.065);
+  --color-primary-950: oklch(24.89% 0.03561 93.717);
+
+  /* ---- cyan ---- */
+  --color-cyan: #00ffff;
+  --color-cyan-50: #b8ffff;
+  --color-cyan-100: #a3ffff;
+  --color-cyan-200: #7affff;
+  --color-cyan-300: #52ffff;
+  --color-cyan-400: #29ffff;
+  --color-cyan-500: #00ffff;
+  --color-cyan-600: #00c7c7;
+  --color-cyan-700: #008f8f;
+  --color-cyan-800: #005757;
+  --color-cyan-900: #001f1f;
+  --color-cyan-950: #000303;
+
+  /* ---- pink ---- */
+  --color-pink: #dd1599;
+  --color-pink-50: #f8b2e0;
+  --color-pink-100: #f69fd8;
+  --color-pink-200: #f27ac9;
+  --color-pink-300: #ef55ba;
+  --color-pink-400: #eb30ab;
+  --color-pink-500: #dd1599;
+  --color-pink-600: #aa1076;
+  --color-pink-700: #770b52;
+  --color-pink-800: #2b0d20;
+  --color-pink-900: #10020b;
+  --color-pink-950: #000000;
+
+  /* ---- neutral (overrides Tailwind's default neutral ramp) ---- */
+  --color-neutral: oklch(93.972% 0.00545 95.102);
+  --color-neutral-dark: oklch(39.331% 0.01991 95.545);
+  --color-neutral-50: oklch(100% 0 none);
+  --color-neutral-100: oklch(99.703% 0 none);
+  --color-neutral-200: oklch(93.972% 0.00545 95.102);
+  --color-neutral-300: oklch(85.975% 0.01244 96.446);
+  --color-neutral-400: oklch(77.767% 0.02109 97.605);
+  --color-neutral-500: oklch(69.463% 0.02893 95.47);
+  --color-neutral-600: oklch(60.455% 0.03399 97.106);
+  --color-neutral-700: oklch(50.161% 0.0279 96.875);
+  --color-neutral-800: oklch(39.331% 0.01991 95.545);
+  --color-neutral-900: oklch(27.545% 0.01256 100.48);
+  --color-neutral-950: oklch(21.269% 0.00963 97.809);
+  --color-neutral-hover: oklch(50.161% 0.0279 96.875);
+
+  /* ---- border radius ---- */
+  --radius: 10px;
+  --radius-none: 0;
+  --radius-sm: 5px;
+  --radius-md: 15px;
+  --radius-lg: 20px;
+  --radius-full: 100%;
+  --radius-mainContainer: 24px;
+  --radius-textField: 8px;
+  --radius-buttonBorderRadius: 200px;
+
+  /* ---- font sizes ---- */
+  --text-xxs: 0.625rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 2.85rem;
+  --text-6xl: 3.25rem;
+  --text-7xl: 4rem;
+
+  /* ---- easing (transitionTimingFunction) ---- */
+  --ease-in-cubic: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --ease-in-circ: cubic-bezier(0.6, 0.04, 0.98, 0.335);
+  --ease-out-circ: cubic-bezier(0.075, 0.82, 0.165, 1);
+  --ease-in-out-circ: cubic-bezier(0.785, 0.135, 0.15, 0.86);
+  --ease-in-expo: cubic-bezier(0.95, 0.05, 0.795, 0.035);
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-in-out-expo: cubic-bezier(1, 0, 0, 1);
+  --ease-in-quad: cubic-bezier(0.55, 0.085, 0.68, 0.53);
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-in-out-quad: cubic-bezier(0.455, 0.03, 0.515, 0.955);
+  --ease-in-quart: cubic-bezier(0.895, 0.03, 0.685, 0.22);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-in-out-quart: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-in-quint: cubic-bezier(0.755, 0.05, 0.855, 0.06);
+  --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-quint: cubic-bezier(0.86, 0, 0.07, 1);
+  --ease-in-sine: cubic-bezier(0.47, 0, 0.745, 0.715);
+  --ease-out-sine: cubic-bezier(0.39, 0.575, 0.565, 1);
+  --ease-in-out-sine: cubic-bezier(0.445, 0.05, 0.55, 0.95);
+  --ease-in-back: cubic-bezier(0.6, -0.28, 0.735, 0.045);
+  --ease-out-back: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-in-out-back: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* ---- animations + keyframes ---- */
+  --animate-fade-in: fadeIn var(--ease-out-expo) 1s;
+  --animate-slide-down: slideDown 0.5s var(--ease-out-expo) forwards;
+  --animate-slide-up: slideUp 0.5s var(--ease-out-expo) forwards;
+
+  @keyframes slideDown {
+    0% {
+      transform: translateY(-100%);
+    }
+
+    100% {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideUp {
+    0% {
+      transform: translateY(100%);
+    }
+
+    100% {
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/*
+ * v4 compatibility: in v3 the default `border-color` / `divide-color` was
+ * `neutral-200`. v4 changed the default to `currentColor`. A few components use a
+ * bare `border` / `divide` with no explicit color and relied on the v3 default,
+ * so restore it here to preserve the exact previous look.
+ */
+@layer base {
+
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-neutral-200, currentColor);
+  }
+}

@@ -1,0 +1,14 @@
+Zillions SDK
+Copyright 2026 Heliax
+
+This project is a fork of WebZjs by ChainSafe Systems
+(https://github.com/ChainSafe/WebZjs).
+
+Portions of this software are Copyright 2024 ChainSafe Systems and are
+licensed under the MIT License or the Apache License, Version 2.0, at your
+option. Files carrying a ChainSafe copyright header originate from the
+upstream project; files without a per-file header may contain code from
+either party.
+
+New contributions are Copyright 2026 Heliax and are licensed under the same
+MIT OR Apache-2.0 terms. See LICENSE-MIT and LICENSE-APACHE.

@@ -1,0 +1,25 @@
+{
+  "name": "root",
+  "private": true,
+  "license": "Apache-2.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "prettier-plugin-packagejson": "^2.5.3"
+  },
+  "packageManager": "yarn@4.5.1",
+  "scripts": {
+    "test:e2e": "yarn workspace @zillions-sdk/e2e-tests test",
+    "just:build": "just build",
+    "just:build-keys": "just build-keys",
+    "just:mac": "just build-mac",
+    "just:pack": "just pack",
+    "just:ship-mac": "just ship-mac",
+    "build": "just ship-mac"
+  }
+}
