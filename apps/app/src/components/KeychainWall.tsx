@@ -104,8 +104,9 @@ function Connect({ children }: { children: ReactNode }) {
     (async () => {
       try {
         setIsConnected(await keychain().isConnected());
-      } catch (error) {
-        setError(String(error));
+      } catch (err) {
+        console.error(err);
+        setError(String(err));
       } finally {
         setLoading(false);
       }

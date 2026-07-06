@@ -43,6 +43,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         if (!cancelled) {
+          console.error(err);
           setError(String(err));
         }
       }
