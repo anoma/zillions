@@ -1,0 +1,23 @@
+{
+  "name": "zillions-interface",
+  "private": true,
+  "packageManager": "pnpm@9.12.1",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "dev:app": "pnpm --filter zillions-app dev",
+    "dev:keychain": "pnpm --filter zillions-keychain dev",
+    "build:app": "pnpm --filter zillions-app build",
+    "build:keychain": "pnpm --filter zillions-keychain build",
+    "build:sdk": "pnpm --filter zillions-sdk build",
+    "keychain:zip": "pnpm --filter zillions-keychain build:chrome && pnpm --filter zillions-app keychain:update",
+    "typecheck": "pnpm --filter zillions-app typecheck && pnpm --filter zillions-keychain compile",
+    "lint": "pnpm --filter zillions-app lint && pnpm --filter zillions-keychain lint"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7"
+  }
+}

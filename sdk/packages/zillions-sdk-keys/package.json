@@ -1,0 +1,19 @@
+{
+  "name": "@zillions-sdk/keys",
+  "collaborators": ["Heliax", "ChainSafe Systems"],
+  "description": "A browser client-side library for generating and manipulating zcash keys",
+  "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heliaxdev/zillions-sdk"
+  },
+  "files": [
+    "zillions_sdk_keys_bg.wasm",
+    "zillions_sdk_keys.js",
+    "zillions_sdk_keys.d.ts"
+  ],
+  "module": "zillions_sdk_keys.js",
+  "types": "zillions_sdk_keys.d.ts",
+  "sideEffects": ["./snippets/*"]
+}

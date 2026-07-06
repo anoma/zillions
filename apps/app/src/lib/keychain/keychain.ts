@@ -1,5 +1,9 @@
+import {
+  Events,
+  type ZCashKeychainAccount,
+  type Zillions,
+} from "@zillions/keychain-types";
 import { invariant } from "../invariant";
-import { Events, type ZCashKeychainAccount, type Zillions } from "./types/src";
 import { waitForWindowProp } from "./utils";
 
 export type KeychainAccount = ZCashKeychainAccount;

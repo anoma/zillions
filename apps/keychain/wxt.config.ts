@@ -74,7 +74,16 @@ const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
     },
   ];
 
-  return [...crypto, ...generic];
+  // nodePolyfills injects shim imports into every module that touches
+  // `global`/`Buffer`, including the workspace-linked @zillions-sdk/keys.
+  // Those injected specifiers can't resolve from the SDK package's own
+  // directory under pnpm's strict layout, so pin them to our copy.
+  const polyfillShims = ["global", "buffer", "process"].map((shim) => ({
+    find: new RegExp(`^vite-plugin-node-polyfills/shims/${shim}$`),
+    replacement: r(`node_modules/vite-plugin-node-polyfills/shims/${shim}`),
+  }));
+
+  return [...crypto, ...generic, ...polyfillShims];
 };
 
 export default defineConfig({

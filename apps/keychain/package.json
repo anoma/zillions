@@ -1,5 +1,5 @@
 {
-  "name": "zillions-extension",
+  "name": "zillions-keychain",
   "version": "0.1.0",
   "description": "Zillions Keychain — a Zcash wallet browser extension.",
   "author": "Heliax Dev <info@heliax.dev>",
@@ -14,12 +14,11 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "compile": "tsc --noEmit",
-    "lint": "eslint src entrypoints --ext .ts,.tsx",
-    "sdk:update": "bash ./scripts/update-sdk.sh"
+    "lint": "eslint src entrypoints --ext .ts,.tsx"
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.2.8",
-    "@zillions-sdk/keys": "file:src/packages/zillions-sdk/zillions-sdk-keys-0.1.0.tgz",
+    "@zillions-sdk/keys": "workspace:*",
     "clsx": "^2.1.1",
     "fp-ts": "^2.16.1",
     "framer-motion": "^11.18.2",

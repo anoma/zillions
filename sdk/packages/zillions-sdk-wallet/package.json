@@ -1,0 +1,39 @@
+{
+  "name": "@zillions-sdk/wallet",
+  "collaborators": ["Heliax", "ChainSafe Systems"],
+  "description": "A browser client-side library for implementing Zcash wallets",
+  "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heliaxdev/zillions-sdk"
+  },
+  "files": [
+    "zillions_sdk_wallet_bg.wasm",
+    "zillions_sdk_wallet_bg.wasm.d.ts",
+    "zillions_sdk_wallet.js",
+    "zillions_sdk_wallet.d.ts",
+    "snippets",
+    "vite-plugin.js",
+    "vite-plugin.d.ts",
+    "params.js",
+    "params.d.ts"
+  ],
+  "module": "zillions_sdk_wallet.js",
+  "types": "zillions_sdk_wallet.d.ts",
+  "sideEffects": ["./snippets/*"],
+  "exports": {
+    ".": {
+      "import": "./zillions_sdk_wallet.js",
+      "types": "./zillions_sdk_wallet.d.ts"
+    },
+    "./vite-plugin": {
+      "import": "./vite-plugin.js",
+      "types": "./vite-plugin.d.ts"
+    },
+    "./params": {
+      "import": "./params.js",
+      "types": "./params.d.ts"
+    }
+  }
+}

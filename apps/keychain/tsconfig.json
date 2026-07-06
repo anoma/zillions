@@ -19,6 +19,12 @@
     "strict": true,
     "target": "es2023",
     "paths": {
+      // Pin React types to this package's copy; the app's @types/react 19
+      // otherwise leaks into dependency d.ts files via pnpm's hoist.
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"],
       "@vitejs/plugin-react": ["./.types-shims/vitejs-plugin-react.d.ts"],
       "@zillions/components": ["./src/packages/components/src"],
       "@zillions/components/*": ["./src/packages/components/src/*"],

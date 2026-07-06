@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Copy types
-cp ../zillions-extension/src/packages/types/src/*.ts src/lib/keychain/types/src/
-
-npx prettier --write src/lib/keychain/types/src/*.ts
-
-echo "Copied keychain types"
-
-# Zip the pre-built extension into public/
+# Zip the pre-built keychain extension into public/.
+# Build it first: pnpm --filter zillions-keychain build:chrome
 zip_name="zillions-keychain.zip"
 public_dir=$(pwd)/public
+keychain_out="../keychain/.output/chrome-mv3"
+
+if [ ! -d "$keychain_out" ]; then
+  echo "Keychain build output not found at $keychain_out" >&2
+  echo "Run: pnpm --filter zillions-keychain build:chrome" >&2
+  exit 1
+fi
 
 rm -f "${public_dir}/${zip_name}"
-(cd ../zillions-extension/.output/chrome-mv3 && zip -r "${public_dir}/${zip_name}" .)
+(cd "$keychain_out" && zip -r "${public_dir}/${zip_name}" .)
 
 echo "Created public/${zip_name}"
