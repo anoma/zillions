@@ -11,8 +11,10 @@ import {
 } from "../hooks/useGetKeychainDefaultAccount";
 import {
   isKeychainAvailable,
+  isKeychainVersionSupported,
   keychain,
   KeychainEvent,
+  MIN_KEYCHAIN_VERSION,
 } from "../lib/keychain/keychain";
 import { keychainUrl } from "../lib/urls";
 import { AccountProvider } from "./AccountProvider";
@@ -22,7 +24,7 @@ import { ActionButton } from "./ui/ActionButton";
 
 function Content({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-5 items-center justify-center h-svh">
+    <div className="flex flex-col gap-5 items-center justify-center h-svh text-center">
       <div className="text-3xl">{title}</div>
       {children}
     </div>
@@ -151,6 +153,21 @@ function Download({ children }: { children: ReactNode }) {
   if (!isKeychainAvailable()) {
     return (
       <Content title="Keychain not installed">
+        <a download href={keychainUrl}>
+          <ActionButton>Download Keychain</ActionButton>
+        </a>
+      </Content>
+    );
+  }
+
+  if (!isKeychainVersionSupported()) {
+    return (
+      <Content title="Keychain outdated">
+        <div>
+          Version {MIN_KEYCHAIN_VERSION} or newer is required.
+          <br />
+          Download the latest keychain and reinstall it.
+        </div>
         <a download href={keychainUrl}>
           <ActionButton>Download Keychain</ActionButton>
         </a>

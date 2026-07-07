@@ -4,12 +4,14 @@ import {
   type Zillions,
 } from "@zillions/keychain-types";
 import { invariant } from "../invariant";
-import { waitForWindowProp } from "./utils";
+import { compareVersions, waitForWindowProp } from "./utils";
 
 export type KeychainAccount = ZCashKeychainAccount;
 export type Keychain = Zillions;
 
 export const KeychainEvent = Events;
+
+export const MIN_KEYCHAIN_VERSION = "0.1.1";
 
 export function keychain(): Keychain {
   invariant(window.zc, "Keychain not installed");
@@ -18,6 +20,12 @@ export function keychain(): Keychain {
 
 export function isKeychainAvailable(): boolean {
   return Boolean(window.zc);
+}
+
+export function isKeychainVersionSupported(): boolean {
+  const version = keychain().version();
+  if (!version) return false;
+  return compareVersions(version, MIN_KEYCHAIN_VERSION) >= 0;
 }
 
 export function waitForKeychainInjection(): Promise<Keychain | undefined> {
