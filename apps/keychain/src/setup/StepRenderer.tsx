@@ -5,14 +5,14 @@
  */
 import { useWizard } from "./SetupContext";
 import { Start } from "./steps/Start";
-import { CreateWarning } from "./steps/create/CreateWarning";
-import { CreateSeed } from "./steps/create/CreateSeed";
 import { CreateConfirm } from "./steps/create/CreateConfirm";
-import { NameAndPassword } from "./steps/shared/NameAndPassword";
-import { Complete } from "./steps/shared/Complete";
+import { CreateSeed } from "./steps/create/CreateSeed";
+import { CreateWarning } from "./steps/create/CreateWarning";
 import { ImportSecret } from "./steps/import/ImportSecret";
+import { Complete } from "./steps/shared/Complete";
+import { NameAndPassword } from "./steps/shared/NameAndPassword";
 
-export const StepRenderer = (): JSX.Element => {
+export const StepRenderer = () => {
   const { state } = useWizard();
 
   switch (state.step) {

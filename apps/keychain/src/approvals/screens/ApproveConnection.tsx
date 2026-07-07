@@ -12,7 +12,7 @@ import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext, ExtensionLockContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 
-export const ApproveConnection = (): JSX.Element => {
+export const ApproveConnection = () => {
   const client = useContext(ClientContext);
   const { isUnlocked } = useContext(ExtensionLockContext);
   const [params] = useSearchParams();

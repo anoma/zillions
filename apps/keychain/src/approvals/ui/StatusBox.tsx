@@ -17,7 +17,7 @@ export const StatusBox = ({
   idleText,
   pendingText,
   errorText,
-}: Props): JSX.Element | null => {
+}: Props) => {
   if (status === undefined) {
     return idleText ? <Alert type="warning">{idleText}</Alert> : null;
   }

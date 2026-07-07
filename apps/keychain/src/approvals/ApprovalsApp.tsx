@@ -9,7 +9,7 @@ import {
   useMemo,
   useState,
   type Dispatch,
-  type SetStateAction,
+  type SetStateAction
 } from "react";
 import { HashRouter, Route, Routes } from "react-router-dom";
 
@@ -43,7 +43,7 @@ export type ApprovalDetails = {
   summary: PcztSummary;
 };
 
-export const ApprovalsApp = (): JSX.Element => {
+export const ApprovalsApp = () => {
   const client = useMemo(() => createBackgroundClient(), []);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [details, setDetails] = useState<ApprovalDetails>();

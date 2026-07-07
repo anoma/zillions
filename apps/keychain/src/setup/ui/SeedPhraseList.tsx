@@ -29,7 +29,7 @@ const ListItem = ({
   invalidWordIndex?: number;
   onChange?: (index: number, value: string) => void;
   onPaste?: (index: number, e: ClipboardEvent<HTMLInputElement>) => void;
-}): JSX.Element => {
+}) => {
   const hasError = idx === invalidWordIndex;
   return (
     <li
@@ -76,7 +76,7 @@ export const SeedPhraseList = ({
   invalidWordIndex,
   onChange,
   onPaste,
-}: Props): JSX.Element => {
+}: Props) => {
   const list = (
     <ol
       className="grid gap-x-1.5 gap-y-2 w-full min-h-54"

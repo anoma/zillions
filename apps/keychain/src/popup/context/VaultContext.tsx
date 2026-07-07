@@ -9,7 +9,7 @@ import {
   useContext,
   useEffect,
   useState,
-  type PropsWithChildren,
+  type PropsWithChildren
 } from "react";
 
 import type { BackgroundClient } from "../../ipc/client";
@@ -45,7 +45,7 @@ type ProviderProps = PropsWithChildren<{ client: BackgroundClient }>;
 export const VaultProvider = ({
   client,
   children,
-}: ProviderProps): JSX.Element => {
+}: ProviderProps) => {
   const [lockStatus, setLockStatus] = useState<LockStatus>("pending");
   const [passwordInitialized, setPasswordInitialized] = useState<
     boolean | undefined

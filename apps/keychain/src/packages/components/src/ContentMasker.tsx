@@ -35,7 +35,7 @@ type ContentMaskerProps = {
   hideIcon?: boolean;
 } & VariantProps<typeof contentMasker>;
 
-export const ContentMasker = (props: ContentMaskerProps): JSX.Element => {
+export const ContentMasker = (props: ContentMaskerProps) => {
   const { base, blurred, icon } = contentMasker({ color: props.color });
   return (
     <div className={base()}>

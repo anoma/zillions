@@ -11,7 +11,7 @@ type Props = {
   children: React.ReactNode;
 };
 
-export const WithAuth = ({ children }: Props): JSX.Element => {
+export const WithAuth = ({ children }: Props) => {
   const client = useContext(ClientContext);
   const { isUnlocked, setIsUnlocked } = useContext(ExtensionLockContext);
 

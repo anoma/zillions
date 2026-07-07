@@ -8,7 +8,7 @@ import { PiWarning } from "react-icons/pi";
 import { tv } from "tailwind-variants";
 
 type KeyListItemProps = {
-  as: keyof React.ReactHTML;
+  as: keyof HTMLElementTagNameMap;
   alias: string;
   type: AccountType;
   outdated: boolean;
@@ -47,7 +47,7 @@ export const KeyListItem = ({
   onDisposableKeyDetails,
   dropdownPosition = "top",
   ...props
-}: KeyListItemProps): JSX.Element => {
+}: KeyListItemProps) => {
   return createElement(
     props.as || "div",
     { className: keyListItem({ selected: isMainKey }) },

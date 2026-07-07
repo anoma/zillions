@@ -17,7 +17,7 @@ import { useWizard } from "../../SetupContext";
 import type { MnemonicLength } from "../../model/secrets";
 import { SeedPhraseList } from "../../ui/SeedPhraseList";
 
-export const CreateSeed = (): JSX.Element => {
+export const CreateSeed = () => {
   const { state, dispatch, client } = useWizard();
   const { mnemonic, mnemonicLength } = state;
 

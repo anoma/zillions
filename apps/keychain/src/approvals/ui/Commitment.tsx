@@ -41,7 +41,7 @@ const Section = ({
   title: string;
   inputs: (PcztTransparentIo | PcztShieldedIo)[];
   outputs: (PcztTransparentIo | PcztShieldedIo)[];
-}): JSX.Element | null => {
+}) => {
   if (inputs.length === 0 && outputs.length === 0) {
     return null;
   }
@@ -67,7 +67,7 @@ const Section = ({
   );
 };
 
-export const Commitment = ({ summary }: CommitmentProps): JSX.Element => {
+export const Commitment = ({ summary }: CommitmentProps) => {
   const empty =
     summary.transparentInputs.length === 0 &&
     summary.transparentOutputs.length === 0 &&

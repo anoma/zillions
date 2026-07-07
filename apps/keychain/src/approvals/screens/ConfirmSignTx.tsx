@@ -18,7 +18,7 @@ type Props = {
   details: ApprovalDetails;
 };
 
-export const ConfirmSignTx = ({ details }: Props): JSX.Element => {
+export const ConfirmSignTx = ({ details }: Props) => {
   const { msgId, signer } = details;
 
   const navigate = useNavigate();

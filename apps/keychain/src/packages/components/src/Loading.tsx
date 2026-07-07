@@ -36,7 +36,7 @@ export const Loading = ({
   imageUrl = "",
   variant = "contained",
   className,
-}: LoadingProps): JSX.Element => {
+}: LoadingProps) => {
   const { container, panel, header, image } = loading({ variant, visible });
 
   return (

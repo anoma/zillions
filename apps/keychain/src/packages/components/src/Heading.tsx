@@ -16,7 +16,7 @@ export const Heading = ({
   level = "h1",
   className = "",
   children,
-}: HeadingProps): JSX.Element => {
+}: HeadingProps) => {
   return createElement(
     level,
     { className: heading({ class: className }) },

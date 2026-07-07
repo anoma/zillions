@@ -15,7 +15,7 @@ import { useWizard } from "../../SetupContext";
 const { NODE_ENV } = process.env;
 const TIMEOUT = NODE_ENV === "development" ? 50 : 1000;
 
-export const CreateWarning = (): JSX.Element => {
+export const CreateWarning = () => {
   const { dispatch } = useWizard();
   const [countdown, setCountdown] = useState(5);
 

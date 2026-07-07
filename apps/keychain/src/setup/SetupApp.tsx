@@ -8,7 +8,7 @@ import { SetupProvider } from "./SetupContext";
 import { StepRenderer } from "./StepRenderer";
 import { StepHeader } from "./ui/StepHeader";
 
-const SetupShell = (): JSX.Element => {
+const SetupShell = () => {
   return (
     <Container className="flex flex-col" size="base" header={<StepHeader />}>
       <StepRenderer />
@@ -16,7 +16,7 @@ const SetupShell = (): JSX.Element => {
   );
 };
 
-export const SetupApp = (): JSX.Element => (
+export const SetupApp = () => (
   <SetupProvider>
     <SetupShell />
   </SetupProvider>

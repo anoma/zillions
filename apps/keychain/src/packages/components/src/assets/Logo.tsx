@@ -1,8 +1,8 @@
-import { ComponentPropsWithoutRef, ReactElement } from "react";
+import { ComponentPropsWithoutRef } from "react";
 
 type LogoProps = ComponentPropsWithoutRef<"svg">;
 
-export const Logo = ({ ...props }: LogoProps): ReactElement => {
+export const Logo = ({ ...props }: LogoProps) => {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

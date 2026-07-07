@@ -20,7 +20,7 @@ export const AppHeader = ({
   returnButton,
   settingsButton,
   lockButton,
-}: AppHeaderProps): JSX.Element => {
+}: AppHeaderProps) => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const { lock } = useVault();

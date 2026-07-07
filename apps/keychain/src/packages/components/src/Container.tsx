@@ -33,7 +33,7 @@ export type ContainerProps = {
   header?: React.ReactNode;
 };
 
-export const Container = (props: ContainerProps): JSX.Element => {
+export const Container = (props: ContainerProps) => {
   const { header, base, wrapper, body } = container({
     size: props.size || "base",
   });

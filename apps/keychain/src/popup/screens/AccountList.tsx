@@ -19,7 +19,7 @@ import { openSetupTab } from "../openSetup";
 import routes from "../routes";
 import { PageHeader } from "../ui/PageHeader";
 
-export const AccountList = (): JSX.Element => {
+export const AccountList = () => {
   const navigate = useNavigate();
   const { parentAccounts, activeAccountId, status, changeActiveAccount } =
     useAccounts();

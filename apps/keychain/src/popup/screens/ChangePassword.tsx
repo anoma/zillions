@@ -25,7 +25,7 @@ enum Status {
   Failed,
 }
 
-export const ChangePassword = (): JSX.Element => {
+export const ChangePassword = () => {
   const navigate = useNavigate();
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");

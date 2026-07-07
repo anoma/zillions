@@ -20,7 +20,7 @@ import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 
-export const ApproveUpdateDefaultAccount = (): JSX.Element => {
+export const ApproveUpdateDefaultAccount = () => {
   const client = useContext(ClientContext);
   const [params] = useSearchParams();
   const address = params.get("address") ?? "";

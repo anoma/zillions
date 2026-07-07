@@ -9,7 +9,7 @@ import {
   useContext,
   useEffect,
   useState,
-  type PropsWithChildren,
+  type PropsWithChildren
 } from "react";
 
 import type { BackgroundClient } from "../../ipc/client";
@@ -49,7 +49,7 @@ type ProviderProps = PropsWithChildren<{ client: BackgroundClient }>;
 export const AccountProvider = ({
   client,
   children,
-}: ProviderProps): JSX.Element => {
+}: ProviderProps) => {
   const { lockStatus } = useVault();
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<string | undefined>();

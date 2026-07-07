@@ -11,7 +11,7 @@ import { ActionButton, Alert, Stack } from "@zillions/components";
 import { createBackgroundClient } from "../../ipc/client";
 import { PageHeader } from "../ui/PageHeader";
 
-export const ConnectedSites = (): JSX.Element => {
+export const ConnectedSites = () => {
   const client = useMemo(() => createBackgroundClient(), []);
   const [connectedSites, setConnectedSites] = useState<string[]>();
 

@@ -23,7 +23,7 @@ import routes from "../routes";
 import { BackButton } from "../ui/BackButton";
 import { PageHeader } from "../ui/PageHeader";
 
-export const SpendingKey = (): JSX.Element => {
+export const SpendingKey = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
   const { checkPassword } = useVault();

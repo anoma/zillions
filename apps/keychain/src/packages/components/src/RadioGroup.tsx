@@ -38,7 +38,7 @@ export const RadioGroup = ({
   value,
   groupLabel,
   onChange,
-}: RadioGroupProps): JSX.Element => {
+}: RadioGroupProps) => {
   const [activeIndicatorPosition, setActiveIndicatorPosition] = useState("0px");
   const [activeIndicatorWidth, setActiveIndicatorWidth] = useState("0px");
 
@@ -85,11 +85,11 @@ export const RadioGroup = ({
                 name={id}
                 value={option.value.toString()}
                 checked={value ? option.value === value : idx === 0}
-                ref={(ref) =>
+                ref={ref => {
                   option.value === value || (!value && idx === 0) ?
                     (initialSelectedRadio.current = ref)
-                    : null
-                }
+                    : null;
+                }}
                 onChange={(e) =>
                   _onChange(e.currentTarget, option.value.toString())
                 }

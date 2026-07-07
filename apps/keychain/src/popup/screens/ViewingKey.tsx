@@ -10,7 +10,7 @@ import routes from "../routes";
 import { BackButton } from "../ui/BackButton";
 import { PageHeader } from "../ui/PageHeader";
 
-export const ViewingKey = (): JSX.Element => {
+export const ViewingKey = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
   const { getById, accounts } = useAccounts();

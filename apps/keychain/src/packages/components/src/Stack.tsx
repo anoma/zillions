@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { tv } from "tailwind-variants";
 
-type StackProps<T extends keyof JSX.IntrinsicElements> = {
+type StackProps<T extends keyof HTMLElementTagNameMap> = {
   children: React.ReactNode;
   gap?: "px" | number;
   direction?: "vertical" | "horizontal";
@@ -32,16 +32,16 @@ const calculateGap = (gap: "px" | number): string => {
   return gap * 4 + "px";
 };
 
-export const Stack = <T extends keyof JSX.IntrinsicElements>({
+export const Stack = <T extends keyof HTMLElementTagNameMap>({
   children,
   gap = 4,
   direction = "vertical",
   className,
   full = false,
   ...props
-}: StackProps<T> & React.ComponentPropsWithoutRef<T>): JSX.Element => {
+}: StackProps<T> & React.ComponentPropsWithoutRef<T>) => {
   return createElement(
-    (props.as as keyof React.ReactHTML) || "div",
+    (props.as) || "div",
     {
       className: stack({ direction, full, class: className }),
       style: { gap: calculateGap(gap) },

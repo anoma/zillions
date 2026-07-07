@@ -103,7 +103,7 @@ export const Input = ({
   valueToDisplay,
   "data-testid": dataTestId,
   ...props
-}: InputProps): JSX.Element => {
+}: InputProps) => {
   const [passwordShown, setPasswordShown] = useState(false);
   let icon: React.ReactNode | null = null;
   const inputElement: InputProps = { type: "text", ...props };
@@ -218,7 +218,7 @@ export const Input = ({
   );
 };
 
-const LoadingSpinner = (): JSX.Element => (
+const LoadingSpinner = () => (
   <div className="flex absolute z-10 justify-center items-center w-full h-full">
     <i className=" animate-spin text-primary text-sm w-auto h-full">
       <CgSpinner className="w-auto h-full p-4" />

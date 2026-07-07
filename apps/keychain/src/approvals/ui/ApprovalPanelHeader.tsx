@@ -13,7 +13,7 @@ export const ApprovalPanelHeader = ({
   numberOfTransactions,
   viewTransactionData: displayTransaction,
   onChangeViewData,
-}: ApprovalPanelHeaderProps): JSX.Element => {
+}: ApprovalPanelHeaderProps) => {
   return (
     <header className="flex w-full items-center justify-between text-sm mb-2">
       <div>

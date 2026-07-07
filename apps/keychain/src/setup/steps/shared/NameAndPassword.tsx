@@ -19,7 +19,7 @@ type Props = {
   nextStep: Extract<Step, "create.complete" | "import.complete">;
 };
 
-export const NameAndPassword = ({ nextStep }: Props): JSX.Element => {
+export const NameAndPassword = ({ nextStep }: Props) => {
   const { state, dispatch, client } = useWizard();
   const [alias, setAlias] = useState(state.alias);
   const [aliasError, setAliasError] = useState("");

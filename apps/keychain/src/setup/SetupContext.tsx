@@ -12,7 +12,7 @@ import {
   useReducer,
   useState,
   type Dispatch,
-  type PropsWithChildren,
+  type PropsWithChildren
 } from "react";
 
 import { createBackgroundClient, type BackgroundClient } from "../ipc/client";
@@ -39,7 +39,7 @@ type ProviderProps = PropsWithChildren<{
 export const SetupProvider = ({
   children,
   client: injectedClient,
-}: ProviderProps): JSX.Element => {
+}: ProviderProps) => {
   const client = useMemo(
     () => injectedClient ?? createBackgroundClient(),
     [injectedClient]

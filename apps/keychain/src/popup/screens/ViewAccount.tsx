@@ -16,7 +16,7 @@ import routes from "../routes";
 import { BackButton } from "../ui/BackButton";
 import { PageHeader } from "../ui/PageHeader";
 
-export const ViewAccount = (): JSX.Element => {
+export const ViewAccount = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
   const { getById, accounts } = useAccounts();

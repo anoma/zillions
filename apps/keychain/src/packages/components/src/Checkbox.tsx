@@ -40,7 +40,7 @@ export const Checkbox = ({
   checkedClassName,
   type = "checkbox",
   ...props
-}: CheckboxProps): JSX.Element => {
+}: CheckboxProps) => {
   const checkboxClasses = checkbox({
     checked: props.checked,
   });
