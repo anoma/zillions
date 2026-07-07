@@ -17,10 +17,10 @@
 import {
   initSaplingParams,
   saplingParamsLoaded,
-} from "./wasm/wallet/zillions_sdk_wallet.js";
+} from './wasm/wallet/zillions_sdk_wallet.js';
 
 // Where the vite plugin serves @zillions-sdk/sapling-params from.
-const DEFAULT_BASE_URL = "/zillions-sdk-sapling-params/";
+const DEFAULT_BASE_URL = '/zillions-sdk-sapling-params/';
 
 interface ParamsFile {
   name: string;
@@ -30,19 +30,19 @@ interface ParamsFile {
 
 const FILES: ParamsFile[] = [
   {
-    name: "sapling-spend.params",
-    cacheKey: "sapling-spend-v1",
-    sha256: "8e48ffd23abb3a5fd9c5589204f32d9c31285a04b78096ba40a79b75677efc13",
+    name: 'sapling-spend.params',
+    cacheKey: 'sapling-spend-v1',
+    sha256: '8e48ffd23abb3a5fd9c5589204f32d9c31285a04b78096ba40a79b75677efc13',
   },
   {
-    name: "sapling-output.params",
-    cacheKey: "sapling-output-v1",
-    sha256: "2f0ebbcbb9bb0bcffe95a397e7eba89c29eb4dde6191c339db88570e3f3fb0e4",
+    name: 'sapling-output.params',
+    cacheKey: 'sapling-output-v1',
+    sha256: '2f0ebbcbb9bb0bcffe95a397e7eba89c29eb4dde6191c339db88570e3f3fb0e4',
   },
 ];
 
-const DB_NAME = "zillions-sdk-sapling-params";
-const STORE = "params";
+const DB_NAME = 'zillions-sdk-sapling-params';
+const STORE = 'params';
 
 let loadPromise: Promise<void> | undefined;
 
@@ -83,7 +83,10 @@ async function load(baseUrl: string): Promise<void> {
   initSaplingParams(new Uint8Array(spend), new Uint8Array(output));
 }
 
-async function loadFile(baseUrl: string, file: ParamsFile): Promise<ArrayBuffer> {
+async function loadFile(
+  baseUrl: string,
+  file: ParamsFile,
+): Promise<ArrayBuffer> {
   const cached = await cacheGet(file.cacheKey);
   if (cached && (await sha256Hex(cached)) === file.sha256) return cached;
 
@@ -106,10 +109,10 @@ async function loadFile(baseUrl: string, file: ParamsFile): Promise<ArrayBuffer>
 }
 
 async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (b) =>
-    b.toString(16).padStart(2, "0"),
-  ).join("");
+    b.toString(16).padStart(2, '0'),
+  ).join('');
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -142,7 +145,7 @@ async function cachePut(key: string, bytes: ArrayBuffer): Promise<void> {
   const db = await openDb();
   try {
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
+      const tx = db.transaction(STORE, 'readwrite');
       tx.objectStore(STORE).put(bytes, key);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
