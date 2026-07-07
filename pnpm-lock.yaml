@@ -26,15 +26,12 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.16
         version: 1.170.17(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@zillions-sdk/sapling-params':
-        specifier: workspace:*
-        version: link:../../sdk/packages/zillions-sdk-sapling-params
-      '@zillions-sdk/wallet':
-        specifier: workspace:*
-        version: link:../../sdk/packages/zillions-sdk-wallet
       '@zillions/keychain-types':
         specifier: workspace:*
         version: link:../keychain/src/packages/types
+      '@zillions/sdk':
+        specifier: workspace:*
+        version: link:../../sdk/packages/zillions-sdk
       idb:
         specifier: ^8.0.3
         version: 8.0.3
@@ -117,9 +114,9 @@ importers:
       '@fontsource-variable/montserrat':
         specifier: ^5.2.8
         version: 5.2.8
-      '@zillions-sdk/keys':
+      '@zillions/sdk':
         specifier: workspace:*
-        version: link:../../sdk/packages/zillions-sdk-keys
+        version: link:../../sdk/packages/zillions-sdk
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -261,15 +258,9 @@ importers:
       '@types/node':
         specifier: ^22.7.4
         version: 22.20.0
-      '@zillions-sdk/keys':
+      '@zillions/sdk':
         specifier: workspace:^
-        version: link:../zillions-sdk-keys
-      '@zillions-sdk/requests':
-        specifier: workspace:^
-        version: link:../zillions-sdk-requests
-      '@zillions-sdk/wallet':
-        specifier: workspace:^
-        version: link:../zillions-sdk-wallet
+        version: link:../zillions-sdk
       parcel:
         specifier: ^2.12.0
         version: 2.16.4(@swc/helpers@0.5.23)
@@ -277,13 +268,20 @@ importers:
         specifier: ^14.2.3
         version: 14.2.6
 
-  sdk/packages/zillions-sdk-keys: {}
-
-  sdk/packages/zillions-sdk-requests: {}
+  sdk/packages/zillions-sdk:
+    dependencies:
+      '@zillions-sdk/sapling-params':
+        specifier: workspace:*
+        version: link:../zillions-sdk-sapling-params
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.2
+      vite:
+        specifier: ^8.0.12
+        version: 8.1.3(@types/node@24.13.2)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
 
   sdk/packages/zillions-sdk-sapling-params: {}
-
-  sdk/packages/zillions-sdk-wallet: {}
 
 packages:
 

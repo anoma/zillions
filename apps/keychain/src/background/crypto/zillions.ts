@@ -11,11 +11,11 @@ import initWasm, {
   pczt_sign,
   SeedFingerprint,
   UnifiedSpendingKey
-} from "@zillions-sdk/keys";
+} from "@zillions/sdk/keys";
 import type { PcztSummary, PcztTransparentIo } from "@zillions/types";
 import { jsonify } from "@zillions/utils";
 
-export type { Pczt } from "@zillions-sdk/keys";
+export type { Pczt } from "@zillions/sdk/keys";
 
 let initialized: Promise<unknown> | undefined;
 

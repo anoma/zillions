@@ -18,7 +18,7 @@ build-mac:
 pack:
     #!/usr/bin/env bash
     mkdir -p dist
-    for pkg in zillions-sdk-wallet zillions-sdk-keys zillions-sdk-requests zillions-sdk-sapling-params; do
+    for pkg in zillions-sdk zillions-sdk-sapling-params; do
         tarball=$(cd packages/$pkg && npm pack 2>/dev/null | tail -1)
         mv packages/$pkg/$tarball dist/
         echo "✓ dist/$tarball"
@@ -29,33 +29,24 @@ ship-mac:
     just pack
 
 build-wallet *features:
-    cd crates/zillions-sdk-wallet && wasm-pack build -t web --release --scope zillions-sdk --out-dir ../../packages/zillions-sdk-wallet --no-default-features --features="wasm wasm-parallel {{features}}" -Z build-std="panic_abort,std"
+    cd crates/zillions-sdk-wallet && wasm-pack build --no-pack -t web --release --out-dir ../../packages/zillions-sdk/wasm/wallet --no-default-features --features="wasm wasm-parallel {{features}}" -Z build-std="panic_abort,std"
     ./add-worker-module.sh
     node patch-workers.js
-    cp js/vite-plugin.js packages/zillions-sdk-wallet/
-    cp js/vite-plugin.d.ts packages/zillions-sdk-wallet/
-    cp js/params.js packages/zillions-sdk-wallet/
-    cp js/params.d.ts packages/zillions-sdk-wallet/
-    cp js/wallet-package.json packages/zillions-sdk-wallet/package.json
-    rm -f packages/zillions-sdk-wallet/.gitignore
+    rm -f packages/zillions-sdk/wasm/wallet/.gitignore
 
 # Assemble the (immutable) Sapling proving params into their own npm package
 build-sapling-params:
     ./scripts/assemble-sapling-params.sh
-    cp js/sapling-params-package.json packages/zillions-sdk-sapling-params/package.json
-    cp js/sapling-params-README.md packages/zillions-sdk-sapling-params/README.md
     rm -f packages/zillions-sdk-sapling-params/.gitignore
 
 build-keys *features:
-    cd crates/zillions-sdk-keys && wasm-pack build -t web --release --scope zillions-sdk --out-dir ../../packages/zillions-sdk-keys --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"
-    cp js/keys-package.json packages/zillions-sdk-keys/package.json
-    rm -f packages/zillions-sdk-keys/.gitignore
+    cd crates/zillions-sdk-keys && wasm-pack build --no-pack -t web --release --out-dir ../../packages/zillions-sdk/wasm/keys --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"
+    rm -f packages/zillions-sdk/wasm/keys/.gitignore
 
 
 build-requests *features:
-    cd crates/zillions-sdk-requests && wasm-pack build -t web --release --scope zillions-sdk --out-dir ../../packages/zillions-sdk-requests --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"
-    cp js/requests-package.json packages/zillions-sdk-requests/package.json
-    rm -f packages/zillions-sdk-requests/.gitignore
+    cd crates/zillions-sdk-requests && wasm-pack build --no-pack -t web --release --out-dir ../../packages/zillions-sdk/wasm/requests --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"
+    rm -f packages/zillions-sdk/wasm/requests/.gitignore
 
 # All Wasm Tests
 test-web *features:

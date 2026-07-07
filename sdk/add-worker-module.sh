@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Find the wasm_thread directory regardless of the hash
-WASM_THREAD_DIR=$(find packages/zillions-sdk-wallet/snippets -type d -name "wasm_thread-*" | head -n 1)
+WASM_THREAD_DIR=$(find packages/zillions-sdk/wasm/wallet/snippets -type d -name "wasm_thread-*" | head -n 1)
 
 if [ -z "$WASM_THREAD_DIR" ]; then
     echo "Error: Could not find wasm_thread directory"

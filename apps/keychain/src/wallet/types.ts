@@ -5,7 +5,7 @@
  * math via `@zillions-sdk/keys` — librustzcash `default_address`; no
  * lightwalletd, no sync, no wallet DB). Runs in the setup tab.
  */
-import type { UnifiedFullViewingKey } from "@zillions-sdk/keys";
+import type { UnifiedFullViewingKey } from "@zillions/sdk/keys";
 
 /** Zcash network the addresses are encoded for. */
 export type ZcashNetwork = "main" | "test";

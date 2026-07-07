@@ -1,7 +1,7 @@
-import initWasm, * as ZillionsWallet from '@zillions-sdk/wallet';
-import { initThreadPool, WebWallet } from '@zillions-sdk/wallet';
-import initKeys, * as ZillionsKeys from '@zillions-sdk/keys';
-import initRequests, * as ZillionsRequests from '@zillions-sdk/requests';
+import initWasm, * as ZillionsWallet from '@zillions/sdk/wallet';
+import { initThreadPool, WebWallet } from '@zillions/sdk/wallet';
+import initKeys, * as ZillionsKeys from '@zillions/sdk/keys';
+import initRequests, * as ZillionsRequests from '@zillions/sdk/requests';
 
 window.ZillionsWallet = ZillionsWallet;
 window.ZillionsKeys = ZillionsKeys;

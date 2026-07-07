@@ -12,15 +12,23 @@
  * or wrong URLs must be caught here, in recoverable JS, instead.
  */
 
+// The wallet glue stays external in app builds (see vite-plugin.ts), so
+// this module shares the one initialized wasm-bindgen instance.
 import {
   initSaplingParams,
   saplingParamsLoaded,
-} from './zillions_sdk_wallet.js';
+} from './wasm/wallet/zillions_sdk_wallet.js';
 
 // Where the vite plugin serves @zillions-sdk/sapling-params from.
 const DEFAULT_BASE_URL = '/zillions-sdk-sapling-params/';
 
-const FILES = [
+interface ParamsFile {
+  name: string;
+  cacheKey: string;
+  sha256: string;
+}
+
+const FILES: ParamsFile[] = [
   {
     name: 'sapling-spend.params',
     cacheKey: 'sapling-spend-v1',
@@ -36,7 +44,7 @@ const FILES = [
 const DB_NAME = 'zillions-sdk-sapling-params';
 const STORE = 'params';
 
-let loadPromise;
+let loadPromise: Promise<void> | undefined;
 
 /**
  * Downloads (or restores from IndexedDB) the Sapling proving parameters and
@@ -45,11 +53,12 @@ let loadPromise;
  *
  * Must be called after the wallet wasm module has been initialized.
  *
- * @param {string} [baseUrl] Base URL to fetch the .params files from.
- *   Defaults to the files served out of @zillions-sdk/sapling-params.
- * @returns {Promise<void>}
+ * @param baseUrl Base URL to fetch the .params files from. Defaults to the
+ *   files served out of @zillions-sdk/sapling-params.
  */
-export function loadProverParams(baseUrl = DEFAULT_BASE_URL) {
+export function loadProverParams(
+  baseUrl: string = DEFAULT_BASE_URL,
+): Promise<void> {
   loadPromise ??= load(baseUrl).catch((e) => {
     loadPromise = undefined;
     throw e;
@@ -58,11 +67,11 @@ export function loadProverParams(baseUrl = DEFAULT_BASE_URL) {
 }
 
 /** Returns whether the params are already installed in the wasm. */
-export function proverParamsLoaded() {
+export function proverParamsLoaded(): boolean {
   return saplingParamsLoaded();
 }
 
-async function load(baseUrl) {
+async function load(baseUrl: string): Promise<void> {
   if (saplingParamsLoaded()) return;
 
   // Best-effort: reduce the odds of the browser evicting the cached params.
@@ -74,7 +83,10 @@ async function load(baseUrl) {
   initSaplingParams(new Uint8Array(spend), new Uint8Array(output));
 }
 
-async function loadFile(baseUrl, file) {
+async function loadFile(
+  baseUrl: string,
+  file: ParamsFile,
+): Promise<ArrayBuffer> {
   const cached = await cacheGet(file.cacheKey);
   if (cached && (await sha256Hex(cached)) === file.sha256) return cached;
 
@@ -96,14 +108,14 @@ async function loadFile(baseUrl, file) {
   return bytes;
 }
 
-async function sha256Hex(bytes) {
+async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (b) =>
     b.toString(16).padStart(2, '0'),
   ).join('');
 }
 
-function openDb() {
+function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => req.result.createObjectStore(STORE);
@@ -112,13 +124,13 @@ function openDb() {
   });
 }
 
-async function cacheGet(key) {
+async function cacheGet(key: string): Promise<ArrayBuffer | undefined> {
   try {
     const db = await openDb();
     try {
-      return await new Promise((resolve, reject) => {
+      return await new Promise<ArrayBuffer | undefined>((resolve, reject) => {
         const req = db.transaction(STORE).objectStore(STORE).get(key);
-        req.onsuccess = () => resolve(req.result);
+        req.onsuccess = () => resolve(req.result as ArrayBuffer | undefined);
         req.onerror = () => reject(req.error);
       });
     } finally {
@@ -129,13 +141,13 @@ async function cacheGet(key) {
   }
 }
 
-async function cachePut(key, bytes) {
+async function cachePut(key: string, bytes: ArrayBuffer): Promise<void> {
   const db = await openDb();
   try {
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite');
       tx.objectStore(STORE).put(bytes, key);
-      tx.oncomplete = resolve;
+      tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } finally {

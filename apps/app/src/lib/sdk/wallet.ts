@@ -1,13 +1,13 @@
 import {
+  awaitProverParams,
   Pczt,
   SeedFingerprint,
   TransactionHistoryResponse,
   WalletSummary,
   WebWallet,
-} from "@zillions-sdk/wallet";
+} from "@zillions/sdk";
 import { db } from "../db";
 import { dedupe } from "../utils";
-import { awaitProverParams } from "./sdk";
 
 const hexToBytes = (hex: string): Uint8Array =>
   Uint8Array.from({ length: hex.length / 2 }, (_, i) =>
