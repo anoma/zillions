@@ -14,7 +14,6 @@ const inputClassList = tv({
       "py-5 px-4 w-full transition-all duration-150 ease-out focus:outline-0 active:outline-0 focus:outline-0",
       "placeholder:text-neutral-400 placeholder:transition-opacity placeholder:duration-150 placeholder:ease-out",
       "hover:placeholder:opacity-70 focus:placeholder:opacity-0 select:bg-primary-50",
-      "[&[readonly]]:select-none [&[readonly]]:pointer-events-none"
     ),
     label: "text-black text-sm font-medium [&_p]:pb-1",
     labelText: "pl-1.5",
