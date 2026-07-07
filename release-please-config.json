@@ -8,9 +8,6 @@
   "packages": {
     "apps/app": {},
     "apps/keychain": {},
-    "sdk/packages/zillions-sdk-keys": {},
-    "sdk/packages/zillions-sdk-requests": {},
-    "sdk/packages/zillions-sdk-wallet": {},
     "sdk/packages/zillions-sdk-sapling-params": {},
     "sdk/packages/zillions-sdk": {}
   }

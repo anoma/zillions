@@ -1,2 +1,2 @@
-export * from "@zillions-sdk/keys";
-export { default } from "@zillions-sdk/keys";
+export * from "./wasm/keys/zillions_sdk_keys.js";
+export { default } from "./wasm/keys/zillions_sdk_keys.js";

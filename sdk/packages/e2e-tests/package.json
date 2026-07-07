@@ -14,9 +14,7 @@
     "@parcel/core": "^2.12.0",
     "@playwright/test": "^1.49.1",
     "@types/node": "^22.7.4",
-    "@zillions-sdk/keys": "workspace:^",
-    "@zillions-sdk/requests": "workspace:^",
-    "@zillions-sdk/wallet": "workspace:^",
+    "@zillions/sdk": "workspace:^",
     "parcel": "^2.12.0",
     "serve": "^14.2.3"
   }

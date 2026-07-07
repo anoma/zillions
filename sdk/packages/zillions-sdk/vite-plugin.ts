@@ -1,16 +1,15 @@
 /**
  * Vite plugin for the Zillions SDK wallet.
  *
- * Bundling the wallet with Rollup is fragile: workers re-import the wallet
- * chunk via walletUrl (= import.meta.url) and call pkg.default() to init wasm,
- * but Rollup strips the default export from the chunk when the app only uses
- * named exports.
+ * Bundling the wallet wasm glue with Rollup is fragile: workers re-import the
+ * wallet chunk via walletUrl (= import.meta.url) and call pkg.default() to
+ * init wasm, but Rollup strips the default export from the chunk when the app
+ * only uses named exports.
  *
- * The fix: don't bundle the wallet at all. Mark it external, copy the raw
- * wasm-pack output (@zillions-sdk/wallet's wasm/ dir) into
- * dist/zillions-sdk-wallet/ as-is, and inject an import map so the browser
- * resolves the bare specifier to the correct URL. Workers then import the
- * original unmodified module, which already has export default __wbg_init.
+ * The fix: don't bundle the glue at all. Mark ./wasm/wallet/zillions_sdk_wallet.js
+ * external, rewrite its module id in the output to the /zillions-sdk-wallet/
+ * URL, and copy the raw wasm-pack output there as-is. The browser then loads
+ * the original unmodified module, which already has export default __wbg_init.
  *
  * Side effects:
  * - SharedArrayBuffer requires COOP + COEP — injected on dev and preview servers.
@@ -24,23 +23,28 @@
 import { cpSync, createReadStream, statSync } from "fs";
 import { createRequire } from "module";
 import { dirname, join } from "path";
+import { fileURLToPath } from "url";
 
 import type { Plugin } from "vite";
 
 const WALLET_PREFIX = "/zillions-sdk-wallet";
 const PARAMS_PREFIX = "/zillions-sdk-sapling-params";
 
-const require = createRequire(import.meta.url);
+const WALLET_GLUE = "zillions_sdk_wallet.js";
 
-// The committed wasm-pack output (glue + wasm + worker snippets) of the
-// wallet package.
-const walletWasmDir = (): string =>
-  join(dirname(require.resolve("@zillions-sdk/wallet/package.json")), "wasm");
+// The committed wasm-pack output (glue + wasm + worker snippets), shipped
+// inside this package.
+const walletWasmDir = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "wasm",
+  "wallet",
+);
 
 // Optional sibling package holding the Sapling proving params; consumers that
 // self-host the params (loadProverParams(url)) may not install it.
 function resolveParamsDir(): string | undefined {
   try {
+    const require = createRequire(import.meta.url);
     return dirname(
       require.resolve("@zillions-sdk/sapling-params/package.json"),
     );
@@ -48,6 +52,9 @@ function resolveParamsDir(): string | undefined {
     return undefined;
   }
 }
+
+const isWalletGlue = (id: string): boolean =>
+  id.endsWith(`/wasm/wallet/${WALLET_GLUE}`);
 
 export function zillionsWallet(): Plugin {
   let outDir = "dist";
@@ -57,14 +64,20 @@ export function zillionsWallet(): Plugin {
 
     config() {
       return {
-        // Prevent Vite from pre-bundling the wallet in dev mode so it is served
-        // as raw ESM from node_modules (import.meta.url stays meaningful).
-        optimizeDeps: { exclude: ["@zillions-sdk/wallet"] },
+        // Prevent Vite from pre-bundling the SDK in dev mode so the glue is
+        // served as raw ESM from disk (import.meta.url stays meaningful).
+        optimizeDeps: { exclude: ["@zillions/sdk"] },
         build: {
           modulePreload: { polyfill: false },
           rollupOptions: {
-            // Wallet is served as static files — keep it out of the Rollup graph.
-            external: ["@zillions-sdk/wallet"],
+            // The glue is served as static files — keep it out of the Rollup
+            // graph and point the emitted import at the copied location.
+            external: isWalletGlue,
+            makeAbsoluteExternalsRelative: false,
+            output: {
+              paths: (id: string) =>
+                isWalletGlue(id) ? `${WALLET_PREFIX}/${WALLET_GLUE}` : id,
+            },
           },
         },
       };
@@ -74,26 +87,10 @@ export function zillionsWallet(): Plugin {
       outDir = config.build.outDir;
     },
 
-    // Inject the import map so the browser resolves the bare specifier.
-    transformIndexHtml() {
-      return [
-        {
-          tag: "script",
-          attrs: { type: "importmap" },
-          children: JSON.stringify({
-            imports: {
-              "@zillions-sdk/wallet": `${WALLET_PREFIX}/zillions_sdk_wallet.js`,
-            },
-          }),
-          injectTo: "head-prepend",
-        },
-      ];
-    },
-
     // Copy the wallet wasm output to dist/zillions-sdk-wallet/ after the
     // bundle is written.
     closeBundle() {
-      cpSync(walletWasmDir(), join(outDir, "zillions-sdk-wallet"), {
+      cpSync(walletWasmDir, join(outDir, "zillions-sdk-wallet"), {
         recursive: true,
       });
       const paramsDir = resolveParamsDir();
@@ -109,13 +106,13 @@ export function zillionsWallet(): Plugin {
         res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
         res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
 
-        // In dev mode Vite serves the wallet via /@fs/... but workers may also
+        // In dev mode Vite serves the glue via /@fs/... but workers may also
         // request it through the /zillions-sdk-wallet/ prefix — serve it from
-        // the package's wasm dir so those requests resolve correctly. The
-        // Sapling params package is served the same way under its own prefix.
+        // the wasm dir so those requests resolve correctly. The Sapling params
+        // package is served the same way under its own prefix.
         const url = req.url ?? "";
         const roots: [string, string | undefined][] = [
-          [WALLET_PREFIX, walletWasmDir()],
+          [WALLET_PREFIX, walletWasmDir],
           [PARAMS_PREFIX, resolveParamsDir()],
         ];
         for (const [prefix, dir] of roots) {

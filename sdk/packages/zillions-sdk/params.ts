@@ -12,9 +12,12 @@
  * or wrong URLs must be caught here, in recoverable JS, instead.
  */
 
-// The bare wallet specifier stays external in app builds (see vite-plugin.ts),
-// so this module shares the one initialized wasm-bindgen instance.
-import { initSaplingParams, saplingParamsLoaded } from "@zillions-sdk/wallet";
+// The wallet glue stays external in app builds (see vite-plugin.ts), so
+// this module shares the one initialized wasm-bindgen instance.
+import {
+  initSaplingParams,
+  saplingParamsLoaded,
+} from "./wasm/wallet/zillions_sdk_wallet.js";
 
 // Where the vite plugin serves @zillions-sdk/sapling-params from.
 const DEFAULT_BASE_URL = "/zillions-sdk-sapling-params/";

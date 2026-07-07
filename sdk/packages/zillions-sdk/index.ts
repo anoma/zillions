@@ -4,13 +4,13 @@
  * await awaitProverParams() before proving/sending.
  */
 
-import initWasm, { initThreadPool } from "@zillions-sdk/wallet";
+import initWasm, { initThreadPool } from "./wasm/wallet/zillions_sdk_wallet.js";
 import { loadProverParams } from "./params";
 
 // The wallet API is the SDK's main surface — re-export it from the root.
 // Keys and requests stay behind subpaths: their symbol names collide with
 // the wallet's (e.g. both export a Pczt).
-export * from "@zillions-sdk/wallet";
+export * from "./wasm/wallet/zillions_sdk_wallet.js";
 
 export interface InitSdkOptions {
   /** Threads for the wasm worker pool. Defaults to navigator.hardwareConcurrency. */

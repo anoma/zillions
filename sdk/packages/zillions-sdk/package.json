@@ -10,6 +10,7 @@
   },
   "type": "module",
   "files": [
+    "wasm",
     "index.ts",
     "wallet.ts",
     "keys.ts",
@@ -28,10 +29,7 @@
     "./vite-plugin": "./vite-plugin.ts"
   },
   "dependencies": {
-    "@zillions-sdk/keys": "workspace:*",
-    "@zillions-sdk/requests": "workspace:*",
-    "@zillions-sdk/sapling-params": "workspace:*",
-    "@zillions-sdk/wallet": "workspace:*"
+    "@zillions-sdk/sapling-params": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

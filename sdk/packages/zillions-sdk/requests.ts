@@ -1,2 +1,2 @@
-export * from "@zillions-sdk/requests";
-export { default } from "@zillions-sdk/requests";
+export * from "./wasm/requests/zillions_sdk_requests.js";
+export { default } from "./wasm/requests/zillions_sdk_requests.js";
