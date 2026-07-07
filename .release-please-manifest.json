@@ -1,6 +1,6 @@
 {
-  "apps/app": "1.0.0",
-  "apps/keychain": "0.1.1",
+  "apps/app": "1.1.0",
+  "apps/keychain": "0.2.0",
   "sdk/packages/zillions-sdk-sapling-params": "1.0.0",
-  "sdk/packages/zillions-sdk": "0.1.0"
+  "sdk/packages/zillions-sdk": "0.2.0"
 }
