@@ -1,8 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "node",
-  "bump-minor-pre-major": true,
-  "bump-patch-for-minor-pre-major": true,
   "include-component-in-tag": true,
   "bootstrap-sha": "8f06b7db724744241336f61e417c24dec720090f",
   "packages": {
