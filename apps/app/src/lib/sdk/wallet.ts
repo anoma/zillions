@@ -205,6 +205,8 @@ export class SdkWallet {
 
   /** Prepare a transfer spending shielded funds; `to` may be shielded or transparent. */
   async prepareTransferFromShielded(to: string, amount: bigint): Promise<Pczt> {
+    // Proposals require a near-tip wallet; deduped and cheap when synced.
+    await this.sync();
     return this.wallet.pczt_create_from_shielded(this.accountId, to, amount);
   }
 
@@ -213,11 +215,13 @@ export class SdkWallet {
     to: string,
     amount: bigint,
   ): Promise<Pczt> {
+    await this.sync();
     return this.wallet.pczt_create_from_transparent(this.accountId, to, amount);
   }
 
   /** Prepare a shielding PCZT; sweeps all transparent funds, or at least `amount` when given. */
   async prepareShield(amount?: bigint): Promise<Pczt> {
+    await this.sync();
     return this.wallet.pczt_shield(this.accountId, amount);
   }
 
