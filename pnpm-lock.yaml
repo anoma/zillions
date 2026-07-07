@@ -52,7 +52,7 @@ importers:
         version: 3.2.2(tailwind-merge@3.6.0)(tailwindcss@4.3.2)
       zillions-sdk:
         specifier: workspace:*
-        version: link:../../sdk/zillions-sdk
+        version: link:../../sdk/packages/zillions-sdk
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -158,7 +158,7 @@ importers:
         version: 0.12.0
       zillions-sdk:
         specifier: workspace:*
-        version: link:../../sdk/zillions-sdk
+        version: link:../../sdk/packages/zillions-sdk
       zxcvbn:
         specifier: ^4.4.2
         version: 4.4.2
@@ -274,28 +274,20 @@ importers:
         specifier: ^14.2.3
         version: 14.2.6
 
-  sdk/packages/zillions-sdk-keys: {}
-
-  sdk/packages/zillions-sdk-requests: {}
-
-  sdk/packages/zillions-sdk-sapling-params: {}
-
-  sdk/packages/zillions-sdk-wallet: {}
-
-  sdk/zillions-sdk:
+  sdk/packages/zillions-sdk:
     dependencies:
       '@zillions-sdk/keys':
         specifier: workspace:*
-        version: link:../packages/zillions-sdk-keys
+        version: link:../zillions-sdk-keys
       '@zillions-sdk/requests':
         specifier: workspace:*
-        version: link:../packages/zillions-sdk-requests
+        version: link:../zillions-sdk-requests
       '@zillions-sdk/sapling-params':
         specifier: workspace:*
-        version: link:../packages/zillions-sdk-sapling-params
+        version: link:../zillions-sdk-sapling-params
       '@zillions-sdk/wallet':
         specifier: workspace:*
-        version: link:../packages/zillions-sdk-wallet
+        version: link:../zillions-sdk-wallet
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -303,6 +295,14 @@ importers:
       vite:
         specifier: ^8.0.12
         version: 8.1.3(@types/node@24.13.2)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
+
+  sdk/packages/zillions-sdk-keys: {}
+
+  sdk/packages/zillions-sdk-requests: {}
+
+  sdk/packages/zillions-sdk-sapling-params: {}
+
+  sdk/packages/zillions-sdk-wallet: {}
 
 packages:
 

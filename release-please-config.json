@@ -12,6 +12,6 @@
     "sdk/packages/zillions-sdk-requests": {},
     "sdk/packages/zillions-sdk-wallet": {},
     "sdk/packages/zillions-sdk-sapling-params": {},
-    "sdk/zillions-sdk": {}
+    "sdk/packages/zillions-sdk": {}
   }
 }
