@@ -26,7 +26,11 @@ export interface SyncProgress {
   fullyScannedHeight: number;
   /** Blocks remaining in the wallet's suggested scan ranges. */
   remainingBlocks: number;
-  /** Overall scan progress in percent (0–100). */
+  /**
+   * Progress in percent (0–100): blocks scanned this session over the total
+   * this session set out to scan (the total grows if a reorg rewind or a new
+   * chain tip adds ranges mid-sync).
+   */
   percent: number;
 }
 
@@ -47,26 +51,8 @@ export interface SyncOptions {
   signal?: AbortSignal;
 }
 
-const readProgress = async (
-  wallet: WebWallet,
-  chainTip: number,
-  ranges: [number, number][],
-): Promise<SyncProgress> => {
-  const remainingBlocks = ranges.reduce((n, [start, end]) => n + (end - start), 0);
-  const summary = await wallet.get_wallet_summary();
-  try {
-    const numerator = Number(summary?.scan_progress_numerator ?? 0n);
-    const denominator = Number(summary?.scan_progress_denominator ?? 0n);
-    return {
-      chainTip,
-      fullyScannedHeight: summary?.fully_scanned_height ?? 0,
-      remainingBlocks,
-      percent: denominator > 0 ? Math.min(100, (numerator / denominator) * 100) : 0,
-    };
-  } finally {
-    summary?.free();
-  }
-};
+const sumBlocks = (ranges: [number, number][]): number =>
+  ranges.reduce((n, [start, end]) => n + (end - start), 0);
 
 /**
  * Sync the wallet to the chain tip. Resolves when the wallet is fully
@@ -86,6 +72,27 @@ export async function syncWallet(
   await wallet.sync_update_subtree_roots();
 
   let batches = 0;
+  let scannedBlocks = 0;
+  let totalBlocks = 0;
+
+  const emitProgress = async (chainTip: number, remainingBlocks: number) => {
+    if (!options.onProgress) return;
+    const summary = await wallet.get_wallet_summary();
+    try {
+      options.onProgress({
+        chainTip,
+        fullyScannedHeight: summary?.fully_scanned_height ?? 0,
+        remainingBlocks,
+        percent:
+          totalBlocks > 0
+            ? Math.min(100, (scannedBlocks / totalBlocks) * 100)
+            : 100,
+      });
+    } finally {
+      summary?.free();
+    }
+  };
+
   for (;;) {
     options.signal?.throwIfAborted();
 
@@ -94,21 +101,27 @@ export async function syncWallet(
 
     let ranges = await suggestRanges();
     if (ranges.length === 0) break;
+    totalBlocks = Math.max(totalBlocks, scannedBlocks + sumBlocks(ranges));
 
     while (ranges.length > 0) {
       options.signal?.throwIfAborted();
 
       const [start, end] = ranges[0];
-      await wallet.sync_scan_range(start, Math.min(end, start + batchSize));
+      const batchEnd = Math.min(end, start + batchSize);
+      await wallet.sync_scan_range(start, batchEnd);
       batches += 1;
+      scannedBlocks += batchEnd - start;
 
-      // Ranges must be re-requested after every scan.
+      // Ranges must be re-requested after every scan; a reorg rewind or a
+      // new higher-priority range grows the remaining total.
       ranges = await suggestRanges();
+      const remainingBlocks = sumBlocks(ranges);
+      totalBlocks = Math.max(totalBlocks, scannedBlocks + remainingBlocks);
 
       if (options.onCheckpoint && batches % checkpointEvery === 0) {
         await options.onCheckpoint(await wallet.db_to_bytes());
       }
-      options.onProgress?.(await readProgress(wallet, chainTip, ranges));
+      await emitProgress(chainTip, remainingBlocks);
     }
     // Ranges drained; loop to refresh the tip in case new blocks arrived.
   }
