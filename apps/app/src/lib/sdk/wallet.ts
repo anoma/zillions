@@ -53,6 +53,8 @@ export class SdkWallet {
   private accountId: number;
   private wallet: WebWallet;
 
+  private syncProgressListeners = new Set<(progress: SyncProgress) => void>();
+
   static async build({
     id,
     ufvk,
@@ -117,8 +119,6 @@ export class SdkWallet {
     this.wallet = wallet;
     this.accountId = accountId;
   }
-
-  private syncProgressListeners = new Set<(progress: SyncProgress) => void>();
 
   /** Subscribe to per-batch sync progress; returns an unsubscribe function. */
   subscribeSyncProgress(listener: (progress: SyncProgress) => void) {
@@ -205,7 +205,6 @@ export class SdkWallet {
 
   /** Prepare a transfer spending shielded funds; `to` may be shielded or transparent. */
   async prepareTransferFromShielded(to: string, amount: bigint): Promise<Pczt> {
-    // Proposals require a near-tip wallet; deduped and cheap when synced.
     await this.sync();
     return this.wallet.pczt_create_from_shielded(this.accountId, to, amount);
   }

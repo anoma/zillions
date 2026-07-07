@@ -17,7 +17,7 @@
  * constructor and syncing resumes where it left off.
  */
 
-import type { WebWallet } from "./wallet";
+import type { WebWallet } from './wallet';
 
 export interface SyncProgress {
   /** Current chain tip height as of the last tip refresh. */
@@ -26,11 +26,7 @@ export interface SyncProgress {
   fullyScannedHeight: number;
   /** Blocks remaining in the wallet's suggested scan ranges. */
   remainingBlocks: number;
-  /**
-   * Progress in percent (0–100): blocks scanned this session over the total
-   * this session set out to scan (the total grows if a reorg rewind or a new
-   * chain tip adds ranges mid-sync).
-   */
+  /** Overall scan progress in percent (0–100). */
   percent: number;
 }
 
