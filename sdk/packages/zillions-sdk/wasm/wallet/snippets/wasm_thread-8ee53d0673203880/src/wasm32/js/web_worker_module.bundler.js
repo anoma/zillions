@@ -15,7 +15,7 @@ self.onmessage = async function(event) {
     const walletUrl = await _walletUrlReady;
     const [module, memory, work, thread_key] = data;
     const { default: init, wasm_thread_entry_point } = await import(/* @vite-ignore */ walletUrl);
-    init(module, memory).catch(err => {
+    init({ module_or_path: module, memory }).catch(err => {
         console.log(err);
         const error = new Error(err.message);
         error.customProperty = "This error right here!";

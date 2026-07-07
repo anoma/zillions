@@ -4163,6 +4163,8 @@ dependencies = [
  "zcash_primitives",
  "zcash_proofs",
  "zcash_protocol",
+ "zcash_script",
+ "zcash_transparent",
  "zillions-sdk-common",
  "zillions-sdk-keys",
  "zip32",

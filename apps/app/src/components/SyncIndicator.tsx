@@ -5,11 +5,19 @@ import { Tooltip } from "./Tooltip";
 
 export function SyncIndicator() {
   const [isSyncing, setIsSyncing] = useState(true);
+  const [percent, setPercent] = useState(0);
   const wallet = useWallet();
 
   useEffect(() => {
     // TODO allow to call sync from other components, this is fundamentally important for transfers
-    wallet.sync().then(() => setIsSyncing(false));
+    const unsubscribe = wallet.subscribeSyncProgress((e) => {
+      setPercent(e.percent);
+    });
+    wallet
+      .sync()
+      .catch((e) => console.error("Sync failed", e))
+      .finally(() => setIsSyncing(false));
+    return unsubscribe;
   }, [wallet]);
 
   return (
@@ -36,8 +44,13 @@ export function SyncIndicator() {
         <div className="px-4 space-y-3 w-full text-xs font-medium">
           {isSyncing ? (
             <div className="font-normal">
-              Syncing your shielded assets now. Balances will update in a few
-              seconds.
+              <div>Shielded sync: {percent.toFixed(0)}%</div>
+              <div className="bg-black h-1 rounded-full overflow-clip mt-1">
+                <div
+                  className="bg-gold h-1 transition-all"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
             </div>
           ) : (
             <div>Shielded sync completed</div>

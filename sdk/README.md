@@ -45,13 +45,18 @@ Once you have a wallet instance it needs an account. Accounts can be added in a 
 await wallet.create_account("my-account", "<24 words here>", 0, birthdayHeight);
 ```
 
-and once an account is added the wallet can sync to the network.
+and once an account is added the wallet can sync to the network using the sync engine from `@zillions/sdk`.
 
 ```javascript
-await wallet.sync();
+import { syncWallet } from "@zillions/sdk";
+
+await syncWallet(wallet, {
+  onProgress: (p) => console.log(`${p.percent.toFixed(0)}%`),
+  onCheckpoint: (bytes) => saveToIndexedDb(bytes), // restore via the WebWallet constructor to resume
+});
 ```
 
-The sync process can take a long time depending on the wallet age and usage. This runs in a webworker so will not block the main. It is safe to trigger the sync process and then interact with the wallet using other methods while the sync runs in the background.
+The sync process can take a long time depending on the wallet age and usage. The heavy scanning stages run in a webworker so they will not block the main thread, and it is safe to interact with the wallet using other methods while the sync runs. Progress is reported after every scanned batch, and checkpoints let a reloaded page resume syncing where it left off.
 
 For more details check out the hosted docs at https://github.com/heliaxdev/zillions-sdk
 

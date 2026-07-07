@@ -1,7 +1,9 @@
+import type { SyncProgress } from "@zillions/sdk";
 import {
   awaitProverParams,
   Pczt,
   SeedFingerprint,
+  syncWallet,
   TransactionHistoryResponse,
   WalletSummary,
   WebWallet,
@@ -50,6 +52,8 @@ export class SdkWallet {
   public id: string;
   private accountId: number;
   private wallet: WebWallet;
+
+  private syncProgressListeners = new Set<(progress: SyncProgress) => void>();
 
   static async build({
     id,
@@ -116,9 +120,24 @@ export class SdkWallet {
     this.accountId = accountId;
   }
 
+  /** Subscribe to per-batch sync progress; returns an unsubscribe function. */
+  subscribeSyncProgress(listener: (progress: SyncProgress) => void) {
+    this.syncProgressListeners.add(listener);
+    return () => {
+      this.syncProgressListeners.delete(listener);
+    };
+  }
+
   sync = dedupe(async () => {
-    await this.wallet.sync();
-    this.updateWalletCache();
+    await syncWallet(this.wallet, {
+      onProgress: (progress) =>
+        this.syncProgressListeners.forEach((listener) => listener(progress)),
+      // Checkpoints persist scan progress across page refreshes: the wallet
+      // is restored from these bytes and resumes where it left off.
+      onCheckpoint: async (bytes) => {
+        await db.set("wallets", this.id, bytes);
+      },
+    });
   });
 
   private updateWalletCache = dedupe(async () => {
@@ -186,6 +205,7 @@ export class SdkWallet {
 
   /** Prepare a transfer spending shielded funds; `to` may be shielded or transparent. */
   async prepareTransferFromShielded(to: string, amount: bigint): Promise<Pczt> {
+    await this.sync();
     return this.wallet.pczt_create_from_shielded(this.accountId, to, amount);
   }
 
@@ -194,11 +214,13 @@ export class SdkWallet {
     to: string,
     amount: bigint,
   ): Promise<Pczt> {
+    await this.sync();
     return this.wallet.pczt_create_from_transparent(this.accountId, to, amount);
   }
 
   /** Prepare a shielding PCZT; sweeps all transparent funds, or at least `amount` when given. */
   async prepareShield(amount?: bigint): Promise<Pczt> {
+    await this.sync();
     return this.wallet.pczt_shield(this.accountId, amount);
   }
 

@@ -57,14 +57,24 @@ use zcash_primitives::transaction::fees::FeeRule;
 use zcash_primitives::transaction::TxId;
 use zcash_protocol::{PoolType, ShieldedProtocol};
 
-use zcash_client_backend::sync::run;
+use futures_util::TryStreamExt;
+use orchard::tree::MerkleHashOrchard;
+use transparent::address::Script;
+use transparent::bundle::{OutPoint, TxOut};
+use zcash_client_backend::data_api::chain::{
+    error::Error as ChainError, scan_cached_blocks, BlockCache, CommitmentTreeRoot,
+};
+use zcash_keys::encoding::AddressCodec;
+use zcash_primitives::merkle_tree::HashSer;
+use zcash_script::script;
 
 use zcash_protocol::consensus::{BlockHeight, Parameters};
 use zcash_protocol::value::Zatoshis;
 use zip32;
 use zip32::fingerprint::SeedFingerprint;
 
-const BATCH_SIZE: u32 = 10000; // Smaller batches = shorter CPU bursts with I/O pauses between them
+/// Rewind margin applied below the height where a chain reorg is detected.
+const REORG_REWIND_MARGIN: u32 = 10;
 
 /// constant that signals what's the minimum transparent balance for proposing a
 /// shielding transaction
@@ -280,21 +290,204 @@ where
         })?)
     }
 
-    pub async fn sync(&self) -> Result<(), Error> {
+    /// Sync stage: fetch the note commitment subtree roots from lightwalletd
+    /// and store them in the wallet. Call once before the first scan of a
+    /// session; scanning only needs the shards containing the wallet's notes.
+    pub async fn sync_update_subtree_roots(&self) -> Result<(), Error> {
         let mut client = self.client.clone();
-        // TODO: This should be held in the Wallet struct so we can download in parallel
-        let db_cache = MemBlockCache::new();
+
+        let mut request = service::GetSubtreeRootsArg::default();
+        request.set_shielded_protocol(service::ShieldedProtocol::Sapling);
+        let sapling_roots: Vec<CommitmentTreeRoot<sapling::Node>> = client
+            .get_subtree_roots(request)
+            .await?
+            .into_inner()
+            .and_then(|root| async move {
+                let root_hash = sapling::Node::read(&root.root_hash[..])?;
+                Ok(CommitmentTreeRoot::from_parts(
+                    BlockHeight::from_u32(root.completing_block_height as u32),
+                    root_hash,
+                ))
+            })
+            .try_collect()
+            .await?;
+
+        let mut request = service::GetSubtreeRootsArg::default();
+        request.set_shielded_protocol(service::ShieldedProtocol::Orchard);
+        let orchard_roots: Vec<CommitmentTreeRoot<MerkleHashOrchard>> = client
+            .get_subtree_roots(request)
+            .await?
+            .into_inner()
+            .and_then(|root| async move {
+                let root_hash = MerkleHashOrchard::read(&root.root_hash[..])?;
+                Ok(CommitmentTreeRoot::from_parts(
+                    BlockHeight::from_u32(root.completing_block_height as u32),
+                    root_hash,
+                ))
+            })
+            .try_collect()
+            .await?;
 
         let mut db = self.db.write().await;
-        run(
-            &mut client,
-            &self.network.clone(),
-            &db_cache,
-            &mut *db,
-            BATCH_SIZE,
-        )
-        .await
-        .map_err(Into::into)
+        db.put_sapling_subtree_roots(0, &sapling_roots)
+            .map_err(|e| Error::Sync(e.to_string()))?;
+        db.put_orchard_subtree_roots(0, &orchard_roots)
+            .map_err(|e| Error::Sync(e.to_string()))?;
+        Ok(())
+    }
+
+    /// Sync stage: fetch the current chain tip from lightwalletd and notify
+    /// the wallet, which updates its scan queue. Returns the tip height.
+    pub async fn sync_update_chain_tip(&self) -> Result<u32, Error> {
+        let mut client = self.client.clone();
+        let tip_height: u32 = client
+            .get_latest_block(service::ChainSpec::default())
+            .await?
+            .into_inner()
+            .height
+            .try_into()
+            .map_err(|_| Error::Generic("chain tip height out of range".to_string()))?;
+
+        self.db
+            .write()
+            .await
+            .update_chain_tip(BlockHeight::from_u32(tip_height))?;
+        Ok(tip_height)
+    }
+
+    /// Sync stage: refresh the wallet's view of transparent UTXOs for all
+    /// accounts. Run before shielded scanning so UTXOs between the last
+    /// scanned height and the chain tip are discovered.
+    pub async fn sync_refresh_utxos(&self) -> Result<(), Error> {
+        let account_ids = self.db.read().await.get_account_ids()?;
+        for account_id in account_ids {
+            let (start_height, addresses) = {
+                let db = self.db.read().await;
+                let start_height = db.utxo_query_height(account_id)?;
+                let addresses: Vec<String> = db
+                    .get_transparent_receivers(account_id, true, true)?
+                    .into_keys()
+                    .map(|addr| addr.encode(&self.network))
+                    .collect();
+                (start_height, addresses)
+            };
+            if addresses.is_empty() {
+                continue;
+            }
+
+            let mut client = self.client.clone();
+            let utxos = client
+                .get_address_utxos_stream(service::GetAddressUtxosArg {
+                    addresses,
+                    start_height: start_height.into(),
+                    max_entries: 0,
+                })
+                .await?
+                .into_inner()
+                .try_collect::<Vec<_>>()
+                .await?;
+
+            let mut db = self.db.write().await;
+            for reply in utxos {
+                let invalid = |what: &str| Error::Generic(format!("invalid {what} from server"));
+                let output = WalletTransparentOutput::from_parts(
+                    OutPoint::new(
+                        reply.txid[..].try_into().map_err(|_| invalid("txid"))?,
+                        reply.index.try_into().map_err(|_| invalid("utxo index"))?,
+                    ),
+                    TxOut::new(
+                        Zatoshis::from_nonnegative_i64(reply.value_zat)
+                            .map_err(|_| invalid("utxo value"))?,
+                        Script(script::Code(reply.script)),
+                    ),
+                    Some(
+                        BlockHeight::try_from(reply.height)
+                            .map_err(|_| invalid("utxo height"))?,
+                    ),
+                    Some(account_id),
+                    None,
+                    None,
+                )
+                .ok_or_else(|| invalid("utxo script"))?;
+                db.put_received_transparent_utxo(&output)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Sync stage: download and scan the compact blocks in `[start, end)`.
+    ///
+    /// A chain reorg detected while scanning rewinds the wallet internally;
+    /// callers must re-request `suggest_scan_ranges` after every call, as
+    /// scanning can reprioritize ranges or invalidate them via a rewind.
+    pub async fn sync_scan_range(&self, start: u32, end: u32) -> Result<(), Error> {
+        if end <= start {
+            return Ok(());
+        }
+        let mut client = self.client.clone();
+
+        let range = service::BlockRange {
+            start: Some(service::BlockId {
+                height: start as u64,
+                hash: vec![],
+            }),
+            end: Some(service::BlockId {
+                height: (end - 1) as u64,
+                hash: vec![],
+            }),
+            pool_types: vec![],
+        };
+        let compact_blocks = client
+            .get_block_range(range)
+            .await?
+            .into_inner()
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        let db_cache = MemBlockCache::new();
+        db_cache
+            .insert(compact_blocks)
+            .await
+            .map_err(|e| Error::Sync(e.to_string()))?;
+
+        // The tree frontier just below the range anchors the scanned notes
+        // into the commitment trees.
+        let chain_state = client
+            .get_tree_state(service::BlockId {
+                height: (start - 1) as u64,
+                hash: vec![],
+            })
+            .await?
+            .into_inner()
+            .to_chain_state()
+            .map_err(|e| Error::Sync(format!("invalid tree state from server: {e}")))?;
+
+        let scan_result = {
+            let mut db = self.db.write().await;
+            scan_cached_blocks(
+                &self.network,
+                &db_cache,
+                &mut *db,
+                BlockHeight::from_u32(start),
+                &chain_state,
+                (end - start) as usize,
+            )
+        };
+
+        match scan_result {
+            Err(ChainError::Scan(err)) if err.is_continuity_error() => {
+                let rewind_height = err.at_height().saturating_sub(REORG_REWIND_MARGIN);
+                tracing::info!(
+                    "Chain reorg detected at {}, rewinding to {}",
+                    err.at_height(),
+                    rewind_height,
+                );
+                self.db.write().await.truncate_to_height(rewind_height)?;
+                Ok(())
+            }
+            Ok(_) => Ok(()),
+            Err(e) => Err(Error::Sync(e.to_string())),
+        }
     }
 
     pub async fn get_wallet_summary(&self) -> Result<Option<WalletSummary<AccountId>>, Error> {
@@ -448,8 +641,8 @@ where
     }
 
     /// Ensure the wallet is synced to near the chain tip before creating a
-    /// transaction; prevents expiry and anchor-mismatch errors. Errors if the
-    /// wallet has never been synced.
+    /// transaction; prevents expiry and anchor-mismatch errors. Syncing is
+    /// driven by the caller (the JS sync engine), so this only checks.
     async fn ensure_synced(&self, op: &str) -> Result<(), Error> {
         let mut client = self.client.clone();
         let chain_tip: u32 = client
@@ -465,12 +658,9 @@ where
         })?;
         let wallet_height_u32: u32 = wallet_height.into();
         if chain_tip.saturating_sub(wallet_height_u32) > 10 {
-            tracing::warn!(
-                "{op}: Wallet not fully synced: wallet={wallet_height_u32} < chain_tip={chain_tip}. Syncing now..."
-            );
-            drop(client);
-            self.sync().await?;
-            tracing::info!("{op}: Sync completed, proceeding with transaction creation");
+            return Err(Error::Generic(format!(
+                "{op}: wallet is not synced to the chain tip (wallet={wallet_height_u32}, chain_tip={chain_tip}). Sync first."
+            )));
         }
         Ok(())
     }
