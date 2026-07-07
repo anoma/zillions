@@ -8,12 +8,8 @@
     "type": "git",
     "url": "https://github.com/heliaxdev/zillions-sdk"
   },
-  "files": [
-    "zillions_sdk_requests_bg.wasm",
-    "zillions_sdk_requests.js",
-    "zillions_sdk_requests.d.ts"
-  ],
-  "module": "zillions_sdk_requests.js",
-  "types": "zillions_sdk_requests.d.ts",
-  "sideEffects": ["./snippets/*"]
+  "files": ["wasm"],
+  "module": "wasm/zillions_sdk_requests.js",
+  "types": "wasm/zillions_sdk_requests.d.ts",
+  "sideEffects": ["./wasm/snippets/*"]
 }

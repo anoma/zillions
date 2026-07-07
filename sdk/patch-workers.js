@@ -37,7 +37,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const WALLET_PKG = path.join('packages', 'zillions-sdk-wallet');
+const WALLET_PKG = path.join('packages', 'zillions-sdk-wallet', 'wasm');
 const snippetsDir = path.join(WALLET_PKG, 'snippets');
 
 // ── Locate snippet directories ────────────────────────────────────────────────

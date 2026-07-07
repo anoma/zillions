@@ -8,32 +8,15 @@
     "type": "git",
     "url": "https://github.com/heliaxdev/zillions-sdk"
   },
-  "files": [
-    "zillions_sdk_wallet_bg.wasm",
-    "zillions_sdk_wallet_bg.wasm.d.ts",
-    "zillions_sdk_wallet.js",
-    "zillions_sdk_wallet.d.ts",
-    "snippets",
-    "vite-plugin.js",
-    "vite-plugin.d.ts",
-    "params.js",
-    "params.d.ts"
-  ],
-  "module": "zillions_sdk_wallet.js",
-  "types": "zillions_sdk_wallet.d.ts",
-  "sideEffects": ["./snippets/*"],
+  "files": ["wasm"],
+  "module": "wasm/zillions_sdk_wallet.js",
+  "types": "wasm/zillions_sdk_wallet.d.ts",
+  "sideEffects": ["./wasm/snippets/*"],
   "exports": {
     ".": {
-      "import": "./zillions_sdk_wallet.js",
-      "types": "./zillions_sdk_wallet.d.ts"
+      "types": "./wasm/zillions_sdk_wallet.d.ts",
+      "import": "./wasm/zillions_sdk_wallet.js"
     },
-    "./vite-plugin": {
-      "import": "./vite-plugin.js",
-      "types": "./vite-plugin.d.ts"
-    },
-    "./params": {
-      "import": "./params.js",
-      "types": "./params.d.ts"
-    }
+    "./package.json": "./package.json"
   }
 }

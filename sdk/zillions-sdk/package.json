@@ -32,5 +32,9 @@
     "@zillions-sdk/requests": "workspace:*",
     "@zillions-sdk/sapling-params": "workspace:*",
     "@zillions-sdk/wallet": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "vite": "^8.0.12"
   }
 }

@@ -5,7 +5,7 @@
  */
 
 import initWasm, { initThreadPool } from "@zillions-sdk/wallet";
-import { loadProverParams } from "@zillions-sdk/wallet/params";
+import { loadProverParams } from "./params";
 
 // The wallet API is the SDK's main surface — re-export it from the root.
 // Keys and requests stay behind subpaths: their symbol names collide with

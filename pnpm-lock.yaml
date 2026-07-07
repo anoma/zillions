@@ -296,6 +296,13 @@ importers:
       '@zillions-sdk/wallet':
         specifier: workspace:*
         version: link:../packages/zillions-sdk-wallet
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.2
+      vite:
+        specifier: ^8.0.12
+        version: 8.1.3(@types/node@24.13.2)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.0)
 
 packages:
 
