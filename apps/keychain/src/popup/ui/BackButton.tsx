@@ -11,7 +11,7 @@ type BackButtonProps = {
 export const BackButton = ({
   onClick,
   children = "Back",
-}: BackButtonProps): JSX.Element => (
+}: BackButtonProps) => (
   <button
     type="button"
     className="w-full text-center text-sm cursor-pointer"

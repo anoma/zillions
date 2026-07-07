@@ -11,7 +11,7 @@ import { useAccounts } from "../context/AccountContext";
 import routes from "../routes";
 import { PageHeader } from "../ui/PageHeader";
 
-export const RenameAccount = (): JSX.Element => {
+export const RenameAccount = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
   const { getById, rename } = useAccounts();

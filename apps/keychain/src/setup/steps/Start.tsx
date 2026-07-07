@@ -5,7 +5,7 @@ import { ActionButton, Stack } from "@zillions/components";
 import { Logo } from "@zillions/components/assets/Logo";
 import { useWizard } from "../SetupContext";
 
-export const Start = (): JSX.Element => {
+export const Start = () => {
   const { dispatch } = useWizard();
   return (
     <div className="flex flex-col flex-1 justify-center">

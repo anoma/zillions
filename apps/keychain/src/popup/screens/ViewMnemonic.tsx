@@ -20,7 +20,7 @@ import routes from "../routes";
 import { BackButton } from "../ui/BackButton";
 import { PageHeader } from "../ui/PageHeader";
 
-export const ViewMnemonic = (): JSX.Element => {
+export const ViewMnemonic = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
   const { checkPassword } = useVault();

@@ -42,7 +42,7 @@ export const LinkButton = ({
   children,
   hoverColor = "neutral",
   ...props
-}: LinkButtonProps): JSX.Element => {
+}: LinkButtonProps) => {
   return (
     <div className={linkButton({ color, underline, hoverColor })}>
       {createElement(props.href ? "a" : "button", { ...props }, children)}

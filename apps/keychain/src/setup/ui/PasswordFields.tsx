@@ -24,7 +24,7 @@ const isValid = (
 export const PasswordFields = ({
   onValidPassword,
   "data-testid": dataTestId,
-}: Props): JSX.Element => {
+}: Props) => {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [feedback, setFeedback] = useState(zxcvbn("").feedback);

@@ -80,7 +80,7 @@ const actionButtonIcon = tv({
 type ButtonTailwindVariantsProps = VariantProps<typeof actionButtonShape> &
   VariantProps<typeof actionButtonBackground>;
 
-export type ActionButtonProps<HtmlTag extends keyof React.ReactHTML> = {
+export type ActionButtonProps<HtmlTag extends keyof HTMLElementTagNameMap> = {
   as?: HtmlTag;
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
@@ -107,7 +107,7 @@ const Button = ({
   textHoverColor: textHoverColorProp,
   as = "button",
   ...domProps
-}: ActionButtonProps<keyof React.ReactHTML>): JSX.Element => {
+}: ActionButtonProps<keyof HTMLElementTagNameMap>) => {
   const outlined = !!outlineColor;
 
   const textColor = textColorProp || outlineColor || "black";
@@ -148,7 +148,7 @@ const Button = ({
         "--outline": outlineColorString,
       } as CSSProperties,
       disabled,
-      ...domProps,
+      ...(domProps as Record<string, unknown>),
     },
     <>
       {icon && (
@@ -165,9 +165,9 @@ const Button = ({
   );
 };
 
-export const ActionButton = <HtmlTag extends keyof React.ReactHTML>(
+export const ActionButton = <HtmlTag extends keyof HTMLElementTagNameMap>(
   props: ActionButtonProps<HtmlTag>
-): JSX.Element => {
+) => {
   if ("href" in props) {
     const { href, ...otherProps } = props;
     if (href) {

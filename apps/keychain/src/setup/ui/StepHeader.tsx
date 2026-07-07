@@ -10,7 +10,7 @@ import { isLastStep, previousStep } from "../model/navigation";
 import { STEP_META } from "../model/steps";
 import { useWizard } from "../SetupContext";
 
-export const StepHeader = (): JSX.Element | null => {
+export const StepHeader = () => {
   const { state, dispatch } = useWizard();
   const meta = STEP_META[state.step];
 

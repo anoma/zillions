@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { twMerge } from "tailwind-merge";
 
 type TextProps = {
-  as?: keyof React.ReactHTML;
+  as?: keyof HTMLElementTagNameMap;
   children: React.ReactNode;
 } & React.ComponentPropsWithRef<"p">;
 
@@ -11,7 +11,7 @@ export const Text = ({
   children,
   className,
   ...props
-}: TextProps): JSX.Element => {
+}: TextProps) => {
   return createElement(
     htmlTag || "p",
     {

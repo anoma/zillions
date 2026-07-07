@@ -14,7 +14,7 @@ export const CopyToClipboardControl = ({
   value,
   className,
   children,
-}: CopyToClipboardControlIcon): JSX.Element => {
+}: CopyToClipboardControlIcon) => {
   const [copied, setCopied] = useState(false);
 
   const showConfirmation = (): void => {

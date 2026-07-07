@@ -22,7 +22,7 @@ type Props = {
   setDetails: (details: ApprovalDetails) => void;
 };
 
-export const ApproveSignTx = ({ details, setDetails }: Props): JSX.Element => {
+export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const navigate = useNavigate();
   const client = useContext(ClientContext);
   const params = useParams<{

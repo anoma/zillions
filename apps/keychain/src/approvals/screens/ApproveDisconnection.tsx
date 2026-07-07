@@ -11,7 +11,7 @@ import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 
-export const ApproveDisconnection = (): JSX.Element => {
+export const ApproveDisconnection = () => {
   const client = useContext(ClientContext);
   const [params] = useSearchParams();
   const interfaceOrigin = params.get("interfaceOrigin") ?? "";

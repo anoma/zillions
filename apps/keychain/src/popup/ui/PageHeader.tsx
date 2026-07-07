@@ -7,6 +7,6 @@ type PageHeaderProps = {
   title: string;
 };
 
-export const PageHeader = ({ title }: PageHeaderProps): JSX.Element => {
+export const PageHeader = ({ title }: PageHeaderProps) => {
   return <Heading className="text-xl text-center text-black">{title}</Heading>;
 };

@@ -16,7 +16,7 @@ export const TransactionCard = ({
   title,
   content,
   icon,
-}: TransactionCardProps): JSX.Element => {
+}: TransactionCardProps) => {
   return (
     <article
       className={clsx(

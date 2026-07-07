@@ -80,9 +80,7 @@ const actionButtonIcon = tv({
 type ButtonTailwindVariantsProps = VariantProps<typeof actionButtonShape> &
   VariantProps<typeof actionButtonBackground>;
 
-export type ActionButtonProps<
-  HtmlTag extends keyof React.JSX.IntrinsicElements,
-> = {
+export type ActionButtonProps<HtmlTag extends keyof HTMLElementTagNameMap> = {
   as?: HtmlTag;
   icon?: React.ReactNode;
   iconPosition?: "left" | "right";
@@ -94,7 +92,7 @@ export type ActionButtonProps<
 } & React.ComponentPropsWithoutRef<HtmlTag> &
   Omit<ButtonTailwindVariantsProps, "noHover" | "outlined">;
 
-const Button = <HtmlTag extends keyof React.JSX.IntrinsicElements = "button">({
+const Button = <HtmlTag extends keyof HTMLElementTagNameMap = "button">({
   icon,
   iconPosition = "left",
   children,
@@ -168,7 +166,7 @@ const Button = <HtmlTag extends keyof React.JSX.IntrinsicElements = "button">({
   );
 };
 
-export const ActionButton = <HtmlTag extends keyof React.JSX.IntrinsicElements>(
+export const ActionButton = <HtmlTag extends keyof HTMLElementTagNameMap>(
   props: ActionButtonProps<HtmlTag>,
 ) => {
   if ("href" in props) {

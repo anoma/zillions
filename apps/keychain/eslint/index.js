@@ -21,12 +21,6 @@ module.exports = {
     "no-shadow": "off",
     "@typescript-eslint/no-shadow": ["off"],
     "@typescript-eslint/no-require-imports": "off",
-    "@typescript-eslint/explicit-function-return-type": [
-      "error",
-      {
-        allowExpressions: true,
-      },
-    ],
     "import/prefer-default-export": "off",
     "no-restricted-globals": [
       "error",

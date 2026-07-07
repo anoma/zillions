@@ -17,7 +17,7 @@ type LoginProps = {
   onLogin: (password: string) => Promise<boolean>;
 };
 
-export const Login = ({ onLogin }: LoginProps): JSX.Element => {
+export const Login = ({ onLogin }: LoginProps) => {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<Status>(Status.Idle);
 

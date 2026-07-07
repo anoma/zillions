@@ -11,7 +11,7 @@ type Props = {
   children: ReactNode;
 };
 
-export const StepTransition = ({ stepKey, children }: Props): JSX.Element => {
+export const StepTransition = ({ stepKey, children }: Props) => {
   const containerRef = useRef<HTMLDivElement>(null);
   // Hold the currently-displayed content so we can animate the swap.
   const [displayed, setDisplayed] = useState<{ key: string; node: ReactNode }>({

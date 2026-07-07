@@ -6,7 +6,7 @@ import { ActionButton, Alert, Loading, ViewKeys } from "@zillions/components";
 
 import { useWizard } from "../../SetupContext";
 
-export const Complete = (): JSX.Element => {
+export const Complete = () => {
   const { state } = useWizard();
   const { completion, completionInfo, parentAccount, shieldedAccount } = state;
 

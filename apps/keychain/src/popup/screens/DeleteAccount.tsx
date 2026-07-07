@@ -21,7 +21,7 @@ import { openSetupTab } from "../openSetup";
 import routes from "../routes";
 import { PageHeader } from "../ui/PageHeader";
 
-export const DeleteAccount = (): JSX.Element => {
+export const DeleteAccount = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
   const { checkPassword } = useVault();

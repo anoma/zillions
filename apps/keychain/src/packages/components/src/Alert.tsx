@@ -33,7 +33,7 @@ export const Alert = ({
   children,
   "data-testid": dataTestId,
   ...props
-}: AlertProps): JSX.Element => {
+}: AlertProps) => {
   const alertClass = alert({ type: props.type });
   return (
     <div

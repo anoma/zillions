@@ -67,7 +67,7 @@ type DropdownMenuProps = {
   position?: "top" | "bottom";
 } & VariantProps<typeof dropdownMenu>;
 
-export const DropdownMenu = (props: DropdownMenuProps): JSX.Element => {
+export const DropdownMenu = (props: DropdownMenuProps) => {
   const [isOpen, setOpen] = useState(false);
 
   const handleClick = (callback: DropdownClickFn) => (): void => {

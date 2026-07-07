@@ -19,7 +19,7 @@ export const FeedbackButton = ({
   onAction,
   "data-testid": dataTestid,
   ...props
-}: Props): JSX.Element => {
+}: Props) => {
   const [displaySuccess, setDisplaySuccess] = useState(false);
   const [displayError, setDisplayError] = useState(false);
   const [feedbackKey, setFeedbackKey] = useState("");

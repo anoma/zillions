@@ -10,7 +10,7 @@ export const Badge = ({
   className,
   icon,
   ...props
-}: Props): JSX.Element => {
+}: Props) => {
   return (
     <span
       className={twMerge(

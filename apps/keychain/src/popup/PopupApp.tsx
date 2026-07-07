@@ -36,7 +36,7 @@ import { ViewingKey } from "./screens/ViewingKey";
 import { ViewMnemonic } from "./screens/ViewMnemonic";
 import { AppHeader } from "./ui/AppHeader";
 
-const PopupShell = (): JSX.Element | null => {
+const PopupShell = () => {
   const location = useLocation();
   const { lockStatus, passwordInitialized, unlock } = useVault();
 
@@ -105,7 +105,7 @@ const PopupShell = (): JSX.Element | null => {
   );
 };
 
-export const PopupApp = (): JSX.Element => {
+export const PopupApp = () => {
   const client = useMemo(() => createBackgroundClient(), []);
   return (
     <HashRouter>

@@ -36,7 +36,7 @@ type ProgressIndicatorProps = {
 export const ProgressIndicator = ({
   totalSteps,
   currentStep,
-}: ProgressIndicatorProps): JSX.Element => {
+}: ProgressIndicatorProps) => {
   const { container, listItem } = progressIndicator();
   return (
     <div className={container()} role="group" aria-label="Progress">

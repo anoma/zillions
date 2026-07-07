@@ -1,4 +1,4 @@
-export const SeedPhraseInstructions = (): JSX.Element => {
+export const SeedPhraseInstructions = () => {
   return (
     <div className="rounded-sm px-4 py-2">
       <p className="mb-6">

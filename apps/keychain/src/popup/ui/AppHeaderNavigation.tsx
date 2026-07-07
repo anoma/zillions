@@ -22,7 +22,7 @@ type AppHeaderNavigationProps = {
 export const AppHeaderNavigation = ({
   open,
   onClose,
-}: AppHeaderNavigationProps): JSX.Element => {
+}: AppHeaderNavigationProps) => {
   const { lock } = useVault();
   const navigate = useNavigate();
 

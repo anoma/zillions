@@ -15,7 +15,7 @@ const pickTwoIndices = (length: number): [number, number] => {
   return [Math.min(a, b), Math.max(a, b)];
 };
 
-export const CreateConfirm = (): JSX.Element => {
+export const CreateConfirm = () => {
   const { state, dispatch } = useWizard();
   const { mnemonic } = state;
 

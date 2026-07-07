@@ -8,10 +8,10 @@ import { useCallback, useState } from "react";
 
 import { useWizard } from "../../SetupContext";
 import {
-  type MnemonicLength,
-  type SecretKind,
   validatePrivateKey,
   validateSpendingKey,
+  type MnemonicLength,
+  type SecretKind,
 } from "../../model/secrets";
 import { SeedPhraseList } from "../../ui/SeedPhraseList";
 
@@ -34,7 +34,7 @@ const optionToKind = (opt: Option): { kind: SecretKind; length: MnemonicLength }
   }
 };
 
-export const ImportSecret = (): JSX.Element => {
+export const ImportSecret = () => {
   const { state, dispatch, client } = useWizard();
   const { secretKind, mnemonicLength, privateKey, spendingKey, birthday } = state;
 

@@ -30,7 +30,7 @@ export const ViewKeys = ({
   viewingKeys,
   footer,
   trimCharacters,
-}: ViewKeysProps): JSX.Element => {
+}: ViewKeysProps) => {
   const [seeViewingKey, setSeeViewingKey] = useState(false);
   return (
     <Stack
