@@ -12,7 +12,7 @@
     "build:app": "pnpm --filter zillions-app build",
     "build:keychain": "pnpm --filter zillions-keychain build",
     "build:sdk": "pnpm --filter zillions-sdk build",
-    "keychain:zip": "pnpm --filter zillions-keychain build:chrome && pnpm --filter zillions-app keychain:update",
+    "build:netlify": "bash scripts/build-netlify.sh",
     "typecheck": "pnpm --filter zillions-app typecheck && pnpm --filter zillions-keychain compile",
     "lint": "pnpm --filter zillions-app lint && pnpm --filter zillions-keychain lint"
   },
