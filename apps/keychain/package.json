@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.2.8",
-    "@zillions-sdk/keys": "workspace:*",
+    "zillions-sdk": "workspace:*",
     "clsx": "^2.1.1",
     "fp-ts": "^2.16.1",
     "framer-motion": "^11.18.2",

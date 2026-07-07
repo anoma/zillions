@@ -4,3 +4,4 @@ packages:
   - apps/keychain/src/packages/types
   - sdk
   - sdk/packages/*
+  - sdk/zillions-sdk

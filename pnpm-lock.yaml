@@ -26,12 +26,6 @@ importers:
       '@tanstack/react-router':
         specifier: ^1.170.16
         version: 1.170.17(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@zillions-sdk/sapling-params':
-        specifier: workspace:*
-        version: link:../../sdk/packages/zillions-sdk-sapling-params
-      '@zillions-sdk/wallet':
-        specifier: workspace:*
-        version: link:../../sdk/packages/zillions-sdk-wallet
       '@zillions/keychain-types':
         specifier: workspace:*
         version: link:../keychain/src/packages/types
@@ -56,6 +50,9 @@ importers:
       tailwind-variants:
         specifier: ^3.2.2
         version: 3.2.2(tailwind-merge@3.6.0)(tailwindcss@4.3.2)
+      zillions-sdk:
+        specifier: workspace:*
+        version: link:../../sdk/zillions-sdk
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -117,9 +114,6 @@ importers:
       '@fontsource-variable/montserrat':
         specifier: ^5.2.8
         version: 5.2.8
-      '@zillions-sdk/keys':
-        specifier: workspace:*
-        version: link:../../sdk/packages/zillions-sdk-keys
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -162,6 +156,9 @@ importers:
       webextension-polyfill:
         specifier: ^0.12
         version: 0.12.0
+      zillions-sdk:
+        specifier: workspace:*
+        version: link:../../sdk/zillions-sdk
       zxcvbn:
         specifier: ^4.4.2
         version: 4.4.2
@@ -284,6 +281,21 @@ importers:
   sdk/packages/zillions-sdk-sapling-params: {}
 
   sdk/packages/zillions-sdk-wallet: {}
+
+  sdk/zillions-sdk:
+    dependencies:
+      '@zillions-sdk/keys':
+        specifier: workspace:*
+        version: link:../packages/zillions-sdk-keys
+      '@zillions-sdk/requests':
+        specifier: workspace:*
+        version: link:../packages/zillions-sdk-requests
+      '@zillions-sdk/sapling-params':
+        specifier: workspace:*
+        version: link:../packages/zillions-sdk-sapling-params
+      '@zillions-sdk/wallet':
+        specifier: workspace:*
+        version: link:../packages/zillions-sdk-wallet
 
 packages:
 

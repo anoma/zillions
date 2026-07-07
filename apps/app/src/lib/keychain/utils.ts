@@ -1,4 +1,4 @@
-import { Pczt } from "@zillions-sdk/wallet";
+import { Pczt } from "zillions-sdk";
 
 // Resolves with the value once document is ready, or undefined if the key is still absent.
 // Needed because extensions inject into window after document load.

@@ -1,0 +1,36 @@
+{
+  "name": "zillions-sdk",
+  "collaborators": ["Heliax"],
+  "description": "Single entry point for the Zillions SDK: wallet, keys, payment requests and Sapling params",
+  "version": "0.1.0",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heliaxdev/zillions-interface"
+  },
+  "type": "module",
+  "files": [
+    "index.ts",
+    "wallet.ts",
+    "keys.ts",
+    "requests.ts",
+    "params.ts",
+    "vite-plugin.ts"
+  ],
+  "module": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./wallet": "./wallet.ts",
+    "./keys": "./keys.ts",
+    "./requests": "./requests.ts",
+    "./params": "./params.ts",
+    "./vite-plugin": "./vite-plugin.ts"
+  },
+  "dependencies": {
+    "@zillions-sdk/keys": "workspace:*",
+    "@zillions-sdk/requests": "workspace:*",
+    "@zillions-sdk/sapling-params": "workspace:*",
+    "@zillions-sdk/wallet": "workspace:*"
+  }
+}
