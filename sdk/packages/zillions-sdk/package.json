@@ -1,5 +1,5 @@
 {
-  "name": "zillions-sdk",
+  "name": "@zillions/sdk",
   "collaborators": ["Heliax"],
   "description": "Single entry point for the Zillions SDK: wallet, keys, payment requests and Sapling params",
   "version": "0.1.0",

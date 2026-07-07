@@ -29,6 +29,9 @@ importers:
       '@zillions/keychain-types':
         specifier: workspace:*
         version: link:../keychain/src/packages/types
+      '@zillions/sdk':
+        specifier: workspace:*
+        version: link:../../sdk/packages/zillions-sdk
       idb:
         specifier: ^8.0.3
         version: 8.0.3
@@ -50,9 +53,6 @@ importers:
       tailwind-variants:
         specifier: ^3.2.2
         version: 3.2.2(tailwind-merge@3.6.0)(tailwindcss@4.3.2)
-      zillions-sdk:
-        specifier: workspace:*
-        version: link:../../sdk/packages/zillions-sdk
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -114,6 +114,9 @@ importers:
       '@fontsource-variable/montserrat':
         specifier: ^5.2.8
         version: 5.2.8
+      '@zillions/sdk':
+        specifier: workspace:*
+        version: link:../../sdk/packages/zillions-sdk
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -156,9 +159,6 @@ importers:
       webextension-polyfill:
         specifier: ^0.12
         version: 0.12.0
-      zillions-sdk:
-        specifier: workspace:*
-        version: link:../../sdk/packages/zillions-sdk
       zxcvbn:
         specifier: ^4.4.2
         version: 4.4.2

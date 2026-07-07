@@ -1,5 +1,5 @@
+import { initSdk } from "@zillions/sdk";
 import { useEffect, useState, type ReactNode } from "react";
-import { initSdk } from "zillions-sdk";
 import { waitForKeychainInjection } from "../lib/keychain/keychain";
 import { PageLoader } from "./PageLoader";
 

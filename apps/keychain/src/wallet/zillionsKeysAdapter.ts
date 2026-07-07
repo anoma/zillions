@@ -17,7 +17,7 @@
  * none of them. (`get_unified_address` uses the `SHIELDED` request, matching
  * the UA standard Zcash wallets display.)
  */
-import initWasm, { UnifiedSpendingKey } from "zillions-sdk/keys";
+import initWasm, { UnifiedSpendingKey } from "@zillions/sdk/keys";
 
 import type {
   AccountRef,

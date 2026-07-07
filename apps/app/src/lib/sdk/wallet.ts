@@ -5,7 +5,7 @@ import {
   TransactionHistoryResponse,
   WalletSummary,
   WebWallet,
-} from "zillions-sdk";
+} from "@zillions/sdk";
 import { db } from "../db";
 import { dedupe } from "../utils";
 
