@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.1.1...zillions-keychain-v0.2.0) (2026-07-07)
+
+
+### Features
+
+* consolidate the SDK behind a single @zillions/sdk package ([#4](https://github.com/heliaxdev/zillions-interface/issues/4)) ([7e5b0ef](https://github.com/heliaxdev/zillions-interface/commit/7e5b0efdcff8279089f15d5a921892fd598a0af0))
+
 ## [0.1.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.1.0...zillions-keychain-v0.1.1) (2026-07-07)
 
 

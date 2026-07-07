@@ -1,8 +1,10 @@
 {
   "name": "@zillions/sdk",
-  "collaborators": ["Heliax"],
+  "collaborators": [
+    "Heliax"
+  ],
   "description": "Single entry point for the Zillions SDK: wallet, keys, payment requests and Sapling params",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
