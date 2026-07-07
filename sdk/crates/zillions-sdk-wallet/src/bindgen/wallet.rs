@@ -61,14 +61,19 @@ pub type NoteRef = <MemoryWalletDb<Network> as InputSource>::NoteRef;
 ///
 /// ## Synchronizing
 ///
-/// The wallet can be synchronized with the blockchain by calling the `sync` method. This will fetch compact blocks from the connected lightwalletd instance and scan them for transactions.
-/// The sync method uses a built-in strategy to determine which blocks is needs to download and scan in order to gain full knowledge of the balances for all accounts that are managed.
+/// Syncing is driven from JS by the `syncWallet` engine in `@zillions/sdk`, which composes the
+/// wallet's sync-stage methods: `sync_update_subtree_roots`, `sync_update_chain_tip`,
+/// `sync_refresh_utxos`, and `sync_scan_range`, consulting `suggest_scan_ranges` between scans.
+/// Driving the loop from JS lets callers observe progress and checkpoint the wallet database
+/// (`db_to_bytes`) between batches so syncing survives page reloads.
 ///
-/// Syncing is a long running process and so is delegated to a WebWorker to prevent from blocking the main thread. It is safe to call other methods on the wallet during syncing although they may take
-/// longer than usual while they wait for a write-lock to be released.
+/// The CPU-heavy stages run in a dedicated WebWorker so the main thread is not blocked. It is
+/// safe to call other methods on the wallet while syncing although they may take longer than
+/// usual while they wait for a write-lock to be released.
 ///
 /// ```javascript
-/// await wallet.sync();
+/// import { syncWallet } from "@zillions/sdk";
+/// await syncWallet(wallet, { onProgress: (p) => console.log(p.percent) });
 /// ```
 ///
 /// ## Transacting
