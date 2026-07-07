@@ -11,7 +11,7 @@ export type Keychain = Zillions;
 
 export const KeychainEvent = Events;
 
-export const MIN_KEYCHAIN_VERSION = "0.1.1";
+export const MIN_KEYCHAIN_VERSION = "0.2.0";
 
 export function keychain(): Keychain {
   invariant(window.zc, "Keychain not installed");
