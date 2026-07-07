@@ -421,6 +421,11 @@ export class WalletSummary {
   free(): void;
   chain_tip_height: number;
   fully_scanned_height: number;
+  /**
+   * Overall scan progress as a ratio; percent = numerator / denominator.
+   */
+  scan_progress_numerator: bigint;
+  scan_progress_denominator: bigint;
   next_sapling_subtree_index: bigint;
   next_orchard_subtree_index: bigint;
   readonly account_balances: any;
@@ -560,13 +565,38 @@ export class WebWallet {
    */
   create_account_view_ufvk(account_name: string, encoded_ufvk: string, birthday_height?: number | null): Promise<number>;
   /**
-   *
-   * Start a background sync task which will fetch and scan blocks from the connected lighwalletd server
-   *
-   * IMPORTANT: This will spawn a new webworker which will handle the sync task. The sync task will continue to run in the background until the sync process is complete.
-   * During this time the main thread will not block but certain wallet methods may temporarily block while the wallet is being written to during the sync.
+   * Sync stage: fetch the note commitment subtree roots from the
+   * lightwalletd server and store them in the wallet. Call once before the
+   * first `sync_scan_range` of a session.
    */
-  sync(): Promise<void>;
+  sync_update_subtree_roots(): Promise<void>;
+  /**
+   * Sync stage: fetch the current chain tip from the lightwalletd server
+   * and update the wallet's scan queue. Returns the tip height.
+   */
+  sync_update_chain_tip(): Promise<number>;
+  /**
+   * Sync stage: refresh the wallet's view of transparent UTXOs for all
+   * accounts. Run before shielded scanning.
+   */
+  sync_refresh_utxos(): Promise<void>;
+  /**
+   * Sync stage: download and scan the compact blocks in `[start, end)`.
+   *
+   * The CPU-heavy trial decryption runs in a dedicated webworker (plus the
+   * rayon pool), so the main thread stays responsive. Wallet methods may
+   * temporarily block while the wallet is written to during the scan.
+   *
+   * Callers must re-request `suggest_scan_ranges` after every call:
+   * scanning can reprioritize ranges, or rewind the wallet after a reorg.
+   */
+  sync_scan_range(start: number, end: number): Promise<void>;
+  /**
+   * Ranges of blocks the wallet wants scanned, most urgent first, as
+   * `[start, end]` pairs (end exclusive). Empty means fully synced as of
+   * the last `sync_update_chain_tip`.
+   */
+  suggest_scan_ranges(): Promise<any>;
   get_wallet_summary(): Promise<WalletSummary | undefined>;
   /**
    * Create a new transaction proposal to send funds to a given address
@@ -792,7 +822,11 @@ export interface InitOutput {
   readonly webwallet_create_account: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => any;
   readonly webwallet_create_account_ufvk: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => any;
   readonly webwallet_create_account_view_ufvk: (a: number, b: number, c: number, d: number, e: number, f: number) => any;
-  readonly webwallet_sync: (a: number) => any;
+  readonly webwallet_sync_update_subtree_roots: (a: number) => any;
+  readonly webwallet_sync_update_chain_tip: (a: number) => any;
+  readonly webwallet_sync_refresh_utxos: (a: number) => any;
+  readonly webwallet_sync_scan_range: (a: number, b: number, c: number) => any;
+  readonly webwallet_suggest_scan_ranges: (a: number) => any;
   readonly webwallet_get_wallet_summary: (a: number) => any;
   readonly webwallet_propose_transfer: (a: number, b: number, c: number, d: number, e: bigint) => any;
   readonly webwallet_create_proposed_transactions: (a: number, b: number, c: number, d: number, e: number) => any;
@@ -814,6 +848,10 @@ export interface InitOutput {
   readonly __wbg_set_walletsummary_chain_tip_height: (a: number, b: number) => void;
   readonly __wbg_get_walletsummary_fully_scanned_height: (a: number) => number;
   readonly __wbg_set_walletsummary_fully_scanned_height: (a: number, b: number) => void;
+  readonly __wbg_get_walletsummary_scan_progress_numerator: (a: number) => bigint;
+  readonly __wbg_set_walletsummary_scan_progress_numerator: (a: number, b: bigint) => void;
+  readonly __wbg_get_walletsummary_scan_progress_denominator: (a: number) => bigint;
+  readonly __wbg_set_walletsummary_scan_progress_denominator: (a: number, b: bigint) => void;
   readonly __wbg_get_walletsummary_next_sapling_subtree_index: (a: number) => bigint;
   readonly __wbg_set_walletsummary_next_sapling_subtree_index: (a: number, b: bigint) => void;
   readonly __wbg_get_walletsummary_next_orchard_subtree_index: (a: number) => bigint;
@@ -880,18 +918,18 @@ export interface InitOutput {
   readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
   readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
   readonly memory: WebAssembly.Memory;
-  readonly __wbindgen_exn_store: (a: number) => void;
-  readonly __externref_table_alloc: () => number;
-  readonly __wbindgen_export_3: WebAssembly.Table;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+  readonly __wbindgen_exn_store: (a: number) => void;
+  readonly __externref_table_alloc: () => number;
+  readonly __wbindgen_export_5: WebAssembly.Table;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_7: WebAssembly.Table;
   readonly __externref_table_dealloc: (a: number) => void;
-  readonly closure1491_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure1511_externref_shim: (a: number, b: number, c: any) => void;
   readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hd36cc01afe29005f: (a: number, b: number) => void;
-  readonly closure1558_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure3009_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure1578_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure3027_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_thread_destroy: (a?: number, b?: number, c?: number) => void;
   readonly __wbindgen_start: (a: number) => void;
 }

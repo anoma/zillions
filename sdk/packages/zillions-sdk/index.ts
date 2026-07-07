@@ -11,6 +11,8 @@ import { loadProverParams } from "./params";
 // Keys and requests stay behind subpaths: their symbol names collide with
 // the wallet's (e.g. both export a Pczt).
 export * from "./wasm/wallet/zillions_sdk_wallet.js";
+export { syncWallet } from "./sync";
+export type { SyncOptions, SyncProgress } from "./sync";
 
 export interface InitSdkOptions {
   /** Threads for the wasm worker pool. Defaults to navigator.hardwareConcurrency. */

@@ -1,3 +1,4 @@
+import type { SyncProgress } from "@zillions/sdk";
 import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useWallet } from "../hooks/useWallet";
@@ -5,11 +6,14 @@ import { Tooltip } from "./Tooltip";
 
 export function SyncIndicator() {
   const [isSyncing, setIsSyncing] = useState(true);
+  const [progress, setProgress] = useState<SyncProgress>();
   const wallet = useWallet();
 
   useEffect(() => {
     // TODO allow to call sync from other components, this is fundamentally important for transfers
+    const unsubscribe = wallet.subscribeSyncProgress(setProgress);
     wallet.sync().then(() => setIsSyncing(false));
+    return unsubscribe;
   }, [wallet]);
 
   return (
@@ -36,8 +40,9 @@ export function SyncIndicator() {
         <div className="px-4 space-y-3 w-full text-xs font-medium">
           {isSyncing ? (
             <div className="font-normal">
-              Syncing your shielded assets now. Balances will update in a few
-              seconds.
+              {progress
+                ? `Syncing your shielded assets: ${progress.percent.toFixed(0)}% (${progress.remainingBlocks.toLocaleString()} blocks left)`
+                : "Syncing your shielded assets now. Balances will update in a few seconds."}
             </div>
           ) : (
             <div>Shielded sync completed</div>

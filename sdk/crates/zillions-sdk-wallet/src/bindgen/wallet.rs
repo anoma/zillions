@@ -265,47 +265,58 @@ impl WebWallet {
             .map(|id| *id)
     }
 
+    /// Sync stage: fetch the note commitment subtree roots from the
+    /// lightwalletd server and store them in the wallet. Call once before the
+    /// first `sync_scan_range` of a session.
+    pub async fn sync_update_subtree_roots(&self) -> Result<(), Error> {
+        let inner = self.inner.clone();
+        run_in_sync_worker("sync_subtree_roots", move || async move {
+            inner
+                .sync_update_subtree_roots()
+                .await
+                .map_err(|e| e.to_string())
+        })
+        .await
+    }
+
+    /// Sync stage: fetch the current chain tip from the lightwalletd server
+    /// and update the wallet's scan queue. Returns the tip height.
+    pub async fn sync_update_chain_tip(&self) -> Result<u32, Error> {
+        self.inner.sync_update_chain_tip().await
+    }
+
+    /// Sync stage: refresh the wallet's view of transparent UTXOs for all
+    /// accounts. Run before shielded scanning.
+    pub async fn sync_refresh_utxos(&self) -> Result<(), Error> {
+        self.inner.sync_refresh_utxos().await
+    }
+
+    /// Sync stage: download and scan the compact blocks in `[start, end)`.
     ///
-    /// Start a background sync task which will fetch and scan blocks from the connected lighwalletd server
+    /// The CPU-heavy trial decryption runs in a dedicated webworker (plus the
+    /// rayon pool), so the main thread stays responsive. Wallet methods may
+    /// temporarily block while the wallet is written to during the scan.
     ///
-    /// IMPORTANT: This will spawn a new webworker which will handle the sync task. The sync task will continue to run in the background until the sync process is complete.
-    /// During this time the main thread will not block but certain wallet methods may temporarily block while the wallet is being written to during the sync.
-    ///
-    pub async fn sync(&self) -> Result<(), Error> {
-        assert!(!thread::is_web_worker_thread());
+    /// Callers must re-request `suggest_scan_ranges` after every call:
+    /// scanning can reprioritize ranges, or rewind the wallet after a reorg.
+    pub async fn sync_scan_range(&self, start: u32, end: u32) -> Result<(), Error> {
+        let inner = self.inner.clone();
+        run_in_sync_worker("sync_scan_range", move || async move {
+            inner
+                .sync_scan_range(start, end)
+                .await
+                .map_err(|e| e.to_string())
+        })
+        .await
+    }
 
-        let db = self.inner.clone();
-
-        let sync_handler = thread::Builder::new()
-            .name("sync".to_string())
-            .spawn_async(|| async {
-                assert!(thread::is_web_worker_thread());
-                tracing::debug!(
-                    "Current num threads (wasm_thread) {}",
-                    rayon::current_num_threads()
-                );
-
-                let db = db;
-                // Convert error to String since Error isn't Send (contains JsValue)
-                db.sync().await.map_err(|e| e.to_string())
-            })
-            .unwrap_throw()
-            .join_async();
-
-        // sync_handler.await returns Result<Result<(), String>, Box<dyn Any + Send>>
-        // The outer Result is for the join (thread panics), inner is sync result
-        match sync_handler.await {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(err_string)) => {
-                tracing::warn!("Sync error (will be retried by caller): {}", err_string);
-                Err(Error::Sync(err_string))
-            }
-            Err(panic_error) => {
-                let msg = format!("Sync thread panicked: {:?}", panic_error);
-                tracing::error!("{}", msg);
-                Err(Error::Sync(msg))
-            }
-        }
+    /// Ranges of blocks the wallet wants scanned, most urgent first, as
+    /// `[start, end]` pairs (end exclusive). Empty means fully synced as of
+    /// the last `sync_update_chain_tip`.
+    pub async fn suggest_scan_ranges(&self) -> Result<JsValue, Error> {
+        let ranges = self.inner.suggest_scan_ranges().await?;
+        let pairs: Vec<(u32, u32)> = ranges.iter().map(|r| (r.0, r.1)).collect();
+        serde_wasm_bindgen::to_value(&pairs).map_err(|e| Error::Generic(e.to_string()))
     }
 
     pub async fn get_wallet_summary(&self) -> Result<Option<WalletSummary>, Error> {
@@ -693,13 +704,74 @@ impl WebWallet {
     }
 }
 
+/// Job queue for the dedicated sync worker: heavy sync stages all run in one
+/// long-lived webworker, spawned on first use, so workers (and their wasm
+/// re-initialization) are not respawned per scanned batch.
+type SyncJob = Box<
+    dyn FnOnce() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'static>>
+        + Send
+        + 'static,
+>;
+
+static SYNC_JOBS: std::sync::OnceLock<tokio::sync::mpsc::UnboundedSender<SyncJob>> =
+    std::sync::OnceLock::new();
+
+fn sync_worker() -> &'static tokio::sync::mpsc::UnboundedSender<SyncJob> {
+    SYNC_JOBS.get_or_init(|| {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SyncJob>();
+        thread::Builder::new()
+            .name("sync".to_string())
+            .spawn_async(move || async move {
+                assert!(thread::is_web_worker_thread());
+                while let Some(job) = rx.recv().await {
+                    job().await;
+                }
+            })
+            .unwrap_throw();
+        tx
+    })
+}
+
+/// Runs a CPU-heavy sync stage on the dedicated sync worker so the main
+/// thread stays responsive. The closure returns String errors because
+/// `Error` contains a JsValue and is not Send.
+async fn run_in_sync_worker<R, F, Fut>(name: &str, f: F) -> Result<R, Error>
+where
+    R: Send + 'static,
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: std::future::Future<Output = Result<R, String>> + 'static,
+{
+    let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+    let job: SyncJob = Box::new(move || {
+        Box::pin(async move {
+            let _ = reply_tx.send(f().await);
+        })
+    });
+    sync_worker()
+        .send(job)
+        .map_err(|_| Error::Sync(format!("{name}: sync worker is gone (did it panic?)")))?;
+
+    match reply_rx.await {
+        Ok(Ok(r)) => Ok(r),
+        Ok(Err(err_string)) => {
+            tracing::warn!("{name} error (may be retried by caller): {err_string}");
+            Err(Error::Sync(err_string))
+        }
+        Err(_) => Err(Error::Sync(format!(
+            "{name}: sync worker dropped the job (did it panic?)"
+        ))),
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[wasm_bindgen(inspectable)]
 pub struct WalletSummary {
     account_balances: Vec<(u32, AccountBalance)>,
     pub chain_tip_height: u32,
     pub fully_scanned_height: u32,
-    // scan_progress: Option<Ratio<u64>>,
+    /// Overall scan progress as a ratio; percent = numerator / denominator.
+    pub scan_progress_numerator: u64,
+    pub scan_progress_denominator: u64,
     pub next_sapling_subtree_index: u64,
     pub next_orchard_subtree_index: u64,
 }
@@ -748,10 +820,14 @@ where
 
         account_balances.sort_by(|a, b| a.0.cmp(&b.0));
 
+        let scan_progress = summary.progress().scan();
+
         WalletSummary {
             account_balances,
             chain_tip_height: summary.chain_tip_height().into(),
             fully_scanned_height: summary.fully_scanned_height().into(),
+            scan_progress_numerator: *scan_progress.numerator(),
+            scan_progress_denominator: *scan_progress.denominator(),
             next_sapling_subtree_index: summary.next_sapling_subtree_index(),
             next_orchard_subtree_index: summary.next_orchard_subtree_index(),
         }

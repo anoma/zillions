@@ -5,9 +5,7 @@ __wbg_star0.__setWalletUrl(import.meta.url);
 
 let wasm;
 
-const cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
-
-if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); };
+let WASM_VECTOR_LEN = 0;
 
 let cachedUint8ArrayMemory0 = null;
 
@@ -17,32 +15,6 @@ function getUint8ArrayMemory0() {
     }
     return cachedUint8ArrayMemory0;
 }
-
-function getStringFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return cachedTextDecoder.decode(getUint8ArrayMemory0().slice(ptr, ptr + len));
-}
-
-function addToExternrefTable0(obj) {
-    const idx = wasm.__externref_table_alloc();
-    wasm.__wbindgen_export_3.set(idx, obj);
-    return idx;
-}
-
-function handleError(f, args) {
-    try {
-        return f.apply(this, args);
-    } catch (e) {
-        const idx = addToExternrefTable0(e);
-        wasm.__wbindgen_exn_store(idx);
-    }
-}
-
-function isLikeNone(x) {
-    return x === undefined || x === null;
-}
-
-let WASM_VECTOR_LEN = 0;
 
 const cachedTextEncoder = (typeof TextEncoder !== 'undefined' ? new TextEncoder('utf-8') : { encode: () => { throw Error('TextEncoder not available') } } );
 
@@ -101,6 +73,34 @@ function getDataViewMemory0() {
         cachedDataViewMemory0 = new DataView(wasm.memory.buffer);
     }
     return cachedDataViewMemory0;
+}
+
+const cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
+
+if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); };
+
+function getStringFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return cachedTextDecoder.decode(getUint8ArrayMemory0().slice(ptr, ptr + len));
+}
+
+function addToExternrefTable0(obj) {
+    const idx = wasm.__externref_table_alloc();
+    wasm.__wbindgen_export_5.set(idx, obj);
+    return idx;
+}
+
+function handleError(f, args) {
+    try {
+        return f.apply(this, args);
+    } catch (e) {
+        const idx = addToExternrefTable0(e);
+        wasm.__wbindgen_exn_store(idx);
+    }
+}
+
+function isLikeNone(x) {
+    return x === undefined || x === null;
 }
 
 const CLOSURE_DTORS = (typeof FinalizationRegistry === 'undefined')
@@ -212,7 +212,7 @@ function passArray8ToWasm0(arg, malloc) {
 }
 
 function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_3.get(idx);
+    const value = wasm.__wbindgen_export_5.get(idx);
     wasm.__externref_table_dealloc(idx);
     return value;
 }
@@ -361,7 +361,7 @@ export function wbg_rayon_start_worker(receiver) {
 }
 
 function __wbg_adapter_62(arg0, arg1, arg2) {
-    wasm.closure1491_externref_shim(arg0, arg1, arg2);
+    wasm.closure1511_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_67(arg0, arg1) {
@@ -369,11 +369,11 @@ function __wbg_adapter_67(arg0, arg1) {
 }
 
 function __wbg_adapter_70(arg0, arg1, arg2) {
-    wasm.closure1558_externref_shim(arg0, arg1, arg2);
+    wasm.closure1578_externref_shim(arg0, arg1, arg2);
 }
 
-function __wbg_adapter_411(arg0, arg1, arg2, arg3) {
-    wasm.closure3009_externref_shim(arg0, arg1, arg2, arg3);
+function __wbg_adapter_421(arg0, arg1, arg2, arg3) {
+    wasm.closure3027_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 /**
@@ -1385,6 +1385,8 @@ export class WalletSummary {
         return {
             chain_tip_height: this.chain_tip_height,
             fully_scanned_height: this.fully_scanned_height,
+            scan_progress_numerator: this.scan_progress_numerator,
+            scan_progress_denominator: this.scan_progress_denominator,
             next_sapling_subtree_index: this.next_sapling_subtree_index,
             next_orchard_subtree_index: this.next_orchard_subtree_index,
             account_balances: this.account_balances,
@@ -1431,6 +1433,34 @@ export class WalletSummary {
      */
     set fully_scanned_height(arg0) {
         wasm.__wbg_set_walletsummary_fully_scanned_height(this.__wbg_ptr, arg0);
+    }
+    /**
+     * Overall scan progress as a ratio; percent = numerator / denominator.
+     * @returns {bigint}
+     */
+    get scan_progress_numerator() {
+        const ret = wasm.__wbg_get_walletsummary_scan_progress_numerator(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * Overall scan progress as a ratio; percent = numerator / denominator.
+     * @param {bigint} arg0
+     */
+    set scan_progress_numerator(arg0) {
+        wasm.__wbg_set_walletsummary_scan_progress_numerator(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get scan_progress_denominator() {
+        const ret = wasm.__wbg_get_walletsummary_scan_progress_denominator(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * @param {bigint} arg0
+     */
+    set scan_progress_denominator(arg0) {
+        wasm.__wbg_set_walletsummary_scan_progress_denominator(this.__wbg_ptr, arg0);
     }
     /**
      * @returns {bigint}
@@ -1673,15 +1703,58 @@ export class WebWallet {
         return ret;
     }
     /**
-     *
-     * Start a background sync task which will fetch and scan blocks from the connected lighwalletd server
-     *
-     * IMPORTANT: This will spawn a new webworker which will handle the sync task. The sync task will continue to run in the background until the sync process is complete.
-     * During this time the main thread will not block but certain wallet methods may temporarily block while the wallet is being written to during the sync.
+     * Sync stage: fetch the note commitment subtree roots from the
+     * lightwalletd server and store them in the wallet. Call once before the
+     * first `sync_scan_range` of a session.
      * @returns {Promise<void>}
      */
-    sync() {
-        const ret = wasm.webwallet_sync(this.__wbg_ptr);
+    sync_update_subtree_roots() {
+        const ret = wasm.webwallet_sync_update_subtree_roots(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Sync stage: fetch the current chain tip from the lightwalletd server
+     * and update the wallet's scan queue. Returns the tip height.
+     * @returns {Promise<number>}
+     */
+    sync_update_chain_tip() {
+        const ret = wasm.webwallet_sync_update_chain_tip(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Sync stage: refresh the wallet's view of transparent UTXOs for all
+     * accounts. Run before shielded scanning.
+     * @returns {Promise<void>}
+     */
+    sync_refresh_utxos() {
+        const ret = wasm.webwallet_sync_refresh_utxos(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * Sync stage: download and scan the compact blocks in `[start, end)`.
+     *
+     * The CPU-heavy trial decryption runs in a dedicated webworker (plus the
+     * rayon pool), so the main thread stays responsive. Wallet methods may
+     * temporarily block while the wallet is written to during the scan.
+     *
+     * Callers must re-request `suggest_scan_ranges` after every call:
+     * scanning can reprioritize ranges, or rewind the wallet after a reorg.
+     * @param {number} start
+     * @param {number} end
+     * @returns {Promise<void>}
+     */
+    sync_scan_range(start, end) {
+        const ret = wasm.webwallet_sync_scan_range(this.__wbg_ptr, start, end);
+        return ret;
+    }
+    /**
+     * Ranges of blocks the wallet wants scanned, most urgent first, as
+     * `[start, end]` pairs (end exclusive). Empty means fully synced as of
+     * the last `sync_update_chain_tip`.
+     * @returns {Promise<any>}
+     */
+    suggest_scan_ranges() {
+        const ret = wasm.webwallet_suggest_scan_ranges(this.__wbg_ptr);
         return ret;
     }
     /**
@@ -2079,6 +2152,13 @@ async function __wbg_load(module, imports) {
 function __wbg_get_imports() {
     const imports = {};
     imports.wbg = {};
+    imports.wbg.__wbg_String_8f0eb39a4a4c2f66 = function(arg0, arg1) {
+        const ret = String(arg1);
+        const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+        getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+    };
     imports.wbg.__wbg_abort_410ec47a64ac6117 = function(arg0, arg1) {
         arg0.abort(arg1);
     };
@@ -2356,7 +2436,7 @@ function __wbg_get_imports() {
                 const a = state0.a;
                 state0.a = 0;
                 try {
-                    return __wbg_adapter_411(a, state0.b, arg0, arg1);
+                    return __wbg_adapter_421(a, state0.b, arg0, arg1);
                 } finally {
                     state0.a = a;
                 }
@@ -2706,24 +2786,24 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper3735 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1492, __wbg_adapter_62);
-        return ret;
-    };
-    imports.wbg.__wbindgen_closure_wrapper3737 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1492, __wbg_adapter_62);
+    imports.wbg.__wbindgen_closure_wrapper3771 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 1512, __wbg_adapter_62);
         return ret;
     };
     imports.wbg.__wbindgen_closure_wrapper3773 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1506, __wbg_adapter_67);
+        const ret = makeMutClosure(arg0, arg1, 1512, __wbg_adapter_62);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper3911 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1559, __wbg_adapter_70);
+    imports.wbg.__wbindgen_closure_wrapper3809 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 1526, __wbg_adapter_67);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper3913 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1559, __wbg_adapter_70);
+    imports.wbg.__wbindgen_closure_wrapper3947 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 1579, __wbg_adapter_70);
+        return ret;
+    };
+    imports.wbg.__wbindgen_closure_wrapper3949 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 1579, __wbg_adapter_70);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
@@ -2742,7 +2822,7 @@ function __wbg_get_imports() {
         return ret;
     };
     imports.wbg.__wbindgen_init_externref_table = function() {
-        const table = wasm.__wbindgen_export_3;
+        const table = wasm.__wbindgen_export_5;
         const offset = table.grow(4);
         table.set(0, undefined);
         table.set(offset + 0, undefined);

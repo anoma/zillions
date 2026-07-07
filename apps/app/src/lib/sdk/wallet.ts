@@ -1,7 +1,9 @@
+import type { SyncProgress } from "@zillions/sdk";
 import {
   awaitProverParams,
   Pczt,
   SeedFingerprint,
+  syncWallet,
   TransactionHistoryResponse,
   WalletSummary,
   WebWallet,
@@ -116,9 +118,26 @@ export class SdkWallet {
     this.accountId = accountId;
   }
 
+  private syncProgressListeners = new Set<(progress: SyncProgress) => void>();
+
+  /** Subscribe to per-batch sync progress; returns an unsubscribe function. */
+  subscribeSyncProgress(listener: (progress: SyncProgress) => void) {
+    this.syncProgressListeners.add(listener);
+    return () => {
+      this.syncProgressListeners.delete(listener);
+    };
+  }
+
   sync = dedupe(async () => {
-    await this.wallet.sync();
-    this.updateWalletCache();
+    await syncWallet(this.wallet, {
+      onProgress: (progress) =>
+        this.syncProgressListeners.forEach((listener) => listener(progress)),
+      // Checkpoints persist scan progress across page refreshes: the wallet
+      // is restored from these bytes and resumes where it left off.
+      onCheckpoint: async (bytes) => {
+        await db.set("wallets", this.id, bytes);
+      },
+    });
   });
 
   private updateWalletCache = dedupe(async () => {
