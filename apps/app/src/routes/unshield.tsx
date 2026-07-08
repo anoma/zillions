@@ -36,8 +36,9 @@ function UnshieldRoute() {
     amount,
   );
 
-  // TODO support for sapling
-  const availableBalance = balance.data?.orchardBalance ?? 0n;
+  const availableBalance = balance.data
+    ? balance.data.orchardBalance + balance.data.saplingBalance
+    : 0n;
 
   const onSubmit = async () => {
     try {

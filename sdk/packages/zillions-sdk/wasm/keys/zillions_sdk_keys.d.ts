@@ -312,8 +312,8 @@ export interface InitOutput {
   readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __externref_table_dealloc: (a: number) => void;
-  readonly closure58_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure280_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure60_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure282_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_thread_destroy: (a?: number, b?: number, c?: number) => void;
   readonly __wbindgen_start: (a: number) => void;
 }

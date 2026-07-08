@@ -288,11 +288,11 @@ export function pczt_sign(network, pczt, usk, seed_fp) {
 }
 
 function __wbg_adapter_58(arg0, arg1, arg2) {
-    wasm.closure58_externref_shim(arg0, arg1, arg2);
+    wasm.closure60_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_174(arg0, arg1, arg2, arg3) {
-    wasm.closure280_externref_shim(arg0, arg1, arg2, arg3);
+    wasm.closure282_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 const PcztFinalization = (typeof FinalizationRegistry === 'undefined')
@@ -1156,12 +1156,12 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper240 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 59, __wbg_adapter_58);
+    imports.wbg.__wbindgen_closure_wrapper245 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 61, __wbg_adapter_58);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper242 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 59, __wbg_adapter_58);
+    imports.wbg.__wbindgen_closure_wrapper247 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 61, __wbg_adapter_58);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {
