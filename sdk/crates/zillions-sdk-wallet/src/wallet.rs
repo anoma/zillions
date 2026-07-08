@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::num::NonZeroUsize;
 
 use bip0039::{English, Mnemonic};
@@ -358,58 +358,67 @@ where
     /// Sync stage: refresh the wallet's view of transparent UTXOs for all
     /// accounts. Run before shielded scanning so UTXOs between the last
     /// scanned height and the chain tip are discovered.
+    ///
+    /// Receivers are derived within a BIP44 gap-limit window, and a
+    /// discovered UTXO can widen that window, so each account is re-queried
+    /// with the newly derived addresses until none appear.
     pub async fn sync_refresh_utxos(&self) -> Result<(), Error> {
         let account_ids = self.db.read().await.get_account_ids()?;
         for account_id in account_ids {
-            let (start_height, addresses) = {
-                let db = self.db.read().await;
-                let start_height = db.utxo_query_height(account_id)?;
-                let addresses: Vec<String> = db
+            let start_height = self.db.read().await.utxo_query_height(account_id)?;
+            let mut queried: HashSet<String> = HashSet::new();
+            loop {
+                let addresses: Vec<String> = self
+                    .db
+                    .read()
+                    .await
                     .get_transparent_receivers(account_id, true, true)?
                     .into_keys()
                     .map(|addr| addr.encode(&self.network))
+                    .filter(|addr| !queried.contains(addr))
                     .collect();
-                (start_height, addresses)
-            };
-            if addresses.is_empty() {
-                continue;
-            }
+                if addresses.is_empty() {
+                    break;
+                }
+                queried.extend(addresses.iter().cloned());
 
-            let mut client = self.client.clone();
-            let utxos = client
-                .get_address_utxos_stream(service::GetAddressUtxosArg {
-                    addresses,
-                    start_height: start_height.into(),
-                    max_entries: 0,
-                })
-                .await?
-                .into_inner()
-                .try_collect::<Vec<_>>()
-                .await?;
+                let mut client = self.client.clone();
+                let utxos = client
+                    .get_address_utxos_stream(service::GetAddressUtxosArg {
+                        addresses,
+                        start_height: start_height.into(),
+                        max_entries: 0,
+                    })
+                    .await?
+                    .into_inner()
+                    .try_collect::<Vec<_>>()
+                    .await?;
 
-            let mut db = self.db.write().await;
-            for reply in utxos {
-                let invalid = |what: &str| Error::Generic(format!("invalid {what} from server"));
-                let output = WalletTransparentOutput::from_parts(
-                    OutPoint::new(
-                        reply.txid[..].try_into().map_err(|_| invalid("txid"))?,
-                        reply.index.try_into().map_err(|_| invalid("utxo index"))?,
-                    ),
-                    TxOut::new(
-                        Zatoshis::from_nonnegative_i64(reply.value_zat)
-                            .map_err(|_| invalid("utxo value"))?,
-                        Script(script::Code(reply.script)),
-                    ),
-                    Some(
-                        BlockHeight::try_from(reply.height)
-                            .map_err(|_| invalid("utxo height"))?,
-                    ),
-                    Some(account_id),
-                    None,
-                    None,
-                )
-                .ok_or_else(|| invalid("utxo script"))?;
-                db.put_received_transparent_utxo(&output)?;
+                let mut db = self.db.write().await;
+                for reply in utxos {
+                    let invalid =
+                        |what: &str| Error::Generic(format!("invalid {what} from server"));
+                    let output = WalletTransparentOutput::from_parts(
+                        OutPoint::new(
+                            reply.txid[..].try_into().map_err(|_| invalid("txid"))?,
+                            reply.index.try_into().map_err(|_| invalid("utxo index"))?,
+                        ),
+                        TxOut::new(
+                            Zatoshis::from_nonnegative_i64(reply.value_zat)
+                                .map_err(|_| invalid("utxo value"))?,
+                            Script(script::Code(reply.script)),
+                        ),
+                        Some(
+                            BlockHeight::try_from(reply.height)
+                                .map_err(|_| invalid("utxo height"))?,
+                        ),
+                        Some(account_id),
+                        None,
+                        None,
+                    )
+                    .ok_or_else(|| invalid("utxo script"))?;
+                    db.put_received_transparent_utxo(&output)?;
+                }
             }
         }
         Ok(())

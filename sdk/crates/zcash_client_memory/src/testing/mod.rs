@@ -24,9 +24,11 @@ use crate::{Account, AccountId, Error, MemBlockCache, MemoryWalletDb, SentNoteId
 
 #[cfg(feature = "transparent-inputs")]
 use zcash_client_backend::{
-    data_api::{testing::transparent::GapLimits, wallet::TargetHeight, InputSource, WalletRead},
+    data_api::{wallet::TargetHeight, InputSource, WalletRead},
     wallet::WalletTransparentOutput,
 };
+#[cfg(feature = "transparent-inputs")]
+use zcash_keys::keys::transparent::gap_limits::GapLimits;
 
 pub mod pool;
 
@@ -153,6 +155,14 @@ where
                         #[cfg(feature = "transparent-inputs")]
                         None,
                     ),
+                    #[cfg(feature = "transparent-inputs")]
+                    Recipient::InternalTransparent {
+                        recipient_address, ..
+                    } => OutputOfSentTx::from_parts(
+                        note.value,
+                        Some(Address::from(recipient_address)),
+                        None,
+                    ),
                 })
             })
             .collect::<Result<_, Error>>()
@@ -168,7 +178,7 @@ where
         &self,
         outpoint: &::transparent::bundle::OutPoint,
         _spendable_as_of: Option<TargetHeight>,
-    ) -> Result<Option<WalletTransparentOutput>, <Self as InputSource>::Error> {
+    ) -> Result<Option<WalletTransparentOutput<AccountId>>, <Self as InputSource>::Error> {
         // FIXME: perform spendability check according to `_spendable_as_of`
         Ok(self
             .transparent_received_outputs
