@@ -1163,6 +1163,35 @@ Instead derive the ufvk in the calling code and import it using `import_account_
                 self.mark_transparent_output_spent(&sent_tx.tx().txid(), utxo_outpoint)?;
             }
 
+            // Record transparent outputs paid to the wallet's own addresses (e.g. an
+            // unshield) so they count towards balances before the tx is mined.
+            #[cfg(feature = "transparent-inputs")]
+            for (output_index, txout) in sent_tx
+                .tx()
+                .transparent_bundle()
+                .iter()
+                .flat_map(|b| b.vout.iter())
+                .enumerate()
+            {
+                if let Some(address) = txout.recipient_address() {
+                    if let Some(account_id) = self.find_account_for_transparent_address(&address)? {
+                        let wallet_transparent_output = WalletTransparentOutput::from_parts(
+                            OutPoint::new(
+                                sent_tx.tx().txid().into(),
+                                u32::try_from(output_index).unwrap(),
+                            ),
+                            txout.clone(),
+                            None,
+                            Some(account_id),
+                            None,
+                            None,
+                        )
+                        .unwrap();
+                        self.put_transparent_output(&wallet_transparent_output, &account_id, false)?;
+                    }
+                }
+            }
+
             for output in sent_tx.outputs() {
                 self.sent_notes.insert_sent_output(sent_tx, output);
 
