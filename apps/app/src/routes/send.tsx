@@ -78,8 +78,7 @@ function SendRoute() {
     if (isTransparentFrom) {
       return balance.data.unshieldedBalance;
     }
-    // TODO support for sapling
-    return balance.data.orchardBalance;
+    return balance.data.orchardBalance + balance.data.saplingBalance;
   })();
 
   const isTransparentTo = isTransparentAddress(to);

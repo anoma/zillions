@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::{SeedFingerprint, UnifiedSpendingKey};
 use pczt::roles::signer::Signer;
+use pczt::roles::updater::Updater;
 use pczt::roles::verifier::Verifier;
 use std::collections::BTreeMap;
 use std::convert::Infallible;
@@ -125,6 +126,50 @@ pub async fn pczt_sign_inner(
         })
         .map_err(|e| Error::PcztSign(format!("Invalid PCZT: {:?}", e)))?
         .finish();
+
+    // Sapling proving needs a proof generation key on each spend. Only the
+    // spending key holder can derive it, so attach it here for our spends;
+    // dummy spends already carry one.
+    let sapling_indices: Vec<usize> = keys
+        .values()
+        .flatten()
+        .filter_map(|keyref| match keyref {
+            KeyRef::Sapling { index } => Some(*index),
+            _ => None,
+        })
+        .collect();
+    let pczt = if sapling_indices.is_empty() {
+        pczt
+    } else {
+        let proof_gen_key = usk.sapling().expsk.proof_generation_key();
+        Updater::new(pczt)
+            .update_sapling_with(|mut updater| {
+                let needs_key: Vec<usize> = updater
+                    .bundle()
+                    .spends()
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, spend)| {
+                        sapling_indices.contains(index) && spend.proof_generation_key().is_none()
+                    })
+                    .map(|(index, _)| index)
+                    .collect();
+                for index in needs_key {
+                    updater.update_spend_with(index, |mut spend_updater| {
+                        spend_updater.set_proof_generation_key(proof_gen_key.clone())
+                    })?;
+                }
+                Ok(())
+            })
+            .map_err(|e| {
+                Error::PcztSign(format!(
+                    "Failed to add Sapling proof generation key: {:?}",
+                    e
+                ))
+            })?
+            .finish()
+    };
+
     let mut signer = Signer::new(pczt).unwrap();
     //.map_err(|e| anyhow!("Failed to initialize Signer: {:?}", e))?;
     for (_, spends) in keys {
