@@ -99,7 +99,7 @@ function UnshieldRoute() {
           type="text"
           placeholder="0"
           autoComplete="off"
-          className="mt-2 w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
+          className="mt-2 h-30 w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
           value={amountString}
           onFocus={() => setValidationMessage("")}
           onChange={(e) => {

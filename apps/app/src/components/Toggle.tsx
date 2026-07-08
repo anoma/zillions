@@ -30,7 +30,7 @@ export const Toggle = ({
       disabled={disabled}
       onClick={handleClick}
       className={twMerge(
-        "@container group",
+        "@container group block",
         "relative h-7 w-11 p-0.5 rounded-full cursor-pointer",
         "border border-gray-300",
         "transition-colors duration-300 ease-out",

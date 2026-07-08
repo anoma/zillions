@@ -79,7 +79,7 @@ function ShieldRoute() {
           Shields all transparent funds
         </div>
 
-        <div className="mt-2 w-full text-center text-8xl leading-none font-medium">
+        <div className="mt-2 h-30 w-full flex items-center justify-center text-center text-8xl leading-none font-medium">
           {zatoshiToZec(availableBalance)}
         </div>
 

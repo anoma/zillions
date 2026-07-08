@@ -105,15 +105,13 @@ function SendRoute() {
       >
         <label>
           <div className="text-xs font-medium mb-1">From</div>
-          <div>
-            <ShieldedTransparentToggle
-              isTransparent={isTransparentFrom}
-              setIsTransparent={(value) => {
-                setIsTransparentFrom(value);
-                setValidationMessage("");
-              }}
-            />
-          </div>
+          <ShieldedTransparentToggle
+            isTransparent={isTransparentFrom}
+            setIsTransparent={(value) => {
+              setIsTransparentFrom(value);
+              setValidationMessage("");
+            }}
+          />
         </label>
 
         <div className="mt-4 text-xs font-medium text-center">
@@ -125,7 +123,7 @@ function SendRoute() {
           type="text"
           placeholder="0"
           autoComplete="off"
-          className="mt-2 w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
+          className="mt-2 h-30 w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
           value={amountString}
           onFocus={() => setValidationMessage("")}
           onChange={(e) => {
@@ -141,7 +139,7 @@ function SendRoute() {
             type="text"
             placeholder="Enter Zcash address..."
             className={twMerge(
-              "w-full px-4 py-2 font-medium rounded-lg border border-gray-300 outline-none placeholder:text-black focus:placeholder:text-transparent",
+              "h-11 w-full px-4 font-medium rounded-lg border border-gray-300 outline-none placeholder:text-black focus:placeholder:text-transparent",
               isTransparentTo && "border-black",
               isShieldedTo && "border-gold",
             )}
