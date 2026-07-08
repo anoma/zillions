@@ -39,14 +39,12 @@ export function TotalBalance() {
     return <PageError>{String(balance.error)}</PageError>;
   }
 
-  const transparentBalance = balance.data.unshieldedBalance;
   const shieldedBalance =
-    balance.data.orchardBalance +
-    balance.data.saplingBalance +
-    balance.data.pendingChange +
-    balance.data.pendingSpendable;
+    balance.data.orchardBalance + balance.data.saplingBalance;
   const pendingBalance =
     balance.data.pendingChange + balance.data.pendingSpendable;
+  const transparentBalance = balance.data.unshieldedBalance;
+  const totalBalance = shieldedBalance + transparentBalance + pendingBalance;
 
   return (
     <div className="p-10 flex max-lg:flex-col lg:items-center justify-between gap-10 font-medium border-b border-gray-300 overflow-auto">
@@ -54,11 +52,11 @@ export function TotalBalance() {
         <Label>Total Balance in Zillions</Label>
         <div className="my-5 lg:my-10">
           <Amount className="text-5xl xl:text-7xl">
-            {zatoshiToZec(shieldedBalance + transparentBalance)}
+            {zatoshiToZec(totalBalance)}
           </Amount>
           {pendingBalance > 0n && (
             <div className="text-xs font-normal mt-1">
-              Pending: {zatoshiToZec(pendingBalance)} ZEC
+              {zatoshiToZec(pendingBalance)} ZEC pending (included)
             </div>
           )}
         </div>
