@@ -3,6 +3,11 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+#[cfg(feature = "transparent-inputs")]
+use std::collections::HashSet;
+#[cfg(feature = "transparent-inputs")]
+use zcash_keys::keys::transparent::gap_limits::GapLimits;
+
 use subtle::ConditionallySelectable;
 use transparent::address::TransparentAddress;
 #[cfg(feature = "transparent-inputs")]
@@ -124,56 +129,6 @@ impl Accounts {
     /// Gets the account ids of all accounts
     pub(crate) fn account_ids(&self) -> impl Iterator<Item = &AccountId> {
         self.accounts.keys()
-    }
-
-    #[cfg(feature = "transparent-inputs")]
-    pub(crate) fn find_account_for_transparent_address(
-        &self,
-        address: &TransparentAddress,
-    ) -> Result<Option<AccountId>, Error> {
-        // Look for transparent receivers generated as part of a Unified Address
-        if let Some(id) = self
-            .accounts
-            .iter()
-            .find(|(_, account)| {
-                account
-                    .addresses()
-                    .iter()
-                    .any(|(_, unified_address)| unified_address.transparent() == Some(address))
-            })
-            .map(|(id, _)| *id)
-        {
-            Ok(Some(id))
-        } else {
-            // then look at ephemeral addresses
-            if let Some(id) = self.find_account_for_ephemeral_address(address)? {
-                Ok(Some(id))
-            } else {
-                for (account_id, account) in self.accounts.iter() {
-                    if account.get_legacy_transparent_address()?.is_some() {
-                        return Ok(Some(*account_id));
-                    }
-                }
-                Ok(None)
-            }
-        }
-    }
-
-    #[cfg(feature = "transparent-inputs")]
-    pub(crate) fn find_account_for_ephemeral_address(
-        &self,
-        address: &TransparentAddress,
-    ) -> Result<Option<AccountId>, Error> {
-        for (account_id, account) in self.accounts.iter() {
-            let contains = account
-                .ephemeral_addresses()?
-                .iter()
-                .any(|(eph_addr, _)| eph_addr == address);
-            if contains {
-                return Ok(Some(*account_id));
-            }
-        }
-        Ok(None)
     }
 
     #[cfg(feature = "transparent-inputs")]
@@ -361,16 +316,6 @@ impl Account {
         self.account_id
     }
 
-    #[cfg(feature = "transparent-inputs")]
-    pub(crate) fn get_legacy_transparent_address(
-        &self,
-    ) -> Result<Option<(TransparentAddress, NonHardenedChildIndex)>, Error> {
-        Ok(self
-            .uivk()
-            .transparent()
-            .as_ref()
-            .map(|tivk| tivk.default_address()))
-    }
 }
 #[cfg(feature = "transparent-inputs")]
 impl Account {
@@ -466,41 +411,35 @@ impl Account {
         Ok(Vec::new())
     }
 
-    /// Finds the key scope for a given transparent address by checking:
-    /// 1. Ephemeral addresses (EPHEMERAL scope)
-    /// 2. Unified addresses (EXTERNAL scope)
-    /// 3. Legacy transparent address (EXTERNAL scope)
+    /// Derives the addresses for `scope` within the BIP44 gap-limit window:
+    /// every child index up to the highest index whose address appears in
+    /// `used`, plus the scope's gap limit beyond it. Returns an empty list
+    /// for accounts without a transparent key and for unsupported scopes.
     #[cfg(feature = "transparent-inputs")]
-    pub(crate) fn find_key_scope_for_transparent_address(
+    pub(crate) fn transparent_addresses_within_gap(
         &self,
-        address: &TransparentAddress,
-    ) -> Option<TransparentKeyScope> {
-        // Check ephemeral addresses first
-        if self
-            .ephemeral_addresses
-            .values()
-            .any(|eph_addr| eph_addr.address == *address)
-        {
-            return Some(TransparentKeyScope::EPHEMERAL);
+        scope: TransparentKeyScope,
+        used: &HashSet<TransparentAddress>,
+    ) -> Result<Vec<(TransparentAddress, NonHardenedChildIndex)>, Error> {
+        let Some(account_pubkey) = self.viewing_key.transparent() else {
+            return Ok(Vec::new());
+        };
+        let gap_limits = GapLimits::default();
+        if scope == TransparentKeyScope::EXTERNAL {
+            addresses_within_gap(
+                &account_pubkey.derive_external_ivk()?,
+                gap_limits.external(),
+                used,
+            )
+        } else if scope == TransparentKeyScope::INTERNAL {
+            addresses_within_gap(
+                &account_pubkey.derive_internal_ivk()?,
+                gap_limits.internal(),
+                used,
+            )
+        } else {
+            Ok(Vec::new())
         }
-
-        // Check unified addresses (EXTERNAL scope)
-        if self
-            .addresses
-            .values()
-            .any(|ua| ua.transparent() == Some(address))
-        {
-            return Some(TransparentKeyScope::EXTERNAL);
-        }
-
-        // Check legacy transparent address (EXTERNAL scope)
-        if let Ok(Some((legacy_addr, _))) = self.get_legacy_transparent_address() {
-            if legacy_addr == *address {
-                return Some(TransparentKeyScope::EXTERNAL);
-            }
-        }
-
-        None
     }
 
     #[cfg(feature = "transparent-inputs")]
@@ -551,6 +490,32 @@ impl Account {
         }
         Ok(())
     }
+}
+
+/// Derives addresses at consecutive child indices, extending the window until
+/// it ends with `gap` unused indices past the highest used one, per BIP44
+/// address discovery.
+#[cfg(feature = "transparent-inputs")]
+fn addresses_within_gap<K: IncomingViewingKey>(
+    ivk: &K,
+    gap: u32,
+    used: &HashSet<TransparentAddress>,
+) -> Result<Vec<(TransparentAddress, NonHardenedChildIndex)>, Error> {
+    let mut addresses = Vec::new();
+    let mut frontier = gap;
+    let mut index = 0u32;
+    while index < frontier {
+        let Some(child) = NonHardenedChildIndex::from_index(index) else {
+            break;
+        };
+        let address = ivk.derive_address(child)?;
+        if used.contains(&address) {
+            frontier = index.saturating_add(gap).saturating_add(1);
+        }
+        addresses.push((address, child));
+        index += 1;
+    }
+    Ok(addresses)
 }
 
 impl zcash_client_backend::data_api::Account for Account {
@@ -915,5 +880,45 @@ mod serialization {
             assert_eq!(acc.account_name, acc2.account_name);
             assert_eq!(acc.account_id, acc2.account_id);
         }
+    }
+}
+
+#[cfg(all(test, feature = "transparent-inputs"))]
+mod gap_limit_tests {
+    use super::*;
+    use zcash_keys::keys::UnifiedSpendingKey;
+    use zcash_protocol::consensus::MainNetwork;
+
+    fn external_ivk() -> transparent::keys::ExternalIvk {
+        UnifiedSpendingKey::from_seed(&MainNetwork, &[0u8; 32], zip32::AccountId::ZERO)
+            .unwrap()
+            .transparent()
+            .to_account_pubkey()
+            .derive_external_ivk()
+            .unwrap()
+    }
+
+    #[test]
+    fn window_without_usage_covers_gap_addresses() {
+        let window = addresses_within_gap(&external_ivk(), 10, &HashSet::new()).unwrap();
+        assert_eq!(window.len(), 10);
+        assert_eq!(window[0].1.index(), 0);
+        assert_eq!(window[9].1.index(), 9);
+    }
+
+    #[test]
+    fn window_extends_past_used_addresses() {
+        let ivk = external_ivk();
+        let all = addresses_within_gap(&ivk, 25, &HashSet::new()).unwrap();
+
+        // Usage at index 3 extends the window to 3 + 1 + gap.
+        let used = HashSet::from([all[3].0]);
+        let window = addresses_within_gap(&ivk, 10, &used).unwrap();
+        assert_eq!(window.len(), 14);
+
+        // Usage at indices 3 and 12 chains the extension.
+        let used = HashSet::from([all[3].0, all[12].0]);
+        let window = addresses_within_gap(&ivk, 10, &used).unwrap();
+        assert_eq!(window.len(), 23);
     }
 }

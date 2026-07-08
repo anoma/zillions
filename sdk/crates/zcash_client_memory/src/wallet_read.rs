@@ -36,9 +36,8 @@ use zip32::fingerprint::SeedFingerprint;
 
 #[cfg(feature = "transparent-inputs")]
 use {
-    transparent::{address::TransparentAddress, keys::NonHardenedChildIndex},
+    transparent::{address::TransparentAddress, keys::TransparentKeyScope},
     zcash_client_backend::wallet::{Exposure, TransparentAddressMetadata},
-    zip32::Scope,
 };
 
 use crate::{error::Error, Account, AccountId, MemoryWalletBlock, MemoryWalletDb, Nullifier};
@@ -651,38 +650,30 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
     fn get_transparent_receivers(
         &self,
         account_id: Self::AccountId,
-        _include_change: bool,
+        include_change: bool,
         _include_standalone: bool,
     ) -> Result<HashMap<TransparentAddress, TransparentAddressMetadata>, Self::Error> {
-        let account = self
-            .get_account(account_id)?
+        self.get_account(account_id)?
             .ok_or(Error::AccountUnknown(account_id))?;
 
-        // NOTE: For the memory wallet, we only track external (receiving) addresses.
-        // Change addresses (Internal scope) are not separately tracked - they're derived
-        // on-demand during transaction creation. Standalone addresses are not supported.
-        // We simply return the external addresses regardless of the include_* flags.
-
-        let t_addresses = account
-            .addresses()
-            .iter()
-            .filter_map(|(diversifier_index, ua)| {
-                ua.transparent().map(|ta| {
-                    let metadata = TransparentAddressMetadata::derived(
-                        Scope::External.into(),
-                        NonHardenedChildIndex::from_index((*diversifier_index).try_into().unwrap())
-                            .expect(
-                                "diversifier index corresponds to a valid NonHardenedChildIndex",
-                            ),
-                        Exposure::Unknown,
-                        None,
-                    );
-
-                    (*ta, metadata)
-                })
+        // Addresses are derived within the BIP44 gap-limit window; usage
+        // discovered later widens the window on the next call. Standalone
+        // addresses are not supported.
+        Ok(self
+            .transparent_address_index()?
+            .into_iter()
+            .filter(|(_, (owner, scope, _))| {
+                *owner == account_id
+                    && (*scope == TransparentKeyScope::EXTERNAL
+                        || (include_change && *scope == TransparentKeyScope::INTERNAL))
             })
-            .collect();
-        Ok(t_addresses)
+            .map(|(address, (_, scope, child))| {
+                (
+                    address,
+                    TransparentAddressMetadata::derived(scope, child, Exposure::Unknown, None),
+                )
+            })
+            .collect())
     }
 
     /// Returns a mapping from each transparent receiver associated with the specified account
@@ -703,14 +694,11 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
 
         let mut balances = HashMap::new();
 
+        let address_index = self.transparent_address_index()?;
         for (outpoint, txo) in self.transparent_received_outputs.iter().filter(|(_, txo)| {
-            if let Ok(Some(txo_account_id)) =
-                self.find_account_for_transparent_address(&txo.address)
-            {
-                txo_account_id == account_id
-            } else {
-                false
-            }
+            address_index
+                .get(&txo.address)
+                .is_some_and(|(owner, _, _)| *owner == account_id)
         }) {
             if self.utxo_is_spendable(outpoint, target_height, confirmations_policy)? {
                 let address = txo.address;
@@ -734,29 +722,16 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
         account: Self::AccountId,
         address: &TransparentAddress,
     ) -> Result<Option<TransparentAddressMetadata>, Self::Error> {
-        let acc = self
-            .get_account(account)?
+        self.get_account(account)?
             .ok_or(Error::AccountUnknown(account))?;
 
-        // Search through account addresses for matching transparent receiver
-        for (diversifier_index, ua) in acc.addresses().iter() {
-            if let Some(transparent_addr) = ua.transparent() {
-                if transparent_addr == address {
-                    let metadata = TransparentAddressMetadata::derived(
-                        Scope::External.into(),
-                        NonHardenedChildIndex::from_index((*diversifier_index).try_into().unwrap())
-                            .expect(
-                                "diversifier index corresponds to a valid NonHardenedChildIndex",
-                            ),
-                        Exposure::Unknown,
-                        None,
-                    );
-                    return Ok(Some(metadata));
-                }
-            }
-        }
-
-        Ok(None)
+        Ok(self.transparent_address_index()?.get(address).and_then(
+            |(owner, scope, child)| {
+                (*owner == account).then(|| {
+                    TransparentAddressMetadata::derived(*scope, *child, Exposure::Unknown, None)
+                })
+            },
+        ))
     }
 
     fn transaction_data_requests(&self) -> Result<Vec<TransactionDataRequest>, Self::Error> {

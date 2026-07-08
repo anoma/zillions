@@ -10,7 +10,9 @@ use std::{
 
 use ::transparent::bundle::OutPoint;
 #[cfg(feature = "transparent-inputs")]
-use ::transparent::keys::NonHardenedChildIndex;
+use ::transparent::keys::{NonHardenedChildIndex, TransparentKeyScope};
+#[cfg(feature = "transparent-inputs")]
+use std::collections::{HashMap, HashSet};
 use incrementalmerkletree::{Address, Level, Marking, Position, Retention};
 use scanning::ScanQueue;
 use shardtree::{
@@ -1017,12 +1019,64 @@ impl<P: consensus::Parameters> MemoryWalletDb<P> {
         }
     }
 
+    /// Maps every transparent address the wallet watches to its account, key
+    /// scope, and child index. Covers, per account: the gap-limit windows for
+    /// the external and internal scopes (extended past the highest index seen
+    /// in `transparent_received_outputs`), the transparent receivers of
+    /// generated unified addresses, and ephemeral addresses.
+    #[cfg(feature = "transparent-inputs")]
+    pub(crate) fn transparent_address_index(
+        &self,
+    ) -> Result<HashMap<TransparentAddress, (AccountId, TransparentKeyScope, NonHardenedChildIndex)>, Error>
+    {
+        let used: HashSet<TransparentAddress> = self
+            .transparent_received_outputs
+            .values()
+            .map(|txo| txo.address)
+            .collect();
+
+        let mut index = HashMap::new();
+        for (account_id, account) in self.accounts.iter() {
+            for scope in [TransparentKeyScope::EXTERNAL, TransparentKeyScope::INTERNAL] {
+                for (address, child) in account.transparent_addresses_within_gap(scope, &used)? {
+                    index.insert(address, (*account_id, scope, child));
+                }
+            }
+            // Unified addresses can carry transparent receivers past the gap
+            // window; their diversifier index doubles as the child index.
+            for (diversifier_index, ua) in account.addresses() {
+                if let Some(address) = ua.transparent() {
+                    if let Some(child) = u32::try_from(*diversifier_index)
+                        .ok()
+                        .and_then(NonHardenedChildIndex::from_index)
+                    {
+                        index
+                            .entry(*address)
+                            .or_insert((*account_id, TransparentKeyScope::EXTERNAL, child));
+                    }
+                }
+            }
+            for (raw_index, ephemeral) in account.ephemeral_addresses.iter() {
+                if let Some(child) = NonHardenedChildIndex::from_index(*raw_index) {
+                    index.insert(
+                        ephemeral.address,
+                        (*account_id, TransparentKeyScope::EPHEMERAL, child),
+                    );
+                }
+            }
+        }
+        Ok(index)
+    }
+
     #[cfg(feature = "transparent-inputs")]
     pub(crate) fn find_account_for_transparent_address(
         &self,
         address: &TransparentAddress,
     ) -> Result<Option<AccountId>, Error> {
-        self.accounts.find_account_for_transparent_address(address)
+        Ok(self
+            .transparent_address_index()?
+            .get(address)
+            .map(|(account_id, _, _)| *account_id))
     }
 
     pub(crate) fn mark_transparent_output_spent(
@@ -1041,7 +1095,6 @@ impl<P: consensus::Parameters> MemoryWalletDb<P> {
     }
 
     #[cfg(feature = "transparent-inputs")]
-    #[allow(unreachable_code, unused_variables)] //FIXME: need address key scope detection
     pub(crate) fn put_transparent_output(
         &mut self,
         output: &WalletTransparentOutput<AccountId>,
@@ -1091,8 +1144,14 @@ impl<P: consensus::Parameters> MemoryWalletDb<P> {
             }
         };
 
+        // Resolve the scope before the entry below takes a mutable borrow.
+        let key_scope = self
+            .transparent_address_index()?
+            .get(address)
+            .map(|(_, scope, _)| *scope)
+            .unwrap_or(TransparentKeyScope::EXTERNAL);
+
         // insert into transparent_received_outputs table. Update if it exists
-        #[allow(clippy::diverging_sub_expression)] // FIXME
         match self
             .transparent_received_outputs
             .entry(output.outpoint().clone())
@@ -1104,14 +1163,6 @@ impl<P: consensus::Parameters> MemoryWalletDb<P> {
                 entry.get_mut().txout = output.txout().clone();
             }
             Entry::Vacant(entry) => {
-                // Look up the key scope for this address by checking ephemeral,
-                // unified, and legacy transparent addresses in the account
-                let key_scope = self
-                    .accounts
-                    .get(*receiving_account)
-                    .and_then(|account| account.find_key_scope_for_transparent_address(address))
-                    .unwrap_or(::transparent::keys::TransparentKeyScope::EXTERNAL);
-
                 entry.insert(ReceivedTransparentOutput::new(
                     txid,
                     *receiving_account,

@@ -843,9 +843,7 @@ impl<P: consensus::Parameters> WalletWrite for MemoryWalletDb<P> {
 
                     // If the output belongs to the wallet, add it to `transparent_received_outputs`.
                     #[cfg(feature = "transparent-inputs")]
-                    if let Some(account_id) = self
-                        .accounts
-                        .find_account_for_transparent_address(&address)?
+                    if let Some(account_id) = self.find_account_for_transparent_address(&address)?
                     {
                         tracing::debug!(
                             "{:?} output {} belongs to account {:?}",
