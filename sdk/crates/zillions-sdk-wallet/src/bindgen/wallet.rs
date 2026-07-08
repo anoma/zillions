@@ -23,7 +23,7 @@ use zcash_keys::encoding::AddressCodec;
 use zcash_keys::keys::{UnifiedAddressRequest, UnifiedFullViewingKey};
 use zcash_primitives::transaction::TxId;
 use zillions_sdk_common::{Network, Pczt};
-use zillions_sdk_keys::{ProofGenerationKey, SeedFingerprint};
+use zillions_sdk_keys::SeedFingerprint;
 
 pub type MemoryWallet<T> = Wallet<MemoryWalletDb<Network>, T>;
 pub type AccountId = <MemoryWalletDb<Network> as WalletRead>::AccountId;
@@ -552,22 +552,15 @@ impl WebWallet {
 
     /// Creates and inserts proofs for a PCZT.
     ///
-    /// If there are Sapling spends, a ProofGenerationKey needs to be supplied. It can be derived from the UFVK.
+    /// Sapling spends must already carry their proof generation key, attached
+    /// by the keychain's `pczt_sign` during signing.
     ///
     /// # Arguments
     ///
-    /// * `pczt` - The PCZT that needs to be signed
-    /// * `sapling_proof_gen_key` - The Sapling proof generation key (needed only if there are Sapling spends)
+    /// * `pczt` - The PCZT that needs to be proven
     ///
-    pub async fn pczt_prove(
-        &self,
-        pczt: Pczt,
-        sapling_proof_gen_key: Option<ProofGenerationKey>,
-    ) -> Result<Pczt, Error> {
-        self.inner
-            .pczt_prove(pczt.into(), sapling_proof_gen_key.map(Into::into))
-            .await
-            .map(Into::into)
+    pub async fn pczt_prove(&self, pczt: Pczt) -> Result<Pczt, Error> {
+        self.inner.pczt_prove(pczt.into()).await.map(Into::into)
     }
 
     pub async fn pczt_send(&self, pczt: Pczt) -> Result<(), Error> {

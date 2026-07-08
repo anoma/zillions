@@ -16,9 +16,7 @@ use zillions_sdk_common::Network;
 use pczt::roles::combiner::Combiner;
 use pczt::roles::prover::Prover;
 
-use pczt::roles::updater::Updater;
 use pczt::Pczt;
-use sapling::ProofGenerationKey;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
@@ -1117,54 +1115,9 @@ where
     ///
     /// Prove a PCZT
     ///
-    pub async fn pczt_prove(
-        &self,
-        pczt: Pczt,
-        sapling_proof_gen_key: Option<ProofGenerationKey>,
-    ) -> Result<Pczt, Error> {
-        // Add Sapling proof generation key.
-        // TODO: Check to see if there is any sapling in here in the first place
-        let pczt = if let Some(sapling_proof_gen_key) = sapling_proof_gen_key {
-            Updater::new(pczt)
-                .update_sapling_with(|mut updater| {
-                    let non_dummy_spends = updater
-                        .bundle()
-                        .spends()
-                        .iter()
-                        .enumerate()
-                        // Dummy spends will already have a proof generation key.
-                        .filter(|(_, spend)| spend.proof_generation_key().is_none())
-                        .map(|(index, spend)| {
-                            (
-                                index,
-                                spend
-                                    .zip32_derivation()
-                                    .as_ref()
-                                    .map(|d| (*d.seed_fingerprint(), d.derivation_path().clone())),
-                            )
-                        })
-                        .collect::<Vec<_>>();
-
-                    // Assume all non-dummy spent notes are from the same account.
-                    for (index, _) in non_dummy_spends {
-                        updater.update_spend_with(index, |mut spend_updater| {
-                            spend_updater.set_proof_generation_key(sapling_proof_gen_key.clone())
-                        })?;
-                    }
-
-                    Ok(())
-                })
-                .map_err(|e| {
-                    Error::PcztProve(format!(
-                        "Failed to add Sapling proof generation key: {:?}",
-                        e
-                    ))
-                })?
-                .finish()
-        } else {
-            pczt
-        };
-
+    /// Sapling spends must already carry their proof generation key; the
+    /// keychain's `pczt_sign` attaches it while signing.
+    pub async fn pczt_prove(&self, pczt: Pczt) -> Result<Pczt, Error> {
         let prover = crate::proofs::sapling_prover()?;
         let pczt = Prover::new(pczt)
             .create_orchard_proof(&orchard::circuit::ProvingKey::build())

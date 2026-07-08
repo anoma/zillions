@@ -361,7 +361,7 @@ export function wbg_rayon_start_worker(receiver) {
 }
 
 function __wbg_adapter_62(arg0, arg1, arg2) {
-    wasm.closure1513_externref_shim(arg0, arg1, arg2);
+    wasm.closure1514_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_67(arg0, arg1) {
@@ -369,11 +369,11 @@ function __wbg_adapter_67(arg0, arg1) {
 }
 
 function __wbg_adapter_70(arg0, arg1, arg2) {
-    wasm.closure1580_externref_shim(arg0, arg1, arg2);
+    wasm.closure1581_externref_shim(arg0, arg1, arg2);
 }
 
 function __wbg_adapter_421(arg0, arg1, arg2, arg3) {
-    wasm.closure3029_externref_shim(arg0, arg1, arg2, arg3);
+    wasm.closure3030_externref_shim(arg0, arg1, arg2, arg3);
 }
 
 /**
@@ -1960,25 +1960,19 @@ export class WebWallet {
     /**
      * Creates and inserts proofs for a PCZT.
      *
-     * If there are Sapling spends, a ProofGenerationKey needs to be supplied. It can be derived from the UFVK.
+     * Sapling spends must already carry their proof generation key, attached
+     * by the keychain's `pczt_sign` during signing.
      *
      * # Arguments
      *
-     * * `pczt` - The PCZT that needs to be signed
-     * * `sapling_proof_gen_key` - The Sapling proof generation key (needed only if there are Sapling spends)
+     * * `pczt` - The PCZT that needs to be proven
      * @param {Pczt} pczt
-     * @param {ProofGenerationKey | null} [sapling_proof_gen_key]
      * @returns {Promise<Pczt>}
      */
-    pczt_prove(pczt, sapling_proof_gen_key) {
+    pczt_prove(pczt) {
         _assertClass(pczt, Pczt);
         var ptr0 = pczt.__destroy_into_raw();
-        let ptr1 = 0;
-        if (!isLikeNone(sapling_proof_gen_key)) {
-            _assertClass(sapling_proof_gen_key, ProofGenerationKey);
-            ptr1 = sapling_proof_gen_key.__destroy_into_raw();
-        }
-        const ret = wasm.webwallet_pczt_prove(this.__wbg_ptr, ptr0, ptr1);
+        const ret = wasm.webwallet_pczt_prove(this.__wbg_ptr, ptr0);
         return ret;
     }
     /**
@@ -2791,24 +2785,24 @@ function __wbg_get_imports() {
         const ret = false;
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper3780 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1514, __wbg_adapter_62);
+    imports.wbg.__wbindgen_closure_wrapper3783 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 1515, __wbg_adapter_62);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper3782 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1514, __wbg_adapter_62);
+    imports.wbg.__wbindgen_closure_wrapper3785 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 1515, __wbg_adapter_62);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper3818 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1528, __wbg_adapter_67);
+    imports.wbg.__wbindgen_closure_wrapper3821 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 1529, __wbg_adapter_67);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper3956 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1581, __wbg_adapter_70);
+    imports.wbg.__wbindgen_closure_wrapper3959 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 1582, __wbg_adapter_70);
         return ret;
     };
-    imports.wbg.__wbindgen_closure_wrapper3958 = function(arg0, arg1, arg2) {
-        const ret = makeMutClosure(arg0, arg1, 1581, __wbg_adapter_70);
+    imports.wbg.__wbindgen_closure_wrapper3961 = function(arg0, arg1, arg2) {
+        const ret = makeMutClosure(arg0, arg1, 1582, __wbg_adapter_70);
         return ret;
     };
     imports.wbg.__wbindgen_debug_string = function(arg0, arg1) {

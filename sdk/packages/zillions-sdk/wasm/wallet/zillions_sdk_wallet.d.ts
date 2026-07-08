@@ -734,14 +734,14 @@ export class WebWallet {
   /**
    * Creates and inserts proofs for a PCZT.
    *
-   * If there are Sapling spends, a ProofGenerationKey needs to be supplied. It can be derived from the UFVK.
+   * Sapling spends must already carry their proof generation key, attached
+   * by the keychain's `pczt_sign` during signing.
    *
    * # Arguments
    *
-   * * `pczt` - The PCZT that needs to be signed
-   * * `sapling_proof_gen_key` - The Sapling proof generation key (needed only if there are Sapling spends)
+   * * `pczt` - The PCZT that needs to be proven
    */
-  pczt_prove(pczt: Pczt, sapling_proof_gen_key?: ProofGenerationKey | null): Promise<Pczt>;
+  pczt_prove(pczt: Pczt): Promise<Pczt>;
   pczt_send(pczt: Pczt): Promise<void>;
   pczt_combine(pczts: Pczt[]): Pczt;
   /**
@@ -841,7 +841,7 @@ export interface InitOutput {
   readonly webwallet_pczt_shield: (a: number, b: number, c: number, d: bigint) => any;
   readonly webwallet_pczt_create_from_shielded: (a: number, b: number, c: number, d: number, e: bigint) => any;
   readonly webwallet_pczt_create_from_transparent: (a: number, b: number, c: number, d: number, e: bigint) => any;
-  readonly webwallet_pczt_prove: (a: number, b: number, c: number) => any;
+  readonly webwallet_pczt_prove: (a: number, b: number) => any;
   readonly webwallet_pczt_send: (a: number, b: number) => any;
   readonly webwallet_pczt_combine: (a: number, b: number, c: number) => [number, number, number];
   readonly webwallet_get_current_address_transparent: (a: number, b: number) => any;
@@ -931,10 +931,10 @@ export interface InitOutput {
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_7: WebAssembly.Table;
   readonly __externref_table_dealloc: (a: number) => void;
-  readonly closure1513_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure1514_externref_shim: (a: number, b: number, c: any) => void;
   readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hd36cc01afe29005f: (a: number, b: number) => void;
-  readonly closure1580_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure3029_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure1581_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure3030_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_thread_destroy: (a?: number, b?: number, c?: number) => void;
   readonly __wbindgen_start: (a: number) => void;
 }
