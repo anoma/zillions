@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use transparent::bundle::OutPoint;
 use wasm_bindgen::prelude::*;
 use zcash_client_backend::data_api::TransactionStatus;
 use zcash_client_memory::MemoryWalletDb;
@@ -61,6 +62,11 @@ pub struct TransactionHistoryEntry {
     timestamp: Option<u64>,
     /// Pool type: "sapling", "orchard", "transparent", or "mixed"
     pool: String,
+    /// External recipient address (only for sent transactions)
+    to_address: Option<String>,
+    /// Funding address (only resolvable for transparent transactions;
+    /// shielded senders are not revealed by the protocol)
+    from_address: Option<String>,
 }
 
 #[wasm_bindgen]
@@ -114,6 +120,16 @@ impl TransactionHistoryEntry {
     pub fn pool(&self) -> String {
         self.pool.clone()
     }
+
+    #[wasm_bindgen(getter)]
+    pub fn to_address(&self) -> Option<String> {
+        self.to_address.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn from_address(&self) -> Option<String> {
+        self.from_address.clone()
+    }
 }
 
 /// Response containing paginated transaction history
@@ -154,6 +170,47 @@ struct TxAccumulator {
     block_height: Option<BlockHeight>,
     status: Option<TransactionStatus>,
     expiry_height: Option<BlockHeight>,
+    to_address: Option<String>,
+    from_address: Option<String>,
+}
+
+/// Resolve the address that funded a transaction from the prevouts of its
+/// transparent inputs. Requires the raw data of both the transaction and a
+/// prevout transaction to be present (fetched during sync enhancement);
+/// returns `None` for shielded-input or not-yet-enhanced transactions.
+fn transparent_sender(db: &MemoryWalletDb<Network>, txid: &zcash_protocol::TxId) -> Option<String> {
+    use zcash_keys::encoding::AddressCodec;
+
+    let tx_entry = db.tx_table().get(txid)?;
+    let height = tx_entry.mined_height()?;
+    let branch_id = zcash_protocol::consensus::BranchId::for_height(db.params(), height);
+    let tx = zcash_primitives::transaction::Transaction::read(tx_entry.raw()?, branch_id).ok()?;
+
+    for txin in tx.transparent_bundle().iter().flat_map(|b| b.vin.iter()) {
+        let prevout = txin.prevout();
+        let Some(prev_entry) = db.tx_table().get(prevout.txid()) else {
+            continue;
+        };
+        let (Some(prev_height), Some(prev_raw)) = (prev_entry.mined_height(), prev_entry.raw())
+        else {
+            continue;
+        };
+        let prev_branch_id =
+            zcash_protocol::consensus::BranchId::for_height(db.params(), prev_height);
+        let Ok(prev_tx) =
+            zcash_primitives::transaction::Transaction::read(prev_raw, prev_branch_id)
+        else {
+            continue;
+        };
+        if let Some(address) = prev_tx
+            .transparent_bundle()
+            .and_then(|b| b.vout.get(prevout.n() as usize))
+            .and_then(|txout| txout.recipient_address())
+        {
+            return Some(address.encode(db.params()));
+        }
+    }
+    None
 }
 
 /// Extract transaction history from the wallet database
@@ -205,6 +262,35 @@ pub fn extract_transaction_history(
         }
     }
 
+    // Process transparent outputs received by this account. These are not
+    // notes, so they live in their own table; without them, a transparent
+    // receive would be invisible and a transparent send would double-count
+    // its own change output.
+    for (_, txo) in db.transparent_received_outputs().iter() {
+        if txo.account_id() != account_id_typed {
+            continue;
+        }
+
+        let txid = txo.transaction_id();
+        let entry = tx_map.entry(txid).or_default();
+
+        entry.received_value += u64::from(txo.txout().value());
+        entry.pools.insert("transparent".to_string());
+
+        if let Some(tx_entry) = db.tx_table().get(&txid) {
+            entry.status = Some(tx_entry.status());
+            entry.block_height = tx_entry.mined_height();
+            entry.expiry_height = tx_entry.expiry_height();
+            entry.fee = entry
+                .fee
+                .or_else(|| tx_entry.fee().map(|fee| fee.into_u64()));
+        }
+
+        if entry.from_address.is_none() {
+            entry.from_address = transparent_sender(db, &txid);
+        }
+    }
+
     // Process sent notes for this account
     for (sent_note_id, sent_note) in db.sent_notes().iter() {
         if sent_note.from_account_id() != account_id_typed {
@@ -216,6 +302,26 @@ pub fn extract_transaction_history(
 
         // Add sent value
         entry.sent_value += sent_note.value().into_u64();
+
+        // Record the external recipient. Transparent outputs paying back
+        // into the wallet (our own change) are also recorded as External
+        // sent outputs, so exclude any output we received ourselves.
+        if entry.to_address.is_none() {
+            if let zcash_client_backend::wallet::Recipient::External {
+                recipient_address, ..
+            } = sent_note.to()
+            {
+                let own_transparent_output = match sent_note_id {
+                    zcash_client_memory::SentNoteId::Transparent { txid, output_index } => db
+                        .transparent_received_outputs()
+                        .contains_key(&OutPoint::new(*txid.as_ref(), *output_index)),
+                    _ => false,
+                };
+                if !own_transparent_output {
+                    entry.to_address = Some(recipient_address.encode());
+                }
+            }
+        }
 
         // Determine pool from recipient
         let pool = match sent_note.to() {
@@ -345,6 +451,8 @@ pub fn extract_transaction_history(
                 memo,
                 timestamp,
                 pool,
+                to_address: acc.to_address,
+                from_address: acc.from_address,
             }
         })
         .collect();

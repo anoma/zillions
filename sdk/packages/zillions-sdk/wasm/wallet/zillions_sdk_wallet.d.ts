@@ -259,6 +259,8 @@ export class TransactionHistoryEntry {
   readonly memo: string | undefined;
   readonly timestamp: bigint | undefined;
   readonly pool: string;
+  readonly to_address: string | undefined;
+  readonly from_address: string | undefined;
 }
 /**
  * Response containing paginated transaction history
@@ -586,6 +588,13 @@ export class WebWallet {
    */
   sync_refresh_utxos(): Promise<void>;
   /**
+   * Sync stage: download full data for scanner-discovered transactions
+   * (recovering sent outputs, recipient addresses, memos and fees) and
+   * fetch the transaction history of the wallet's transparent addresses.
+   * Run after scanning, once the suggested ranges drain.
+   */
+  sync_enhance_transactions(): Promise<void>;
+  /**
    * Sync stage: download and scan the compact blocks in `[start, end)`.
    *
    * The CPU-heavy trial decryption runs in a dedicated webworker (plus the
@@ -818,6 +827,8 @@ export interface InitOutput {
   readonly transactionhistoryentry_memo: (a: number) => [number, number];
   readonly transactionhistoryentry_timestamp: (a: number) => [number, bigint];
   readonly transactionhistoryentry_pool: (a: number) => [number, number];
+  readonly transactionhistoryentry_to_address: (a: number) => [number, number];
+  readonly transactionhistoryentry_from_address: (a: number) => [number, number];
   readonly __wbg_transactionhistoryresponse_free: (a: number, b: number) => void;
   readonly transactionhistoryresponse_transactions: (a: number) => any;
   readonly transactionhistoryresponse_total_count: (a: number) => number;
@@ -830,6 +841,7 @@ export interface InitOutput {
   readonly webwallet_sync_update_subtree_roots: (a: number) => any;
   readonly webwallet_sync_update_chain_tip: (a: number) => any;
   readonly webwallet_sync_refresh_utxos: (a: number) => any;
+  readonly webwallet_sync_enhance_transactions: (a: number) => any;
   readonly webwallet_sync_scan_range: (a: number, b: number, c: number) => any;
   readonly webwallet_suggest_scan_ranges: (a: number) => any;
   readonly webwallet_get_wallet_summary: (a: number) => any;
@@ -931,10 +943,10 @@ export interface InitOutput {
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_export_7: WebAssembly.Table;
   readonly __externref_table_dealloc: (a: number) => void;
-  readonly closure1514_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure1521_externref_shim: (a: number, b: number, c: any) => void;
   readonly _dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hd36cc01afe29005f: (a: number, b: number) => void;
-  readonly closure1581_externref_shim: (a: number, b: number, c: any) => void;
-  readonly closure3030_externref_shim: (a: number, b: number, c: any, d: any) => void;
+  readonly closure1588_externref_shim: (a: number, b: number, c: any) => void;
+  readonly closure3037_externref_shim: (a: number, b: number, c: any, d: any) => void;
   readonly __wbindgen_thread_destroy: (a?: number, b?: number, c?: number) => void;
   readonly __wbindgen_start: (a: number) => void;
 }

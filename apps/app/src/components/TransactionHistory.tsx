@@ -3,7 +3,7 @@ import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { ShieldIcon } from "../icons/ShieldIcon";
-import { zatoshiToZec } from "../lib/utils";
+import { shortenAddress, zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 
@@ -32,6 +32,8 @@ export function TransactionHistory() {
           <tr>
             <th>Type</th>
             <th>Value</th>
+            <th>From</th>
+            <th>To</th>
             <th>Status</th>
             <th>Time</th>
           </tr>
@@ -54,6 +56,12 @@ export function TransactionHistory() {
                 </div>
               </td>
               <td>{zatoshiToZec(item.value)} ZEC</td>
+              <td title={item.from_address}>
+                {item.from_address ? shortenAddress(item.from_address) : "—"}
+              </td>
+              <td title={item.to_address}>
+                {item.to_address ? shortenAddress(item.to_address) : "—"}
+              </td>
               <td>{item.status}</td>
               <td>
                 {item.timestamp &&

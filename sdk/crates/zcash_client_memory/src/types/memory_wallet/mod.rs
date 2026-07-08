@@ -104,6 +104,12 @@ pub struct MemoryWalletDb<P: consensus::Parameters> {
     pub(crate) transaction_data_request_queue: TransactionDataRequestQueue,
     /// Queue of block ranges that should be scanned along with their priority
     pub(crate) scan_queue: ScanQueue,
+
+    /// Transparent receivers already checked for on-chain history, mapped to
+    /// the chain height they were checked at. Not serialized: a fresh session
+    /// re-checks each address once.
+    #[cfg(feature = "transparent-inputs")]
+    pub(crate) transparent_addresses_checked: BTreeMap<TransparentAddress, BlockHeight>,
 }
 
 impl<P: consensus::Parameters + PartialEq> PartialEq for MemoryWalletDb<P> {
@@ -166,6 +172,8 @@ impl<P: consensus::Parameters> MemoryWalletDb<P> {
             transparent_received_output_spends: TransparentReceivedOutputSpends::new(),
             transparent_spend_map: TransparentSpendCache::new(),
             transaction_data_request_queue: TransactionDataRequestQueue::new(),
+            #[cfg(feature = "transparent-inputs")]
+            transparent_addresses_checked: BTreeMap::new(),
         }
     }
 
@@ -1226,5 +1234,10 @@ impl<P: consensus::Parameters> MemoryWalletDb<P> {
     /// Returns the block_time for a given block height, if the block is in the wallet's cache
     pub fn get_block_time(&self, height: BlockHeight) -> Option<u32> {
         self.blocks.get(&height).map(|block| block.block_time)
+    }
+
+    /// Returns a reference to the received transparent outputs table for transaction history queries
+    pub fn transparent_received_outputs(&self) -> &TransparentReceivedOutputs {
+        &self.transparent_received_outputs
     }
 }

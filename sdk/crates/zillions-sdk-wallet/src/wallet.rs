@@ -27,13 +27,13 @@ use tokio::sync::RwLock;
 use zcash_address::ZcashAddress;
 use zcash_client_backend::data_api::wallet::TargetHeight;
 use zcash_client_backend::data_api::wallet::{
-    create_pczt_from_proposal, create_proposed_transactions,
+    create_pczt_from_proposal, create_proposed_transactions, decrypt_and_store_transaction,
     extract_and_store_transaction_from_pczt, input_selection::GreedyInputSelector,
     propose_shielding, propose_transfer, ConfirmationsPolicy, SpendingKeys,
 };
 use zcash_client_backend::data_api::{
-    Account, AccountBirthday, AccountPurpose, InputSource, TransparentOutputFilter, WalletRead,
-    WalletSummary, WalletWrite,
+    Account, AccountBirthday, AccountPurpose, InputSource, TransactionDataRequest,
+    TransactionStatus, TransparentOutputFilter, WalletRead, WalletSummary, WalletWrite,
 };
 use zcash_client_backend::data_api::{WalletCommitmentTrees, Zip32Derivation};
 use zcash_client_backend::fees::standard::MultiOutputChangeStrategy;
@@ -66,7 +66,7 @@ use zcash_keys::encoding::AddressCodec;
 use zcash_primitives::merkle_tree::HashSer;
 use zcash_script::script;
 
-use zcash_protocol::consensus::{BlockHeight, Parameters};
+use zcash_protocol::consensus::{BlockHeight, BranchId, Parameters};
 use zcash_protocol::value::Zatoshis;
 use zip32;
 use zip32::fingerprint::SeedFingerprint;
@@ -419,6 +419,182 @@ where
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Sync stage: service the wallet's transaction data requests.
+    ///
+    /// Compact-block scanning only yields incoming notes and nullifier
+    /// spends, so this stage completes the picture: it downloads the full
+    /// data of scanner-discovered transactions (recovering sent outputs,
+    /// recipient addresses, memos and fees via trial decryption with the
+    /// wallet's viewing keys) and queries lightwalletd for the history of
+    /// each transparent receiver, which compact blocks do not carry at all.
+    ///
+    /// Servicing a request can surface new ones (e.g. a discovered output
+    /// widens the transparent gap-limit window), so requests are re-derived
+    /// until they stabilize, up to a bounded number of rounds.
+    pub async fn sync_enhance_transactions(&self) -> Result<(), Error> {
+        const MAX_ROUNDS: usize = 10;
+
+        let mut previous: Option<Vec<TransactionDataRequest>> = None;
+        for _ in 0..MAX_ROUNDS {
+            let requests = self.db.read().await.transaction_data_requests()?;
+            if requests.is_empty() || previous.as_ref() == Some(&requests) {
+                break;
+            }
+
+            for request in &requests {
+                match request {
+                    TransactionDataRequest::GetStatus(txid) => {
+                        let status = match self.fetch_transaction(*txid).await? {
+                            Some((_, Some(height))) => TransactionStatus::Mined(height),
+                            Some((_, None)) => TransactionStatus::NotInMainChain,
+                            None => TransactionStatus::TxidNotRecognized,
+                        };
+                        self.db.write().await.set_transaction_status(*txid, status)?;
+                    }
+                    TransactionDataRequest::Enhancement(txid) => {
+                        match self.fetch_transaction(*txid).await? {
+                            Some((tx, mined_height)) => {
+                                let mut db = self.db.write().await;
+                                decrypt_and_store_transaction(
+                                    &self.network,
+                                    &mut *db,
+                                    &tx,
+                                    mined_height,
+                                )?;
+                            }
+                            None => {
+                                self.db.write().await.set_transaction_status(
+                                    *txid,
+                                    TransactionStatus::TxidNotRecognized,
+                                )?;
+                            }
+                        }
+                    }
+                    TransactionDataRequest::TransactionsInvolvingAddress(req) => {
+                        self.fetch_transactions_involving_address(req).await?;
+                    }
+                }
+            }
+            previous = Some(requests);
+        }
+        Ok(())
+    }
+
+    /// Fetch a full transaction from lightwalletd, returning it together
+    /// with its mined height (`None` while it is in the mempool), or `None`
+    /// if the node does not know the transaction at all.
+    async fn fetch_transaction(
+        &self,
+        txid: TxId,
+    ) -> Result<Option<(zcash_primitives::transaction::Transaction, Option<BlockHeight>)>, Error>
+    {
+        let mut client = self.client.clone();
+        let response = client
+            .get_transaction(service::TxFilter {
+                block: None,
+                index: 0,
+                hash: txid.as_ref().to_vec(),
+            })
+            .await;
+
+        let raw = match response {
+            Ok(response) => response.into_inner(),
+            Err(status) if transaction_not_found(&status) => return Ok(None),
+            Err(status) => return Err(status.into()),
+        };
+
+        // lightwalletd reports mempool transactions with a zero (or, on some
+        // servers, sentinel out-of-range) height.
+        let mined_height = u32::try_from(raw.height)
+            .ok()
+            .filter(|h| *h > 0)
+            .map(BlockHeight::from_u32);
+        let branch_height = match mined_height {
+            Some(height) => height,
+            None => self
+                .db
+                .read()
+                .await
+                .chain_height()?
+                .ok_or_else(|| Error::Generic("chain tip unknown".to_string()))?,
+        };
+        let tx = zcash_primitives::transaction::Transaction::read(
+            &raw.data[..],
+            BranchId::for_height(&self.network, branch_height),
+        )
+        .map_err(|e| Error::Generic(format!("failed to parse transaction: {e}")))?;
+        Ok(Some((tx, mined_height)))
+    }
+
+    /// Service a [`TransactionDataRequest::TransactionsInvolvingAddress`]:
+    /// fetch every transaction that sends to or spends from the address in
+    /// the requested range and store it, then record the checked height.
+    async fn fetch_transactions_involving_address(
+        &self,
+        request: &zcash_client_backend::data_api::TransactionsInvolvingAddress,
+    ) -> Result<(), Error> {
+        let Some(chain_tip) = self.db.read().await.chain_height()? else {
+            return Ok(());
+        };
+
+        let start = u32::from(request.block_range_start());
+        // The request's end bound is exclusive; the gRPC range is inclusive.
+        let end = request
+            .block_range_end()
+            .map(|h| u32::from(h).saturating_sub(1))
+            .unwrap_or_else(|| chain_tip.into());
+        if end < start {
+            return Ok(());
+        }
+
+        let mut client = self.client.clone();
+        let mut stream = client
+            .get_taddress_txids(service::TransparentAddressBlockFilter {
+                address: request.address().encode(&self.network),
+                range: Some(service::BlockRange {
+                    start: Some(service::BlockId {
+                        height: start as u64,
+                        hash: vec![],
+                    }),
+                    end: Some(service::BlockId {
+                        height: end as u64,
+                        hash: vec![],
+                    }),
+                    pool_types: vec![],
+                }),
+            })
+            .await?
+            .into_inner();
+
+        let mut raw_txs = Vec::new();
+        while let Some(raw) = stream.try_next().await? {
+            raw_txs.push(raw);
+        }
+        // Store in mined order so spends of earlier outputs resolve against
+        // outputs already recorded (fee derivation, funding account lookup).
+        raw_txs.sort_by_key(|raw| raw.height);
+
+        for raw in raw_txs {
+            let mined_height = u32::try_from(raw.height)
+                .ok()
+                .filter(|h| *h > 0)
+                .map(BlockHeight::from_u32);
+            let tx = zcash_primitives::transaction::Transaction::read(
+                &raw.data[..],
+                BranchId::for_height(&self.network, mined_height.unwrap_or(chain_tip)),
+            )
+            .map_err(|e| Error::Generic(format!("failed to parse transaction: {e}")))?;
+            let mut db = self.db.write().await;
+            decrypt_and_store_transaction(&self.network, &mut *db, &tx, mined_height)?;
+        }
+
+        self.db
+            .write()
+            .await
+            .notify_address_checked(request.clone(), BlockHeight::from_u32(end))?;
         Ok(())
     }
 
@@ -1194,6 +1370,15 @@ where
             .combine()
             .map_err(|e| Error::PcztCombine(format!("Failed to combine PCZT: {:?}", e)))
     }
+}
+
+/// Whether a gRPC error status means the queried transaction is unknown to
+/// the node, as opposed to a transport or server failure.
+fn transaction_not_found(status: &tonic::Status) -> bool {
+    let message = status.message().to_lowercase();
+    status.code() == tonic::Code::NotFound
+        || message.contains("not found")
+        || message.contains("no such mempool")
 }
 
 pub(crate) fn usk_from_seed_str(

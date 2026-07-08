@@ -20,7 +20,7 @@ use zcash_client_backend::{
     },
     data_api::{
         AccountBirthday, DecryptedTransaction, ScannedBlock, SentTransaction,
-        SentTransactionOutput, WalletRead, WalletWrite,
+        SentTransactionOutput, TransactionDataRequest, WalletRead, WalletWrite,
     },
     keys::{UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey},
     wallet::{NoteId, Recipient, WalletTransparentOutput},
@@ -938,13 +938,34 @@ impl<P: consensus::Parameters> WalletWrite for MemoryWalletDb<P> {
         // If the transaction has outputs that belong to the wallet as well as transparent
         // inputs, we may need to download the transactions corresponding to the transparent
         // prevout references to determine whether the transaction was created (at least in
-        // part) by this wallet.
+        // part) by this wallet, and which address funded it.
         #[cfg(feature = "transparent-inputs")]
-        if tx_has_wallet_outputs && d_tx.tx().transparent_bundle().is_some() {
-            // queue the transparent inputs for enhancement
-            self.transaction_data_request_queue
-                .queue_status_retrieval(&d_tx.tx().txid());
+        if tx_has_wallet_outputs {
+            for txin in d_tx
+                .tx()
+                .transparent_bundle()
+                .iter()
+                .flat_map(|b| b.vin.iter())
+            {
+                let prevout_txid = txin.prevout().txid();
+                let known = self
+                    .tx_table
+                    .get(prevout_txid)
+                    .is_some_and(|entry| entry.raw().is_some());
+                if !known {
+                    self.transaction_data_request_queue
+                        .queue_enhancement(prevout_txid);
+                }
+            }
         }
+
+        // The raw data for this transaction is now stored, so any queued
+        // enhancement request for it is redundant.
+        self.transaction_data_request_queue
+            .0
+            .retain(|request| {
+                !matches!(request, TransactionDataRequest::Enhancement(t) if *t == d_tx.tx().txid())
+            });
 
         #[cfg(feature = "transparent-inputs")]
         {
@@ -1246,7 +1267,29 @@ Instead derive the ufvk in the calling code and import it using `import_account_
         status: TransactionStatus,
     ) -> Result<(), Self::Error> {
         tracing::debug!("set_transaction_status");
-        self.tx_table.set_transaction_status(&txid, status)
+        // The status may concern a transaction the wallet has no entry for
+        // yet (e.g. an unresolvable prevout of received transparent funds);
+        // record a stub so the resolution is not re-requested forever.
+        #[cfg(feature = "transparent-inputs")]
+        if self.tx_table.get(&txid).is_none() {
+            self.tx_table.put_tx_partial(&txid, &None, None);
+        }
+        self.tx_table.set_transaction_status(&txid, status)?;
+        // A resolved status makes queued requests for this transaction
+        // redundant: status requests always, enhancement requests only when
+        // the node does not know the transaction at all.
+        if !matches!(status, TransactionStatus::NotInMainChain) {
+            self.transaction_data_request_queue
+                .0
+                .retain(|request| match request {
+                    TransactionDataRequest::GetStatus(t) => *t != txid,
+                    TransactionDataRequest::Enhancement(t) => {
+                        *t != txid || !matches!(status, TransactionStatus::TxidNotRecognized)
+                    }
+                    _ => true,
+                });
+        }
+        Ok(())
     }
 
     #[cfg(feature = "transparent-inputs")]
@@ -1299,12 +1342,16 @@ Instead derive the ufvk in the calling code and import it using `import_account_
     #[cfg(feature = "transparent-inputs")]
     fn notify_address_checked(
         &mut self,
-        _request: TransactionsInvolvingAddress,
-        _as_of_height: BlockHeight,
+        request: TransactionsInvolvingAddress,
+        as_of_height: BlockHeight,
     ) -> Result<(), Self::Error> {
-        // No-op for now - this notifies that an address range was checked for transactions.
-        // In the sqlite implementation, this updates address metadata tracking.
-        // For the memory wallet, we don't need to track this state.
+        // Record the checked height so `transaction_data_requests` stops
+        // re-requesting history for this address below it.
+        let checked = self
+            .transparent_addresses_checked
+            .entry(request.address())
+            .or_insert(as_of_height);
+        *checked = (*checked).max(as_of_height);
         Ok(())
     }
 

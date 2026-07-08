@@ -296,6 +296,14 @@ impl WebWallet {
         self.inner.sync_refresh_utxos().await
     }
 
+    /// Sync stage: download full data for scanner-discovered transactions
+    /// (recovering sent outputs, recipient addresses, memos and fees) and
+    /// fetch the transaction history of the wallet's transparent addresses.
+    /// Run after scanning, once the suggested ranges drain.
+    pub async fn sync_enhance_transactions(&self) -> Result<(), Error> {
+        self.inner.sync_enhance_transactions().await
+    }
+
     /// Sync stage: download and scan the compact blocks in `[start, end)`.
     ///
     /// The CPU-heavy trial decryption runs in a dedicated webworker (plus the

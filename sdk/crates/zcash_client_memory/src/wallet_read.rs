@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     num::NonZeroU32,
 };
 
@@ -37,6 +37,7 @@ use zip32::fingerprint::SeedFingerprint;
 #[cfg(feature = "transparent-inputs")]
 use {
     transparent::{address::TransparentAddress, keys::TransparentKeyScope},
+    zcash_client_backend::data_api::{OutputStatusFilter, TransactionStatusFilter},
     zcash_client_backend::wallet::{Exposure, TransparentAddressMetadata},
 };
 
@@ -736,11 +737,79 @@ impl<P: consensus::Parameters> WalletRead for MemoryWalletDb<P> {
 
     fn transaction_data_requests(&self) -> Result<Vec<TransactionDataRequest>, Self::Error> {
         tracing::debug!("transaction_data_requests");
-        Ok(self
-            .transaction_data_request_queue
-            .iter()
-            .cloned()
-            .collect())
+        // Without a chain tip there is no meaningful way to service requests.
+        let Some(_chain_tip) = self.chain_height()? else {
+            return Ok(Vec::new());
+        };
+
+        let mut requests = Vec::new();
+
+        // Scanner-discovered transactions carry only compact data; request
+        // enhancement (full raw transaction) so sent outputs, memos and fees
+        // can be recovered by trial decryption.
+        let mut enhancement_requested = HashSet::new();
+        for (txid, entry) in self.tx_table.iter() {
+            if entry.raw().is_none()
+                && !matches!(entry.status(), TransactionStatus::TxidNotRecognized)
+            {
+                requests.push(TransactionDataRequest::Enhancement(*txid));
+                enhancement_requested.insert(*txid);
+            }
+        }
+
+        // Queued requests, skipping any that are already satisfied or
+        // subsumed by a derived enhancement request for the same transaction.
+        for request in self.transaction_data_request_queue.iter() {
+            match request {
+                TransactionDataRequest::GetStatus(txid) => {
+                    let resolved = matches!(
+                        self.tx_table.tx_status(txid),
+                        Some(TransactionStatus::Mined(_) | TransactionStatus::TxidNotRecognized)
+                    );
+                    if !resolved && !enhancement_requested.contains(txid) {
+                        requests.push(request.clone());
+                    }
+                }
+                TransactionDataRequest::Enhancement(txid) => {
+                    let satisfied = self.tx_table.get(txid).is_some_and(|entry| {
+                        entry.raw().is_some()
+                            || matches!(entry.status(), TransactionStatus::TxidNotRecognized)
+                    });
+                    if !satisfied && !enhancement_requested.contains(txid) {
+                        requests.push(request.clone());
+                    }
+                }
+                other => requests.push(other.clone()),
+            }
+        }
+
+        // Transparent history cannot be discovered from compact blocks, so
+        // each transparent receiver must be actively checked for involving
+        // transactions, resuming above the height already checked.
+        #[cfg(feature = "transparent-inputs")]
+        for account_id in self.get_account_ids()? {
+            let query_start = self.utxo_query_height(account_id)?;
+            for address in self
+                .get_transparent_receivers(account_id, true, true)?
+                .into_keys()
+            {
+                let start = match self.transparent_addresses_checked.get(&address) {
+                    Some(checked) if *checked >= _chain_tip => continue,
+                    Some(checked) => query_start.max(*checked + 1),
+                    None => query_start,
+                };
+                requests.push(TransactionDataRequest::transactions_involving_address(
+                    address,
+                    start,
+                    None,
+                    None,
+                    TransactionStatusFilter::Mined,
+                    OutputStatusFilter::All,
+                ));
+            }
+        }
+
+        Ok(requests)
     }
 
     fn list_addresses(&self, account: Self::AccountId) -> Result<Vec<AddressInfo>, Self::Error> {

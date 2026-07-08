@@ -73,7 +73,7 @@ impl TransactionEntry {
         self.fee
     }
 
-    pub(crate) fn raw(&self) -> Option<&[u8]> {
+    pub fn raw(&self) -> Option<&[u8]> {
         self.raw.as_deref()
     }
 

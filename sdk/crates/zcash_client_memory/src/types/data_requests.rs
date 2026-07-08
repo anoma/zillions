@@ -14,6 +14,13 @@ impl TransactionDataRequestQueue {
     pub fn queue_status_retrieval(&mut self, txid: &TxId) {
         self.0.push_back(TransactionDataRequest::GetStatus(*txid));
     }
+
+    pub fn queue_enhancement(&mut self, txid: &TxId) {
+        let request = TransactionDataRequest::Enhancement(*txid);
+        if !self.0.contains(&request) {
+            self.0.push_back(request);
+        }
+    }
 }
 
 impl Deref for TransactionDataRequestQueue {

@@ -9,7 +9,10 @@
  *   3. scan the suggested ranges batch by batch, re-requesting the ranges
  *      after every scan (scanning can reprioritize them or rewind after a
  *      chain reorg), emitting progress and checkpoints along the way
- *   4. when the ranges drain, refresh the tip again; done when no new
+ *   4. sync_enhance_transactions — fetch full data for transactions the
+ *      scanner discovered (sent outputs, memos, fees) and the history of
+ *      the wallet's transparent addresses
+ *   5. when the ranges drain, refresh the tip again; done when no new
  *      ranges appear
  *
  * The wallet database tracks its own scan queue, so persisting the
@@ -89,6 +92,8 @@ export async function syncWallet(
     }
   };
 
+  let enhanced = false;
+
   for (;;) {
     options.signal?.throwIfAborted();
 
@@ -119,11 +124,22 @@ export async function syncWallet(
       }
       await emitProgress(chainTip, remainingBlocks);
     }
-    // Ranges drained; loop to refresh the tip in case new blocks arrived.
+
+    // Ranges drained; complete the freshly scanned transactions before
+    // refreshing the tip in case new blocks arrived.
+    await wallet.sync_enhance_transactions();
+    enhanced = true;
   }
 
-  // Final checkpoint so a fully-synced wallet is what gets restored.
-  if (options.onCheckpoint && batches > 0) {
+  // A wallet restored already-synced never enters the scan loop but may
+  // still have unserviced data requests from a previous session.
+  if (!enhanced) {
+    await wallet.sync_enhance_transactions();
+  }
+
+  // Final checkpoint so the fully synced and enhanced wallet is what gets
+  // restored next session.
+  if (options.onCheckpoint) {
     await options.onCheckpoint(await wallet.db_to_bytes());
   }
 }

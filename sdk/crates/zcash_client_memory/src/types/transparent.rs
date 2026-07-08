@@ -120,6 +120,21 @@ impl ReceivedTransparentOutput {
         }
     }
 
+    /// Returns the id of the transaction that created this output
+    pub fn transaction_id(&self) -> TxId {
+        self.transaction_id
+    }
+
+    /// Returns the account that controls spend authority for this output
+    pub fn account_id(&self) -> AccountId {
+        self.account_id
+    }
+
+    /// Returns the output's script and value
+    pub fn txout(&self) -> &TxOut {
+        &self.txout
+    }
+
     pub fn to_wallet_transparent_output(
         &self,
         outpoint: &OutPoint,
