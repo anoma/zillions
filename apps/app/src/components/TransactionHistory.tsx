@@ -2,6 +2,7 @@ import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
+import { ShieldIcon } from "../icons/ShieldIcon";
 import { zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -44,6 +45,8 @@ export function TransactionHistory() {
                     <ArrowUpIcon className="size-4" />
                   ) : item.tx_type === "Received" ? (
                     <ArrowDownIcon className="size-4" />
+                  ) : item.tx_type === "Shielded" ? (
+                    <ShieldIcon className="size-4" />
                   ) : (
                     <div />
                   )}
