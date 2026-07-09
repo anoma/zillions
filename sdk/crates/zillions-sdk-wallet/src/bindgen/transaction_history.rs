@@ -353,6 +353,12 @@ pub fn extract_transaction_history(
         entry.spent_transparent_value += u64::from(txo.txout().value());
         entry.pools.insert("transparent".to_string());
 
+        // The address that funded this tx: for a shield, this is the
+        // wallet's own transparent address the shielded funds came from.
+        if entry.from_address.is_none() {
+            entry.from_address = transparent_sender(db, spent_txid);
+        }
+
         if let Some(tx_entry) = db.tx_table().get(spent_txid) {
             if entry.status.is_none() {
                 entry.status = Some(tx_entry.status());
