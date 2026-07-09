@@ -73,7 +73,7 @@ export function TransactionHistory() {
                     <div />
                   )}
                   {item.tx_type}
-                  {item.status !== "Confirmed" && `(${item.status})`}
+                  {item.status !== "Confirmed" && ` (${item.status})`}
                 </div>
               </td>
               <td>
