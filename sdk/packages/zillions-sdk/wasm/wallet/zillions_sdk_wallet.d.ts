@@ -81,16 +81,16 @@ export enum TransactionType {
   /**
    * Transparent funds moved into the shielded pool
    */
-  Shield = 2,
+  Shielded = 2,
   /**
    * Shielded funds moved into the transparent pool
    */
-  Unshield = 3,
+  Unshielded = 3,
   /**
    * Internal transfer with no transparent leg: a sapling<->orchard pool
    * migration
    */
-  Shielded = 4,
+  Migrated = 4,
 }
 /**
  * The `ReadableStreamType` enum.

@@ -125,6 +125,11 @@ impl ReceivedTransparentOutput {
         self.transaction_id
     }
 
+    /// Returns the address this output was paid to
+    pub fn address(&self) -> &TransparentAddress {
+        &self.address
+    }
+
     /// Returns the account that controls spend authority for this output
     pub fn account_id(&self) -> AccountId {
         self.account_id

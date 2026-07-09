@@ -7,6 +7,7 @@ use transparent::bundle::OutPoint;
 use wasm_bindgen::prelude::*;
 use zcash_client_backend::data_api::TransactionStatus;
 use zcash_client_memory::MemoryWalletDb;
+use zcash_keys::encoding::AddressCodec;
 use zcash_protocol::consensus::BlockHeight;
 use zcash_protocol::TxId;
 
@@ -23,12 +24,12 @@ pub enum TransactionType {
     /// Funds sent to external recipient
     Sent,
     /// Transparent funds moved into the shielded pool
-    Shield,
+    Shielded,
     /// Shielded funds moved into the transparent pool
-    Unshield,
+    Unshielded,
     /// Internal transfer with no transparent leg: a sapling<->orchard pool
     /// migration
-    Shielded,
+    Migrated,
 }
 
 /// The status of a transaction
@@ -195,6 +196,11 @@ struct TxAccumulator {
     expiry_height: Option<BlockHeight>,
     to_address: Option<String>,
     from_address: Option<String>,
+    /// The account's own transparent address a new transparent output paid.
+    /// Used as a `to_address` fallback when there's no external recipient
+    /// to show (i.e. this account didn't author the tx): a plain receive
+    /// or the destination side of an unshield.
+    own_transparent_address: Option<String>,
 }
 
 /// Whether `address` belongs to one of the wallet's own accounts (checked
@@ -222,8 +228,6 @@ fn is_own_address(
 /// prevout transaction to be present (fetched during sync enhancement);
 /// returns `None` for shielded-input or not-yet-enhanced transactions.
 fn transparent_sender(db: &MemoryWalletDb<Network>, txid: &zcash_protocol::TxId) -> Option<String> {
-    use zcash_keys::encoding::AddressCodec;
-
     let tx_entry = db.tx_table().get(txid)?;
     let height = tx_entry.mined_height()?;
     let branch_id = zcash_protocol::consensus::BranchId::for_height(db.params(), height);
@@ -387,6 +391,10 @@ pub fn extract_transaction_history(
         entry.received_transparent_value += u64::from(txo.txout().value());
         entry.pools.insert("transparent".to_string());
 
+        if entry.own_transparent_address.is_none() {
+            entry.own_transparent_address = Some(txo.address().encode(db.params()));
+        }
+
         if let Some(tx_entry) = db.tx_table().get(&txid) {
             entry.status = Some(tx_entry.status());
             entry.block_height = tx_entry.mined_height();
@@ -496,24 +504,32 @@ pub fn extract_transaction_history(
                 // A genuinely external recipient was recovered: funds
                 // definitely left the wallet.
                 TransactionType::Sent
+            } else if acc.spent_value == 0 {
+                // The account funded nothing in this tx (no nullifier or
+                // UTXO of ours was consumed), so any credited value is a
+                // plain external receive - regardless of which pool it
+                // landed in. Without this check, a transparent input from
+                // someone else paying us directly (no spend of ours at
+                // all) satisfies "received_transparent_value > 0 with
+                // nothing of ours spent transparently" and would otherwise
+                // be mistaken for an unshield.
+                TransactionType::Received
             } else if acc.spent_transparent_value > 0 && acc.received_transparent_value == 0 {
                 // Transparent funds consumed, nothing transparent credited
                 // back: a shield.
-                TransactionType::Shield
+                TransactionType::Shielded
             } else if acc.received_transparent_value > 0 && acc.spent_transparent_value == 0 {
                 // The reverse: an unshield.
-                TransactionType::Unshield
-            } else if acc.spent_value > 0 && acc.received_value > 0 {
+                TransactionType::Unshielded
+            } else if acc.received_value > 0 {
                 // The account funded this tx and got value back, with no
                 // transparent leg and no external recipient known: a
                 // sapling<->orchard pool migration, or a send not yet
                 // enhanced.
-                TransactionType::Shielded
-            } else if acc.spent_value > 0 {
+                TransactionType::Migrated
+            } else {
                 // Funded the tx and got nothing back; recipient unknown.
                 TransactionType::Sent
-            } else {
-                TransactionType::Received
             };
 
             // Determine pool type
@@ -573,11 +589,11 @@ pub fn extract_transaction_history(
                     // Show just the amount that crossed into the
                     // transparent pool, not any shielded change from the
                     // same tx.
-                    TransactionType::Unshield => acc.received_transparent_value as i64,
+                    TransactionType::Unshielded => acc.received_transparent_value as i64,
                     // No transparent receipt in these cases, so the full
                     // received value is the shield/migration destination
                     // amount.
-                    TransactionType::Shield | TransactionType::Shielded => {
+                    TransactionType::Shielded | TransactionType::Migrated => {
                         acc.received_value as i64
                     }
                     // Show the amount that actually reached the recipient,
@@ -595,7 +611,7 @@ pub fn extract_transaction_history(
                 memo,
                 timestamp,
                 pool,
-                to_address: acc.to_address,
+                to_address: acc.to_address.or(acc.own_transparent_address),
                 from_address: acc.from_address,
             }
         })

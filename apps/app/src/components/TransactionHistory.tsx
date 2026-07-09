@@ -4,20 +4,23 @@ import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { ShieldIcon } from "../icons/ShieldIcon";
-import { shortenAddress, zatoshiToZec } from "../lib/utils";
+import { isShieldedAddress, shortenAddress, zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 
-// Blockchair has no testnet explorer, so the link is only meaningful on mainnet.
-const isMainnet = (import.meta.env.VITE_ZCASH_NETWORK ?? "main") === "main";
 const explorerUrl = (txid: string) =>
   `https://blockchair.com/zcash/transaction/${txid}`;
 
 function AddressOrShieldedBadge({ address }: { address?: string }) {
-  if (!address) {
-    return <div className="bg-gold rounded-full w-fit px-5">Shielded</div>;
-  }
-  return <div title={address}>{shortenAddress(address)}</div>;
+  const hasGoldBadge = !address || isShieldedAddress(address);
+  return (
+    <div
+      title={address}
+      className={twMerge(hasGoldBadge && "bg-gold rounded-full w-fit px-4")}
+    >
+      {address ? shortenAddress(address) : hasGoldBadge ? "Shielded" : "-"}
+    </div>
+  );
 }
 
 export function TransactionHistory() {
@@ -49,7 +52,6 @@ export function TransactionHistory() {
             <th>To</th>
             <th>Status</th>
             <th>Time</th>
-            <th>Explorer</th>
           </tr>
         </thead>
         <tbody>
@@ -61,11 +63,11 @@ export function TransactionHistory() {
                     <ArrowUpIcon className="size-4" />
                   ) : item.tx_type === "Received" ? (
                     <ArrowDownIcon className="size-4" />
-                  ) : item.tx_type === "Shield" ? (
-                    <ShieldIcon className="size-4" />
-                  ) : item.tx_type === "Unshield" ? (
-                    <div>-</div>
                   ) : item.tx_type === "Shielded" ? (
+                    <ShieldIcon className="size-4" />
+                  ) : item.tx_type === "Unshielded" ? (
+                    <div>-</div>
+                  ) : item.tx_type === "Migrated" ? (
                     <div>-</div>
                   ) : (
                     <div />
@@ -82,23 +84,17 @@ export function TransactionHistory() {
               </td>
               <td>{item.status}</td>
               <td>
-                {item.timestamp &&
-                  new Date(Number(item.timestamp) * 1000).toLocaleString()}
-              </td>
-              <td>
-                {isMainnet ? (
-                  <a
-                    href={explorerUrl(item.txid)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-end"
-                    title="View on Blockchair"
-                  >
-                    <ExternalLinkIcon className="size-4" />
-                  </a>
-                ) : (
-                  "—"
-                )}
+                <a
+                  href={explorerUrl(item.txid)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-end hover:underline"
+                  title="View on Explorer"
+                >
+                  {item.timestamp &&
+                    new Date(Number(item.timestamp) * 1000).toLocaleString()}
+                  <ExternalLinkIcon className="size-3 ml-1" />
+                </a>
               </td>
             </tr>
           ))}

@@ -410,16 +410,16 @@ export const TransactionType = Object.freeze({
     /**
      * Transparent funds moved into the shielded pool
      */
-    Shield: 2, "2": "Shield",
+    Shielded: 2, "2": "Shielded",
     /**
      * Shielded funds moved into the transparent pool
      */
-    Unshield: 3, "3": "Unshield",
+    Unshielded: 3, "3": "Unshielded",
     /**
      * Internal transfer with no transparent leg: a sapling<->orchard pool
      * migration
      */
-    Shielded: 4, "4": "Shielded",
+    Migrated: 4, "4": "Migrated",
 });
 
 const __wbindgen_enum_ReadableStreamType = ["bytes"];
