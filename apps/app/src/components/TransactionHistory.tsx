@@ -41,7 +41,9 @@ export function TransactionHistory() {
       <table
         className={twMerge(
           "w-full mt-10 font-medium text-sm",
-          "[&_th,&_td]:text-left [&_th,&_td]:last:text-right [&_th,&_td]:py-1 lg:[&_th,&_td]:py-2",
+          "table-fixed",
+          "[&_th,&_td]:text-left [&_th,&_td]:py-2 lg:[&_th,&_td]:py-2",
+          "lg:[&_th,&_td]:last:text-right",
           "max-lg:[&,&_tr,&_td]:block max-lg:[&_thead]:hidden",
         )}
       >
@@ -95,7 +97,15 @@ export function TransactionHistory() {
                   title="View on Explorer"
                 >
                   {item.timestamp &&
-                    new Date(Number(item.timestamp) * 1000).toLocaleString()}
+                    new Date(Number(item.timestamp) * 1000).toLocaleString(
+                      undefined,
+                      {
+                        month: "numeric",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      },
+                    )}
                   <ExternalLinkIcon className="size-3 ml-1" />
                 </a>
               </td>
