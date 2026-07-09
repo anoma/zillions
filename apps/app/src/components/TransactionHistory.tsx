@@ -3,7 +3,8 @@ import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
-import { ShieldIcon } from "../icons/ShieldIcon";
+import { ShieldCheckIcon } from "../icons/ShieldCheckIcon";
+import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
 import { isShieldedAddress, shortenAddress, zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -64,11 +65,9 @@ export function TransactionHistory() {
                   ) : item.tx_type === "Received" ? (
                     <ArrowDownIcon className="size-4" />
                   ) : item.tx_type === "Shielded" ? (
-                    <ShieldIcon className="size-4" />
+                    <ShieldCheckIcon className="size-4" />
                   ) : item.tx_type === "Unshielded" ? (
-                    <div>-</div>
-                  ) : item.tx_type === "Migrated" ? (
-                    <div>-</div>
+                    <ShieldSlashIcon className="size-4" />
                   ) : (
                     <div />
                   )}

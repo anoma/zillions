@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 
-export function ShieldIcon(props: ComponentProps<"svg">) {
+export function ShieldCheckIcon(props: ComponentProps<"svg">) {
   return (
     <svg
       viewBox="0 0 24 24"
