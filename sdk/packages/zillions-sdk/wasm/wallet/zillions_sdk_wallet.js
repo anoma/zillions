@@ -396,7 +396,7 @@ export const TransactionStatusType = Object.freeze({
 });
 /**
  * The type of transaction
- * @enum {0 | 1 | 2}
+ * @enum {0 | 1 | 2 | 3 | 4}
  */
 export const TransactionType = Object.freeze({
     /**
@@ -408,9 +408,18 @@ export const TransactionType = Object.freeze({
      */
     Sent: 1, "1": "Sent",
     /**
-     * Internal transfer (shielding, de-shielding, or pool migration)
+     * Transparent funds moved into the shielded pool
      */
-    Shielded: 2, "2": "Shielded",
+    Shield: 2, "2": "Shield",
+    /**
+     * Shielded funds moved into the transparent pool
+     */
+    Unshield: 3, "3": "Unshield",
+    /**
+     * Internal transfer with no transparent leg: a sapling<->orchard pool
+     * migration
+     */
+    Shielded: 4, "4": "Shielded",
 });
 
 const __wbindgen_enum_ReadableStreamType = ["bytes"];

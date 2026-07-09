@@ -22,7 +22,12 @@ pub enum TransactionType {
     Received,
     /// Funds sent to external recipient
     Sent,
-    /// Internal transfer (shielding, de-shielding, or pool migration)
+    /// Transparent funds moved into the shielded pool
+    Shield,
+    /// Shielded funds moved into the transparent pool
+    Unshield,
+    /// Internal transfer with no transparent leg: a sapling<->orchard pool
+    /// migration
     Shielded,
 }
 
@@ -169,6 +174,10 @@ struct TxAccumulator {
     /// Tracked separately so a deshield's displayed value is just the
     /// unshielded amount, not the shielded change from the same tx.
     received_transparent_value: u64,
+    /// Portion of `spent_value` consumed from a transparent UTXO. Together
+    /// with `received_transparent_value`, distinguishes a shield (T->S,
+    /// this is nonzero) from an unshield (S->T, the other is nonzero).
+    spent_transparent_value: u64,
     /// Value of the account's own notes/UTXOs consumed as inputs to this
     /// tx, found via nullifier and outpoint spend tracking. This is the
     /// only reliable signal that the account authored a transaction: an
@@ -341,6 +350,7 @@ pub fn extract_transaction_history(
 
         let entry = tx_map.entry(*spent_txid).or_default();
         entry.spent_value += u64::from(txo.txout().value());
+        entry.spent_transparent_value += u64::from(txo.txout().value());
         entry.pools.insert("transparent".to_string());
 
         if let Some(tx_entry) = db.tx_table().get(spent_txid) {
@@ -480,10 +490,18 @@ pub fn extract_transaction_history(
                 // A genuinely external recipient was recovered: funds
                 // definitely left the wallet.
                 TransactionType::Sent
+            } else if acc.spent_transparent_value > 0 && acc.received_transparent_value == 0 {
+                // Transparent funds consumed, nothing transparent credited
+                // back: a shield.
+                TransactionType::Shield
+            } else if acc.received_transparent_value > 0 && acc.spent_transparent_value == 0 {
+                // The reverse: an unshield.
+                TransactionType::Unshield
             } else if acc.spent_value > 0 && acc.received_value > 0 {
-                // The account funded this tx and got value back, but no
-                // external recipient is known: shielding, de-shielding,
-                // pool migration, or a send not yet enhanced.
+                // The account funded this tx and got value back, with no
+                // transparent leg and no external recipient known: a
+                // sapling<->orchard pool migration, or a send not yet
+                // enhanced.
                 TransactionType::Shielded
             } else if acc.spent_value > 0 {
                 // Funded the tx and got nothing back; recipient unknown.
@@ -546,16 +564,16 @@ pub fn extract_transaction_history(
                 txid: hex::encode(txid.as_ref()),
                 tx_type,
                 value: match tx_type {
-                    // A deshield (or a shield/migration with a transparent
-                    // leg) should show just the amount that crossed into
-                    // the transparent pool, not any shielded change from
-                    // the same tx. Pure shield / s<->o migration has no
-                    // transparent receipt, so the full received value (the
-                    // shield/migration destination amount) is shown.
-                    TransactionType::Shielded if acc.received_transparent_value > 0 => {
-                        acc.received_transparent_value as i64
+                    // Show just the amount that crossed into the
+                    // transparent pool, not any shielded change from the
+                    // same tx.
+                    TransactionType::Unshield => acc.received_transparent_value as i64,
+                    // No transparent receipt in these cases, so the full
+                    // received value is the shield/migration destination
+                    // amount.
+                    TransactionType::Shield | TransactionType::Shielded => {
+                        acc.received_value as i64
                     }
-                    TransactionType::Shielded => acc.received_value as i64,
                     // Show the amount that actually reached the recipient,
                     // excluding the fee (`net_value` is the total wallet
                     // balance decrease, which bundles the fee in). Falls

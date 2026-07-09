@@ -33,7 +33,7 @@ type SummaryAccountBalances = Array<
 
 type Transaction = {
   txid: string;
-  tx_type: "Received" | "Sent" | "Shielded";
+  tx_type: "Received" | "Sent" | "Shield" | "Unshield" | "Shielded";
   value: bigint;
   fee: bigint;
   block_height: number;

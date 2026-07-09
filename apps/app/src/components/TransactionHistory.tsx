@@ -13,6 +13,13 @@ const isMainnet = (import.meta.env.VITE_ZCASH_NETWORK ?? "main") === "main";
 const explorerUrl = (txid: string) =>
   `https://blockchair.com/zcash/transaction/${txid}`;
 
+function AddressOrShieldedBadge({ address }: { address?: string }) {
+  if (!address) {
+    return <div className="bg-gold rounded-full w-fit px-5">Shielded</div>;
+  }
+  return <div title={address}>{shortenAddress(address)}</div>;
+}
+
 export function TransactionHistory() {
   const transactionHistory = useGetTransactionHistory();
 
@@ -54,8 +61,12 @@ export function TransactionHistory() {
                     <ArrowUpIcon className="size-4" />
                   ) : item.tx_type === "Received" ? (
                     <ArrowDownIcon className="size-4" />
-                  ) : item.tx_type === "Shielded" ? (
+                  ) : item.tx_type === "Shield" ? (
                     <ShieldIcon className="size-4" />
+                  ) : item.tx_type === "Unshield" ? (
+                    <div>-</div>
+                  ) : item.tx_type === "Shielded" ? (
+                    <div>-</div>
                   ) : (
                     <div />
                   )}
@@ -63,11 +74,11 @@ export function TransactionHistory() {
                 </div>
               </td>
               <td>{zatoshiToZec(item.value)} ZEC</td>
-              <td title={item.from_address}>
-                {item.from_address ? shortenAddress(item.from_address) : "—"}
+              <td>
+                <AddressOrShieldedBadge address={item.from_address} />
               </td>
-              <td title={item.to_address}>
-                {item.to_address ? shortenAddress(item.to_address) : "—"}
+              <td>
+                <AddressOrShieldedBadge address={item.to_address} />
               </td>
               <td>{item.status}</td>
               <td>
