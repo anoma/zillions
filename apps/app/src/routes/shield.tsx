@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ActionButton } from "../components/ui/ActionButton";
+import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useShield } from "../hooks/useShield";
 import { useShieldFee } from "../hooks/useShieldFee";
+import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { invariant } from "../lib/invariant";
 import { zatoshiToZec } from "../lib/utils";
 
@@ -95,11 +97,13 @@ function ShieldRoute() {
         <div className="mt-4 flex items-center justify-between text-xs font-medium">
           <div>Transaction fee</div>
           <div>
-            {fee.data
-              ? `${zatoshiToZec(fee.data)} ZEC`
-              : fee.isLoading
-                ? "..."
-                : "-"}
+            {fee.data ? (
+              <ZecValue zat={fee.data} />
+            ) : fee.isLoading ? (
+              <SpinnerIcon className="size-3" />
+            ) : (
+              "-"
+            )}
           </div>
         </div>
 
@@ -115,7 +119,7 @@ function ShieldRoute() {
 
         {!canShield && (
           <div className="mt-2 text-sm text-center font-medium">
-            Only balances above {zatoshiToZec(SHIELDING_THRESHOLD)} ZEC can be
+            Only balances above <ZecValue zat={SHIELDING_THRESHOLD} /> can be
             shielded
           </div>
         )}

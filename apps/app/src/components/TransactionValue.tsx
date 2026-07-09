@@ -1,19 +1,19 @@
 import type { TransactionReceipt } from "../lib/sdk/types";
-import { zatoshiToZec } from "../lib/utils";
+import { ZecValue } from "./ZecValue";
 
 export function TransactionValue({ tx }: { tx: TransactionReceipt }) {
   let value = tx.value;
-  // on sent, the value is negative, but we want to present as positive value
+  // Sent values come back negative; flip to positive for display.
   if (tx.tx_type === "Sent") {
     value *= -1n;
   }
-  // on shielded of migrated, include the fee so user have a better perception of the total value of the transaction
+  // Shielded/migrated values exclude the fee; add it back for the total amount.
   if (tx.tx_type === "Shielded" || tx.tx_type === "Migrated") {
     value += tx.fee;
   }
 
   let signal = "";
-  // on received, we want to enforce the increased balance, so add the plus sign
+  // Prefix received amounts with + to show the balance increase.
   if (tx.tx_type === "Received") {
     signal = "+";
   }
@@ -21,8 +21,7 @@ export function TransactionValue({ tx }: { tx: TransactionReceipt }) {
   return (
     <span>
       {signal}
-      {zatoshiToZec(value)}
-      <span className="text-[0.6em]"> ZEC</span>
+      <ZecValue zat={value} />
     </span>
   );
 }
