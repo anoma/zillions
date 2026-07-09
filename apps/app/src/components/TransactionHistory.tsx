@@ -5,10 +5,10 @@ import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { ShieldCheckIcon } from "../icons/ShieldCheckIcon";
 import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
-import { zatoshiToZec } from "../lib/utils";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
+import { TransactionValue } from "./TransactionValue";
 
 export function TransactionHistory() {
   const transactionHistory = useGetTransactionHistory();
@@ -61,15 +61,7 @@ export function TransactionHistory() {
                 {item.tx_type}
                 {item.status !== "Confirmed" && ` (${item.status})`}
               </div>
-              <div>
-                {zatoshiToZec(
-                  item.value +
-                    (item.tx_type === "Shielded" || item.tx_type === "Migrated"
-                      ? item.fee
-                      : 0n),
-                )}{" "}
-                ZEC
-              </div>
+              <TransactionValue tx={item} />
               <AddressBadge address={item.from_address} />
               <AddressBadge address={item.to_address} />
               <time>

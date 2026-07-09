@@ -10,41 +10,16 @@ import {
 } from "@zillions/sdk";
 import { db } from "../db";
 import { dedupe } from "../utils";
+import type {
+  Network,
+  SummaryAccountBalances,
+  TransactionReceipt,
+} from "./types";
 
 const hexToBytes = (hex: string): Uint8Array =>
   Uint8Array.from({ length: hex.length / 2 }, (_, i) =>
     parseInt(hex.substring(i * 2, i * 2 + 2), 16),
   );
-
-type Network = "main" | "test";
-
-type SummaryAccountBalances = Array<
-  [
-    number, // account id
-    {
-      sapling_balance: number;
-      orchard_balance: number;
-      unshielded_balance: number;
-      pending_change: number;
-      pending_spendable: number;
-    },
-  ]
->;
-
-type Transaction = {
-  txid: string;
-  tx_type: "Received" | "Sent" | "Shielded" | "Unshielded" | "Migrated";
-  value: bigint;
-  fee: bigint;
-  block_height: number;
-  confirmations: number;
-  status: "Confirmed" | "Pending" | "Expired";
-  memo: string | undefined;
-  timestamp: number;
-  pool: "orchard" | "sapling" | "transparent" | "mixed";
-  to_address: string | undefined;
-  from_address: string | undefined;
-};
 
 const defaultNetwork: Network = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 const minConfirmationsTrusted = 3;
@@ -197,7 +172,7 @@ export class SdkWallet {
               ...t,
               value: BigInt(t.value),
               fee: BigInt(t.fee ?? 0),
-            }) as Transaction,
+            }) as TransactionReceipt,
         );
     } finally {
       summary?.free();

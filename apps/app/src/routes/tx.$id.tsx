@@ -3,13 +3,13 @@ import { AddressBadge } from "../components/AddressBadge";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
 import { PageError } from "../components/PageError";
 import { PageLoader } from "../components/PageLoader";
+import { TransactionValue } from "../components/TransactionValue";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { ShieldCheckIcon } from "../icons/ShieldCheckIcon";
 import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
-import { zatoshiToZec } from "../lib/utils";
 
 export const Route = createFileRoute("/tx/$id")({
   component: TransactionRoute,
@@ -63,13 +63,7 @@ function TransactionRoute() {
       </div>
 
       <div className="mt-2 text-center text-6xl leading-none font-medium">
-        {zatoshiToZec(
-          item.value +
-            (item.tx_type === "Shielded" || item.tx_type === "Migrated"
-              ? item.fee
-              : 0n),
-        )}{" "}
-        ZEC
+        <TransactionValue tx={item} />
       </div>
 
       <div className="my-15 flex items-center justify-center gap-2">
