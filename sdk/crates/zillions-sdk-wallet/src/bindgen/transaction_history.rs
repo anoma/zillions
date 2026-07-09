@@ -165,6 +165,10 @@ struct TxAccumulator {
     /// Value of new notes/outputs credited to the account in this tx
     /// (including our own change).
     received_value: u64,
+    /// Portion of `received_value` credited as a new transparent output.
+    /// Tracked separately so a deshield's displayed value is just the
+    /// unshielded amount, not the shielded change from the same tx.
+    received_transparent_value: u64,
     /// Value of the account's own notes/UTXOs consumed as inputs to this
     /// tx, found via nullifier and outpoint spend tracking. This is the
     /// only reliable signal that the account authored a transaction: an
@@ -364,6 +368,7 @@ pub fn extract_transaction_history(
         let entry = tx_map.entry(txid).or_default();
 
         entry.received_value += u64::from(txo.txout().value());
+        entry.received_transparent_value += u64::from(txo.txout().value());
         entry.pools.insert("transparent".to_string());
 
         if let Some(tx_entry) = db.tx_table().get(&txid) {
@@ -541,6 +546,15 @@ pub fn extract_transaction_history(
                 txid: hex::encode(txid.as_ref()),
                 tx_type,
                 value: match tx_type {
+                    // A deshield (or a shield/migration with a transparent
+                    // leg) should show just the amount that crossed into
+                    // the transparent pool, not any shielded change from
+                    // the same tx. Pure shield / s<->o migration has no
+                    // transparent receipt, so the full received value (the
+                    // shield/migration destination amount) is shown.
+                    TransactionType::Shielded if acc.received_transparent_value > 0 => {
+                        acc.received_transparent_value as i64
+                    }
                     TransactionType::Shielded => acc.received_value as i64,
                     // Show the amount that actually reached the recipient,
                     // excluding the fee (`net_value` is the total wallet
