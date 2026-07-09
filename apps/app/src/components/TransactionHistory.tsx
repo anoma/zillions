@@ -51,7 +51,6 @@ export function TransactionHistory() {
             <th>Value</th>
             <th>From</th>
             <th>To</th>
-            <th>Status</th>
             <th>Time</th>
           </tr>
         </thead>
@@ -72,6 +71,7 @@ export function TransactionHistory() {
                     <div />
                   )}
                   {item.tx_type}
+                  {item.status !== "Confirmed" && `(${item.status})`}
                 </div>
               </td>
               <td>
@@ -86,7 +86,6 @@ export function TransactionHistory() {
               <td>
                 <AddressOrShieldedBadge address={item.to_address} />
               </td>
-              <td>{item.status}</td>
               <td>
                 <a
                   href={explorerUrl(item.txid)}
