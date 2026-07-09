@@ -2,10 +2,16 @@ import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
+import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { ShieldIcon } from "../icons/ShieldIcon";
 import { shortenAddress, zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
+
+// Blockchair has no testnet explorer, so the link is only meaningful on mainnet.
+const isMainnet = (import.meta.env.VITE_ZCASH_NETWORK ?? "main") === "main";
+const explorerUrl = (txid: string) =>
+  `https://blockchair.com/zcash/transaction/${txid}`;
 
 export function TransactionHistory() {
   const transactionHistory = useGetTransactionHistory();
@@ -36,6 +42,7 @@ export function TransactionHistory() {
             <th>To</th>
             <th>Status</th>
             <th>Time</th>
+            <th>Explorer</th>
           </tr>
         </thead>
         <tbody>
@@ -66,6 +73,21 @@ export function TransactionHistory() {
               <td>
                 {item.timestamp &&
                   new Date(Number(item.timestamp) * 1000).toLocaleString()}
+              </td>
+              <td>
+                {isMainnet ? (
+                  <a
+                    href={explorerUrl(item.txid)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-end"
+                    title="View on Blockchair"
+                  >
+                    <ExternalLinkIcon className="size-4" />
+                  </a>
+                ) : (
+                  "—"
+                )}
               </td>
             </tr>
           ))}
