@@ -4,6 +4,7 @@ import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
 import { PageError } from "../components/PageError";
 import { PageLoader } from "../components/PageLoader";
 import { TransactionValue } from "../components/TransactionValue";
+import { ZecValue } from "../components/ZecValue";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
@@ -37,7 +38,7 @@ function TransactionRoute() {
   }
 
   return (
-    <div className="p-10 mx-auto">
+    <div className="p-10">
       <h1 className="text-center text-lg font-bold">Transaction receipt</h1>
       <div className="mt-1 text-center text-xs">
         <time>
@@ -46,55 +47,92 @@ function TransactionRoute() {
         </time>
       </div>
 
-      <div className="mt-15 text-lg flex items-center justify-center gap-2">
-        {item.tx_type === "Sent" ? (
-          <ArrowUpIcon className="size-4" />
-        ) : item.tx_type === "Received" ? (
-          <ArrowDownIcon className="size-4" />
-        ) : item.tx_type === "Shielded" ? (
-          <ShieldCheckIcon className="size-4" />
-        ) : item.tx_type === "Unshielded" ? (
-          <ShieldSlashIcon className="size-4" />
-        ) : (
-          <div />
-        )}
-        {item.tx_type}
-        {item.status !== "Confirmed" && ` (${item.status})`}
-      </div>
+      <div className="max-w-125 mx-auto">
+        <div className="mt-15 text-lg flex items-center justify-center gap-2">
+          {item.tx_type === "Sent" ? (
+            <ArrowUpIcon className="size-4" />
+          ) : item.tx_type === "Received" ? (
+            <ArrowDownIcon className="size-4" />
+          ) : item.tx_type === "Shielded" ? (
+            <ShieldCheckIcon className="size-4" />
+          ) : item.tx_type === "Unshielded" ? (
+            <ShieldSlashIcon className="size-4" />
+          ) : (
+            <div />
+          )}
+          {item.tx_type}
+          {item.status !== "Confirmed" && ` (${item.status})`}
+        </div>
 
-      <div className="mt-2 text-center text-6xl leading-none font-medium">
-        <TransactionValue tx={item} />
-      </div>
+        <div className="mt-2 text-center text-6xl leading-none font-medium">
+          <TransactionValue tx={item} />
+        </div>
 
-      <div className="my-15 flex items-center justify-center gap-2">
-        <AddressBadge
-          address={item.from_address}
-          className="h-8 w-50 text-sm"
-        />{" "}
-        →{" "}
-        <AddressBadge address={item.to_address} className="h-8 w-50 text-sm" />
-      </div>
+        <div className="mt-15 flex items-center justify-center gap-2">
+          <AddressBadge
+            address={item.from_address}
+            className="h-8 w-50 text-sm"
+          />{" "}
+          →{" "}
+          <AddressBadge
+            address={item.to_address}
+            className="h-8 w-50 text-sm"
+          />
+        </div>
 
-      <div className="mt-15 w-min mx-auto">
-        <div className="text-xs font-medium mb-1">Tx hash:</div>
-        <div className="h-11 py-0.5 px-5 rounded-full border border-gray-300 flex items-center">
-          <CopyToClipboardControl value={item.txid}>
-            <div className="text-xs">{item.txid}</div>
+        <div className="mt-20">
+          {(
+            {
+              Shielded: [
+                ["Sent from Transparent", item.value + item.fee],
+                ["Transaction fee", item.fee],
+                ["Received in Shielded", item.value],
+              ],
+              Unshielded: [
+                ["Received in Transparent", item.value],
+                ["Transaction fee", item.fee],
+                ["Deducted from Shielded", item.value + item.fee],
+              ],
+              Sent: [
+                ["Recipient received", -item.value],
+                ["Transaction fee", item.fee],
+                ["Total spent", -item.value + item.fee],
+              ],
+              Received: [],
+              Migrated: [],
+            } as const
+          )[item.tx_type].map(([label, value]) => (
+            <div className="grid grid-cols-2 gap-2 text-xs font-medium mb-2">
+              <div>{label}</div>
+              <ZecValue zat={value} className="text-right" />
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 rounded-lg border border-gray-300">
+          <CopyToClipboardControl
+            value={item.txid}
+            className="w-full justify-between p-3"
+          >
+            <div className="text-xs font-medium">
+              <div>Transaction hash:</div>
+              <div className="tracking-tight wrap-anywhere">{item.txid}</div>
+            </div>
           </CopyToClipboardControl>
         </div>
-      </div>
 
-      <div className="text-center mt-5">
-        <a
-          href={explorerUrl(item.txid)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-end text-xs hover:underline"
-          title="View on Explorer"
-        >
-          View on Explorer
-          <ExternalLinkIcon className="size-3 ml-1" />
-        </a>
+        <div className="mt-3 text-center">
+          <a
+            href={explorerUrl(item.txid)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-end text-xs hover:underline"
+            title="View on Explorer"
+          >
+            View on Explorer
+            <ExternalLinkIcon className="size-3 ml-1" />
+          </a>
+        </div>
       </div>
     </div>
   );

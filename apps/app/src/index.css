@@ -15,9 +15,11 @@
   @keyframes loading {
     from {
       transform: rotate(0turn);
+      transform-origin: center;
     }
     to {
       transform: rotate(1turn);
+      transform-origin: center;
     }
   }
 
