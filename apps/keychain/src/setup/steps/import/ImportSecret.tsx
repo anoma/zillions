@@ -205,7 +205,7 @@ export const ImportSecret = () => {
           variant="Text"
           value={birthday === undefined ? "" : String(birthday)}
           placeholder="e.g. 2500000"
-          hint="The block height when this account first received funds. Keep 0 to scan from genesis (safe but slow), or enter a known height to speed up the initial sync."
+          hint="The block height when this account first received funds. Keep 0 to scan from the start (safe but slow), or enter a known height to speed up the initial sync."
           onChange={(e) => {
             const raw = e.target.value.trim();
             const parsed = parseInt(raw, 10);
