@@ -74,7 +74,12 @@ export function TransactionHistory() {
                   {item.tx_type}
                 </div>
               </td>
-              <td>{zatoshiToZec(item.value)} ZEC</td>
+              <td>
+                {zatoshiToZec(
+                  item.value + (item.tx_type === "Shielded" ? item.fee : 0n),
+                )}{" "}
+                ZEC
+              </td>
               <td>
                 <AddressOrShieldedBadge address={item.from_address} />
               </td>

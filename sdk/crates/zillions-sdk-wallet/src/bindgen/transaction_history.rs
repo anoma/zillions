@@ -499,37 +499,41 @@ pub fn extract_transaction_history(
             // amount sent).
             let net_value = acc.received_value as i64 - acc.spent_value as i64;
 
-            // Determine transaction type
-            let tx_type = if acc.sent_value > 0 {
-                // A genuinely external recipient was recovered: funds
-                // definitely left the wallet.
-                TransactionType::Sent
-            } else if acc.spent_value == 0 {
-                // The account funded nothing in this tx (no nullifier or
-                // UTXO of ours was consumed), so any credited value is a
-                // plain external receive - regardless of which pool it
-                // landed in. Without this check, a transparent input from
-                // someone else paying us directly (no spend of ours at
-                // all) satisfies "received_transparent_value > 0 with
-                // nothing of ours spent transparently" and would otherwise
-                // be mistaken for an unshield.
-                TransactionType::Received
+            // First decide whether an external party is involved at all;
+            // only once we know the tx is entirely self-funded and
+            // self-destined do we look at which pools it moved value
+            // between.
+            let is_internal =
+                acc.spent_value > 0 && acc.sent_value == 0 && acc.received_value > 0;
+
+            let tx_type = if !is_internal {
+                if acc.spent_value == 0 {
+                    // The account funded nothing in this tx (no nullifier
+                    // or UTXO of ours was consumed): whoever did fund it
+                    // is external, so any credited value is a plain
+                    // receive - regardless of which pool it landed in.
+                    TransactionType::Received
+                } else {
+                    // The account funded this tx, either to a confirmed
+                    // external recipient (`sent_value > 0`) or with
+                    // nothing credited back and no recipient known yet
+                    // (not enhanced, or fully drained to an external
+                    // party with zero change): either way, value left
+                    // the wallet.
+                    TransactionType::Sent
+                }
             } else if acc.spent_transparent_value > 0 && acc.received_transparent_value == 0 {
-                // Transparent funds consumed, nothing transparent credited
-                // back: a shield.
+                // Self-funded, something came back, no transparent
+                // receipt: transparent consumed -> a shield (T -> S).
                 TransactionType::Shielded
             } else if acc.received_transparent_value > 0 && acc.spent_transparent_value == 0 {
-                // The reverse: an unshield.
+                // The reverse: an unshield (S -> T).
                 TransactionType::Unshielded
-            } else if acc.received_value > 0 {
-                // The account funded this tx and got value back, with no
-                // transparent leg and no external recipient known: a
-                // sapling<->orchard pool migration, or a send not yet
-                // enhanced.
-                TransactionType::Migrated
             } else {
-                // Funded the tx and got nothing back; recipient unknown.
-                TransactionType::Sent
+                // Self-funded, something came back, and the transparent
+                // pool was either untouched (S -> S) or on both sides
+                // (T -> T consolidation): a pool migration.
+                TransactionType::Migrated
             };
 
             // Determine pool type
