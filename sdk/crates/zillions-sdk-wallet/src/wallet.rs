@@ -438,10 +438,17 @@ where
         const MAX_ROUNDS: usize = 10;
 
         let mut previous: Option<Vec<TransactionDataRequest>> = None;
-        for _ in 0..MAX_ROUNDS {
+        for round in 0..MAX_ROUNDS {
             let requests = self.db.read().await.transaction_data_requests()?;
             if requests.is_empty() || previous.as_ref() == Some(&requests) {
                 break;
+            }
+            if round + 1 == MAX_ROUNDS {
+                tracing::warn!(
+                    "sync_enhance_transactions did not converge within {MAX_ROUNDS} rounds; \
+                     {} requests still outstanding",
+                    requests.len()
+                );
             }
 
             for request in &requests {

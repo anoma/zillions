@@ -92,8 +92,6 @@ export async function syncWallet(
     }
   };
 
-  let enhanced = false;
-
   for (;;) {
     options.signal?.throwIfAborted();
 
@@ -128,14 +126,12 @@ export async function syncWallet(
     // Ranges drained; complete the freshly scanned transactions before
     // refreshing the tip in case new blocks arrived.
     await wallet.sync_enhance_transactions();
-    enhanced = true;
   }
 
-  // A wallet restored already-synced never enters the scan loop but may
-  // still have unserviced data requests from a previous session.
-  if (!enhanced) {
-    await wallet.sync_enhance_transactions();
-  }
+  // A wallet restored already-synced never enters the loop above, but may
+  // still have unserviced data requests from a previous session; harmless
+  // to call again otherwise, since it's a no-op with nothing outstanding.
+  await wallet.sync_enhance_transactions();
 
   // Final checkpoint so the fully synced and enhanced wallet is what gets
   // restored next session.

@@ -19,7 +19,7 @@ function AddressOrShieldedBadge({ address }: { address?: string }) {
       title={address}
       className={twMerge(hasGoldBadge && "bg-gold rounded-full w-fit px-4")}
     >
-      {address ? shortenAddress(address) : hasGoldBadge ? "Shielded" : "-"}
+      {address ? shortenAddress(address) : "Shielded"}
     </div>
   );
 }
@@ -42,7 +42,7 @@ export function TransactionHistory() {
         className={twMerge(
           "w-full mt-10 font-medium text-sm",
           "table-fixed",
-          "[&_th,&_td]:text-left [&_th,&_td]:py-2 lg:[&_th,&_td]:py-2",
+          "[&_th,&_td]:text-left [&_th,&_td]:py-2",
           "lg:[&_th,&_td]:last:text-right",
           "max-lg:[&,&_tr,&_td]:block max-lg:[&_thead]:hidden",
         )}
@@ -78,7 +78,10 @@ export function TransactionHistory() {
               </td>
               <td>
                 {zatoshiToZec(
-                  item.value + (item.tx_type === "Shielded" ? item.fee : 0n),
+                  item.value +
+                    (item.tx_type === "Shielded" || item.tx_type === "Migrated"
+                      ? item.fee
+                      : 0n),
                 )}{" "}
                 ZEC
               </td>

@@ -948,10 +948,10 @@ impl<P: consensus::Parameters> WalletWrite for MemoryWalletDb<P> {
                 .flat_map(|b| b.vin.iter())
             {
                 let prevout_txid = txin.prevout().txid();
-                let known = self
-                    .tx_table
-                    .get(prevout_txid)
-                    .is_some_and(|entry| entry.raw().is_some());
+                let known = self.tx_table.get(prevout_txid).is_some_and(|entry| {
+                    entry.raw().is_some()
+                        || matches!(entry.status(), TransactionStatus::TxidNotRecognized)
+                });
                 if !known {
                     self.transaction_data_request_queue
                         .queue_enhancement(prevout_txid);
@@ -1370,6 +1370,11 @@ Instead derive the ufvk in the calling code and import it using `import_account_
         self.nullifiers.0.retain(|_, (h, _)| *h <= height);
         // Truncate scanned blocks and scan queue to the target height
         self.scan_queue.0.retain(|(start, _, _)| *start <= height);
+        // A reorg may have replaced transactions above this height, so
+        // forget any transparent address checked past it to re-request it.
+        #[cfg(feature = "transparent-inputs")]
+        self.transparent_addresses_checked
+            .retain(|_, checked_height| *checked_height <= height);
         Ok(())
     }
 

@@ -168,25 +168,16 @@ impl TransactionHistoryResponse {
 /// Internal struct to accumulate transaction data
 #[derive(Debug, Default)]
 struct TxAccumulator {
-    /// Value of new notes/outputs credited to the account in this tx
-    /// (including our own change).
+    /// New value credited to the account (including its own change).
     received_value: u64,
-    /// Portion of `received_value` credited as a new transparent output.
-    /// Tracked separately so a deshield's displayed value is just the
-    /// unshielded amount, not the shielded change from the same tx.
+    /// Portion of `received_value` that is a new transparent output.
     received_transparent_value: u64,
-    /// Portion of `spent_value` consumed from a transparent UTXO. Together
-    /// with `received_transparent_value`, distinguishes a shield (T->S,
-    /// this is nonzero) from an unshield (S->T, the other is nonzero).
+    /// Portion of `spent_value` consumed from a transparent UTXO.
     spent_transparent_value: u64,
-    /// Value of the account's own notes/UTXOs consumed as inputs to this
-    /// tx, found via nullifier and outpoint spend tracking. This is the
-    /// only reliable signal that the account authored a transaction: an
-    /// spent note doesn't require the transaction to be decrypted or
-    /// enhanced first, unlike `sent_value`.
+    /// Value of the account's own notes/UTXOs spent as inputs, found via
+    /// nullifier and outpoint tracking (available before enhancement).
     spent_value: u64,
-    /// Value confirmed sent to a genuinely external recipient (excludes
-    /// change, self-shields and other outputs paying our own addresses).
+    /// Value confirmed sent to a genuinely external recipient.
     sent_value: u64,
     fee: Option<u64>,
     memos: Vec<String>,
@@ -196,31 +187,56 @@ struct TxAccumulator {
     expiry_height: Option<BlockHeight>,
     to_address: Option<String>,
     from_address: Option<String>,
-    /// The account's own transparent address a new transparent output paid.
-    /// Used as a `to_address` fallback when there's no external recipient
-    /// to show (i.e. this account didn't author the tx): a plain receive
-    /// or the destination side of an unshield.
+    /// The account's own transparent address a new transparent output
+    /// paid; a `to_address` fallback for receives and unshields.
     own_transparent_address: Option<String>,
 }
 
-/// Whether `address` belongs to one of the wallet's own accounts (checked
-/// against each account's default address). Used to avoid misclassifying
-/// a self-shield or unshield transaction as a Sent transaction: OVK
-/// decryption recovers such outputs the same way it recovers genuinely
-/// external ones.
+impl TxAccumulator {
+    /// Copies status/height/expiry/fee from a tx_table entry, without
+    /// overwriting an already-set value.
+    fn merge_tx_entry(&mut self, tx_entry: &zcash_client_memory::TransactionEntry) {
+        if self.status.is_none() {
+            self.status = Some(tx_entry.status());
+            self.block_height = tx_entry.mined_height();
+            self.expiry_height = tx_entry.expiry_height();
+        }
+        self.fee = self.fee.or_else(|| tx_entry.fee().map(|fee| fee.into_u64()));
+    }
+}
+
+/// Whether `address` belongs to one of the wallet's own accounts: each
+/// account's default address, or any of its known transparent receivers.
+/// A non-default diversified shielded address is not detected.
 fn is_own_address(
     db: &MemoryWalletDb<Network>,
     recipient_address: &zcash_address::ZcashAddress,
 ) -> bool {
     use zcash_client_backend::data_api::WalletRead;
 
-    zcash_keys::address::Address::decode(db.params(), &recipient_address.encode())
-        .and_then(|address| {
-            db.find_account_for_address(db.params(), &address)
-                .ok()
-                .flatten()
-        })
+    let Some(address) =
+        zcash_keys::address::Address::decode(db.params(), &recipient_address.encode())
+    else {
+        return false;
+    };
+
+    if db
+        .find_account_for_address(db.params(), &address)
+        .ok()
+        .flatten()
         .is_some()
+    {
+        return true;
+    }
+
+    if let zcash_keys::address::Address::Transparent(t_addr) = &address {
+        return db.get_account_ids().unwrap_or_default().iter().any(|id| {
+            db.get_transparent_receivers(*id, true, true)
+                .is_ok_and(|receivers| receivers.contains_key(t_addr))
+        });
+    }
+
+    false
 }
 
 /// Resolve the address that funded a transaction from the prevouts of its
@@ -300,19 +316,15 @@ pub fn extract_transaction_history(
             }
         }
 
-        // Get transaction status from tx_table
         if let Some(tx_entry) = db.tx_table().get(&txid) {
-            entry.status = Some(tx_entry.status());
-            entry.block_height = tx_entry.mined_height();
-            entry.expiry_height = tx_entry.expiry_height();
-            entry.fee = tx_entry.fee().map(|fee| fee.into_u64());
+            entry.merge_tx_entry(tx_entry);
         }
     }
 
-    // Process notes this account owned that were spent as inputs to a
-    // transaction. Compact-block scanning marks nullifiers spent without
-    // touching sent_notes, so without this a wallet-authored transaction
-    // is invisible as anything but the receipt of its own change.
+    // Nullifier/outpoint spends of the account's own notes: needed so a
+    // wallet-authored tx is visible as more than just the receipt of its
+    // own change (compact-block scanning marks spends without touching
+    // sent_notes).
     for (note_id, spent_txid) in db.received_note_spends().iter() {
         let Some(note) = db.received_notes().find_by_note_id(note_id) else {
             continue;
@@ -331,19 +343,12 @@ pub fn extract_transaction_history(
         entry.pools.insert(pool.to_string());
 
         if let Some(tx_entry) = db.tx_table().get(spent_txid) {
-            if entry.status.is_none() {
-                entry.status = Some(tx_entry.status());
-                entry.block_height = tx_entry.mined_height();
-                entry.expiry_height = tx_entry.expiry_height();
-            }
-            entry.fee = entry
-                .fee
-                .or_else(|| tx_entry.fee().map(|fee| fee.into_u64()));
+            entry.merge_tx_entry(tx_entry);
         }
     }
 
-    // Process transparent UTXOs this account owned that were spent as
-    // inputs to a transaction (e.g. shielding), for the same reason as above.
+    // Transparent UTXOs the account owned that were spent as inputs (e.g.
+    // shielding), for the same reason as above.
     for (outpoint, spent_txid) in db.transparent_received_output_spends().iter() {
         let Some(txo) = db.transparent_received_outputs().get(outpoint) else {
             continue;
@@ -357,28 +362,19 @@ pub fn extract_transaction_history(
         entry.spent_transparent_value += u64::from(txo.txout().value());
         entry.pools.insert("transparent".to_string());
 
-        // The address that funded this tx: for a shield, this is the
-        // wallet's own transparent address the shielded funds came from.
         if entry.from_address.is_none() {
             entry.from_address = transparent_sender(db, spent_txid);
         }
 
         if let Some(tx_entry) = db.tx_table().get(spent_txid) {
-            if entry.status.is_none() {
-                entry.status = Some(tx_entry.status());
-                entry.block_height = tx_entry.mined_height();
-                entry.expiry_height = tx_entry.expiry_height();
-            }
-            entry.fee = entry
-                .fee
-                .or_else(|| tx_entry.fee().map(|fee| fee.into_u64()));
+            entry.merge_tx_entry(tx_entry);
         }
     }
 
-    // Process transparent outputs received by this account. These are not
-    // notes, so they live in their own table; without them, a transparent
-    // receive would be invisible and a transparent send would double-count
-    // its own change output.
+    // Transparent outputs received by the account. These live in their own
+    // table (not `received_notes`); without this a transparent receive
+    // would be invisible and a transparent send would double-count its
+    // own change.
     for (_, txo) in db.transparent_received_outputs().iter() {
         if txo.account_id() != account_id_typed {
             continue;
@@ -396,12 +392,7 @@ pub fn extract_transaction_history(
         }
 
         if let Some(tx_entry) = db.tx_table().get(&txid) {
-            entry.status = Some(tx_entry.status());
-            entry.block_height = tx_entry.mined_height();
-            entry.expiry_height = tx_entry.expiry_height();
-            entry.fee = entry
-                .fee
-                .or_else(|| tx_entry.fee().map(|fee| fee.into_u64()));
+            entry.merge_tx_entry(tx_entry);
         }
 
         if entry.from_address.is_none() {
@@ -418,11 +409,8 @@ pub fn extract_transaction_history(
         let txid = *sent_note_id.txid();
         let entry = tx_map.entry(txid).or_default();
 
-        // A sent-note entry exists for every output the wallet authored,
-        // including change, self-shields and unshields to our own address
-        // (all of which OVK decryption recovers the same way as a genuine
-        // external payment). Only outputs paying an address we don't
-        // control count as money that actually left the wallet.
+        // Only an output paying an address we don't control is money that
+        // actually left the wallet (change/self-shields also land here).
         if let zcash_client_backend::wallet::Recipient::External {
             recipient_address, ..
         } = sent_note.to()
@@ -475,16 +463,8 @@ pub fn extract_transaction_history(
             }
         }
 
-        // Get transaction status (if not already set) and fee from tx_table
         if let Some(tx_entry) = db.tx_table().get(&txid) {
-            if entry.status.is_none() {
-                entry.status = Some(tx_entry.status());
-                entry.block_height = tx_entry.mined_height();
-                entry.expiry_height = tx_entry.expiry_height();
-            }
-            entry.fee = entry
-                .fee
-                .or_else(|| tx_entry.fee().map(|fee| fee.into_u64()));
+            entry.merge_tx_entry(tx_entry);
         }
     }
 
@@ -492,47 +472,26 @@ pub fn extract_transaction_history(
     let mut transactions: Vec<TransactionHistoryEntry> = tx_map
         .into_iter()
         .map(|(txid, acc)| {
-            // The wallet's balance change: new value credited, minus the
-            // account's own value consumed as inputs (which subsumes
-            // change, so a send's net value is correctly negative
-            // regardless of how large the change is relative to the
-            // amount sent).
+            // Balance change: credited value minus the account's own
+            // value spent (so a send is negative regardless of change size).
             let net_value = acc.received_value as i64 - acc.spent_value as i64;
 
-            // First decide whether an external party is involved at all;
-            // only once we know the tx is entirely self-funded and
-            // self-destined do we look at which pools it moved value
-            // between.
+            // Self-funded with no confirmed external recipient and
+            // something credited back: an internal pool move.
             let is_internal =
                 acc.spent_value > 0 && acc.sent_value == 0 && acc.received_value > 0;
 
             let tx_type = if !is_internal {
                 if acc.spent_value == 0 {
-                    // The account funded nothing in this tx (no nullifier
-                    // or UTXO of ours was consumed): whoever did fund it
-                    // is external, so any credited value is a plain
-                    // receive - regardless of which pool it landed in.
                     TransactionType::Received
                 } else {
-                    // The account funded this tx, either to a confirmed
-                    // external recipient (`sent_value > 0`) or with
-                    // nothing credited back and no recipient known yet
-                    // (not enhanced, or fully drained to an external
-                    // party with zero change): either way, value left
-                    // the wallet.
                     TransactionType::Sent
                 }
             } else if acc.spent_transparent_value > 0 && acc.received_transparent_value == 0 {
-                // Self-funded, something came back, no transparent
-                // receipt: transparent consumed -> a shield (T -> S).
                 TransactionType::Shielded
             } else if acc.received_transparent_value > 0 && acc.spent_transparent_value == 0 {
-                // The reverse: an unshield (S -> T).
                 TransactionType::Unshielded
             } else {
-                // Self-funded, something came back, and the transparent
-                // pool was either untouched (S -> S) or on both sides
-                // (T -> T consolidation): a pool migration.
                 TransactionType::Migrated
             };
 
@@ -590,21 +549,17 @@ pub fn extract_transaction_history(
                 txid: hex::encode(txid.as_ref()),
                 tx_type,
                 value: match tx_type {
-                    // Show just the amount that crossed into the
-                    // transparent pool, not any shielded change from the
-                    // same tx.
+                    // Just the amount that crossed into the transparent
+                    // pool, excluding any shielded change from the same tx.
                     TransactionType::Unshielded => acc.received_transparent_value as i64,
-                    // No transparent receipt in these cases, so the full
-                    // received value is the shield/migration destination
-                    // amount.
+                    // No transparent receipt, so the full received value is
+                    // the shield/migration destination amount.
                     TransactionType::Shielded | TransactionType::Migrated => {
                         acc.received_value as i64
                     }
-                    // Show the amount that actually reached the recipient,
-                    // excluding the fee (`net_value` is the total wallet
-                    // balance decrease, which bundles the fee in). Falls
-                    // back to `net_value` when the recipient isn't known
-                    // yet (fee can't be separated out in that case).
+                    // The recipient's amount, excluding the fee (`net_value`
+                    // bundles it in). Falls back to `net_value` when the
+                    // recipient isn't known yet.
                     TransactionType::Sent if acc.sent_value > 0 => -(acc.sent_value as i64),
                     _ => net_value,
                 },
