@@ -126,7 +126,9 @@ export const wizardReducer = (
         flow: event.flow,
         step: event.flow === "create" ? "create.warning" : "import.secret",
         // Create: auto-fetch chain tip (new account has no prior history).
-        // Import: default to genesis so no old transactions are missed.
+        // Import: default to 0; the SDK clamps any height at or below Sapling
+        // activation to an empty tree, so this scans from the start of the
+        // shielded chain without a server round-trip.
         birthday: event.flow === "create" ? undefined : 0,
       };
 

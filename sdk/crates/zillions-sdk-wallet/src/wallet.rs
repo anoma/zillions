@@ -60,19 +60,35 @@ use orchard::tree::MerkleHashOrchard;
 use transparent::address::Script;
 use transparent::bundle::{OutPoint, TxOut};
 use zcash_client_backend::data_api::chain::{
-    error::Error as ChainError, scan_cached_blocks, BlockCache, CommitmentTreeRoot,
+    error::Error as ChainError, scan_cached_blocks, BlockCache, ChainState, CommitmentTreeRoot,
 };
 use zcash_keys::encoding::AddressCodec;
+use zcash_primitives::block::BlockHash;
 use zcash_primitives::merkle_tree::HashSer;
 use zcash_script::script;
 
-use zcash_protocol::consensus::{BlockHeight, BranchId, Parameters};
+use zcash_protocol::consensus::{BlockHeight, BranchId, NetworkUpgrade, Parameters};
 use zcash_protocol::value::Zatoshis;
 use zip32;
 use zip32::fingerprint::SeedFingerprint;
 
 /// Rewind margin applied below the height where a chain reorg is detected.
 const REORG_REWIND_MARGIN: u32 = 10;
+
+/// The chain state immediately prior to Sapling activation: no shielded pool exists
+/// before that height, so the note commitment trees are empty by definition and this
+/// needs no server round-trip. Used as the birthday anchor for any height at or below
+/// Sapling activation, where querying `GetTreeState` would otherwise be ambiguous
+/// (height 0 is indistinguishable from an unset field on the wire).
+fn earliest_chain_state(network: &Network) -> Result<ChainState, Error> {
+    let sapling_activation = network
+        .activation_height(NetworkUpgrade::Sapling)
+        .ok_or(Error::Birthday)?;
+    Ok(ChainState::empty(
+        sapling_activation - 1,
+        BlockHash([0; 32]),
+    ))
+}
 
 /// constant that signals what's the minimum transparent balance for proposing a
 /// shielding transaction
@@ -255,7 +271,16 @@ where
             }
         };
         // Construct an `AccountBirthday` for the account's birthday.
-        let birthday = {
+        let sapling_activation: u32 = self
+            .network
+            .activation_height(NetworkUpgrade::Sapling)
+            .ok_or(Error::Birthday)?
+            .into();
+        let birthday = if birthday <= sapling_activation {
+            // Nothing shielded can exist at or before Sapling activation; skip the
+            // (ambiguous, for height 0) server round-trip entirely.
+            AccountBirthday::from_parts(earliest_chain_state(&self.network)?, None)
+        } else {
             // Fetch the tree state corresponding to the last block prior to the wallet's
             // birthday height. NOTE: THIS APPROACH LEAKS THE BIRTHDAY TO THE SERVER!
             let request = service::BlockId {
@@ -640,17 +665,28 @@ where
             .await
             .map_err(|e| Error::Sync(e.to_string()))?;
 
-        // The tree frontier just below the range anchors the scanned notes
-        // into the commitment trees.
-        let chain_state = client
-            .get_tree_state(service::BlockId {
-                height: (start - 1) as u64,
-                hash: vec![],
-            })
-            .await?
-            .into_inner()
-            .to_chain_state()
-            .map_err(|e| Error::Sync(format!("invalid tree state from server: {e}")))?;
+        // The tree frontier just below the range anchors the scanned notes into the
+        // commitment trees. Nothing shielded exists at or before Sapling activation,
+        // so that case is constructed locally instead of querying the server (which
+        // is ambiguous for height 0 — indistinguishable from an unset field).
+        let sapling_activation: u32 = self
+            .network
+            .activation_height(NetworkUpgrade::Sapling)
+            .ok_or(Error::Birthday)?
+            .into();
+        let chain_state = if start <= sapling_activation {
+            earliest_chain_state(&self.network)?
+        } else {
+            client
+                .get_tree_state(service::BlockId {
+                    height: (start - 1) as u64,
+                    hash: vec![],
+                })
+                .await?
+                .into_inner()
+                .to_chain_state()
+                .map_err(|e| Error::Sync(format!("invalid tree state from server: {e}")))?
+        };
 
         let scan_result = {
             let mut db = self.db.write().await;

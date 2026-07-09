@@ -34,47 +34,47 @@ export type CreateAccountInput = {
 
 /**
  * Fetch the current chain tip height from lightwalletd via a minimal gRPC-web
- * call to `GetLatestBlock`. Returns 0 if the request fails so callers can fall
- * back gracefully (scan from genesis rather than crashing).
+ * call to `GetLatestBlock`. Throws if the request fails: a height of 0 (genesis)
+ * is not a safe fallback here, since it gets stored as the account's birthday
+ * and later sent to the wallet's GetTreeState RPC, where it's indistinguishable
+ * from an unset height/hash and rejected by the server.
  *
  * The request body is a 5-byte gRPC-web frame with an empty `ChainSpec` proto.
  * The response contains a `BlockID` proto; field 1 (height) is a varint uint64.
  */
 const fetchChainTipHeight = async (): Promise<number> => {
   const url = process.env.Z_INTERFACE_LIGHTWALLETD_URL;
-  if (!url) return 0;
+  if (!url) throw new Error("Z_INTERFACE_LIGHTWALLETD_URL is not configured");
 
-  try {
-    const body = new Uint8Array([0x00, 0x00, 0x00, 0x00, 0x00]);
-    // CompactTxStreamer is the lightwalletd gRPC service; GetLatestBlock returns the chain tip as a BlockID.
-    const res = await fetch(
-      `${url}/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLatestBlock`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/grpc-web+proto",
-          "X-Grpc-Web": "1",
-        },
-        body,
-      }
-    );
-
-    if (!res.ok) return 0;
-
-    // Parse: skip 5-byte gRPC-web frame header, then read BlockID field 1 varint.
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    let height = 0;
-    let shift = 0;
-    // bytes[5] = 0x08 (field 1, wire type 0); height varint starts at bytes[6]
-    for (let i = 6; i < bytes.length; i++) {
-      height |= (bytes[i] & 0x7f) << shift;
-      shift += 7;
-      if ((bytes[i] & 0x80) === 0) break;
+  const body = new Uint8Array([0x00, 0x00, 0x00, 0x00, 0x00]);
+  // CompactTxStreamer is the lightwalletd gRPC service; GetLatestBlock returns the chain tip as a BlockID.
+  const res = await fetch(
+    `${url}/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLatestBlock`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/grpc-web+proto",
+        "X-Grpc-Web": "1",
+      },
+      body,
     }
-    return height;
-  } catch {
-    return 0;
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch chain tip height: HTTP ${res.status}`);
   }
+
+  // Parse: skip 5-byte gRPC-web frame header, then read BlockID field 1 varint.
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let height = 0;
+  let shift = 0;
+  // bytes[5] = 0x08 (field 1, wire type 0); height varint starts at bytes[6]
+  for (let i = 6; i < bytes.length; i++) {
+    height |= (bytes[i] & 0x7f) << shift;
+    shift += 7;
+    if ((bytes[i] & 0x80) === 0) break;
+  }
+  return height;
 };
 
 export type CreateAccountResult =
