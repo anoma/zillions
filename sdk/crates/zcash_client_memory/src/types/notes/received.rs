@@ -27,7 +27,7 @@ use crate::{error::Error, Nullifier};
 
 /// Keeps track of notes that are spent in which transaction
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ReceievedNoteSpends(pub(crate) BTreeMap<NoteId, TxId>);
+pub struct ReceievedNoteSpends(pub(crate) BTreeMap<NoteId, TxId>);
 
 impl ReceievedNoteSpends {
     pub fn new() -> Self {
@@ -358,7 +358,7 @@ impl ReceivedNoteTable {
     }
 
     /// O(1) lookup of a note by its NoteId
-    pub(crate) fn find_by_note_id(&self, note_id: &NoteId) -> Option<&ReceivedNote> {
+    pub fn find_by_note_id(&self, note_id: &NoteId) -> Option<&ReceivedNote> {
         self.note_id_index.get(note_id).map(|&idx| &self.notes[idx])
     }
 

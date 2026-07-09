@@ -33,7 +33,7 @@ type SummaryAccountBalances = Array<
 
 type Transaction = {
   txid: string;
-  tx_type: "Received" | "Sent" | "Shielded";
+  tx_type: "Received" | "Sent" | "Shielded" | "Unshielded" | "Migrated";
   value: bigint;
   fee: bigint;
   block_height: number;
@@ -41,7 +41,9 @@ type Transaction = {
   status: "Confirmed" | "Pending" | "Expired";
   memo: string | undefined;
   timestamp: number;
-  pool: "orchard" | "sapling";
+  pool: "orchard" | "sapling" | "transparent" | "mixed";
+  to_address: string | undefined;
+  from_address: string | undefined;
 };
 
 const defaultNetwork: Network = import.meta.env.VITE_ZCASH_NETWORK ?? "main";

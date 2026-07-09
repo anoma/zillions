@@ -2,10 +2,27 @@ import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
-import { ShieldIcon } from "../icons/ShieldIcon";
-import { zatoshiToZec } from "../lib/utils";
+import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
+import { ShieldCheckIcon } from "../icons/ShieldCheckIcon";
+import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
+import { isShieldedAddress, shortenAddress, zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
+
+const explorerUrl = (txid: string) =>
+  `https://blockchair.com/zcash/transaction/${txid}`;
+
+function AddressOrShieldedBadge({ address }: { address?: string }) {
+  const hasGoldBadge = !address || isShieldedAddress(address);
+  return (
+    <div
+      title={address}
+      className={twMerge(hasGoldBadge && "bg-gold rounded-full w-fit px-4")}
+    >
+      {address ? shortenAddress(address) : "Shielded"}
+    </div>
+  );
+}
 
 export function TransactionHistory() {
   const transactionHistory = useGetTransactionHistory();
@@ -24,7 +41,9 @@ export function TransactionHistory() {
       <table
         className={twMerge(
           "w-full mt-10 font-medium text-sm",
-          "[&_th,&_td]:text-left [&_th,&_td]:last:text-right [&_th,&_td]:py-1 lg:[&_th,&_td]:py-2",
+          "table-fixed",
+          "[&_th,&_td]:text-left [&_th,&_td]:py-2",
+          "lg:[&_th,&_td]:last:text-right",
           "max-lg:[&,&_tr,&_td]:block max-lg:[&_thead]:hidden",
         )}
       >
@@ -32,7 +51,8 @@ export function TransactionHistory() {
           <tr>
             <th>Type</th>
             <th>Value</th>
-            <th>Status</th>
+            <th>From</th>
+            <th>To</th>
             <th>Time</th>
           </tr>
         </thead>
@@ -46,18 +66,51 @@ export function TransactionHistory() {
                   ) : item.tx_type === "Received" ? (
                     <ArrowDownIcon className="size-4" />
                   ) : item.tx_type === "Shielded" ? (
-                    <ShieldIcon className="size-4" />
+                    <ShieldCheckIcon className="size-4" />
+                  ) : item.tx_type === "Unshielded" ? (
+                    <ShieldSlashIcon className="size-4" />
                   ) : (
                     <div />
                   )}
                   {item.tx_type}
+                  {item.status !== "Confirmed" && `(${item.status})`}
                 </div>
               </td>
-              <td>{zatoshiToZec(item.value)} ZEC</td>
-              <td>{item.status}</td>
               <td>
-                {item.timestamp &&
-                  new Date(Number(item.timestamp) * 1000).toLocaleString()}
+                {zatoshiToZec(
+                  item.value +
+                    (item.tx_type === "Shielded" || item.tx_type === "Migrated"
+                      ? item.fee
+                      : 0n),
+                )}{" "}
+                ZEC
+              </td>
+              <td>
+                <AddressOrShieldedBadge address={item.from_address} />
+              </td>
+              <td>
+                <AddressOrShieldedBadge address={item.to_address} />
+              </td>
+              <td>
+                <a
+                  href={explorerUrl(item.txid)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-end hover:underline"
+                  title="View on Explorer"
+                >
+                  {item.timestamp &&
+                    new Date(Number(item.timestamp) * 1000).toLocaleString(
+                      undefined,
+                      {
+                        month: "numeric",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      },
+                    )}
+                  <ExternalLinkIcon className="size-3 ml-1" />
+                </a>
               </td>
             </tr>
           ))}
