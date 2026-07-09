@@ -1240,4 +1240,14 @@ impl<P: consensus::Parameters> MemoryWalletDb<P> {
     pub fn transparent_received_outputs(&self) -> &TransparentReceivedOutputs {
         &self.transparent_received_outputs
     }
+
+    /// Returns a reference to the received-note spends table (note id -> spending txid) for transaction history queries
+    pub fn received_note_spends(&self) -> &ReceievedNoteSpends {
+        &self.received_note_spends
+    }
+
+    /// Returns a reference to the transparent output spends table (outpoint -> spending txid) for transaction history queries
+    pub fn transparent_received_output_spends(&self) -> &TransparentReceivedOutputSpends {
+        &self.transparent_received_output_spends
+    }
 }
