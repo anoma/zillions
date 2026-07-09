@@ -8,144 +8,170 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as UnshieldRouteImport } from './routes/unshield'
-import { Route as TransactionsRouteImport } from './routes/transactions'
-import { Route as ShieldRouteImport } from './routes/shield'
-import { Route as SendRouteImport } from './routes/send'
-import { Route as ReceiveRouteImport } from './routes/receive'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as IndexRouteImport } from "./routes/index";
+import { Route as ReceiveRouteImport } from "./routes/receive";
+import { Route as SendRouteImport } from "./routes/send";
+import { Route as ShieldRouteImport } from "./routes/shield";
+import { Route as TransactionsRouteImport } from "./routes/transactions";
+import { Route as TxIdRouteImport } from "./routes/tx.$id";
+import { Route as UnshieldRouteImport } from "./routes/unshield";
 
 const UnshieldRoute = UnshieldRouteImport.update({
-  id: '/unshield',
-  path: '/unshield',
+  id: "/unshield",
+  path: "/unshield",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const TransactionsRoute = TransactionsRouteImport.update({
-  id: '/transactions',
-  path: '/transactions',
+  id: "/transactions",
+  path: "/transactions",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ShieldRoute = ShieldRouteImport.update({
-  id: '/shield',
-  path: '/shield',
+  id: "/shield",
+  path: "/shield",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const SendRoute = SendRouteImport.update({
-  id: '/send',
-  path: '/send',
+  id: "/send",
+  path: "/send",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ReceiveRoute = ReceiveRouteImport.update({
-  id: '/receive',
-  path: '/receive',
+  id: "/receive",
+  path: "/receive",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
+const TxIdRoute = TxIdRouteImport.update({
+  id: "/tx/$id",
+  path: "/tx/$id",
+  getParentRoute: () => rootRouteImport,
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/receive': typeof ReceiveRoute
-  '/send': typeof SendRoute
-  '/shield': typeof ShieldRoute
-  '/transactions': typeof TransactionsRoute
-  '/unshield': typeof UnshieldRoute
+  "/": typeof IndexRoute;
+  "/receive": typeof ReceiveRoute;
+  "/send": typeof SendRoute;
+  "/shield": typeof ShieldRoute;
+  "/transactions": typeof TransactionsRoute;
+  "/unshield": typeof UnshieldRoute;
+  "/tx/$id": typeof TxIdRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/receive': typeof ReceiveRoute
-  '/send': typeof SendRoute
-  '/shield': typeof ShieldRoute
-  '/transactions': typeof TransactionsRoute
-  '/unshield': typeof UnshieldRoute
+  "/": typeof IndexRoute;
+  "/receive": typeof ReceiveRoute;
+  "/send": typeof SendRoute;
+  "/shield": typeof ShieldRoute;
+  "/transactions": typeof TransactionsRoute;
+  "/unshield": typeof UnshieldRoute;
+  "/tx/$id": typeof TxIdRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/receive': typeof ReceiveRoute
-  '/send': typeof SendRoute
-  '/shield': typeof ShieldRoute
-  '/transactions': typeof TransactionsRoute
-  '/unshield': typeof UnshieldRoute
+  __root__: typeof rootRouteImport;
+  "/": typeof IndexRoute;
+  "/receive": typeof ReceiveRoute;
+  "/send": typeof SendRoute;
+  "/shield": typeof ShieldRoute;
+  "/transactions": typeof TransactionsRoute;
+  "/unshield": typeof UnshieldRoute;
+  "/tx/$id": typeof TxIdRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
+  fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
-    | '/'
-    | '/receive'
-    | '/send'
-    | '/shield'
-    | '/transactions'
-    | '/unshield'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/receive' | '/send' | '/shield' | '/transactions' | '/unshield'
+    | "/"
+    | "/receive"
+    | "/send"
+    | "/shield"
+    | "/transactions"
+    | "/unshield"
+    | "/tx/$id";
+  fileRoutesByTo: FileRoutesByTo;
+  to:
+    | "/"
+    | "/receive"
+    | "/send"
+    | "/shield"
+    | "/transactions"
+    | "/unshield"
+    | "/tx/$id";
   id:
-    | '__root__'
-    | '/'
-    | '/receive'
-    | '/send'
-    | '/shield'
-    | '/transactions'
-    | '/unshield'
-  fileRoutesById: FileRoutesById
+    | "__root__"
+    | "/"
+    | "/receive"
+    | "/send"
+    | "/shield"
+    | "/transactions"
+    | "/unshield"
+    | "/tx/$id";
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  ReceiveRoute: typeof ReceiveRoute
-  SendRoute: typeof SendRoute
-  ShieldRoute: typeof ShieldRoute
-  TransactionsRoute: typeof TransactionsRoute
-  UnshieldRoute: typeof UnshieldRoute
+  IndexRoute: typeof IndexRoute;
+  ReceiveRoute: typeof ReceiveRoute;
+  SendRoute: typeof SendRoute;
+  ShieldRoute: typeof ShieldRoute;
+  TransactionsRoute: typeof TransactionsRoute;
+  UnshieldRoute: typeof UnshieldRoute;
+  TxIdRoute: typeof TxIdRoute;
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/unshield': {
-      id: '/unshield'
-      path: '/unshield'
-      fullPath: '/unshield'
-      preLoaderRoute: typeof UnshieldRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/transactions': {
-      id: '/transactions'
-      path: '/transactions'
-      fullPath: '/transactions'
-      preLoaderRoute: typeof TransactionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/shield': {
-      id: '/shield'
-      path: '/shield'
-      fullPath: '/shield'
-      preLoaderRoute: typeof ShieldRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/send': {
-      id: '/send'
-      path: '/send'
-      fullPath: '/send'
-      preLoaderRoute: typeof SendRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/receive': {
-      id: '/receive'
-      path: '/receive'
-      fullPath: '/receive'
-      preLoaderRoute: typeof ReceiveRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+    "/unshield": {
+      id: "/unshield";
+      path: "/unshield";
+      fullPath: "/unshield";
+      preLoaderRoute: typeof UnshieldRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/transactions": {
+      id: "/transactions";
+      path: "/transactions";
+      fullPath: "/transactions";
+      preLoaderRoute: typeof TransactionsRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/shield": {
+      id: "/shield";
+      path: "/shield";
+      fullPath: "/shield";
+      preLoaderRoute: typeof ShieldRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/send": {
+      id: "/send";
+      path: "/send";
+      fullPath: "/send";
+      preLoaderRoute: typeof SendRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/receive": {
+      id: "/receive";
+      path: "/receive";
+      fullPath: "/receive";
+      preLoaderRoute: typeof ReceiveRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/": {
+      id: "/";
+      path: "/";
+      fullPath: "/";
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/tx/$id": {
+      id: "/tx/$id";
+      path: "/tx/$id";
+      fullPath: "/tx/$id";
+      preLoaderRoute: typeof TxIdRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
   }
 }
 
@@ -156,7 +182,8 @@ const rootRouteChildren: RootRouteChildren = {
   ShieldRoute: ShieldRoute,
   TransactionsRoute: TransactionsRoute,
   UnshieldRoute: UnshieldRoute,
-}
+  TxIdRoute: TxIdRoute,
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();
