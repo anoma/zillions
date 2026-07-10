@@ -1347,7 +1347,7 @@ where
         Ok(pczt)
     }
 
-    pub async fn pczt_send(&self, pczt: Pczt) -> Result<(), Error> {
+    pub async fn pczt_send(&self, pczt: Pczt) -> Result<TxId, Error> {
         // Verify the wallet is sufficiently synced before sending
         // The network only accepts anchors within the last 100 blocks
         let mut client = self.client.clone();
@@ -1405,7 +1405,8 @@ where
         })?;
         drop(db);
         self.send_authorized_transactions(&NonEmpty::new(txid))
-            .await
+            .await?;
+        Ok(txid)
     }
 
     pub fn pczt_combine(&self, pczts: Vec<Pczt>) -> Result<Pczt, Error> {
