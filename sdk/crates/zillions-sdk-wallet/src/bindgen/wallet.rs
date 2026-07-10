@@ -571,8 +571,12 @@ impl WebWallet {
         self.inner.pczt_prove(pczt.into()).await.map(Into::into)
     }
 
-    pub async fn pczt_send(&self, pczt: Pczt) -> Result<(), Error> {
-        self.inner.pczt_send(pczt.into()).await
+    /// Extracts, stores, and broadcasts the transaction from a proved PCZT,
+    /// returning its hex-encoded txid. The txid is final once the PCZT is
+    /// proved, so it is available immediately while the transaction is pending.
+    pub async fn pczt_send(&self, pczt: Pczt) -> Result<String, Error> {
+        let txid = self.inner.pczt_send(pczt.into()).await?;
+        Ok(txid.to_string())
     }
 
     pub fn pczt_combine(&self, pczts: Vec<Pczt>) -> Result<Pczt, Error> {

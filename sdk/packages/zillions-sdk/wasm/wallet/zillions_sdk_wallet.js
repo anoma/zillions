@@ -2022,8 +2022,11 @@ export class WebWallet {
         return ret;
     }
     /**
+     * Extracts, stores, and broadcasts the transaction from a proved PCZT,
+     * returning its hex-encoded txid. The txid is final once the PCZT is
+     * proved, so it is available immediately while the transaction is pending.
      * @param {Pczt} pczt
-     * @returns {Promise<void>}
+     * @returns {Promise<string>}
      */
     pczt_send(pczt) {
         _assertClass(pczt, Pczt);

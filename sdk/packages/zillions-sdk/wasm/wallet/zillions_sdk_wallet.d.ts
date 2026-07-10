@@ -760,7 +760,12 @@ export class WebWallet {
    * * `pczt` - The PCZT that needs to be proven
    */
   pczt_prove(pczt: Pczt): Promise<Pczt>;
-  pczt_send(pczt: Pczt): Promise<void>;
+  /**
+   * Extracts, stores, and broadcasts the transaction from a proved PCZT,
+   * returning its hex-encoded txid. The txid is final once the PCZT is
+   * proved, so it is available immediately while the transaction is pending.
+   */
+  pczt_send(pczt: Pczt): Promise<string>;
   pczt_combine(pczts: Pczt[]): Pczt;
   /**
    * Get the current unified address for a given account and extracts the transparent component. This is returned as a string in canonical encoding

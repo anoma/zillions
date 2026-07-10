@@ -80,9 +80,9 @@ function SendRoute() {
         ? account.transparent.address
         : account.shielded.address;
 
-      const pczt = await transfer.mutateAsync({ from, to, amount });
+      const { txid, pczt } = await transfer.mutateAsync({ from, to, amount });
       setReceipt({
-        txid: "", // TODO how to the tx hash after submit?
+        txid,
         tx_type: "Sent",
         value: amount,
         fee: pczt.fee(),
