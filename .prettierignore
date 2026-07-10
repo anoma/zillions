@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-ssr
+storybook-static
+.storybook-out
+coverage
+build
+*.local
+pnpm-lock.yaml
+routeTree.gen.ts

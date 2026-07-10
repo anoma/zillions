@@ -1,4 +1,4 @@
-import { useLocation } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { twMerge } from "tailwind-merge";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
@@ -16,41 +16,43 @@ export function MainNav() {
     <aside className="h-full flex flex-col justify-between border-r border-gray-300 px-6 overflow-auto">
       <nav>
         <div className="h-20 flex items-center">
-          <SmartLink href="/" className="hover:text-gold transition-all">
+          <Link to="/" className="hover:text-gold transition-all">
             <ZillionsIcon className="h-11" />
-          </SmartLink>
+          </Link>
         </div>
         <ul className="mt-8">
-          {[
-            { label: "Wallet", href: "/", icon: HouseIcon },
-            { label: "Send", href: "/send", icon: ArrowUpIcon },
-            { label: "Receive", href: "/receive", icon: ArrowDownIcon },
-            {
-              label: "Transactions",
-              href: "/transactions",
-              icon: RotateCcwIcon,
-            },
-          ].map((item) => (
-            <li key={item.href} className="my-4">
-              <SmartLink
-                href={item.href}
+          {(
+            [
+              { label: "Wallet", to: "/", icon: HouseIcon },
+              { label: "Send", to: "/send", icon: ArrowUpIcon },
+              { label: "Receive", to: "/receive", icon: ArrowDownIcon },
+              {
+                label: "Transactions",
+                to: "/transactions",
+                icon: RotateCcwIcon,
+              },
+            ] as const
+          ).map((item) => (
+            <li key={item.to} className="my-4">
+              <Link
+                to={item.to}
                 className="group inline-flex items-center gap-3"
               >
                 <item.icon
                   className={twMerge(
                     "size-5 transition-all",
-                    item.href === pathname && "text-gold",
+                    item.to === pathname && "text-gold",
                   )}
                 />
                 <span
                   className={twMerge(
                     "text-sm group-hover:font-semibold transition-all",
-                    item.href === pathname && "font-semibold",
+                    item.to === pathname && "font-semibold",
                   )}
                 >
                   {item.label}
                 </span>
-              </SmartLink>
+              </Link>
             </li>
           ))}
         </ul>

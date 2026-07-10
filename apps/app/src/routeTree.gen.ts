@@ -15,6 +15,7 @@ import { Route as ShieldRouteImport } from './routes/shield'
 import { Route as SendRouteImport } from './routes/send'
 import { Route as ReceiveRouteImport } from './routes/receive'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TxIdRouteImport } from './routes/tx.$id'
 
 const UnshieldRoute = UnshieldRouteImport.update({
   id: '/unshield',
@@ -46,6 +47,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TxIdRoute = TxIdRouteImport.update({
+  id: '/tx/$id',
+  path: '/tx/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
   '/unshield': typeof UnshieldRoute
+  '/tx/$id': typeof TxIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
   '/unshield': typeof UnshieldRoute
+  '/tx/$id': typeof TxIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +79,7 @@ export interface FileRoutesById {
   '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
   '/unshield': typeof UnshieldRoute
+  '/tx/$id': typeof TxIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,8 +90,16 @@ export interface FileRouteTypes {
     | '/shield'
     | '/transactions'
     | '/unshield'
+    | '/tx/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/receive' | '/send' | '/shield' | '/transactions' | '/unshield'
+  to:
+    | '/'
+    | '/receive'
+    | '/send'
+    | '/shield'
+    | '/transactions'
+    | '/unshield'
+    | '/tx/$id'
   id:
     | '__root__'
     | '/'
@@ -91,6 +108,7 @@ export interface FileRouteTypes {
     | '/shield'
     | '/transactions'
     | '/unshield'
+    | '/tx/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -100,6 +118,7 @@ export interface RootRouteChildren {
   ShieldRoute: typeof ShieldRoute
   TransactionsRoute: typeof TransactionsRoute
   UnshieldRoute: typeof UnshieldRoute
+  TxIdRoute: typeof TxIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -146,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tx/$id': {
+      id: '/tx/$id'
+      path: '/tx/$id'
+      fullPath: '/tx/$id'
+      preLoaderRoute: typeof TxIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -156,6 +182,7 @@ const rootRouteChildren: RootRouteChildren = {
   ShieldRoute: ShieldRoute,
   TransactionsRoute: TransactionsRoute,
   UnshieldRoute: UnshieldRoute,
+  TxIdRoute: TxIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

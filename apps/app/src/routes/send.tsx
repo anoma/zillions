@@ -3,15 +3,16 @@ import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { ActionButton } from "../components/ui/ActionButton";
+import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
 import { useFee } from "../hooks/useFee";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useTransfer } from "../hooks/useTransfer";
+import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { invariant } from "../lib/invariant";
 import {
   isShieldedAddress,
   isTransparentAddress,
-  zatoshiToZec,
   zecToZatoshi,
 } from "../lib/utils";
 
@@ -114,7 +115,7 @@ function SendRoute() {
         </label>
 
         <div className="mt-4 text-xs font-medium text-center">
-          Available: {zatoshiToZec(availableBalance)} ZEC
+          Available: <ZecValue zat={availableBalance} />
         </div>
 
         <input
@@ -154,11 +155,13 @@ function SendRoute() {
         <div className="mt-4 flex items-center justify-between text-xs font-medium">
           <div>Transaction fee</div>
           <div>
-            {fee.data
-              ? `${zatoshiToZec(fee.data)} ZEC`
-              : fee.isLoading
-                ? "..."
-                : "-"}
+            {fee.data ? (
+              <ZecValue zat={fee.data} />
+            ) : fee.isLoading ? (
+              <SpinnerIcon className="size-3" />
+            ) : (
+              "-"
+            )}
           </div>
         </div>
 

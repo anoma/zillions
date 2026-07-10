@@ -18,18 +18,10 @@ import {
 } from "../lib/keychain/keychain";
 import { keychainUrl } from "../lib/urls";
 import { AccountProvider } from "./AccountProvider";
+import { FinalStatePage } from "./FinalStatePage";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { ActionButton } from "./ui/ActionButton";
-
-function Content({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-5 items-center justify-center h-svh text-center">
-      <div className="text-3xl">{title}</div>
-      {children}
-    </div>
-  );
-}
 
 function Account({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -66,9 +58,9 @@ function Account({ children }: { children: ReactNode }) {
 
   if (!accounts.data.length) {
     return (
-      <Content title="Create account">
+      <FinalStatePage title="Create account">
         Open the keychain and create a new account.
-      </Content>
+      </FinalStatePage>
     );
   }
 
@@ -79,9 +71,9 @@ function Account({ children }: { children: ReactNode }) {
 
   if (!transparentAccount || !shieldedAccount) {
     return (
-      <Content title="Select account">
+      <FinalStatePage title="Select account">
         Open the keychain and select one account.
-      </Content>
+      </FinalStatePage>
     );
   }
 
@@ -133,7 +125,7 @@ function Connect({ children }: { children: ReactNode }) {
 
   if (!isConnected) {
     return (
-      <Content title="Connect Keychain">
+      <FinalStatePage title="Connect Keychain">
         <ActionButton
           onClick={async () => {
             await keychain().connect();
@@ -142,7 +134,7 @@ function Connect({ children }: { children: ReactNode }) {
         >
           Connect
         </ActionButton>
-      </Content>
+      </FinalStatePage>
     );
   }
 
@@ -152,17 +144,17 @@ function Connect({ children }: { children: ReactNode }) {
 function Download({ children }: { children: ReactNode }) {
   if (!isKeychainAvailable()) {
     return (
-      <Content title="Keychain not installed">
+      <FinalStatePage title="Keychain not installed">
         <a download href={keychainUrl}>
           <ActionButton>Download Keychain</ActionButton>
         </a>
-      </Content>
+      </FinalStatePage>
     );
   }
 
   if (!isKeychainVersionSupported()) {
     return (
-      <Content title="Keychain outdated">
+      <FinalStatePage title="Keychain outdated">
         <div>
           Version {MIN_KEYCHAIN_VERSION} or newer is required.
           <br />
@@ -171,7 +163,7 @@ function Download({ children }: { children: ReactNode }) {
         <a download href={keychainUrl}>
           <ActionButton>Download Keychain</ActionButton>
         </a>
-      </Content>
+      </FinalStatePage>
     );
   }
 

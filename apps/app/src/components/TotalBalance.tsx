@@ -2,30 +2,13 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { useGetBalance } from "../hooks/useGetBalance";
-import { zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { ActionButton } from "./ui/ActionButton";
+import { ZecValue } from "./ZecValue";
 
 function Label({ children }: { children: ReactNode }) {
   return <div className="text-sm mb-1 xl:mb-6">{children}</div>;
-}
-
-function Amount({
-  className,
-  children,
-}: {
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className={twMerge("whitespace-nowrap text-xl xl:text-3xl", className)}
-    >
-      <span>{children}</span>
-      <span className="text-[0.5em]"> ZEC</span>
-    </div>
-  );
 }
 
 export function TotalBalance() {
@@ -51,12 +34,10 @@ export function TotalBalance() {
       <div>
         <Label>Total Balance in Zillions</Label>
         <div className="my-5 lg:my-10">
-          <Amount className="text-5xl xl:text-7xl">
-            {zatoshiToZec(totalBalance)}
-          </Amount>
+          <ZecValue zat={totalBalance} className="text-5xl xl:text-7xl" />
           {pendingBalance > 0n && (
             <div className="text-xs font-normal mt-1">
-              {zatoshiToZec(pendingBalance)} ZEC pending (included)
+              <ZecValue zat={pendingBalance} /> pending (included)
             </div>
           )}
         </div>
@@ -75,23 +56,27 @@ export function TotalBalance() {
       </div>
       <div>
         <Label>Shielded balance</Label>
-        <Amount className="my-3 lg:my-6">
-          {zatoshiToZec(shieldedBalance)}
-        </Amount>
-        <Link
-          to="/unshield"
-          className={twMerge(!shieldedBalance && "max-lg:hidden lg:invisible")}
-        >
-          <ActionButton size="xs" outlineColor="black">
-            Unshield
-          </ActionButton>
-        </Link>
+        <div className="my-3 lg:my-6">
+          <ZecValue zat={shieldedBalance} className="text-xl xl:text-3xl" />
+        </div>
+        <div>
+          <Link
+            to="/unshield"
+            className={twMerge(
+              !shieldedBalance && "max-lg:hidden lg:invisible",
+            )}
+          >
+            <ActionButton size="xs" outlineColor="black">
+              Unshield
+            </ActionButton>
+          </Link>
+        </div>
       </div>
       <div className="lg:mr-15">
         <Label>Transparent balance</Label>
-        <Amount className="my-3 lg:my-6">
-          {zatoshiToZec(transparentBalance)}
-        </Amount>
+        <div className="my-3 lg:my-6">
+          <ZecValue zat={transparentBalance} className="text-xl xl:text-3xl" />
+        </div>
         <Link
           to="/shield"
           className={twMerge(

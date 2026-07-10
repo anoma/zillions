@@ -546,7 +546,7 @@ pub fn extract_transaction_history(
                 .map(|t| t as u64);
 
             TransactionHistoryEntry {
-                txid: hex::encode(txid.as_ref()),
+                txid: txid.to_string(),
                 tx_type,
                 value: match tx_type {
                     // Just the amount that crossed into the transparent

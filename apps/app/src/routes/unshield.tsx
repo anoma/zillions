@@ -1,12 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { ActionButton } from "../components/ui/ActionButton";
+import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
 import { useFee } from "../hooks/useFee";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useTransfer } from "../hooks/useTransfer";
+import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { invariant } from "../lib/invariant";
-import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
+import { zecToZatoshi } from "../lib/utils";
 
 export const Route = createFileRoute("/unshield")({
   component: UnshieldRoute,
@@ -92,7 +94,7 @@ function UnshieldRoute() {
         </div>
 
         <div className="mt-4 text-xs font-medium text-center">
-          Available: {zatoshiToZec(availableBalance)} ZEC
+          Available: <ZecValue zat={availableBalance} />
         </div>
 
         <input
@@ -122,11 +124,13 @@ function UnshieldRoute() {
         <div className="mt-4 flex items-center justify-between text-xs font-medium">
           <div>Transaction fee</div>
           <div>
-            {fee.data
-              ? `${zatoshiToZec(fee.data)} ZEC`
-              : fee.isLoading
-                ? "..."
-                : "-"}
+            {fee.data ? (
+              <ZecValue zat={fee.data} />
+            ) : fee.isLoading ? (
+              <SpinnerIcon className="size-3" />
+            ) : (
+              "-"
+            )}
           </div>
         </div>
 
