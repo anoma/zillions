@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/heliaxdev/zillions-interface/compare/sdk-v0.3.0...sdk-v0.4.0) (2026-07-10)
+
+
+### Features
+
+* add transfer success state ([#16](https://github.com/heliaxdev/zillions-interface/issues/16)) ([4e2e166](https://github.com/heliaxdev/zillions-interface/commit/4e2e1666ee027a4a760f05950f27c03aa045affc))
+
 ## [0.3.0](https://github.com/heliaxdev/zillions-interface/compare/sdk-v0.2.0...sdk-v0.3.0) (2026-07-10)
 
 
