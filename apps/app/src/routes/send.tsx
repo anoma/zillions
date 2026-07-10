@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, type ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 import { twMerge } from "tailwind-merge";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { ActionButton } from "../components/ui/ActionButton";
@@ -35,23 +35,6 @@ function SendRoute() {
 
   const transfer = useTransfer();
 
-  useEffect(() => {
-    setTimeout(() => {
-      setReceipt({
-        txid: "123456",
-        tx_type: "Sent",
-        value: 500000n,
-        fee: 100n,
-        // value: amount ,
-        // fee: fee.data ?? 0n,
-        status: "Pending",
-        timestamp: Date.now(),
-        to_address: undefined,
-        from_address: undefined,
-      });
-    });
-  }, []);
-
   const amount = (() => {
     try {
       return zecToZatoshi(amountString);
@@ -59,6 +42,7 @@ function SendRoute() {
       return 0n;
     }
   })();
+
   const fee = useFee(
     isTransparentFrom ? account.transparent.address : account.shielded.address,
     to,
@@ -84,12 +68,12 @@ function SendRoute() {
       setReceipt({
         txid,
         tx_type: "Sent",
-        value: amount,
+        value: -amount,
         fee: pczt.fee(),
         status: "Pending",
         timestamp: Date.now(),
-        to_address: undefined,
-        from_address: undefined,
+        from_address: from,
+        to_address: to,
       });
     } catch (error) {
       setValidationMessage(

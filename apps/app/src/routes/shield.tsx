@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
@@ -9,6 +9,7 @@ import { useShieldFee } from "../hooks/useShieldFee";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { invariant } from "../lib/invariant";
 import { zatoshiToZec } from "../lib/utils";
+import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/shield")({
   component: ShieldRoute,
@@ -23,7 +24,8 @@ function ShieldRoute() {
 
   const [validationMessage, setValidationMessage] = useState("");
   const [isPending, setIsPending] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [receipt, setReceipt] =
+    useState<ComponentProps<typeof TransferSuccess>["tx"]>();
 
   const shield = useShield();
 
@@ -38,8 +40,23 @@ function ShieldRoute() {
 
       invariant(canShield, "Nothing to shield");
 
-      await shield.mutateAsync({ signer: account.transparent.address });
-      setIsSuccess(true);
+      const from = account.shielded.address;
+      const to = account.transparent.address;
+
+      const { txid, pczt } = await shield.mutateAsync({
+        signer: account.transparent.address,
+      });
+      const fee = pczt.fee();
+      setReceipt({
+        txid,
+        tx_type: "Shielded",
+        value: availableBalance - fee,
+        fee,
+        status: "Pending",
+        timestamp: Date.now(),
+        from_address: from,
+        to_address: to,
+      });
     } catch (error) {
       setValidationMessage(
         error instanceof Error ? error.message : String(error),
@@ -49,12 +66,8 @@ function ShieldRoute() {
     }
   };
 
-  if (isSuccess) {
-    return (
-      <div className="p-10">
-        <div>Transaction Success</div>
-      </div>
-    );
+  if (receipt) {
+    return <TransferSuccess tx={receipt} />;
   }
 
   return (

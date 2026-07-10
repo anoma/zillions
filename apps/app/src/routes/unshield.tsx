@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
@@ -9,6 +9,7 @@ import { useTransfer } from "../hooks/useTransfer";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { invariant } from "../lib/invariant";
 import { zecToZatoshi } from "../lib/utils";
+import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/unshield")({
   component: UnshieldRoute,
@@ -21,7 +22,8 @@ function UnshieldRoute() {
   const [amountString, setAmountString] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
   const [isPending, setIsPending] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [receipt, setReceipt] =
+    useState<ComponentProps<typeof TransferSuccess>["tx"]>();
 
   const transfer = useTransfer();
 
@@ -51,12 +53,20 @@ function UnshieldRoute() {
       invariant(amount > 0, "Set an amount");
       invariant(amount <= availableBalance, "Insufficient balance");
 
-      await transfer.mutateAsync({
-        from: account.shielded.address,
-        to: account.transparent.address,
-        amount,
+      const from = account.shielded.address;
+      const to = account.transparent.address;
+
+      const { txid, pczt } = await transfer.mutateAsync({ from, to, amount });
+      setReceipt({
+        txid,
+        tx_type: "Unshielded",
+        value: -amount,
+        fee: pczt.fee(),
+        status: "Pending",
+        timestamp: Date.now(),
+        from_address: from,
+        to_address: to,
       });
-      setIsSuccess(true);
     } catch (error) {
       setValidationMessage(
         error instanceof Error ? error.message : String(error),
@@ -66,12 +76,8 @@ function UnshieldRoute() {
     }
   };
 
-  if (isSuccess) {
-    return (
-      <div className="p-10">
-        <div>Transaction Success</div>
-      </div>
-    );
+  if (receipt) {
+    return <TransferSuccess tx={receipt} />;
   }
 
   return (
