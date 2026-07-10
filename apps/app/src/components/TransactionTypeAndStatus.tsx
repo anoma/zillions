@@ -5,7 +5,11 @@ import { ShieldCheckIcon } from "../icons/ShieldCheckIcon";
 import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
 import type { TransactionReceipt } from "../lib/sdk/types";
 
-export function TransactionTypeAndStatus({ tx }: { tx: TransactionReceipt }) {
+export function TransactionTypeAndStatus({
+  tx,
+}: {
+  tx: Pick<TransactionReceipt, "tx_type" | "status">;
+}) {
   return (
     <div className="flex items-center gap-2">
       {tx.tx_type === "Sent" ? (

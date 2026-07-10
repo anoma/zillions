@@ -201,11 +201,12 @@ export class SdkWallet {
     return this.wallet.pczt_shield(this.accountId, amount);
   }
 
-  async submitTransfer(signedPczt: Pczt): Promise<void> {
+  async submitTransfer(signedPczt: Pczt): Promise<Pczt> {
     await awaitProverParams();
     const provedPczt = await this.wallet.pczt_prove(signedPczt);
     await this.wallet.pczt_send(provedPczt);
     this.updateWalletCache();
+    return provedPczt;
   }
 
   free() {

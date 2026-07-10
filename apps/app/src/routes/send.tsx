@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import { twMerge } from "tailwind-merge";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { ActionButton } from "../components/ui/ActionButton";
@@ -15,6 +15,7 @@ import {
   isTransparentAddress,
   zecToZatoshi,
 } from "../lib/utils";
+import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/send")({
   component: SendRoute,
@@ -29,9 +30,27 @@ function SendRoute() {
   const [to, setTo] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
   const [isPending, setIsPending] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [receipt, setReceipt] =
+    useState<ComponentProps<typeof TransferSuccess>["tx"]>();
 
   const transfer = useTransfer();
+
+  useEffect(() => {
+    setTimeout(() => {
+      setReceipt({
+        txid: "123456",
+        tx_type: "Sent",
+        value: 500000n,
+        fee: 100n,
+        // value: amount ,
+        // fee: fee.data ?? 0n,
+        status: "Pending",
+        timestamp: Date.now(),
+        to_address: undefined,
+        from_address: undefined,
+      });
+    });
+  }, []);
 
   const amount = (() => {
     try {
@@ -61,8 +80,17 @@ function SendRoute() {
         ? account.transparent.address
         : account.shielded.address;
 
-      await transfer.mutateAsync({ from, to, amount });
-      setIsSuccess(true);
+      const pczt = await transfer.mutateAsync({ from, to, amount });
+      setReceipt({
+        txid: "", // TODO how to the tx hash after submit?
+        tx_type: "Sent",
+        value: amount,
+        fee: pczt.fee(),
+        status: "Pending",
+        timestamp: Date.now(),
+        to_address: undefined,
+        from_address: undefined,
+      });
     } catch (error) {
       setValidationMessage(
         error instanceof Error ? error.message : String(error),
@@ -85,12 +113,8 @@ function SendRoute() {
   const isTransparentTo = isTransparentAddress(to);
   const isShieldedTo = isShieldedAddress(to);
 
-  if (isSuccess) {
-    return (
-      <div className="p-10">
-        <div>Transaction Success</div>
-      </div>
-    );
+  if (receipt) {
+    return <TransferSuccess tx={receipt} />;
   }
 
   return (

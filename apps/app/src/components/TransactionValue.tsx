@@ -1,7 +1,11 @@
 import type { TransactionReceipt } from "../lib/sdk/types";
 import { ZecValue } from "./ZecValue";
 
-export function TransactionValue({ tx }: { tx: TransactionReceipt }) {
+export function TransactionValue({
+  tx,
+}: {
+  tx: Pick<TransactionReceipt, "tx_type" | "value" | "fee">;
+}) {
   let value = tx.value;
   // Sent values come back negative; flip to positive for display.
   if (tx.tx_type === "Sent") {
