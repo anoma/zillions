@@ -60,7 +60,7 @@ function UnshieldRoute() {
       setReceipt({
         txid,
         tx_type: "Unshielded",
-        value: -amount,
+        value: amount,
         fee,
         status: "Pending",
         timestamp: Date.now(),

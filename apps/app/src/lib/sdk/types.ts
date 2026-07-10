@@ -22,7 +22,7 @@ export type TransactionReceipt = {
   confirmations: number;
   status: "Confirmed" | "Pending" | "Expired";
   memo: string | undefined;
-  timestamp: number;
+  timestamp?: number;
   pool: "orchard" | "sapling" | "transparent" | "mixed";
   to_address: string | undefined;
   from_address: string | undefined;

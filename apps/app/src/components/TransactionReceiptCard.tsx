@@ -28,7 +28,9 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
     <div className="p-10">
       <h1 className="text-center text-lg font-bold">Transaction receipt</h1>
       <div className="mt-1 text-center text-xs">
-        <time>{new Date(Number(tx.timestamp) * 1000).toLocaleString()}</time>
+        {tx.timestamp && (
+          <time>{new Date(Number(tx.timestamp) * 1000).toLocaleString()}</time>
+        )}
       </div>
 
       <div className="max-w-125 mx-auto">
@@ -71,7 +73,10 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
               Migrated: [],
             } as const
           )[tx.tx_type].map(([label, value]) => (
-            <div className="grid grid-cols-2 gap-2 text-xs font-medium mb-2">
+            <div
+              key={label}
+              className="grid grid-cols-2 gap-2 text-xs font-medium mb-2"
+            >
               <div>{label}</div>
               <ZecValue zat={value} className="text-right" />
             </div>
