@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.1.0...zillions-app-v1.2.0) (2026-07-10)
+
+
+### Features
+
+* add shield icon ([2abd095](https://github.com/heliaxdev/zillions-interface/commit/2abd09522577c5e02cc54b558a403ea0d7833550))
+* add the transaction page ([#14](https://github.com/heliaxdev/zillions-interface/issues/14)) ([272fd7a](https://github.com/heliaxdev/zillions-interface/commit/272fd7a0d97d0de41bea7a88a627c23a6201742a))
+* align transfer forms ([1c2d79c](https://github.com/heliaxdev/zillions-interface/commit/1c2d79c5926bbfd36d950d0400201c22c228f805))
+* improve pending communication ([b39b6e2](https://github.com/heliaxdev/zillions-interface/commit/b39b6e26b6cd0c753a91e9f69c32d2a6eeed3819))
+* restore full history after sync ([#12](https://github.com/heliaxdev/zillions-interface/issues/12)) ([8c697db](https://github.com/heliaxdev/zillions-interface/commit/8c697db6f817b8c79701560ab1ebf9394e985a97))
+* sapling send support ([#10](https://github.com/heliaxdev/zillions-interface/issues/10)) ([65965ca](https://github.com/heliaxdev/zillions-interface/commit/65965ca83ee5e59e199ebc7a4571f0954e3b40fb))
+* show pending balance ([41ee005](https://github.com/heliaxdev/zillions-interface/commit/41ee00542e9fac462e0479b17583663c311d9521))
+
 ## [1.1.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.0.0...zillions-app-v1.1.0) (2026-07-07)
 
 
