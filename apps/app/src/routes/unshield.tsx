@@ -56,12 +56,12 @@ function UnshieldRoute() {
       const from = account.shielded.address;
       const to = account.transparent.address;
 
-      const { txid, pczt } = await transfer.mutateAsync({ from, to, amount });
+      const { txid, fee } = await transfer.mutateAsync({ from, to, amount });
       setReceipt({
         txid,
         tx_type: "Unshielded",
         value: -amount,
-        fee: pczt.fee(),
+        fee,
         status: "Pending",
         timestamp: Date.now(),
         from_address: from,

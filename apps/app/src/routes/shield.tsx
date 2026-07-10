@@ -43,10 +43,9 @@ function ShieldRoute() {
       const from = account.shielded.address;
       const to = account.transparent.address;
 
-      const { txid, pczt } = await shield.mutateAsync({
+      const { txid, fee } = await shield.mutateAsync({
         signer: account.transparent.address,
       });
-      const fee = pczt.fee();
       setReceipt({
         txid,
         tx_type: "Shielded",

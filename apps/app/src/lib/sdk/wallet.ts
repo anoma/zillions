@@ -203,12 +203,13 @@ export class SdkWallet {
 
   async submitTransfer(
     signedPczt: Pczt,
-  ): Promise<{ txid: string; pczt: Pczt }> {
+  ): Promise<{ txid: string; fee: bigint }> {
     await awaitProverParams();
     const provedPczt = await this.wallet.pczt_prove(signedPczt);
+    const fee = provedPczt.fee();
     const txid = await this.wallet.pczt_send(provedPczt);
     this.updateWalletCache();
-    return { txid, pczt: provedPczt };
+    return { txid, fee };
   }
 
   free() {
