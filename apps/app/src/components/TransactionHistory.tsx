@@ -1,14 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
-import { ArrowDownIcon } from "../icons/ArrowDownIcon";
-import { ArrowUpIcon } from "../icons/ArrowUpIcon";
-import { DatabaseArrowIcon } from "../icons/DatabaseArrowIcon";
-import { ShieldCheckIcon } from "../icons/ShieldCheckIcon";
-import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
+import { TransactionTypeAndStatus } from "./TransactionTypeAndStatus";
 import { TransactionValue } from "./TransactionValue";
 
 export function TransactionHistory() {
@@ -36,38 +32,24 @@ export function TransactionHistory() {
           <div>Time</div>
         </div>
         <div className="mt-5 space-y-0">
-          {transactionHistory.data.map((item) => (
+          {transactionHistory.data.map((tx) => (
             <Link
-              key={item.txid}
+              key={tx.txid}
               to={"/tx/$id"}
-              params={{ id: item.txid }}
+              params={{ id: tx.txid }}
               className={twMerge(
                 "py-3 -mx-5 px-5 hover:bg-white transition-all",
                 "rounded-2xl lg:rounded-full hover:bg-white transition-all",
                 gridClassName,
               )}
             >
-              <div className="flex items-center gap-2">
-                {item.tx_type === "Sent" ? (
-                  <ArrowUpIcon className="size-4" />
-                ) : item.tx_type === "Received" ? (
-                  <ArrowDownIcon className="size-4" />
-                ) : item.tx_type === "Shielded" ? (
-                  <ShieldCheckIcon className="size-4" />
-                ) : item.tx_type === "Unshielded" ? (
-                  <ShieldSlashIcon className="size-4" />
-                ) : item.tx_type === "Migrated" ? (
-                  <DatabaseArrowIcon className="size-4" />
-                ) : null}
-                {item.tx_type}
-                {item.status !== "Confirmed" && ` (${item.status})`}
-              </div>
-              <TransactionValue tx={item} />
-              <AddressBadge address={item.from_address} />
-              <AddressBadge address={item.to_address} />
+              <TransactionTypeAndStatus tx={tx} />
+              <TransactionValue tx={tx} />
+              <AddressBadge address={tx.from_address} />
+              <AddressBadge address={tx.to_address} />
               <time>
-                {item.timestamp &&
-                  new Date(Number(item.timestamp) * 1000).toLocaleString(
+                {tx.timestamp &&
+                  new Date(Number(tx.timestamp) * 1000).toLocaleString(
                     undefined,
                     {
                       month: "numeric",
