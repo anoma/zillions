@@ -13,9 +13,8 @@
     "test:e2e": "pnpm --filter @zillions-sdk/e2e-tests test",
     "just:build": "just build",
     "just:build-keys": "just build-keys",
-    "just:mac": "just build-mac",
     "just:pack": "just pack",
-    "just:ship-mac": "just ship-mac",
-    "build": "just build-mac"
+    "just:ship": "just ship",
+    "build": "just build"
   }
 }
