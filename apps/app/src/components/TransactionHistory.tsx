@@ -3,6 +3,7 @@ import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
+import { DatabaseArrowIcon } from "../icons/DatabaseArrowIcon";
 import { ShieldCheckIcon } from "../icons/ShieldCheckIcon";
 import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
 import { AddressBadge } from "./AddressBadge";
@@ -55,9 +56,9 @@ export function TransactionHistory() {
                   <ShieldCheckIcon className="size-4" />
                 ) : item.tx_type === "Unshielded" ? (
                   <ShieldSlashIcon className="size-4" />
-                ) : (
-                  <div />
-                )}
+                ) : item.tx_type === "Migrated" ? (
+                  <DatabaseArrowIcon className="size-4" />
+                ) : null}
                 {item.tx_type}
                 {item.status !== "Confirmed" && ` (${item.status})`}
               </div>
