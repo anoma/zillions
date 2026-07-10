@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.2.0...zillions-keychain-v0.2.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* wallet birthday at or below Sapling activation ([#13](https://github.com/heliaxdev/zillions-interface/issues/13)) ([4dce0f3](https://github.com/heliaxdev/zillions-interface/commit/4dce0f36d12565a8eb6f7c4bc5dfd61aa06106b6))
+
 ## [0.2.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.1.1...zillions-keychain-v0.2.0) (2026-07-07)
 
 
