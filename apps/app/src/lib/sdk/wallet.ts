@@ -58,40 +58,41 @@ export class SdkWallet {
         bytes,
       );
 
-    // Load from cache; if the bytes are corrupt the wasm deserializer traps, so drop them and start blank.
+    // Restore from cache when present; corrupt bytes trap the deserializer, so drop them.
     const cached = await db.get("wallets", id);
-    let wallet: WebWallet;
+    let restored: WebWallet | undefined;
     if (cached) {
       try {
-        wallet = newWallet(cached);
+        restored = newWallet(cached);
       } catch (e) {
         console.error("Failed to restore wallet from cache; rebuilding", e);
         await db.del("wallets", id);
-        wallet = newWallet();
       }
-    } else {
-      wallet = newWallet();
     }
 
-    // Local-only read: reuse the account already in the wallet DB, creating one only when none exists.
-    const summary = await wallet.get_wallet_summary();
-    const balances = summary?.account_balances as
-      | SummaryAccountBalances
-      | undefined;
-    summary?.free();
-
-    // Single-account by design; more than one means corrupt state, so drop the cache and rebuild blank.
+    // Local-only read: reuse the cached account when there's exactly one; more than one is corrupt state.
     let accountId: number | undefined;
-    if (balances && balances.length > 1) {
-      console.error(
-        `Wallet cache holds ${balances.length} accounts; rebuilding`,
-      );
-      await db.del("wallets", id);
-      wallet.free();
-      wallet = newWallet();
-    } else {
-      accountId = balances?.[0]?.[0];
+    if (restored) {
+      const summary = await restored.get_wallet_summary();
+      const balances = summary?.account_balances as
+        | SummaryAccountBalances
+        | undefined;
+      summary?.free();
+
+      if (balances && balances.length > 1) {
+        console.error(
+          `Wallet cache holds ${balances.length} accounts; rebuilding`,
+        );
+        await db.del("wallets", id);
+        restored.free();
+        restored = undefined;
+      } else {
+        accountId = balances?.[0]?.[0];
+      }
     }
+
+    // Single blank fallback when there was no usable cache.
+    const wallet = restored ?? newWallet();
 
     // No account (blank or rebuilt wallet): create one from the account's birthday.
     if (accountId === undefined) {
