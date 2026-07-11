@@ -61,12 +61,12 @@ export class SdkWallet {
     let wallet: WebWallet | undefined;
     let accountId: number | undefined;
 
-    // TODO add comment
+    // Restore from cache; corrupt bytes or a bad account state fall through to a blank rebuild.
     try {
       const cached = await db.get("wallets", id);
       wallet = newWallet(cached);
 
-      // TODO add comment
+      // Local-only read: reuse the existing account, treating more than one as corrupt state.
       const summary = await wallet.get_wallet_summary();
       const balances = summary?.account_balances as
         | SummaryAccountBalances
@@ -78,7 +78,7 @@ export class SdkWallet {
         accountId = balances?.[0]?.[0];
       }
     } catch (e) {
-      console.error("Failed to restore wallet from cache; rebuilding", e);
+      console.error("Failed to restore wallet from cache; rebuilding.", e);
       await db.del("wallets", id);
       wallet?.free();
       wallet = undefined;
