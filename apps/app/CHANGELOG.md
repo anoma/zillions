@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.3.0...zillions-app-v1.4.0) (2026-07-11)
+
+
+### Features
+
+* format progress percentage ([9f8671c](https://github.com/heliaxdev/zillions-interface/commit/9f8671c82c29b4663a79f7e0fb0fa0403a00d4cc))
+
+
+### Bug Fixes
+
+* recover from corrupt wallet cache ([#34](https://github.com/heliaxdev/zillions-interface/issues/34)) ([9b99bb4](https://github.com/heliaxdev/zillions-interface/commit/9b99bb486050ea45dc4af72f5e764bb4930b2b0b))
+
 ## [1.3.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.2.0...zillions-app-v1.3.0) (2026-07-10)
 
 
