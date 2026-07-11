@@ -58,9 +58,7 @@ export class SdkWallet {
         bytes,
       );
 
-    // Load from cache when present; if the cached bytes are corrupt or an
-    // incompatible format the wasm deserializer traps, so drop the cache and
-    // start from a blank wallet.
+    // Load from cache; if the bytes are corrupt the wasm deserializer traps, so drop them and start blank.
     const cached = await db.get("wallets", id);
     let wallet: WebWallet;
     if (cached) {
@@ -75,16 +73,14 @@ export class SdkWallet {
       wallet = newWallet();
     }
 
-    // Local-only read (no lightwalletd fetch): reuse the account already in
-    // the wallet DB, and only create one when none exists.
+    // Local-only read: reuse the account already in the wallet DB, creating one only when none exists.
     const summary = await wallet.get_wallet_summary();
     const balances = summary?.account_balances as
       | SummaryAccountBalances
       | undefined;
     summary?.free();
 
-    // This wallet is single-account by design; more than one means corrupt
-    // state, so drop the cache and rebuild from a blank wallet.
+    // Single-account by design; more than one means corrupt state, so drop the cache and rebuild blank.
     if (balances && balances.length > 1) {
       console.error(
         `Wallet cache holds ${balances.length} accounts; rebuilding`,
