@@ -49,19 +49,47 @@ export class SdkWallet {
     network?: Network;
     lightwalletdUrl?: string;
   }): Promise<SdkWallet> {
-    const bytes = await db.get("wallets", id);
-    const wallet = new WebWallet(
-      network,
-      lightwalletdUrl,
-      minConfirmationsTrusted,
-      minConfirmationsUntrusted,
-      bytes,
-    );
+    const newWallet = (bytes?: Uint8Array) =>
+      new WebWallet(
+        network,
+        lightwalletdUrl,
+        minConfirmationsTrusted,
+        minConfirmationsUntrusted,
+        bytes,
+      );
 
-    let accountId: number;
-    if (!bytes) {
+    let wallet: WebWallet | undefined;
+    let accountId: number | undefined;
+
+    // Restore from cache; corrupt bytes or a bad account state fall through to a blank rebuild.
+    try {
+      const cached = await db.get("wallets", id);
+      wallet = newWallet(cached);
+
+      // Local-only read: reuse the existing account, treating more than one as corrupt state.
+      const summary = await wallet.get_wallet_summary();
+      const balances = summary?.account_balances as
+        | SummaryAccountBalances
+        | undefined;
+      summary?.free();
+      if (balances && balances.length > 1) {
+        throw new Error(`Wallet cache holds ${balances.length} accounts`);
+      } else {
+        accountId = balances?.[0]?.[0];
+      }
+    } catch (e) {
+      console.error("Failed to restore wallet from cache; rebuilding.", e);
+      await db.del("wallets", id);
+      wallet?.free();
+      wallet = undefined;
+      accountId = undefined;
+    }
+
+    if (!wallet) {
+      wallet = newWallet();
+    }
+    if (accountId === undefined) {
       const fp = SeedFingerprint.from_bytes(hexToBytes(seedFingerprint));
-      // create_account_ufvk takes ownership of fp — do NOT call fp.free().
       accountId = await wallet.create_account_ufvk(
         id,
         ufvk,
@@ -69,15 +97,6 @@ export class SdkWallet {
         hdIndex,
         birthday,
       );
-    } else {
-      // Restoring from cache: the account already exists; read its ID from
-      // the wallet summary rather than re-creating it.
-      const summary = await wallet.get_wallet_summary();
-      const balances = summary?.account_balances as
-        | SummaryAccountBalances
-        | undefined;
-      accountId = balances?.[0]?.[0] ?? 0;
-      summary?.free();
     }
 
     return new SdkWallet({ id, wallet, accountId });

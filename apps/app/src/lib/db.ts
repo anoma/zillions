@@ -41,4 +41,11 @@ export const db = {
   ): Promise<void> {
     await (await getDb()).put(store, value, key);
   },
+
+  async del<S extends StoreNames<ZillionsDB>>(
+    store: S,
+    key: string,
+  ): Promise<void> {
+    await (await getDb()).delete(store, key);
+  },
 };
