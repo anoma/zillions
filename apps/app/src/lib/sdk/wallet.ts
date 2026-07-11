@@ -81,6 +81,7 @@ export class SdkWallet {
     summary?.free();
 
     // Single-account by design; more than one means corrupt state, so drop the cache and rebuild blank.
+    let accountId: number | undefined;
     if (balances && balances.length > 1) {
       console.error(
         `Wallet cache holds ${balances.length} accounts; rebuilding`,
@@ -89,21 +90,21 @@ export class SdkWallet {
       wallet.free();
       wallet = newWallet();
     } else {
-      const existingAccountId = balances?.[0]?.[0];
-      if (existingAccountId !== undefined) {
-        return new SdkWallet({ id, wallet, accountId: existingAccountId });
-      }
+      accountId = balances?.[0]?.[0];
     }
 
-    const fp = SeedFingerprint.from_bytes(hexToBytes(seedFingerprint));
-    // create_account_ufvk takes ownership of fp — do NOT call fp.free().
-    const accountId = await wallet.create_account_ufvk(
-      id,
-      ufvk,
-      fp,
-      hdIndex,
-      birthday,
-    );
+    // No account (blank or rebuilt wallet): create one from the account's birthday.
+    if (accountId === undefined) {
+      const fp = SeedFingerprint.from_bytes(hexToBytes(seedFingerprint));
+      // create_account_ufvk takes ownership of fp — do NOT call fp.free().
+      accountId = await wallet.create_account_ufvk(
+        id,
+        ufvk,
+        fp,
+        hdIndex,
+        birthday,
+      );
+    }
 
     return new SdkWallet({ id, wallet, accountId });
   }
