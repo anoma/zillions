@@ -49,36 +49,46 @@ export class SdkWallet {
     network?: Network;
     lightwalletdUrl?: string;
   }): Promise<SdkWallet> {
-    const bytes = await db.get("wallets", id);
-    const wallet = new WebWallet(
-      network,
-      lightwalletdUrl,
-      minConfirmationsTrusted,
-      minConfirmationsUntrusted,
-      bytes,
-    );
-
-    let accountId: number;
-    if (!bytes) {
-      const fp = SeedFingerprint.from_bytes(hexToBytes(seedFingerprint));
-      // create_account_ufvk takes ownership of fp — do NOT call fp.free().
-      accountId = await wallet.create_account_ufvk(
-        id,
-        ufvk,
-        fp,
-        hdIndex,
-        birthday,
+    const newWallet = (bytes?: Uint8Array) =>
+      new WebWallet(
+        network,
+        lightwalletdUrl,
+        minConfirmationsTrusted,
+        minConfirmationsUntrusted,
+        bytes,
       );
-    } else {
-      // Restoring from cache: the account already exists; read its ID from
-      // the wallet summary rather than re-creating it.
-      const summary = await wallet.get_wallet_summary();
-      const balances = summary?.account_balances as
-        | SummaryAccountBalances
-        | undefined;
-      accountId = balances?.[0]?.[0] ?? 0;
-      summary?.free();
+
+    const cached = await db.get("wallets", id);
+    if (cached) {
+      try {
+        const wallet = newWallet(cached);
+        // Restoring from cache: the account already exists; read its ID from
+        // the wallet summary rather than re-creating it.
+        const summary = await wallet.get_wallet_summary();
+        const balances = summary?.account_balances as
+          | SummaryAccountBalances
+          | undefined;
+        const accountId = balances?.[0]?.[0] ?? 0;
+        summary?.free();
+        return new SdkWallet({ id, wallet, accountId });
+      } catch (e) {
+        // The cached bytes are corrupt or an incompatible format — the wasm
+        // deserializer traps. Drop the cache and rebuild from birthday.
+        console.error("Failed to restore wallet from cache; rebuilding", e);
+        await db.del("wallets", id);
+      }
     }
+
+    const wallet = newWallet();
+    const fp = SeedFingerprint.from_bytes(hexToBytes(seedFingerprint));
+    // create_account_ufvk takes ownership of fp — do NOT call fp.free().
+    const accountId = await wallet.create_account_ufvk(
+      id,
+      ufvk,
+      fp,
+      hdIndex,
+      birthday,
+    );
 
     return new SdkWallet({ id, wallet, accountId });
   }
