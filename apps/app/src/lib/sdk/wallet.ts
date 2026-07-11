@@ -58,28 +58,47 @@ export class SdkWallet {
         bytes,
       );
 
+    // Load from cache when present; if the cached bytes are corrupt or an
+    // incompatible format the wasm deserializer traps, so drop the cache and
+    // start from a blank wallet.
     const cached = await db.get("wallets", id);
+    let wallet: WebWallet;
     if (cached) {
       try {
-        const wallet = newWallet(cached);
-        // Restoring from cache: the account already exists; read its ID from
-        // the wallet summary rather than re-creating it.
-        const summary = await wallet.get_wallet_summary();
-        const balances = summary?.account_balances as
-          | SummaryAccountBalances
-          | undefined;
-        const accountId = balances?.[0]?.[0] ?? 0;
-        summary?.free();
-        return new SdkWallet({ id, wallet, accountId });
+        wallet = newWallet(cached);
       } catch (e) {
-        // The cached bytes are corrupt or an incompatible format — the wasm
-        // deserializer traps. Drop the cache and rebuild from birthday.
         console.error("Failed to restore wallet from cache; rebuilding", e);
         await db.del("wallets", id);
+        wallet = newWallet();
+      }
+    } else {
+      wallet = newWallet();
+    }
+
+    // Local-only read (no lightwalletd fetch): reuse the account already in
+    // the wallet DB, and only create one when none exists.
+    const summary = await wallet.get_wallet_summary();
+    const balances = summary?.account_balances as
+      | SummaryAccountBalances
+      | undefined;
+    summary?.free();
+
+    // This wallet is single-account by design; more than one means corrupt
+    // state, so drop the cache and rebuild from a blank wallet.
+    if (balances && balances.length > 1) {
+      console.error(
+        `Wallet cache holds ${balances.length} accounts; rebuilding`,
+      );
+      await db.del("wallets", id);
+      wallet.free();
+      wallet = newWallet();
+    } else {
+      const existingAccountId = balances?.[0]?.[0];
+      if (existingAccountId !== undefined) {
+        return new SdkWallet({ id, wallet, accountId: existingAccountId });
       }
     }
 
-    const wallet = newWallet();
     const fp = SeedFingerprint.from_bytes(hexToBytes(seedFingerprint));
     // create_account_ufvk takes ownership of fp — do NOT call fp.free().
     const accountId = await wallet.create_account_ufvk(
