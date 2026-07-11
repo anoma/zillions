@@ -58,46 +58,38 @@ export class SdkWallet {
         bytes,
       );
 
-    // Restore from cache when present; corrupt bytes trap the deserializer, so drop them.
-    const cached = await db.get("wallets", id);
-    let restored: WebWallet | undefined;
-    if (cached) {
-      try {
-        restored = newWallet(cached);
-      } catch (e) {
-        console.error("Failed to restore wallet from cache; rebuilding", e);
-        await db.del("wallets", id);
-      }
-    }
-
-    // Local-only read: reuse the cached account when there's exactly one; more than one is corrupt state.
+    let wallet: WebWallet | undefined;
     let accountId: number | undefined;
-    if (restored) {
-      const summary = await restored.get_wallet_summary();
+
+    // TODO add comment
+    try {
+      const cached = await db.get("wallets", id);
+      wallet = newWallet(cached);
+
+      // TODO add comment
+      const summary = await wallet.get_wallet_summary();
       const balances = summary?.account_balances as
         | SummaryAccountBalances
         | undefined;
       summary?.free();
-
       if (balances && balances.length > 1) {
-        console.error(
-          `Wallet cache holds ${balances.length} accounts; rebuilding`,
-        );
-        await db.del("wallets", id);
-        restored.free();
-        restored = undefined;
+        throw new Error(`Wallet cache holds ${balances.length} accounts`);
       } else {
         accountId = balances?.[0]?.[0];
       }
+    } catch (e) {
+      console.error("Failed to restore wallet from cache; rebuilding", e);
+      await db.del("wallets", id);
+      wallet?.free();
+      wallet = undefined;
+      accountId = undefined;
     }
 
-    // Single blank fallback when there was no usable cache.
-    const wallet = restored ?? newWallet();
-
-    // No account (blank or rebuilt wallet): create one from the account's birthday.
+    if (!wallet) {
+      wallet = newWallet();
+    }
     if (accountId === undefined) {
       const fp = SeedFingerprint.from_bytes(hexToBytes(seedFingerprint));
-      // create_account_ufvk takes ownership of fp — do NOT call fp.free().
       accountId = await wallet.create_account_ufvk(
         id,
         ufvk,
