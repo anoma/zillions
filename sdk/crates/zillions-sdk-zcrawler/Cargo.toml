@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0, MIT
 
 [package]
-name = "zillions-sdk-crawler"
+name = "zillions-sdk-zcrawler"
 version = "0.1.0"
 authors = ["Heliax"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/heliaxdev/zillions-interface"
-description = "Stateless shielded-note trial decryption for the Zillions crawler"
+description = "Stateless shielded-note trial decryption for the Zillions zcrawler"
 edition = "2021"
 
 [lib]

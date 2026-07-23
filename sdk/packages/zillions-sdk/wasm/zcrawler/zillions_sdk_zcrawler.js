@@ -601,7 +601,7 @@ async function __wbg_init(module_or_path, memory) {
     }
 
     if (typeof module_or_path === 'undefined') {
-        module_or_path = new URL('zillions_sdk_crawler_bg.wasm', import.meta.url);
+        module_or_path = new URL('zillions_sdk_zcrawler_bg.wasm', import.meta.url);
     }
     const imports = __wbg_get_imports();
 

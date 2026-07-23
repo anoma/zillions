@@ -19,7 +19,7 @@ build:
     just build-wallet
     just build-keys
     just build-requests
-    just build-crawler
+    just build-zcrawler
     just build-sapling-params
 
 pack:
@@ -55,9 +55,9 @@ build-requests *features:
     cd crates/zillions-sdk-requests && wasm-pack build --no-pack -t web --release --out-dir ../../packages/zillions-sdk/wasm/requests --no-default-features --features="{{features}}" -Z build-std="panic_abort,std"
     rm -f packages/zillions-sdk/wasm/requests/.gitignore
 
-build-crawler:
-    cd crates/zillions-sdk-crawler && wasm-pack build --no-pack -t web --release --out-dir ../../packages/zillions-sdk/wasm/crawler --no-default-features --features="" -Z build-std="panic_abort,std"
-    rm -f packages/zillions-sdk/wasm/crawler/.gitignore
+build-zcrawler:
+    cd crates/zillions-sdk-zcrawler && wasm-pack build --no-pack -t web --release --out-dir ../../packages/zillions-sdk/wasm/zcrawler --no-default-features --features="" -Z build-std="panic_abort,std"
+    rm -f packages/zillions-sdk/wasm/zcrawler/.gitignore
 
 # All Wasm Tests
 test-web *features:

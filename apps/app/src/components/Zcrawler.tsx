@@ -1,16 +1,18 @@
 import { useRef, useState } from "react";
 
-import { crawlNotes, type CrawlHit } from "../lib/crawler";
+import { useAccount } from "../hooks/useAccount";
+import { crawlNotes, type CrawlHit } from "../lib/zcrawler";
 
-const DEFAULT_START = 3342500;
-const DEFAULT_END = 3342600;
+// TODO get value from the current chain tip
+const DEFAULT_END = 3422700;
 
 export function Zcrawler() {
-  const [ufvk, setUfvk] = useState("");
-  const [start, setStart] = useState(DEFAULT_START);
+  const account = useAccount();
+  const [ufvk, setUfvk] = useState(account.shielded.viewingKey ?? "");
+  const [start, setStart] = useState(account.shielded.birthday);
   const [end, setEnd] = useState(DEFAULT_END);
   const [scanning, setScanning] = useState(false);
-  const [scannedTo, setScannedTo] = useState(0);
+  const [progress, setProgress] = useState(0);
   const [hits, setHits] = useState<CrawlHit[]>([]);
   const [error, setError] = useState<string>();
   const abort = useRef<AbortController | undefined>(undefined);
@@ -24,14 +26,26 @@ export function Zcrawler() {
     setScanning(true);
     setError(undefined);
     setHits([]);
-    setScannedTo(start);
+    setProgress(0);
+    const startTime = new Date();
+    console.log("[zcrawler] start:", startTime.toLocaleString());
     try {
       const { hits } = await crawlNotes(ufvk.trim(), start, end, {
         signal: controller.signal,
-        onProgress: (to) => setScannedTo(to),
+        onProgress: (hits, scanned, total) => {
+          setHits(hits);
+          setProgress(total > 0 ? scanned / total : 1);
+        },
       });
       setHits(hits);
+      const endTime = new Date();
+      console.log("[zcrawler] end:", endTime.toLocaleString());
+      console.log(
+        "[zcrawler] total time (seconds):",
+        (endTime.getTime() - startTime.getTime()) / 1000,
+      );
     } catch (e) {
+      console.error(e);
       if (!controller.signal.aborted) setError(String(e));
     } finally {
       setScanning(false);
@@ -83,7 +97,7 @@ export function Zcrawler() {
           disabled={scanning || !ufvk.trim() || end <= start}
           onClick={scan}
         >
-          {scanning ? `Scanning ${scannedTo}…` : "Scan"}
+          {scanning ? `Scanning ${Math.round(progress * 100)}%…` : "Scan"}
         </button>
       </div>
 
