@@ -4077,6 +4077,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "zillions-sdk-crawler"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.2.17",
+ "hex",
+ "orchard",
+ "sapling-crypto",
+ "serde",
+ "serde-wasm-bindgen",
+ "wasm-bindgen",
+ "zcash_keys",
+ "zcash_note_encryption",
+ "zillions-sdk-common",
+ "zip32",
+]
+
+[[package]]
 name = "zillions-sdk-keys"
 version = "0.1.0"
 dependencies = [

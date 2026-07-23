@@ -1,0 +1,45 @@
+# Copyright 2024 Heliax AG
+# SPDX-License-Identifier: Apache-2.0, MIT
+
+[package]
+name = "zillions-sdk-crawler"
+version = "0.1.0"
+authors = ["Heliax"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/heliaxdev/zillions-interface"
+description = "Stateless shielded-note trial decryption for the Zillions crawler"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O4", "-O4"]
+
+[dependencies]
+zillions-sdk-common = { path = "../zillions-sdk-common" }
+
+wasm-bindgen.workspace = true
+serde.workspace = true
+serde-wasm-bindgen.workspace = true
+hex = "0.4"
+
+# Only the note-encryption + key surface — no proving circuits (default-features
+# off drops halo2/bellman) and no transparent-inputs (drops the secp256k1 C dep),
+# keeping this wasm small, pure-Rust, and fast to rebuild.
+zcash_keys = { workspace = true, features = ["orchard", "sapling"] }
+zcash_note_encryption = "0.4"
+sapling = { package = "sapling-crypto", version = "0.7", default-features = false, features = ["std"] }
+orchard = { version = "0.14", default-features = false, features = ["std"] }
+zip32.workspace = true
+
+# fixes "failed to resolve: use of undeclared crate or module `imp`" on wasm
+getrandom = { workspace = true, features = ["js"] }
+
+[dev-dependencies]
+# Only the test builds a UnifiedSpendingKey (needs transparent key derivation);
+# dev-dep features never reach the wasm --lib build.
+zcash_keys = { workspace = true, features = ["orchard", "sapling", "transparent-inputs"] }
+
+[lints]
+workspace = true
