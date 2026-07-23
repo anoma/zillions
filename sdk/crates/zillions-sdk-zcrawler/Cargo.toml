@@ -29,6 +29,8 @@ hex = "0.4"
 # keeping this wasm small, pure-Rust, and fast to rebuild.
 zcash_keys = { workspace = true, features = ["orchard", "sapling"] }
 zcash_note_encryption = "0.4"
+zcash_primitives = { workspace = true }
+zcash_protocol = { workspace = true }
 sapling = { package = "sapling-crypto", version = "0.7", default-features = false, features = ["std"] }
 orchard = { version = "0.14", default-features = false, features = ["std"] }
 zip32.workspace = true

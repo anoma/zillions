@@ -1,16 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAccount } from "../hooks/useAccount";
-import { crawlNotes, type CrawlHit } from "../lib/zcrawler";
-
-// TODO get value from the current chain tip
-const DEFAULT_END = 3422700;
+import { crawlNotes, getChainTip, type CrawlHit } from "../lib/zcrawler";
 
 export function Zcrawler() {
   const account = useAccount();
   const [ufvk, setUfvk] = useState(account.shielded.viewingKey ?? "");
   const [start, setStart] = useState(account.shielded.birthday);
-  const [end, setEnd] = useState(DEFAULT_END);
+  const [end, setEnd] = useState(account.shielded.birthday);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [hits, setHits] = useState<CrawlHit[]>([]);
@@ -18,6 +15,13 @@ export function Zcrawler() {
   const abort = useRef<AbortController | undefined>(undefined);
 
   const totalValue = hits.reduce((n, h) => n + h.value, 0);
+
+  // Default the end to the indexer's chain tip.
+  useEffect(() => {
+    getChainTip()
+      .then(setEnd)
+      .catch((e) => setError(String(e)));
+  }, []);
 
   const scan = async () => {
     abort.current?.abort();
@@ -27,6 +31,7 @@ export function Zcrawler() {
     setError(undefined);
     setHits([]);
     setProgress(0);
+
     const startTime = new Date();
     console.log("[zcrawler] start:", startTime.toLocaleString());
     try {
@@ -98,7 +103,7 @@ export function Zcrawler() {
         </label>
         <button
           className="rounded bg-gray-900 px-4 py-2 text-white disabled:opacity-50"
-          disabled={scanning || !ufvk.trim() || end <= start}
+          disabled={scanning || !ufvk.trim() || end < start}
           onClick={scan}
         >
           {scanning ? `Scanning ${Math.round(progress * 100)}%…` : "Scan"}

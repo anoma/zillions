@@ -16,9 +16,11 @@ use orchard::note::ExtractedNoteCommitment as OrchardCmx;
 use orchard::note::Nullifier;
 use orchard::note_encryption::{CompactAction, OrchardDomain};
 use sapling::note::ExtractedNoteCommitment as SaplingCmu;
-use sapling::note_encryption::{CompactOutputDescription, SaplingDomain, Zip212Enforcement};
+use sapling::note_encryption::{CompactOutputDescription, SaplingDomain};
 use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_note_encryption::{batch, EphemeralKeyBytes};
+use zcash_primitives::transaction::components::sapling::zip212_enforcement;
+use zcash_protocol::consensus::BlockHeight;
 use zillions_sdk_common::Network;
 
 /// A compact output from the indexer. Extra endpoint fields (cv, enc_tail,
@@ -87,8 +89,11 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
             .map(|n| {
                 let cmu = Option::<SaplingCmu>::from(SaplingCmu::from_bytes(&hex_n(&n.commitment)?))
                     .ok_or("bad sapling commitment")?;
+                // ZIP-212 enforcement is height-dependent; pre-Canopy notes used
+                // the old rseed format, so hardcoding `On` would miss them.
+                let enforcement = zip212_enforcement(&network, BlockHeight::from(n.height));
                 Ok((
-                    SaplingDomain::new(Zip212Enforcement::On),
+                    SaplingDomain::new(enforcement),
                     CompactOutputDescription {
                         ephemeral_key: EphemeralKeyBytes(hex_n(&n.eph_key)?),
                         cmu,

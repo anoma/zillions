@@ -9,6 +9,16 @@
 
 import ZcrawlerWorker from "./zcrawler.worker.ts?worker";
 
+const CRAWLER_URL = import.meta.env.VITE_CRAWLER_URL ?? "http://localhost:8080";
+
+/** Highest block the indexer has data for, to bound a scan. */
+export async function getChainTip(): Promise<number> {
+  const res = await fetch(`${CRAWLER_URL}/tip`);
+  if (!res.ok) throw new Error(`tip: HTTP ${res.status}`);
+  const { tip } = (await res.json()) as { tip: number };
+  return tip;
+}
+
 export interface CrawlHit {
   pool: "sapling" | "orchard";
   /** "external" (received) or "internal" (change). */
@@ -27,7 +37,7 @@ export interface CrawlResult {
   totalValue: number;
 }
 
-/** Main → worker: decrypt the notes in `[from, to)`. */
+/** Main → worker: decrypt the notes in `[from, to]` (both bounds inclusive). */
 export interface ChunkRequest {
   id: number;
   ufvk: string;
@@ -54,7 +64,7 @@ export interface CrawlOptions {
   signal?: AbortSignal;
 }
 
-/** Crawl `[start, end)` and return the notes the UFVK owns. */
+/** Crawl `[start, end]` (both inclusive) and return the notes the UFVK owns. */
 export function crawlNotes(
   ufvk: string,
   start: number,
@@ -62,11 +72,14 @@ export function crawlNotes(
   options: CrawlOptions = {},
 ): Promise<CrawlResult> {
   const chunkSize = options.chunk ?? 100;
+  // The indexer's /notes range is inclusive on both ends, so tile with
+  // inclusive, non-overlapping chunks — otherwise adjacent chunks would both
+  // fetch the shared boundary block and double-count its notes.
   const chunks: Array<[number, number]> = [];
-  for (let from = start; from < end; from += chunkSize) {
-    chunks.push([from, Math.min(end, from + chunkSize)]);
+  for (let from = start; from <= end; from += chunkSize) {
+    chunks.push([from, Math.min(end, from + chunkSize - 1)]);
   }
-  const totalBlocks = Math.max(0, end - start);
+  const totalBlocks = Math.max(0, end - start + 1);
   const poolSize = Math.max(
     1,
     Math.min(
@@ -125,7 +138,7 @@ export function crawlNotes(
         const msg = e.data;
         if ("error" in msg) return fail(new Error(msg.error));
         hits.push(...msg.hits);
-        scannedBlocks += msg.to - msg.from;
+        scannedBlocks += msg.to - msg.from + 1;
         options.onProgress?.([...hits], scannedBlocks, totalBlocks);
         feed(w);
       };
