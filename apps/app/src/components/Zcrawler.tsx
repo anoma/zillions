@@ -62,6 +62,10 @@ export function Zcrawler() {
           <div className="text-sm text-gray-500">
             {(totalValue / 1e8).toFixed(8)} ZEC
           </div>
+          <div className="text-xs text-gray-400 tabular-nums">
+            {hits.filter((h) => h.scope === "external").length} received ·{" "}
+            {hits.filter((h) => h.scope === "internal").length} change
+          </div>
         </div>
       </div>
 

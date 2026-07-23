@@ -125,12 +125,20 @@ export class SdkWallet {
   }
 
   sync = dedupe(async () => {
+    const startTime = new Date();
+    console.log("[oldSdk] start:", startTime.toLocaleString());
     await syncWallet(this.wallet, {
       onProgress: (progress) =>
         this.syncProgressListeners.forEach((listener) => listener(progress)),
       // Checkpoints persist scan progress across page refreshes: the wallet
       // is restored from these bytes and resumes where it left off.
       onCheckpoint: async (bytes) => {
+        const endTime = new Date();
+        console.log("[oldSdk] end:", endTime.toLocaleString());
+        console.log(
+          "[oldSdk] total time (seconds):",
+          (endTime.getTime() - startTime.getTime()) / 1000,
+        );
         await db.set("wallets", this.id, bytes);
       },
     });

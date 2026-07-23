@@ -49,12 +49,20 @@ struct Notes {
 #[derive(Serialize)]
 struct Hit {
     pool: &'static str,
+    /// "external" (received) or "internal" (change).
+    scope: &'static str,
     height: u32,
     tx_index: u32,
     index: u32,
     position: u64,
     value: u64,
 }
+
+/// External + internal (change) scopes — a note may be addressed to either.
+const SCOPES: [(&str, Scope); 2] = [
+    ("external", Scope::External),
+    ("internal", Scope::Internal),
+];
 
 fn hex_n<const N: usize>(s: &str) -> Result<[u8; N], String> {
     let v = hex::decode(s).map_err(|e| e.to_string())?;
@@ -69,7 +77,10 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
 
     // Sapling: one domain for all outputs (just the ZIP-212 rule).
     if let Some(dfvk) = ufvk.sapling() {
-        let ivk = sapling::keys::PreparedIncomingViewingKey::new(&dfvk.to_ivk(Scope::External));
+        let ivks: Vec<_> = SCOPES
+            .iter()
+            .map(|(_, scope)| sapling::keys::PreparedIncomingViewingKey::new(&dfvk.to_ivk(*scope)))
+            .collect();
         let outputs = notes
             .sapling
             .iter()
@@ -87,14 +98,15 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
             })
             .collect::<Result<Vec<_>, String>>()?;
 
-        for (i, res) in batch::try_compact_note_decryption(std::slice::from_ref(&ivk), &outputs)
+        for (i, res) in batch::try_compact_note_decryption(&ivks, &outputs)
             .into_iter()
             .enumerate()
         {
-            if let Some(((note, _addr), _)) = res {
+            if let Some(((note, _addr), scope_idx)) = res {
                 let n = &notes.sapling[i];
                 hits.push(Hit {
                     pool: "sapling",
+                    scope: SCOPES[scope_idx].0,
                     height: n.height,
                     tx_index: n.tx_index,
                     index: n.index,
@@ -107,7 +119,10 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
 
     // Orchard: each action carries its own rho (= nf), so the domain is per-output.
     if let Some(fvk) = ufvk.orchard() {
-        let ivk = orchard::keys::PreparedIncomingViewingKey::new(&fvk.to_ivk(Scope::External));
+        let ivks: Vec<_> = SCOPES
+            .iter()
+            .map(|(_, scope)| orchard::keys::PreparedIncomingViewingKey::new(&fvk.to_ivk(*scope)))
+            .collect();
         let outputs = notes
             .orchard
             .iter()
@@ -126,14 +141,15 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
             })
             .collect::<Result<Vec<_>, String>>()?;
 
-        for (i, res) in batch::try_compact_note_decryption(std::slice::from_ref(&ivk), &outputs)
+        for (i, res) in batch::try_compact_note_decryption(&ivks, &outputs)
             .into_iter()
             .enumerate()
         {
-            if let Some(((note, _addr), _)) = res {
+            if let Some(((note, _addr), scope_idx)) = res {
                 let n = &notes.orchard[i];
                 hits.push(Hit {
                     pool: "orchard",
+                    scope: SCOPES[scope_idx].0,
                     height: n.height,
                     tx_index: n.tx_index,
                     index: n.index,

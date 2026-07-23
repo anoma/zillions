@@ -11,6 +11,8 @@ import ZcrawlerWorker from "./zcrawler.worker.ts?worker";
 
 export interface CrawlHit {
   pool: "sapling" | "orchard";
+  /** "external" (received) or "internal" (change). */
+  scope: "external" | "internal";
   height: number;
   tx_index: number;
   index: number;
