@@ -41,9 +41,9 @@ export interface CrawlResult {
   totalValue: number;
   /** Sum of unspent hit values (net spendable), in zatoshis. */
   netValue: number;
-  /** Count of distinct Orchard spend nullifiers held for matching. */
+  /** Peak count of owned unspent Orchard notes held during the fold. */
   nullifierSetSize: number;
-  /** Logical size of that set (32 bytes each), for memory tracking. */
+  /** Logical size of that peak set (32 bytes each), for memory tracking. */
   nullifierSetBytes: number;
 }
 
@@ -101,11 +101,18 @@ export function crawlNotes(
 
   return new Promise<CrawlResult>((resolve, reject) => {
     const hits: CrawlHit[] = [];
-    // Orchard spend nullifiers seen across the range. A note is spent when its
-    // own nullifier lands here. ponytail: batch-intersect holds every range nf
-    // transiently — swap for the ordered streaming fold (discard non-matches per
-    // in-order chunk, shrinking the set) when ranges grow.
-    const spendSet = new Set<string>();
+    // Owned unspent Orchard notes, keyed by their own nullifier. The ordered
+    // fold adds a note on receipt and removes it when spent, so this holds only
+    // live notes — a spend nullifier that doesn't match one of ours is discarded
+    // on sight, never accumulated.
+    const unspent = new Map<string, CrawlHit>();
+    let peakUnspent = 0;
+    // Chunks decrypt in parallel but must fold in block order (a note is created
+    // before it's spent), so buffer out-of-order results until their turn.
+    // ponytail: the buffer is bounded by in-flight chunks; only one chunk lagging
+    // far behind all others would grow it toward the full range.
+    const pending = new Map<number, { hits: CrawlHit[]; spends: string[] }>();
+    let nextApply = 0;
     let scannedBlocks = 0;
     let nextChunk = 0;
     let running = 0;
@@ -123,26 +130,33 @@ export function crawlNotes(
       if (settled) return;
       settled = true;
       cleanup();
-      // Mark Orchard notes spent when their nullifier appears in the range.
-      // (Sapling spends aren't in the payload yet — left unspent for now.)
-      for (const h of hits) {
-        if (h.pool === "orchard") h.spent = spendSet.has(h.nf_mine);
-      }
-      // Diagnostic: how spend-matching landed, per pool.
-      const orchard = hits.filter((h) => h.pool === "orchard");
-      const sapling = hits.filter((h) => h.pool === "sapling");
       console.log(
-        `[zcrawler] spend-match: orchard ${orchard.filter((h) => h.spent).length}/${orchard.length} spent`,
-        `· sapling ${sapling.length} (not tracked yet)`,
-        `· spendSet ${spendSet.size}`,
+        `[zcrawler] final unspent: ${unspent.size} nf · peak ${peakUnspent}`,
       );
       resolve({
         hits,
         totalValue: hits.reduce((n, h) => n + h.value, 0),
         netValue: hits.reduce((n, h) => n + (h.spent ? 0 : h.value), 0),
-        nullifierSetSize: spendSet.size,
-        nullifierSetBytes: spendSet.size * 32,
+        nullifierSetSize: peakUnspent,
+        nullifierSetBytes: peakUnspent * 32,
       });
+    };
+
+    // Fold one chunk in block order: register its notes, then resolve its spends
+    // against the live set — a match frees its note, a non-match is dropped.
+    const apply = (chunk: { hits: CrawlHit[]; spends: string[] }) => {
+      for (const h of chunk.hits) {
+        hits.push(h);
+        if (h.pool === "orchard") unspent.set(h.nf_mine, h);
+      }
+      for (const nf of chunk.spends) {
+        const note = unspent.get(nf);
+        if (note) {
+          note.spent = true;
+          unspent.delete(nf);
+        }
+      }
+      peakUnspent = Math.max(peakUnspent, unspent.size);
     };
 
     if (options.signal?.aborted) return fail(options.signal.reason);
@@ -172,15 +186,20 @@ export function crawlNotes(
       w.onmessage = (e: MessageEvent<ChunkResponse>) => {
         const msg = e.data;
         if ("error" in msg) return fail(new Error(msg.error));
-        hits.push(...msg.hits);
-        for (const nf of msg.spends) spendSet.add(nf);
+        pending.set(msg.id, { hits: msg.hits, spends: msg.spends });
         scannedBlocks += msg.to - msg.from + 1;
-        // Track the spend set as it grows — this is the transient memory ceiling.
+        // Fold every chunk that's now contiguous from the frontier, in order.
+        while (pending.has(nextApply)) {
+          apply(pending.get(nextApply)!);
+          pending.delete(nextApply);
+          nextApply += 1;
+        }
+        // Track live memory: the held set (grows/shrinks) and the reorder buffer.
         console.log(
-          `[zcrawler] nullifier set: ${spendSet.size} nf · ${(
-            (spendSet.size * 32) /
+          `[zcrawler] unspent: ${unspent.size} nf · ${(
+            (unspent.size * 32) /
             1024
-          ).toFixed(1)} KB`,
+          ).toFixed(2)} KB · buffered ${pending.size}`,
         );
         options.onProgress?.([...hits], scannedBlocks, totalBlocks);
         feed(w);
