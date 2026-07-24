@@ -35,13 +35,9 @@ export function planChunks(
   return chunks;
 }
 
-/** Crawl `[start, end]` (both inclusive) and return the notes the UFVK owns. */
-export function crawlNotes(
-  ufvk: string,
-  start: number,
-  end: number,
-  options: CrawlOptions = {},
-): Promise<CrawlResult> {
+/** Crawl `[start, end]` of `pool` (both inclusive) and return the notes the UFVK owns. */
+export function crawlNotes(options: CrawlOptions): Promise<CrawlResult> {
+  const { ufvk, start, end, pool } = options;
   const chunks = planChunks(start, end, options.chunk ?? 100);
   const totalBlocks = Math.max(0, end - start + 1);
   const poolSize = Math.max(
@@ -90,7 +86,7 @@ export function crawlNotes(
       }
       const id = nextChunk++;
       const [from, to] = chunks[id];
-      w.postMessage({ id, ufvk, from, to } satisfies ChunkRequest);
+      w.postMessage({ id, ufvk, pool, from, to } satisfies ChunkRequest);
     };
 
     // TODO handle a worker that errors or stalls far behind its peers. A stuck

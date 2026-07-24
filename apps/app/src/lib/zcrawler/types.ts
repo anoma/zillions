@@ -35,6 +35,7 @@ export interface ChunkData {
 export interface ChunkRequest {
   id: number;
   ufvk: string;
+  pool: "orchard" | "sapling";
   from: number;
   to: number;
 }
@@ -45,6 +46,13 @@ export type ChunkResponse =
   | { id: number; error: string };
 
 export interface CrawlOptions {
+  /** Unified full viewing key to scan against. */
+  ufvk: string;
+  /** Block range to scan, both bounds inclusive. */
+  start: number;
+  end: number;
+  /** Shielded pool to crawl; passed through to the indexer. */
+  pool: "orchard" | "sapling";
   /** Blocks fetched + decrypted per request. Defaults to 100. */
   chunk?: number;
   /** Parallel workers. Defaults to the number of CPU cores. */

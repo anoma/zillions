@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAccount } from "../hooks/useAccount";
 import { crawlNotes, getChainTip, type CrawlHit } from "../lib/zcrawler";
 
-export function Zcrawler() {
+export function Zcrawler({ pool }: { pool: "orchard" | "sapling" }) {
   const account = useAccount();
   const [ufvk, setUfvk] = useState(account.shielded.viewingKey ?? "");
   const [start, setStart] = useState(account.shielded.birthday);
@@ -40,8 +40,13 @@ export function Zcrawler() {
     const startTime = new Date();
     console.log("[zcrawler] start:", startTime.toLocaleString());
     try {
-      const result = await crawlNotes(ufvk.trim(), start, end, {
+      const result = await crawlNotes({
+        ufvk: ufvk.trim(),
+        start,
+        end,
+        pool,
         signal: controller.signal,
+        chunk: 1000,
         onProgress: (hits, scanned, total) => {
           setHits(hits);
           setProgress(total > 0 ? scanned / total : 1);

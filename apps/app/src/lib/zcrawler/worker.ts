@@ -27,17 +27,18 @@ worker.onmessage = async (e) => {
   // TODO can we save JS ↔ WASM boundary time by registering the ufvk?
   // And if we create a sequence on the from/to based on the mod of the total blocks?
   // Does it really worth the complexity?
-  const { id, ufvk, from, to } = e.data;
+  const { id, ufvk, pool, from, to } = e.data;
   try {
     await (ready ??= initZcrawler());
-    const sync = await fetchSync(from, to);
+    const sync = await fetchSync(from, to, pool);
     const hits = try_decrypt(NETWORK, ufvk, sync) as CrawlHit[];
     // Spend nullifiers for the range: Orchard's ride inline as each action's
     // `rho` (= its nf); Sapling's come as their own list. Lowercase to match
     // Rust's `hex::encode` (nf_mine); indexer hex case must not decide equality.
+    // Pool-filtered, so the other pool's arrays may be absent.
     const spends = [
-      ...sync.orchard_notes.map((n) => n.rho.toLowerCase()),
-      ...sync.sapling_nullifiers.map((nf) => nf.toLowerCase()),
+      ...(sync.orchard_notes ?? []).map((n) => n.rho.toLowerCase()),
+      ...(sync.sapling_nullifiers ?? []).map((nf) => nf.toLowerCase()),
     ];
     worker.postMessage({ id, from, to, hits, spends });
   } catch (err) {

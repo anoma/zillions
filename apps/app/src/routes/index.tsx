@@ -10,7 +10,8 @@ export const Route = createFileRoute("/")({
 function HomeRoute() {
   return (
     <>
-      <Zcrawler />
+      <Zcrawler pool="orchard" />
+      <Zcrawler pool="sapling" />
       <TotalBalance />
       <TransactionHistory />
     </>
