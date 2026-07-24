@@ -6,7 +6,7 @@
 
 import initZcrawler, { try_decrypt } from "@zillions/sdk/zcrawler";
 
-import { fetchNotes } from "./indexer";
+import { fetchSync } from "./indexer";
 import type { ChunkRequest, ChunkResponse, CrawlHit } from "./types";
 
 // TODO revisit how config (network, indexer URL) reaches the worker: read from
@@ -30,14 +30,15 @@ worker.onmessage = async (e) => {
   const { id, ufvk, from, to } = e.data;
   try {
     await (ready ??= initZcrawler());
-    const notes = await fetchNotes(from, to);
-    const hits = try_decrypt(NETWORK, ufvk, notes) as CrawlHit[];
-    // Every Orchard action reveals the nullifier of the note it spends (`nf`) —
-    // the range's spend set, free in the payload. Lowercase to match Rust's
-    // `hex::encode` (nf_mine); the indexer's hex case must not decide equality.
-    const spends: string[] = Array.isArray(notes.orchard)
-      ? notes.orchard.map((n) => n.nf?.toLowerCase()).filter(Boolean)
-      : [];
+    const sync = await fetchSync(from, to);
+    const hits = try_decrypt(NETWORK, ufvk, sync) as CrawlHit[];
+    // Spend nullifiers for the range: Orchard's ride inline as each action's
+    // `rho` (= its nf); Sapling's come as their own list. Lowercase to match
+    // Rust's `hex::encode` (nf_mine); indexer hex case must not decide equality.
+    const spends = [
+      ...sync.orchard_notes.map((n) => n.rho.toLowerCase()),
+      ...sync.sapling_nullifiers.map((nf) => nf.toLowerCase()),
+    ];
     worker.postMessage({ id, from, to, hits, spends });
   } catch (err) {
     worker.postMessage({ id, error: String(err) });

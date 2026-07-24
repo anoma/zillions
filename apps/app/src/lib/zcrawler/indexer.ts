@@ -2,10 +2,11 @@
 
 const CRAWLER_URL = import.meta.env.VITE_CRAWLER_URL ?? "http://localhost:8080";
 
-/** Compact notes for a block range, as served by `/notes` (extra fields ignored). */
-export interface RawNotes {
-  sapling?: unknown[];
-  orchard?: Array<{ nf: string }>;
+/** A `/sync` range: compact notes for both pools + Sapling spend nullifiers (Orchard's ride inline as `rho`). */
+export interface SyncData {
+  orchard_notes: Array<{ rho: string }>;
+  sapling_notes: unknown[];
+  sapling_nullifiers: string[];
 }
 
 /** Highest block the indexer has data for, to bound a scan. */
@@ -16,9 +17,9 @@ export async function getChainTip(): Promise<number> {
   return tip;
 }
 
-/** Compact notes in `[from, to]` (both bounds inclusive). */
-export async function fetchNotes(from: number, to: number): Promise<RawNotes> {
-  const res = await fetch(`${CRAWLER_URL}/notes?start=${from}&end=${to}`);
-  if (!res.ok) throw new Error(`notes ${from}-${to}: HTTP ${res.status}`);
+/** Notes + Sapling nullifiers in `[from, to]` (both bounds inclusive). */
+export async function fetchSync(from: number, to: number): Promise<SyncData> {
+  const res = await fetch(`${CRAWLER_URL}/sync?start=${from}&end=${to}`);
+  if (!res.ok) throw new Error(`sync ${from}-${to}: HTTP ${res.status}`);
   return res.json();
 }

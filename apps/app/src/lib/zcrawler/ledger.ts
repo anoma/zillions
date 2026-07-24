@@ -11,7 +11,7 @@ import type { ChunkData, CrawlHit, CrawlResult } from "./types";
 export class SpendLedger {
   /** Owned notes in block order, mutated in place as spends resolve. */
   readonly hits: CrawlHit[] = [];
-  /** Owned unspent Orchard notes, keyed by their own nullifier. */
+  /** Owned unspent notes (both pools), keyed by their own nullifier. */
   #unspent = new Map<string, CrawlHit>();
   /** Out-of-order chunks waiting for their turn at the fold frontier. */
   #pending = new Map<number, ChunkData>();
@@ -51,7 +51,7 @@ export class SpendLedger {
   #fold(chunk: ChunkData): void {
     for (const h of chunk.hits) {
       this.hits.push(h);
-      if (h.pool === "orchard") this.#unspent.set(h.nf_mine, h);
+      this.#unspent.set(h.nf_mine, h);
     }
     for (const nf of chunk.spends) {
       const note = this.#unspent.get(nf);

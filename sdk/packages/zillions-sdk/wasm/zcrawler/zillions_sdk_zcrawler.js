@@ -171,8 +171,8 @@ function takeFromExternrefTable0(idx) {
 /**
  * Trial-decrypt a batch of compact notes against `ufvk`.
  *
- * `notes` is `{ sapling: [...], orchard: [...] }` as returned by the `/notes`
- * endpoint. Returns the hits: `[{ pool, height, tx_index, index, position, value }]`.
+ * `notes` is the `/sync` payload (`{ orchard_notes, sapling_notes, ... }`).
+ * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
  * @param {string} network
  * @param {string} ufvk
  * @param {any} notes

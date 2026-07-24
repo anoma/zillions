@@ -4,10 +4,6 @@ export interface CrawlHit {
   pool: "sapling" | "orchard";
   /** "external" (received) or "internal" (change). */
   scope: "external" | "internal";
-  height: number;
-  tx_index: number;
-  index: number;
-  position: number;
   /** Value in zatoshis. */
   value: number;
   /** This note's own nullifier (hex); shows on-chain when spent. */
@@ -22,7 +18,7 @@ export interface CrawlResult {
   totalValue: number;
   /** Sum of unspent hit values (net spendable), in zatoshis. */
   netValue: number;
-  /** Peak count of owned unspent Orchard notes held during the fold. */
+  /** Peak count of owned unspent notes held during the fold. */
   nullifierSetSize: number;
   /** Logical size of that peak set (32 bytes each), for memory tracking. */
   nullifierSetBytes: number;
@@ -31,7 +27,7 @@ export interface CrawlResult {
 /** A worker's decrypted output for one chunk: owned notes and revealed spends. */
 export interface ChunkData {
   hits: CrawlHit[];
-  /** Orchard spend nullifiers revealed in the chunk (hex). */
+  /** Spend nullifiers for the chunk (hex): Orchard `rho` + Sapling nullifiers. */
   spends: string[];
 }
 
