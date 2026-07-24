@@ -6,9 +6,13 @@
 
 import initZcrawler, { try_decrypt } from "@zillions/sdk/zcrawler";
 
-import type { ChunkRequest, ChunkResponse, CrawlHit } from "./zcrawler";
+import { fetchNotes } from "./indexer";
+import type { ChunkRequest, ChunkResponse, CrawlHit } from "./types";
 
-const CRAWLER_URL = import.meta.env.VITE_CRAWLER_URL ?? "http://localhost:8080";
+// TODO revisit how config (network, indexer URL) reaches the worker: read from
+// import.meta.env at module load as now, injected at worker creation, or passed
+// per-message. This whole worker + sync orchestration may move into the SDK
+// rather than the app, which would change where config comes from entirely.
 const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 
 let ready: Promise<unknown> | undefined;
@@ -26,19 +30,13 @@ worker.onmessage = async (e) => {
   const { id, ufvk, from, to } = e.data;
   try {
     await (ready ??= initZcrawler());
-    // TODO can we do a faster request if it runs on rust-wasm?
-    const res = await fetch(`${CRAWLER_URL}/notes?start=${from}&end=${to}`);
-    if (!res.ok) throw new Error(`notes ${from}-${to}: HTTP ${res.status}`);
-    const notes = await res.json();
+    const notes = await fetchNotes(from, to);
     const hits = try_decrypt(NETWORK, ufvk, notes) as CrawlHit[];
-    // Every Orchard action reveals the nullifier of the note it spends (its `nf`).
-    // Collect them as the range's spend set — free, already in the payload.
-    // Lowercase to match Rust's `hex::encode` output (nf_mine); the indexer's
-    // hex case must not decide equality.
+    // Every Orchard action reveals the nullifier of the note it spends (`nf`) —
+    // the range's spend set, free in the payload. Lowercase to match Rust's
+    // `hex::encode` (nf_mine); the indexer's hex case must not decide equality.
     const spends: string[] = Array.isArray(notes.orchard)
-      ? notes.orchard
-          .map((n: { nf: string }) => n.nf?.toLowerCase())
-          .filter(Boolean)
+      ? notes.orchard.map((n) => n.nf?.toLowerCase()).filter(Boolean)
       : [];
     worker.postMessage({ id, from, to, hits, spends });
   } catch (err) {
