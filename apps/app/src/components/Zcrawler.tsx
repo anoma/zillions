@@ -13,13 +13,13 @@ export function Zcrawler({ pool }: { pool: "orchard" | "sapling" }) {
   const [hits, setHits] = useState<CrawlHit[]>([]);
   const [nfSet, setNfSet] = useState<{ size: number; bytes: number }>();
   const [error, setError] = useState<string>();
-  const abort = useRef<AbortController | undefined>(undefined);
+  const cancel = useRef<(() => void) | undefined>(undefined);
 
   const totalValue = hits.reduce((n, h) => n + h.value, 0);
   const netValue = hits.reduce((n, h) => n + (h.spent ? 0 : h.value), 0);
   const spentCount = hits.filter((h) => h.spent).length;
 
-  console.log(hits);
+  console.log("notes:", hits);
 
   // Default the end to the indexer's chain tip.
   useEffect(() => {
@@ -28,10 +28,8 @@ export function Zcrawler({ pool }: { pool: "orchard" | "sapling" }) {
       .catch((e) => setError(String(e)));
   }, []);
 
-  const scan = async () => {
-    abort.current?.abort();
-    const controller = new AbortController();
-    abort.current = controller;
+  const scan = () => {
+    cancel.current?.();
     setScanning(true);
     setError(undefined);
     setHits([]);
@@ -39,36 +37,36 @@ export function Zcrawler({ pool }: { pool: "orchard" | "sapling" }) {
 
     const startTime = new Date();
     console.log("[zcrawler] start:", startTime.toLocaleString());
-    try {
-      const result = await crawlNotes({
-        ufvk: ufvk.trim(),
-        start,
-        end,
-        pool,
-        signal: controller.signal,
-        chunk: 1000,
-        onProgress: (hits, scanned, total) => {
-          setHits(hits);
-          setProgress(total > 0 ? scanned / total : 1);
-        },
-      });
-      setHits(result.hits);
-      setNfSet({
-        size: result.nullifierSetSize,
-        bytes: result.nullifierSetBytes,
-      });
-      const endTime = new Date();
-      console.log("[zcrawler] end:", endTime.toLocaleString());
-      console.log(
-        "[zcrawler] total time (seconds):",
-        (endTime.getTime() - startTime.getTime()) / 1000,
-      );
-    } catch (e) {
-      console.error(e);
-      if (!controller.signal.aborted) setError(String(e));
-    } finally {
-      setScanning(false);
-    }
+    cancel.current = crawlNotes({
+      ufvk: ufvk.trim(),
+      start,
+      end,
+      pool,
+      chunk: 1000,
+      onProgress: (hits, scanned, total) => {
+        setHits(hits);
+        setProgress(total > 0 ? scanned / total : 1);
+      },
+      onComplete: (result) => {
+        setHits(result.hits);
+        setNfSet({
+          size: result.nullifierSetSize,
+          bytes: result.nullifierSetBytes,
+        });
+        const endTime = new Date();
+        console.log("[zcrawler] end:", endTime.toLocaleString());
+        console.log(
+          "[zcrawler] total time (seconds):",
+          (endTime.getTime() - startTime.getTime()) / 1000,
+        );
+        setScanning(false);
+      },
+      onError: (e) => {
+        console.error(e);
+        setError(String(e));
+        setScanning(false);
+      },
+    });
   };
 
   return (

@@ -63,5 +63,8 @@ export interface CrawlOptions {
     scannedBlocks: number,
     totalBlocks: number,
   ) => void;
-  signal?: AbortSignal;
+  /** Fires once when the crawl finishes, with the final result. */
+  onComplete?: (result: CrawlResult) => void;
+  /** Fires if the crawl fails. */
+  onError?: (err: unknown) => void;
 }

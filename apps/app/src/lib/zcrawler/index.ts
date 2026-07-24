@@ -1,6 +1,6 @@
 /** Public surface of the zcrawler: scan a UFVK over a block range for its notes. */
 
-export { crawlNotes, planChunks } from "./crawl";
+export { crawlNotes } from "./crawl";
 export { getChainTip } from "./indexer";
 export { SpendLedger } from "./ledger";
 export type {
