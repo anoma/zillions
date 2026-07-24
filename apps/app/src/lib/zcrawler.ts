@@ -29,12 +29,22 @@ export interface CrawlHit {
   position: number;
   /** Value in zatoshis. */
   value: number;
+  /** This note's own nullifier (hex); shows on-chain when spent. */
+  nf_mine: string;
+  /** True once this note's nullifier is seen spent in the scanned range. */
+  spent?: boolean;
 }
 
 export interface CrawlResult {
   hits: CrawlHit[];
-  /** Sum of hit values, in zatoshis. */
+  /** Sum of all hit values (gross received), in zatoshis. */
   totalValue: number;
+  /** Sum of unspent hit values (net spendable), in zatoshis. */
+  netValue: number;
+  /** Count of distinct Orchard spend nullifiers held for matching. */
+  nullifierSetSize: number;
+  /** Logical size of that set (32 bytes each), for memory tracking. */
+  nullifierSetBytes: number;
 }
 
 /** Main → worker: decrypt the notes in `[from, to]` (both bounds inclusive). */
@@ -45,9 +55,9 @@ export interface ChunkRequest {
   to: number;
 }
 
-/** Worker → main: the hits for a chunk, or an error. */
+/** Worker → main: the hits and Orchard spend nullifiers for a chunk, or an error. */
 export type ChunkResponse =
-  | { id: number; from: number; to: number; hits: CrawlHit[] }
+  | { id: number; from: number; to: number; hits: CrawlHit[]; spends: string[] }
   | { id: number; error: string };
 
 export interface CrawlOptions {
@@ -64,6 +74,7 @@ export interface CrawlOptions {
   signal?: AbortSignal;
 }
 
+// TODO the crawlNotes is a worker orchestrator, revisit this for when cleaning the code
 /** Crawl `[start, end]` (both inclusive) and return the notes the UFVK owns. */
 export function crawlNotes(
   ufvk: string,
@@ -90,6 +101,11 @@ export function crawlNotes(
 
   return new Promise<CrawlResult>((resolve, reject) => {
     const hits: CrawlHit[] = [];
+    // Orchard spend nullifiers seen across the range. A note is spent when its
+    // own nullifier lands here. ponytail: batch-intersect holds every range nf
+    // transiently — swap for the ordered streaming fold (discard non-matches per
+    // in-order chunk, shrinking the set) when ranges grow.
+    const spendSet = new Set<string>();
     let scannedBlocks = 0;
     let nextChunk = 0;
     let running = 0;
@@ -107,7 +123,26 @@ export function crawlNotes(
       if (settled) return;
       settled = true;
       cleanup();
-      resolve({ hits, totalValue: hits.reduce((n, h) => n + h.value, 0) });
+      // Mark Orchard notes spent when their nullifier appears in the range.
+      // (Sapling spends aren't in the payload yet — left unspent for now.)
+      for (const h of hits) {
+        if (h.pool === "orchard") h.spent = spendSet.has(h.nf_mine);
+      }
+      // Diagnostic: how spend-matching landed, per pool.
+      const orchard = hits.filter((h) => h.pool === "orchard");
+      const sapling = hits.filter((h) => h.pool === "sapling");
+      console.log(
+        `[zcrawler] spend-match: orchard ${orchard.filter((h) => h.spent).length}/${orchard.length} spent`,
+        `· sapling ${sapling.length} (not tracked yet)`,
+        `· spendSet ${spendSet.size}`,
+      );
+      resolve({
+        hits,
+        totalValue: hits.reduce((n, h) => n + h.value, 0),
+        netValue: hits.reduce((n, h) => n + (h.spent ? 0 : h.value), 0),
+        nullifierSetSize: spendSet.size,
+        nullifierSetBytes: spendSet.size * 32,
+      });
     };
 
     if (options.signal?.aborted) return fail(options.signal.reason);
@@ -138,7 +173,15 @@ export function crawlNotes(
         const msg = e.data;
         if ("error" in msg) return fail(new Error(msg.error));
         hits.push(...msg.hits);
+        for (const nf of msg.spends) spendSet.add(nf);
         scannedBlocks += msg.to - msg.from + 1;
+        // Track the spend set as it grows — this is the transient memory ceiling.
+        console.log(
+          `[zcrawler] nullifier set: ${spendSet.size} nf · ${(
+            (spendSet.size * 32) /
+            1024
+          ).toFixed(1)} KB`,
+        );
         options.onProgress?.([...hits], scannedBlocks, totalBlocks);
         feed(w);
       };

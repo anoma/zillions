@@ -20,14 +20,27 @@ const worker = self as unknown as {
 };
 
 worker.onmessage = async (e) => {
+  // TODO can we save JS ↔ WASM boundary time by registering the ufvk?
+  // And if we create a sequence on the from/to based on the mod of the total blocks?
+  // Does it really worth the complexity?
   const { id, ufvk, from, to } = e.data;
   try {
     await (ready ??= initZcrawler());
+    // TODO can we do a faster request if it runs on rust-wasm?
     const res = await fetch(`${CRAWLER_URL}/notes?start=${from}&end=${to}`);
     if (!res.ok) throw new Error(`notes ${from}-${to}: HTTP ${res.status}`);
     const notes = await res.json();
     const hits = try_decrypt(NETWORK, ufvk, notes) as CrawlHit[];
-    worker.postMessage({ id, from, to, hits });
+    // Every Orchard action reveals the nullifier of the note it spends (its `nf`).
+    // Collect them as the range's spend set — free, already in the payload.
+    // Lowercase to match Rust's `hex::encode` output (nf_mine); the indexer's
+    // hex case must not decide equality.
+    const spends: string[] = Array.isArray(notes.orchard)
+      ? notes.orchard
+          .map((n: { nf: string }) => n.nf?.toLowerCase())
+          .filter(Boolean)
+      : [];
+    worker.postMessage({ id, from, to, hits, spends });
   } catch (err) {
     worker.postMessage({ id, error: String(err) });
   }

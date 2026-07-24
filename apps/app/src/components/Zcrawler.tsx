@@ -11,10 +11,15 @@ export function Zcrawler() {
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [hits, setHits] = useState<CrawlHit[]>([]);
+  const [nfSet, setNfSet] = useState<{ size: number; bytes: number }>();
   const [error, setError] = useState<string>();
   const abort = useRef<AbortController | undefined>(undefined);
 
   const totalValue = hits.reduce((n, h) => n + h.value, 0);
+  const netValue = hits.reduce((n, h) => n + (h.spent ? 0 : h.value), 0);
+  const spentCount = hits.filter((h) => h.spent).length;
+
+  console.log(hits);
 
   // Default the end to the indexer's chain tip.
   useEffect(() => {
@@ -35,14 +40,18 @@ export function Zcrawler() {
     const startTime = new Date();
     console.log("[zcrawler] start:", startTime.toLocaleString());
     try {
-      const { hits } = await crawlNotes(ufvk.trim(), start, end, {
+      const result = await crawlNotes(ufvk.trim(), start, end, {
         signal: controller.signal,
         onProgress: (hits, scanned, total) => {
           setHits(hits);
           setProgress(total > 0 ? scanned / total : 1);
         },
       });
-      setHits(hits);
+      setHits(result.hits);
+      setNfSet({
+        size: result.nullifierSetSize,
+        bytes: result.nullifierSetBytes,
+      });
       const endTime = new Date();
       console.log("[zcrawler] end:", endTime.toLocaleString());
       console.log(
@@ -65,12 +74,22 @@ export function Zcrawler() {
           <div className="text-sm text-gray-500">Total notes</div>
           <div className="text-2xl tabular-nums">{hits.length}</div>
           <div className="text-sm text-gray-500">
-            {(totalValue / 1e8).toFixed(8)} ZEC
+            {(netValue / 1e8).toFixed(8)} ZEC spendable
+          </div>
+          <div className="text-xs text-gray-400 tabular-nums">
+            {(totalValue / 1e8).toFixed(8)} gross
           </div>
           <div className="text-xs text-gray-400 tabular-nums">
             {hits.filter((h) => h.scope === "external").length} received ·{" "}
-            {hits.filter((h) => h.scope === "internal").length} change
+            {hits.filter((h) => h.scope === "internal").length} change ·{" "}
+            {spentCount} spent
           </div>
+          {nfSet && (
+            <div className="text-xs text-gray-400 tabular-nums">
+              nullifier set: {nfSet.size} nf · {(nfSet.bytes / 1024).toFixed(1)}{" "}
+              KB
+            </div>
+          )}
         </div>
       </div>
 

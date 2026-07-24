@@ -58,6 +58,8 @@ struct Hit {
     index: u32,
     position: u64,
     value: u64,
+    /// This note's own nullifier (hex); it appears on-chain when the note is spent.
+    nf_mine: String,
 }
 
 /// External + internal (change) scopes — a note may be addressed to either.
@@ -79,6 +81,7 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
 
     // Sapling: one domain for all outputs (just the ZIP-212 rule).
     if let Some(dfvk) = ufvk.sapling() {
+        let nk = &dfvk.fvk().vk.nk;
         let ivks: Vec<_> = SCOPES
             .iter()
             .map(|(_, scope)| sapling::keys::PreparedIncomingViewingKey::new(&dfvk.to_ivk(*scope)))
@@ -117,6 +120,7 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
                     index: n.index,
                     position: n.position,
                     value: note.value().inner(),
+                    nf_mine: hex::encode(note.nf(nk, n.position).0),
                 });
             }
         }
@@ -160,6 +164,7 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
                     index: n.index,
                     position: n.position,
                     value: note.value().inner(),
+                    nf_mine: hex::encode(note.nullifier(fvk).to_bytes()),
                 });
             }
         }
