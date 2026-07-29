@@ -1,8 +1,8 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import type { SdkWallet } from "../lib/sdk/wallet";
+import type { ZWallet } from "../lib/zcrawler/ZWallet";
 import { useWallet } from "./useWallet";
 
-export function getBalance(wallet: SdkWallet) {
+export function getBalance(wallet: ZWallet) {
   return queryOptions({
     queryKey: ["getBalance", wallet.id],
     queryFn: () => wallet.getBalance(),

@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { TotalBalance } from "../components/TotalBalance";
 import { TransactionHistory } from "../components/TransactionHistory";
-import { Zcrawler } from "../components/Zcrawler";
 
 export const Route = createFileRoute("/")({
   component: HomeRoute,
@@ -10,8 +9,6 @@ export const Route = createFileRoute("/")({
 function HomeRoute() {
   return (
     <>
-      <Zcrawler pool="orchard" />
-      <Zcrawler pool="sapling" />
       <TotalBalance />
       <TransactionHistory />
     </>

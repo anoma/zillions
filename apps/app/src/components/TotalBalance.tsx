@@ -22,8 +22,7 @@ export function TotalBalance() {
     return <PageError>{String(balance.error)}</PageError>;
   }
 
-  const shieldedBalance =
-    balance.data.orchardBalance + balance.data.saplingBalance;
+  const shieldedBalance = balance.data.shieldedBalance;
   const pendingBalance =
     balance.data.pendingChange + balance.data.pendingSpendable;
   const transparentBalance = balance.data.unshieldedBalance;

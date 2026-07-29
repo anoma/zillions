@@ -91,7 +91,7 @@ function SendRoute() {
     if (isTransparentFrom) {
       return balance.data.unshieldedBalance;
     }
-    return balance.data.orchardBalance + balance.data.saplingBalance;
+    return balance.data.shieldedBalance;
   })();
 
   const isTransparentTo = isTransparentAddress(to);

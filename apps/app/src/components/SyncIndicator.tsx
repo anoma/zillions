@@ -36,8 +36,7 @@ export function SyncIndicator() {
   useEffect(() => {
     // TODO allow to call sync from other components, this is fundamentally important for transfers
     const unsubscribe = wallet.subscribeSyncProgress((e) => {
-      console.log("Sync progress", e);
-      setPercent((prev) => formatPercentage(Number(prev), e.percent));
+      setPercent((prev) => formatPercentage(Number(prev), e.percentage));
     });
     wallet
       .sync()

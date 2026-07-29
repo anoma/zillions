@@ -1,8 +1,8 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import type { SdkWallet } from "../lib/sdk/wallet";
+import type { ZWallet } from "../lib/zcrawler/ZWallet";
 import { useWallet } from "./useWallet";
 
-export function getTransactionHistory(wallet: SdkWallet) {
+export function getTransactionHistory(wallet: ZWallet) {
   return queryOptions({
     queryKey: ["getTransactionHistory", wallet.id],
     queryFn: () => wallet.getTransactionHistory(),

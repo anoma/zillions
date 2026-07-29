@@ -1,15 +1,10 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import type { SdkWallet } from "../lib/sdk/wallet";
 import { isTransparentAddress } from "../lib/utils";
+import type { ZWallet } from "../lib/zcrawler/ZWallet";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { useWallet } from "./useWallet";
 
-export function fee(
-  wallet: SdkWallet,
-  from: string,
-  to: string,
-  amount: bigint,
-) {
+export function fee(wallet: ZWallet, from: string, to: string, amount: bigint) {
   return queryOptions({
     queryKey: ["fee", wallet.id, from, to, amount.toString()],
     queryFn: async () => {

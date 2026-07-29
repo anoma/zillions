@@ -40,9 +40,7 @@ function UnshieldRoute() {
     amount,
   );
 
-  const availableBalance = balance.data
-    ? balance.data.orchardBalance + balance.data.saplingBalance
-    : 0n;
+  const availableBalance = balance.data ? balance.data.shieldedBalance : 0n;
 
   const onSubmit = async () => {
     try {

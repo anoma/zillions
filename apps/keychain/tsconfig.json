@@ -17,7 +17,7 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "target": "es2023",
+    "target": "es2025",
     "paths": {
       "@vitejs/plugin-react": ["./.types-shims/vitejs-plugin-react.d.ts"],
       "@zillions/components": ["./src/packages/components/src"],
@@ -29,7 +29,7 @@
       "@zillions/types": ["./src/packages/types/src"],
       "@zillions/types/*": ["./src/packages/types/src/*"],
       "@zillions/utils": ["./src/packages/utils/src"],
-      "@zillions/utils/*": ["./src/packages/utils/src/*"],
+      "@zillions/utils/*": ["./src/packages/utils/src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "entrypoints/**/*", ".wxt/**/*"],
