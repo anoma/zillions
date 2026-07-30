@@ -7,7 +7,7 @@ import {
   saveSyncState,
   type SyncStatus,
 } from "./db";
-import { type ChunksData, fetchChunks } from "./indexer";
+import { type ChunksData, fetchChunks, isSpent } from "./indexer";
 import type { ChunkWorkerSuccess, Note, Pool } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
@@ -37,6 +37,8 @@ export class ZWallet {
   #abort = new AbortController();
   /** Saves are chained so two overlapping writes can't reorder the sync tip. */
   #saving: Promise<unknown> = Promise.resolve();
+  /** Spend lookups are chained: one bucket in flight, newest notes first. */
+  #checking: Promise<unknown> = Promise.resolve();
 
   constructor(options: { id: string; ufvk: string }) {
     this.id = options.id;
@@ -81,6 +83,8 @@ export class ZWallet {
     this.#emitProgress();
 
     const chunks = await fetchChunks();
+    // Notes carried over from an earlier sync may have been spent since.
+    this.#checkSpends([...this.#unspentNotes.values()]);
 
     for (const pool of POOLS) {
       const { first_chunk, last_chunk } = chunks[pool];
@@ -121,17 +125,18 @@ export class ZWallet {
       });
     }
 
+    await this.#checking;
     await this.#saving;
     console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
   });
 
-  /** Applies one chunk's notes and spends, then persists and announces progress. */
+  /** Applies one chunk's notes, then persists and announces progress. */
   #applyChunk = (
     pool: Pool,
-    { chunk, hits, spends }: ChunkWorkerSuccess,
+    { chunk, hits }: ChunkWorkerSuccess,
     chunks: ChunksData,
   ) => {
-    hits.forEach((hit, i) => {
+    const found = hits.map((hit, i) => {
       const note: Note = {
         ...hit,
         id: `${this.id}_${pool}_${chunk}_${i}`,
@@ -139,20 +144,31 @@ export class ZWallet {
       };
       this.#notes.push(note);
       this.#unspentNotes.set(note.nf_mine, note);
+      return note;
     });
 
-    // ponytail: crawling downward, a spend usually lands before the note it
-    // spends, leaving that note marked unspent. Next step: keep the unmatched
-    // nullifiers and reconcile them as the notes below come in.
-    for (const nullifier of spends) {
-      const note = this.#unspentNotes.get(nullifier);
-      if (note) {
-        note.spent = true;
-        this.#unspentNotes.delete(nullifier);
-      }
-    }
-
+    this.#checkSpends(found);
     this.#advance(chunks);
+  };
+
+  /**
+   * Resolves spentness by asking the indexer for each note's nullifier bucket.
+   * Runs off the crawl (`#applyChunk` must stay synchronous) and chained, so a
+   * long crawl can't fan out into a request per note all at once.
+   */
+  #checkSpends = (notes: Note[]) => {
+    if (!notes.length) return;
+    this.#checking = this.#checking
+      .then(async () => {
+        for (const note of notes) {
+          if (this.#abort.signal.aborted) return;
+          if (!(await isSpent(note.nf_mine, note.pool))) continue;
+          note.spent = true;
+          this.#unspentNotes.delete(note.nf_mine);
+        }
+        this.#save();
+      })
+      .catch((err) => console.error("[sync] spend check failed", err));
   };
 
   /** Recomputes progress from the scanned window, then persists and announces it. */

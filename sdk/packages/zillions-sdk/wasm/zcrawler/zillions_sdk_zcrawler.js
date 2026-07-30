@@ -169,21 +169,25 @@ function takeFromExternrefTable0(idx) {
     return value;
 }
 /**
- * Trial-decrypt a batch of compact notes against `ufvk`.
+ * Trial-decrypt one pool's compact notes against `ufvk`.
  *
- * `notes` is the `/sync` payload (`{ orchard_notes, sapling_notes, ... }`).
+ * `notes` is the `/sync` payload: an array of that pool's notes. `pool` is
+ * `"sapling"` or `"orchard"`; the array itself doesn't say which it is.
  * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
  * @param {string} network
  * @param {string} ufvk
+ * @param {string} pool
  * @param {any} notes
  * @returns {any}
  */
-export function try_decrypt(network, ufvk, notes) {
+export function try_decrypt(network, ufvk, pool, notes) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, notes);
+    const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, notes);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }

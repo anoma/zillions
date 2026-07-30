@@ -41,17 +41,15 @@ struct SaplingNote {
     eph_key: String,
     /// Block height, for height-dependent ZIP-212 enforcement.
     height: u32,
+    /// Note commitment tree position, which the Sapling nullifier binds to.
     position: u64,
 }
 
-/// The `/sync` payload; its `sapling_nullifiers` (spend tracking) is handled in
-/// TS and ignored here.
-#[derive(Deserialize)]
-struct Notes {
-    #[serde(default)]
-    orchard_notes: Vec<OrchardNote>,
-    #[serde(default)]
-    sapling_notes: Vec<SaplingNote>,
+/// A `/sync` chunk: one pool's notes. The payload is a bare array, so the pool
+/// it belongs to comes from the caller rather than the shape.
+enum PoolNotes {
+    Sapling(Vec<SaplingNote>),
+    Orchard(Vec<OrchardNote>),
 }
 
 /// A note the UFVK owns, with its value in zatoshis.
@@ -76,21 +74,20 @@ fn hex_n<const N: usize>(s: &str) -> Result<[u8; N], String> {
     v.try_into().map_err(|_| format!("expected {N} bytes"))
 }
 
-fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> {
+fn decrypt(network: &str, ufvk: &str, notes: PoolNotes) -> Result<Vec<Hit>, String> {
     let network: Network = network.parse().map_err(|_| "invalid network".to_string())?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
 
     let mut hits = Vec::new();
 
     // Sapling: one domain per output (ZIP-212 enforcement is height-dependent).
-    if let Some(dfvk) = ufvk.sapling() {
+    if let (PoolNotes::Sapling(sapling_notes), Some(dfvk)) = (&notes, ufvk.sapling()) {
         let nk = &dfvk.fvk().vk.nk;
         let ivks: Vec<_> = SCOPES
             .iter()
             .map(|(_, scope)| sapling::keys::PreparedIncomingViewingKey::new(&dfvk.to_ivk(*scope)))
             .collect();
-        let outputs = notes
-            .sapling_notes
+        let outputs = sapling_notes
             .iter()
             .map(|n| {
                 let cmu = Option::<SaplingCmu>::from(SaplingCmu::from_bytes(&hex_n(&n.cmu)?))
@@ -114,7 +111,7 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
             .enumerate()
         {
             if let Some(((note, _addr), scope_idx)) = res {
-                let n = &notes.sapling_notes[i];
+                let n = &sapling_notes[i];
                 hits.push(Hit {
                     pool: "sapling",
                     scope: SCOPES[scope_idx].0,
@@ -126,13 +123,12 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
     }
 
     // Orchard: each action carries its own rho (= nf), so the domain is per-output.
-    if let Some(fvk) = ufvk.orchard() {
+    if let (PoolNotes::Orchard(orchard_notes), Some(fvk)) = (&notes, ufvk.orchard()) {
         let ivks: Vec<_> = SCOPES
             .iter()
             .map(|(_, scope)| orchard::keys::PreparedIncomingViewingKey::new(&fvk.to_ivk(*scope)))
             .collect();
-        let outputs = notes
-            .orchard_notes
+        let outputs = orchard_notes
             .iter()
             .map(|n| {
                 let action = CompactAction::from_parts(
@@ -163,13 +159,22 @@ fn decrypt(network: &str, ufvk: &str, notes: Notes) -> Result<Vec<Hit>, String> 
     Ok(hits)
 }
 
-/// Trial-decrypt a batch of compact notes against `ufvk`.
+/// Trial-decrypt one pool's compact notes against `ufvk`.
 ///
-/// `notes` is the `/sync` payload (`{ orchard_notes, sapling_notes, ... }`).
+/// `notes` is the `/sync` payload: an array of that pool's notes. `pool` is
+/// `"sapling"` or `"orchard"`; the array itself doesn't say which it is.
 /// Returns the hits: `[{ pool, scope, value, nf_mine }]`.
 #[wasm_bindgen]
-pub fn try_decrypt(network: &str, ufvk: &str, notes: JsValue) -> Result<JsValue, JsError> {
-    let notes: Notes = serde_wasm_bindgen::from_value(notes).map_err(|e| JsError::new(&e.to_string()))?;
+pub fn try_decrypt(network: &str, ufvk: &str, pool: &str, notes: JsValue) -> Result<JsValue, JsError> {
+    let notes = match pool {
+        "sapling" => PoolNotes::Sapling(
+            serde_wasm_bindgen::from_value(notes).map_err(|e| JsError::new(&e.to_string()))?,
+        ),
+        "orchard" => PoolNotes::Orchard(
+            serde_wasm_bindgen::from_value(notes).map_err(|e| JsError::new(&e.to_string()))?,
+        ),
+        _ => return Err(JsError::new("unknown pool")),
+    };
     let hits = decrypt(network, ufvk, notes).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&hits).map_err(|e| JsError::new(&e.to_string()))
 }
@@ -190,23 +195,38 @@ mod tests {
             .expect("usk");
         let ufvk = usk.to_unified_full_viewing_key().encode(&Network::MainNetwork);
 
-        let notes = Notes {
-            sapling_notes: vec![SaplingNote {
-                cmu: "1e184cee50a61ef8bad79f28a360ae0383b4c2a563723744abb8994145e5d109".into(),
-                eph_key: "cb476002450613bae9a8fa4240a80f459ca338ab4ac9d0ccd69507d0a4bef985".into(),
-                enc_head: "67294ab5a43ac6750a760eb171df88bf67d5847fe3bd1d7ac9f4d2bd3e1e69da31868f810a478d3d5b39366f43e11a8b88ddf384".into(),
-                height: 3342508,
-                position: 73908202,
-            }],
-            orchard_notes: vec![OrchardNote {
-                cmx: "44ba39dbcf4e55c2b2c308eed761a4ffce3f6ae32ec7f01554bb3b2c61eb2936".into(),
-                eph_key: "8c03e7196525e7c5370766dcddf8be8592be5a12bdef5de0e0852189a4ceb233".into(),
-                enc_head: "87d64a0108dec58c38e80bda117b779a8677477347ebe720b5fccb09d188c1632faa0d30abea7f23223df164cdcf3c0a7e5f344d".into(),
-                rho: "08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39".into(),
-            }],
-        };
+        let sapling = PoolNotes::Sapling(vec![SaplingNote {
+            cmu: "1e184cee50a61ef8bad79f28a360ae0383b4c2a563723744abb8994145e5d109".into(),
+            eph_key: "cb476002450613bae9a8fa4240a80f459ca338ab4ac9d0ccd69507d0a4bef985".into(),
+            enc_head: "67294ab5a43ac6750a760eb171df88bf67d5847fe3bd1d7ac9f4d2bd3e1e69da31868f810a478d3d5b39366f43e11a8b88ddf384".into(),
+            height: 3342508,
+            position: 73908202,
+        }]);
+        let orchard = PoolNotes::Orchard(vec![OrchardNote {
+            cmx: "44ba39dbcf4e55c2b2c308eed761a4ffce3f6ae32ec7f01554bb3b2c61eb2936".into(),
+            eph_key: "8c03e7196525e7c5370766dcddf8be8592be5a12bdef5de0e0852189a4ceb233".into(),
+            enc_head: "87d64a0108dec58c38e80bda117b779a8677477347ebe720b5fccb09d188c1632faa0d30abea7f23223df164cdcf3c0a7e5f344d".into(),
+            rho: "08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39".into(),
+        }]);
 
-        let hits = decrypt(network, &ufvk, notes).expect("decrypt runs");
-        assert_eq!(hits.len(), 0);
+        assert_eq!(decrypt(network, &ufvk, sapling).expect("sapling runs").len(), 0);
+        assert_eq!(decrypt(network, &ufvk, orchard).expect("orchard runs").len(), 0);
+    }
+
+    // A pool's array must deserialize from the raw `/sync` shape, extra fields
+    // (orchard's `position`) included.
+    #[test]
+    fn parses_sync_arrays() {
+        let orchard: Vec<OrchardNote> = serde_json::from_str(
+            r#"[{"cmx":"57d9124d8ec87f2dc29a3db51b2feddd4c9f0e5ac49d161b4429add050f4912a","enc_head":"e6a88085dfd561cdf3be21391e553c59876f4d2e660a261cc7e0b9d3805252dec8aca128c3f543a01bc76c2afdea9517c70b9fe1","eph_key":"73a12a77fed895c9745da4db14ca0dbc854921c5dbee78b4d6dac5aa9727b62f","position":50176000,"rho":"291a06b08242662e4a50f2070dfc3ed2e3a1fcd0c5dad43997fca2b7a1050135"}]"#,
+        )
+        .expect("orchard array");
+        assert_eq!(orchard.len(), 1);
+
+        let sapling: Vec<SaplingNote> = serde_json::from_str(
+            r#"[{"cmu":"cebda1a5c30582e5d630430ab42b7c24681e119ab2f32fe0c00a01a91f6d5658","enc_head":"374621524a15dc1084366032b5f81c583c5a8c710a535a452c068b89b8851c89ac6a61ad060f558dee56e77cb8dfa7740e4309fa","eph_key":"010d9b3a567a8e662acc9bb928ceadf3da7a722fd2694495d85cfe750414ba65","height":3401974,"position":73928704}]"#,
+        )
+        .expect("sapling array");
+        assert_eq!(sapling[0].position, 73928704);
     }
 }

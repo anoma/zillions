@@ -1,12 +1,13 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Trial-decrypt a batch of compact notes against `ufvk`.
+ * Trial-decrypt one pool's compact notes against `ufvk`.
  *
- * `notes` is the `/sync` payload (`{ orchard_notes, sapling_notes, ... }`).
+ * `notes` is the `/sync` payload: an array of that pool's notes. `pool` is
+ * `"sapling"` or `"orchard"`; the array itself doesn't say which it is.
  * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
  */
-export function try_decrypt(network: string, ufvk: string, notes: any): any;
+export function try_decrypt(network: string, ufvk: string, pool: string, notes: any): any;
 
 export interface PcztTransparentIoJson {
   value?: number;
@@ -92,7 +93,7 @@ export class Pczt {
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
-  readonly try_decrypt: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
+  readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
   readonly __wbg_pczt_free: (a: number, b: number) => void;
   readonly pczt_to_json: (a: number) => any;
   readonly pczt_from_json: (a: any) => number;

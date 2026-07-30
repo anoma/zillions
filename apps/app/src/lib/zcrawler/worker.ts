@@ -30,16 +30,8 @@ worker.onmessage = async (e) => {
   try {
     await (ready ??= initZcrawler());
     const sync = await fetchSync(chunk, pool);
-    const hits = try_decrypt(NETWORK, ufvk, sync) as DecryptedNote[];
-    // Spend nullifiers for the range: Orchard's ride inline as each action's
-    // `rho` (= its nf); Sapling's come as their own list. Lowercase to match
-    // Rust's `hex::encode` (nf_mine); indexer hex case must not decide equality.
-    // Pool-filtered, so the other pool's arrays may be absent.
-    const spends = [
-      ...(sync.orchard_notes ?? []).map((n) => n.rho.toLowerCase()),
-      ...(sync.sapling_nullifiers ?? []).map((nf) => nf.toLowerCase()),
-    ];
-    worker.postMessage({ chunk, hits, spends });
+    const hits = try_decrypt(NETWORK, ufvk, pool, sync) as DecryptedNote[];
+    worker.postMessage({ chunk, hits });
   } catch (err) {
     worker.postMessage({ chunk, error: String(err) });
   }

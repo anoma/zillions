@@ -25,12 +25,10 @@ export interface ChunkRequest {
   pool: Pool;
 }
 
-/** A worker's decrypted output for one chunk: owned notes and revealed spends. */
+/** A worker's decrypted output for one chunk: the notes this UFVK owns. */
 export type ChunkWorkerSuccess = {
   chunk: number;
   hits: DecryptedNote[];
-  /** Spend nullifiers for the chunk (hex): Orchard `rho` + Sapling nullifiers. */
-  spends: string[];
 };
 
 export type ChunkWorkerError = {

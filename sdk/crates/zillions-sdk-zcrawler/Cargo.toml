@@ -42,6 +42,7 @@ getrandom = { workspace = true, features = ["js"] }
 # Only the test builds a UnifiedSpendingKey (needs transparent key derivation);
 # dev-dep features never reach the wasm --lib build.
 zcash_keys = { workspace = true, features = ["orchard", "sapling", "transparent-inputs"] }
+serde_json.workspace = true
 
 [lints]
 workspace = true
