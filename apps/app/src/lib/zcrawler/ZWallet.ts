@@ -7,7 +7,7 @@ import {
   saveSyncState,
   type SyncStatus,
 } from "./db";
-import { type ChunksData, fetchChunks, isSpent } from "./indexer";
+import { type ChunksData, fetchChunks, fetchNullifiers } from "./indexer";
 import type { ChunkWorkerSuccess, Note, Pool } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
@@ -82,9 +82,10 @@ export class ZWallet {
     await this.#seed();
     this.#emitProgress();
 
-    const chunks = await fetchChunks();
-    // Notes carried over from an earlier sync may have been spent since.
+    // Notes carried over from an earlier sync may have been spent since. Kicked
+    // off before the fetch so the bucket lookups overlap it.
     this.#checkSpends([...this.#unspentNotes.values()]);
+    const chunks = await fetchChunks();
 
     for (const pool of POOLS) {
       const { first_chunk, last_chunk } = chunks[pool];
@@ -162,7 +163,10 @@ export class ZWallet {
       .then(async () => {
         for (const note of notes) {
           if (this.#abort.signal.aborted) return;
-          if (!(await isSpent(note.nf_mine, note.pool))) continue;
+          const bucket = await fetchNullifiers(note.nf_mine, note.pool);
+          // Indexer hex case must not decide equality; `nf_mine` is lowercase.
+          const spent = bucket.some((nf) => nf.toLowerCase() === note.nf_mine);
+          if (!spent) continue;
           note.spent = true;
           this.#unspentNotes.delete(note.nf_mine);
         }
@@ -183,6 +187,7 @@ export class ZWallet {
 
   // TODO persist only the notes that changed, instead of the whole set.
   #save = () => {
+    console.log("[sync] persisting notes:", this.#notes.length);
     const snapshot = {
       ...this.#syncStatus,
       scanned: structuredClone(this.#syncStatus.scanned),
@@ -193,7 +198,6 @@ export class ZWallet {
   };
 
   async getBalance() {
-    await this.sync();
     return {
       shieldedBalance: this.#notes.reduce(
         (sum, n) => sum + (n.spent ? 0n : BigInt(n.value)),

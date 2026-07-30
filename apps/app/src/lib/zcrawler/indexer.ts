@@ -8,9 +8,9 @@ export type SyncData = unknown[];
 /**
  * Hex chars of a nullifier sent to the indexer, which answers with every
  * nullifier sharing that prefix so it never learns which one we asked about.
- * The server rejects any other length, so this tracks its 3-byte bucket.
+ * The server rejects any other length, so this has to track its bucket size.
  */
-const PREFIX_LENGTH = 6;
+const PREFIX_LENGTH = 4;
 
 export interface ChunksData {
   chunk_size: number;
@@ -38,12 +38,8 @@ export async function fetchChunks() {
   return get<ChunksData>(`${CRAWLER_URL}/chunks`);
 }
 
-/** True if `nf` has been revealed on chain, i.e. the note it belongs to is spent. */
-export async function isSpent(nf: string, pool: Pool) {
+/** Every revealed nullifier sharing `nf`'s prefix — the bucket it hides in. */
+export async function fetchNullifiers(nf: string, pool: Pool) {
   const prefix = nf.slice(0, PREFIX_LENGTH);
-  const nullifiers = await get<string[]>(
-    `${CRAWLER_URL}/nullifiers?pool=${pool}&prefix=${prefix}`,
-  );
-  // Indexer hex case must not decide equality; `nf_mine` is lowercase.
-  return nullifiers.some((candidate) => candidate.toLowerCase() === nf);
+  return get<string[]>(`${CRAWLER_URL}/nullifiers?pool=${pool}&prefix=${prefix}`);
 }
