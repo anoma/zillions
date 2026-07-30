@@ -2,10 +2,16 @@ import Dexie, { type EntityTable, type Table } from "dexie";
 
 import type { Note, Pool } from "./types";
 
+/** The contiguous chunk range already scanned for a pool; `to < from` is empty. */
+export interface ChunkRange {
+  from: number;
+  to: number;
+}
+
 export interface SyncStatus {
   id: string;
   percentage: number;
-  lastChunk: Record<Pool, number>;
+  scanned: Record<Pool, ChunkRange>;
 }
 
 export const db = new Dexie("zcrawler") as Dexie & {
@@ -18,11 +24,19 @@ db.version(2).stores({
   sync: "id",
 });
 
-/** Chunk -1 means "nothing scanned yet"; chunk indexes start at 0. */
+// Sync state is dropped: pre-v3 rows track an upward cursor that says nothing
+// about what a downward crawl still has to cover.
+db.version(3)
+  .stores({
+    notes: "id",
+    sync: "id",
+  })
+  .upgrade((tx) => tx.table("sync").clear());
+
 export const emptySyncStatus = (accountId: string): SyncStatus => ({
   id: accountId,
   percentage: 0,
-  lastChunk: { sapling: -1, orchard: -1 },
+  scanned: { sapling: { from: 0, to: -1 }, orchard: { from: 0, to: -1 } },
 });
 
 export const loadNotes = (accountId: string): Promise<Note[]> =>

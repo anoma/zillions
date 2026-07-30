@@ -7,20 +7,23 @@ import {
   saveSyncState,
   type SyncStatus,
 } from "./db";
-import { fetchChunks } from "./indexer";
+import { type ChunksData, fetchChunks } from "./indexer";
 import type { ChunkWorkerSuccess, Note, Pool } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
 
 const POOLS = ["orchard", "sapling"] as const satisfies Pool[];
 
-type ChunkTips = Record<Pool, number>;
-
-/** Chunks are 0-indexed and `lastChunk` is -1 before anything is scanned. */
-const percentageOf = (lastChunk: ChunkTips, tips: ChunkTips) => {
-  const scanned = POOLS.reduce((sum, p) => sum + lastChunk[p] + 1, 0);
-  const total = POOLS.reduce((sum, p) => sum + tips[p] + 1, 0);
-  return total > 0 ? Math.min(100, (scanned / total) * 100) : 100;
+const percentageOf = (scanned: SyncStatus["scanned"], chunks: ChunksData) => {
+  const done = POOLS.reduce(
+    (sum, p) => sum + Math.max(0, scanned[p].to - scanned[p].from + 1),
+    0,
+  );
+  const total = POOLS.reduce(
+    (sum, p) => sum + chunks[p].last_chunk - chunks[p].first_chunk + 1,
+    0,
+  );
+  return total > 0 ? Math.min(100, (done / total) * 100) : 100;
 };
 
 export class ZWallet {
@@ -78,34 +81,55 @@ export class ZWallet {
     this.#emitProgress();
 
     const chunks = await fetchChunks();
-    const tips: ChunkTips = {
-      orchard: chunks.orchard.last_chunk,
-      sapling: chunks.sapling.last_chunk,
-    };
 
     for (const pool of POOLS) {
+      const { first_chunk, last_chunk } = chunks[pool];
+      const scanned = this.#syncStatus.scanned[pool];
+
+      // An untouched wallet starts with an empty window pinned at the tip, so
+      // the whole history falls to the downward crawl below.
+      if (scanned.to < scanned.from) {
+        scanned.from = last_chunk + 1;
+        scanned.to = last_chunk;
+      }
+
+      // Chunks minted since the last sync. Crawled downward like everything
+      // else, so the window's top only moves once the whole range has landed.
       await crawlChunks({
         ufvk: this.#ufvk,
         pool,
-        from: this.#syncStatus.lastChunk[pool] + 1,
-        to: tips[pool],
+        from: last_chunk,
+        to: scanned.to + 1,
         signal: this.#abort.signal,
-        onChunk: (result) => this.#applyChunk(pool, result, tips),
+        onChunk: (result) => this.#applyChunk(pool, result, chunks),
+      });
+      if (this.#abort.signal.aborted) break;
+      scanned.to = last_chunk;
+      this.#advance(chunks);
+
+      // The unscanned history below the window, newest chunk first.
+      await crawlChunks({
+        ufvk: this.#ufvk,
+        pool,
+        from: scanned.from - 1,
+        to: first_chunk,
+        signal: this.#abort.signal,
+        onChunk: (result) => {
+          scanned.from = result.chunk;
+          this.#applyChunk(pool, result, chunks);
+        },
       });
     }
-
-    // Covers the nothing-to-crawl case, where no chunk ever lands.
-    if (!this.#abort.signal.aborted) this.#advance(tips);
 
     await this.#saving;
     console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
   });
 
-  /** Apply one in-order chunk into memory and advances the sync tip. */
+  /** Applies one chunk's notes and spends, then persists and announces progress. */
   #applyChunk = (
     pool: Pool,
     { chunk, hits, spends }: ChunkWorkerSuccess,
-    tips: ChunkTips,
+    chunks: ChunksData,
   ) => {
     hits.forEach((hit, i) => {
       const note: Note = {
@@ -117,6 +141,9 @@ export class ZWallet {
       this.#unspentNotes.set(note.nf_mine, note);
     });
 
+    // ponytail: crawling downward, a spend usually lands before the note it
+    // spends, leaving that note marked unspent. Next step: keep the unmatched
+    // nullifiers and reconcile them as the notes below come in.
     for (const nullifier of spends) {
       const note = this.#unspentNotes.get(nullifier);
       if (note) {
@@ -125,15 +152,14 @@ export class ZWallet {
       }
     }
 
-    this.#syncStatus.lastChunk[pool] = chunk;
-    this.#advance(tips);
+    this.#advance(chunks);
   };
 
-  /** Recomputes progress from the scanned tips, then persists and announces it. */
-  #advance = (tips: ChunkTips) => {
+  /** Recomputes progress from the scanned window, then persists and announces it. */
+  #advance = (chunks: ChunksData) => {
     this.#syncStatus.percentage = percentageOf(
-      this.#syncStatus.lastChunk,
-      tips,
+      this.#syncStatus.scanned,
+      chunks,
     );
     this.#save();
     this.#emitProgress();
@@ -143,7 +169,7 @@ export class ZWallet {
   #save = () => {
     const snapshot = {
       ...this.#syncStatus,
-      lastChunk: { ...this.#syncStatus.lastChunk },
+      scanned: structuredClone(this.#syncStatus.scanned),
     };
     this.#saving = this.#saving
       .then(() => saveSyncState(this.#notes, snapshot))
