@@ -1,7 +1,5 @@
 /** Shared message and result types across the zcrawler main ↔ worker boundary. */
 
-export type NoteId = string;
-
 export type Pool = "sapling" | "orchard";
 
 export interface DecryptedNote {
@@ -15,15 +13,12 @@ export interface DecryptedNote {
 }
 
 export type Note = DecryptedNote & {
-  id: string; // accountId + pool + chunk + index // TODO should I use eph_key?
+  /** `accountId_pool_chunk_index` — stable as long as chunk boundaries are. */
+  id: string;
   spent: boolean;
 };
 
-export interface CrawlResult {
-  hits: DecryptedNote[];
-}
-
-/** Main → worker: decrypt the notes in `[from, to]` (both bounds inclusive). */
+/** Main → worker: decrypt one chunk of one pool. */
 export interface ChunkRequest {
   ufvk: string;
   chunk: number;
@@ -43,28 +38,5 @@ export type ChunkWorkerError = {
   error: string;
 };
 
-/** Worker → main: a chunk's result (tagged with its range), or an error. */
+/** Worker → main: a chunk's result, or the error that chunk hit. */
 export type ChunkWorkerResponse = ChunkWorkerSuccess | ChunkWorkerError;
-
-export interface CrawlOptions {
-  /** Account these notes belong to; scopes every stored row. */
-  accountId: string;
-  /** Unified full viewing key to scan against. */
-  ufvk: string;
-  /** Shielded pool to crawl; passed through to the indexer. */
-  pool: Pool;
-  /** Blocks fetched + decrypted per request. Defaults to 100. */
-  chunk?: number;
-  /** Parallel workers. Defaults to the number of CPU cores. */
-  workers?: number;
-  /** Fires as each chunk lands, with the cumulative hits so far. */
-  onProgress?: (
-    hits: Note[],
-    scannedBlocks: number,
-    totalBlocks: number,
-  ) => void;
-  /** Fires once when the crawl finishes, with the final result. */
-  onComplete?: () => void;
-  /** Fires if the crawl fails. */
-  onError?: (err: unknown) => void;
-}

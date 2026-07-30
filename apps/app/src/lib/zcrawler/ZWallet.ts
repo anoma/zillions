@@ -1,54 +1,63 @@
 import { dedupe, singleton } from "../utils";
-import type { SyncStatus } from "./db";
+import { crawlChunks } from "./crawl";
+import {
+  emptySyncStatus,
+  loadNotes,
+  loadSyncStatus,
+  saveSyncState,
+  type SyncStatus,
+} from "./db";
 import { fetchChunks } from "./indexer";
-import { emptySyncStatus, Persister } from "./persister";
-import { serialQueue } from "./serialQueue";
-import type {
-  ChunkRequest,
-  ChunkWorkerResponse,
-  ChunkWorkerSuccess,
-  Note,
-} from "./types";
-import ZcrawlerWorker from "./worker.ts?worker";
+import type { ChunkWorkerSuccess, Note, Pool } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
+
+const POOLS = ["orchard", "sapling"] as const satisfies Pool[];
+
+type ChunkTips = Record<Pool, number>;
+
+/** Chunks are 0-indexed and `lastChunk` is -1 before anything is scanned. */
+const percentageOf = (lastChunk: ChunkTips, tips: ChunkTips) => {
+  const scanned = POOLS.reduce((sum, p) => sum + lastChunk[p] + 1, 0);
+  const total = POOLS.reduce((sum, p) => sum + tips[p] + 1, 0);
+  return total > 0 ? Math.min(100, (scanned / total) * 100) : 100;
+};
 
 export class ZWallet {
   readonly id: string;
   readonly #ufvk: string;
-  readonly #persister: Persister;
 
   #notes: Note[] = [];
-  #unspentNotesMap: Map<string, Note> = new Map();
-  #syncStatus: SyncStatus = emptySyncStatus;
+  #unspentNotes: Map<string, Note> = new Map();
+  #syncStatus: SyncStatus;
   #syncProgressListeners: Set<SyncEventListener> = new Set();
+  #abort = new AbortController();
+  /** Saves are chained so two overlapping writes can't reorder the sync tip. */
+  #saving: Promise<unknown> = Promise.resolve();
 
   constructor(options: { id: string; ufvk: string }) {
     this.id = options.id;
     this.#ufvk = options.ufvk;
-    this.#persister = new Persister(this.id);
-    this.#syncStatus.id = this.id;
+    this.#syncStatus = emptySyncStatus(this.id);
     this.#seed();
   }
 
   free = () => {
-    // TODO cancel sync and release everything
+    this.#abort.abort();
+    this.#syncProgressListeners.clear();
   };
 
   #seed = singleton(async () => {
     const [notes, syncStatus] = await Promise.all([
-      this.#persister.getNotes(),
-      this.#persister.getSyncStatus(),
+      loadNotes(this.id),
+      loadSyncStatus(this.id),
     ]);
 
     this.#notes = notes;
-    // TODO should we move to a local var in sync() of syncOnePool() function?
-    this.#notes.forEach((note) => {
-      if (!note.spent) {
-        this.#unspentNotesMap.set(note.nf_mine, note);
-      }
-    });
     this.#syncStatus = syncStatus;
+    for (const note of notes) {
+      if (!note.spent) this.#unspentNotes.set(note.nf_mine, note);
+    }
   });
 
   subscribeSyncProgress = (listener: SyncEventListener) => {
@@ -58,177 +67,87 @@ export class ZWallet {
     };
   };
 
-  #emitEvent = () => {
-    console.log("[sync]", this.#syncStatus.percentage);
-    this.#syncProgressListeners.forEach((listener) =>
-      listener({ percentage: this.#syncStatus.percentage }),
-    );
+  #emitProgress = () => {
+    const { percentage } = this.#syncStatus;
+    this.#syncProgressListeners.forEach((listener) => listener({ percentage }));
   };
 
   sync = dedupe(async () => {
-    const startTime = new Date();
-    console.log("[sync] start:", startTime.toLocaleString());
-
+    const startTime = Date.now();
     await this.#seed();
+    this.#emitProgress();
 
-    if (this.#syncStatus.percentage >= 100) {
-      this.#syncStatus.percentage = 0;
+    const chunks = await fetchChunks();
+    const tips: ChunkTips = {
+      orchard: chunks.orchard.chunks,
+      sapling: chunks.sapling.chunks,
+    };
+
+    for (const pool of POOLS) {
+      await crawlChunks({
+        ufvk: this.#ufvk,
+        pool,
+        from: this.#syncStatus.lastChunk[pool] + 1,
+        to: tips[pool],
+        signal: this.#abort.signal,
+        onChunk: (result) => this.#applyChunk(pool, result, tips),
+      });
     }
-    this.#emitEvent();
 
-    const chunksData = await fetchChunks();
+    // Covers the nothing-to-crawl case, where no chunk ever lands.
+    if (!this.#abort.signal.aborted) this.#advance(tips);
 
-    const orchardEndChunk = chunksData.orchard.chunks;
-    const saplingEndChunk = chunksData.sapling.chunks;
-
-    const totalOrchardChunkToSync =
-      orchardEndChunk - this.#syncStatus.lastChunk.orchard;
-    const totalSaplingChunkToSync =
-      saplingEndChunk - this.#syncStatus.lastChunk.sapling;
-    const totalChunksToSync = totalOrchardChunkToSync + totalSaplingChunkToSync;
-    const percentageMissing = 100 - this.#syncStatus.percentage;
-    const percentagePerChunk = percentageMissing / totalChunksToSync;
-
-    await this.#syncOnePool("orchard", orchardEndChunk, percentagePerChunk);
-    await this.#syncOnePool("sapling", saplingEndChunk, percentagePerChunk);
-
-    this.#syncStatus.percentage = 100;
-    this.#emitEvent();
-
-    const endTime = new Date();
-    console.log("[sync] end:", endTime.toLocaleString());
-    console.log(
-      "[zcrawler] total time (seconds):",
-      (endTime.getTime() - startTime.getTime()) / 1000,
-    );
-
-    // TODO
-    // return the cancel item synchronously that allow the sync to be cancelled
-    // or it can be an unsubscriber
-    // return cancel;
+    await this.#saving;
+    console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
   });
 
-  #syncOnePool = async (
-    pool: "sapling" | "orchard",
-    endChunk: number,
-    percentagePerChunk: number,
+  /** Apply one in-order chunk into memory and advances the sync tip. */
+  #applyChunk = (
+    pool: Pool,
+    { chunk, hits, spends }: ChunkWorkerSuccess,
+    tips: ChunkTips,
   ) => {
-    const { promise, resolve, reject } = Promise.withResolvers<void>();
-
-    const startChunk = this.#syncStatus.lastChunk[pool] + 1;
-    const totalChunks = Math.max(0, endChunk - startChunk);
-
-    const queue = serialQueue<ChunkWorkerSuccess>();
-    let nextChunk = startChunk;
-    let running = 0;
-    let settled = false;
-
-    const workers: Worker[] = [];
-    const workersSize = Math.max(
-      1,
-      Math.min(navigator.hardwareConcurrency ?? 4, totalChunks),
-    );
-
-    const cleanup = () => {
-      workers.forEach((w) => w.terminate());
-    };
-    const fail = (err: unknown) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(err);
-      // TODO callback, emit event or return promise?
-      // options.onError?.(err);
-    };
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve();
-      // TODO callback, emit event or return promise?
-      // options.onComplete?.();
-    };
-    // Stop the crawl without firing onComplete/onError — the caller asked for it.
-    const cancel = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve();
-    };
-
-    // Hand a worker its next chunk, or retire it when the queue is drained.
-    const feed = (w: Worker) => {
-      if (nextChunk > endChunk) {
-        running -= 1;
-        if (running === 0) finish();
-        return;
-      }
-      w.postMessage({
-        ufvk: this.#ufvk,
-        chunk: nextChunk,
-        pool,
-      } satisfies ChunkRequest);
-      nextChunk++;
-    };
-
-    // TODO a stalled/errored worker chunks the apply frontier: `pending` grows
-    // unbounded and the crawl never finishes. Needs per-chunk timeout/retry.
-    for (let i = 0; i < workersSize; i++) {
-      const w = new ZcrawlerWorker();
-      workers.push(w);
-      running += 1;
-      w.onmessage = async (e: MessageEvent<ChunkWorkerResponse>) => {
-        const msg = e.data;
-        if ("error" in msg) {
-          return fail(new Error(msg.error));
-        }
-
-        const msgIndex = msg.chunk - startChunk;
-        queue.add(msgIndex, msg);
-
-        const msgsToProcess = queue.consumeNextItems();
-        msgsToProcess.forEach(({ hits, spends, chunk }) => {
-          hits.forEach((hit, i) => {
-            const note: Note = {
-              ...hit,
-              id: `${this.id}_${pool}_${chunk}_${i}`,
-              spent: false,
-            };
-            this.#notes.push(note);
-            this.#unspentNotesMap.set(note.nf_mine, note);
-          });
-          spends.forEach((spend) => {
-            const note = this.#unspentNotesMap.get(spend);
-            if (note) {
-              note.spent = true;
-              this.#unspentNotesMap.delete(spend);
-            }
-          });
-        });
-
-        const lastProcessedChunk = msgsToProcess.at(-1);
-        if (lastProcessedChunk) {
-          const syncedChunks =
-            lastProcessedChunk.chunk - this.#syncStatus.lastChunk[pool];
-          this.#syncStatus.lastChunk[pool] += syncedChunks;
-          this.#syncStatus.percentage += syncedChunks * percentagePerChunk;
-        }
-
-        // TODO update only the delta of notes?
-        this.#persister?.onSyncUpdate(this.#notes, this.#syncStatus);
-        this.#emitEvent();
-
-        if (settled) return;
-        feed(w);
+    hits.forEach((hit, i) => {
+      const note: Note = {
+        ...hit,
+        id: `${this.id}_${pool}_${chunk}_${i}`,
+        spent: false,
       };
-      w.onerror = (e) => fail(new Error(e.message || "worker error"));
-      feed(w);
+      this.#notes.push(note);
+      this.#unspentNotes.set(note.nf_mine, note);
+    });
+
+    for (const nullifier of spends) {
+      const note = this.#unspentNotes.get(nullifier);
+      if (note) {
+        note.spent = true;
+        this.#unspentNotes.delete(nullifier);
+      }
     }
 
-    // TODO how to return the cancel?
-    console.log(cancel);
+    this.#syncStatus.lastChunk[pool] = chunk;
+    this.#advance(tips);
+  };
 
-    return promise;
+  /** Recomputes progress from the scanned tips, then persists and announces it. */
+  #advance = (tips: ChunkTips) => {
+    this.#syncStatus.percentage = percentageOf(
+      this.#syncStatus.lastChunk,
+      tips,
+    );
+    this.#save();
+    this.#emitProgress();
+  };
+
+  // TODO persist only the notes that changed, instead of the whole set.
+  #save = () => {
+    const snapshot = {
+      ...this.#syncStatus,
+      lastChunk: { ...this.#syncStatus.lastChunk },
+    };
+    this.#saving = this.#saving
+      .then(() => saveSyncState(this.#notes, snapshot))
+      .catch((err) => console.error("[sync] save failed", err));
   };
 
   async getBalance() {
@@ -246,7 +165,6 @@ export class ZWallet {
   }
 
   async getTransactionHistory() {
-    console.info("getBalance");
     // TODO
     return [];
   }
