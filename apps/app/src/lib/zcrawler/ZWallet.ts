@@ -193,6 +193,9 @@ export class ZWallet {
       scanned: structuredClone(this.#syncStatus.scanned),
     };
     this.#saving = this.#saving
+      // TODO review if it's safe to persist the note.nf_mine.
+      // Otherwise we need to compute them during the seed phase.
+      // The sync phase already compute them in memory only.
       .then(() => saveSyncState(this.#notes, snapshot))
       .catch((err) => console.error("[sync] save failed", err));
   };
