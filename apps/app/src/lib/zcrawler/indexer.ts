@@ -11,12 +11,12 @@ export interface SyncData {
 export interface ChunksData {
   chunk_size: number;
   orchard: {
-    chunks: number;
-    notes: number;
+    first_chunk: number;
+    last_chunk: number;
   };
   sapling: {
-    chunks: number;
-    notes: number;
+    first_chunk: number;
+    last_chunk: number;
   };
 }
 

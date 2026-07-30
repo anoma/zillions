@@ -79,8 +79,8 @@ export class ZWallet {
 
     const chunks = await fetchChunks();
     const tips: ChunkTips = {
-      orchard: chunks.orchard.chunks,
-      sapling: chunks.sapling.chunks,
+      orchard: chunks.orchard.last_chunk,
+      sapling: chunks.sapling.last_chunk,
     };
 
     for (const pool of POOLS) {
