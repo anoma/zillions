@@ -32,6 +32,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const instance = new ZWallet({
           id: account.shielded.id,
           ufvk: account.shielded.viewingKey,
+          birthday: account.shielded.birthday,
         });
         if (cancelled) {
           instance.free();

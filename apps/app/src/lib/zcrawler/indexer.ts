@@ -34,12 +34,16 @@ export async function fetchSync(chunk: number, pool: Pool) {
   return get<SyncData>(`${CRAWLER_URL}/sync?chunk=${chunk}&pool=${pool}`);
 }
 
-export async function fetchChunks() {
-  return get<ChunksData>(`${CRAWLER_URL}/chunks`);
+/** `birthday` (a block height) raises each pool's `first_chunk` to that floor. */
+export async function fetchChunks(birthday?: number) {
+  const query = birthday === undefined ? "" : `?birthday=${birthday}`;
+  return get<ChunksData>(`${CRAWLER_URL}/chunks${query}`);
 }
 
 /** Every revealed nullifier sharing `nf`'s prefix — the bucket it hides in. */
 export async function fetchNullifiers(nf: string, pool: Pool) {
   const prefix = nf.slice(0, PREFIX_LENGTH);
-  return get<string[]>(`${CRAWLER_URL}/nullifiers?pool=${pool}&prefix=${prefix}`);
+  return get<string[]>(
+    `${CRAWLER_URL}/nullifiers?pool=${pool}&prefix=${prefix}`,
+  );
 }

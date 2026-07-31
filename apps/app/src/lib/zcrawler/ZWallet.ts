@@ -29,6 +29,8 @@ const percentageOf = (scanned: SyncStatus["scanned"], chunks: ChunksData) => {
 export class ZWallet {
   readonly id: string;
   readonly #ufvk: string;
+  /** Block height below which nothing is crawled. Absent means full history. */
+  readonly #birthday?: number;
 
   #notes: Note[] = [];
   #unspentNotes: Map<string, Note> = new Map();
@@ -40,9 +42,10 @@ export class ZWallet {
   /** Spend lookups are chained: one bucket in flight, newest notes first. */
   #checking: Promise<unknown> = Promise.resolve();
 
-  constructor(options: { id: string; ufvk: string }) {
+  constructor(options: { id: string; ufvk: string; birthday?: number }) {
     this.id = options.id;
     this.#ufvk = options.ufvk;
+    this.#birthday = options.birthday;
     this.#syncStatus = emptySyncStatus(this.id);
     this.#seed();
   }
@@ -85,7 +88,7 @@ export class ZWallet {
     // Notes carried over from an earlier sync may have been spent since. Kicked
     // off before the fetch so the bucket lookups overlap it.
     this.#checkSpends([...this.#unspentNotes.values()]);
-    const chunks = await fetchChunks();
+    const chunks = await fetchChunks(this.#birthday);
 
     for (const pool of POOLS) {
       const { first_chunk, last_chunk } = chunks[pool];
