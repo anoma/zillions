@@ -15,7 +15,7 @@ export interface DecryptedNote {
 export type Note = DecryptedNote & {
   /** `accountId_pool_chunk_index` — stable as long as chunk boundaries are. */
   id: string;
-  spent: boolean;
+  spent?: boolean;
 };
 
 /** Main → worker: decrypt one chunk of one pool. */

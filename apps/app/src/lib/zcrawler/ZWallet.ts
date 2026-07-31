@@ -144,7 +144,7 @@ export class ZWallet {
       const note: Note = {
         ...hit,
         id: `${this.id}_${pool}_${chunk}_${i}`,
-        spent: false,
+        spent: undefined,
       };
       this.#notes.push(note);
       this.#unspentNotes.set(note.nf_mine, note);
@@ -168,12 +168,13 @@ export class ZWallet {
           if (this.#abort.signal.aborted) return;
           const bucket = await fetchNullifiers(note.nf_mine, note.pool);
           // Indexer hex case must not decide equality; `nf_mine` is lowercase.
-          const spent = bucket.some((nf) => nf.toLowerCase() === note.nf_mine);
-          if (!spent) continue;
-          note.spent = true;
-          this.#unspentNotes.delete(note.nf_mine);
+          note.spent = bucket.some((nf) => nf.toLowerCase() === note.nf_mine);
+          if (note.spent) {
+            this.#unspentNotes.delete(note.nf_mine);
+          }
         }
         this.#save();
+        this.#emitProgress();
       })
       .catch((err) => console.error("[sync] spend check failed", err));
   };
@@ -206,7 +207,7 @@ export class ZWallet {
   async getBalance() {
     return {
       shieldedBalance: this.#notes.reduce(
-        (sum, n) => sum + (n.spent ? 0n : BigInt(n.value)),
+        (sum, n) => sum + (n.spent === false ? BigInt(n.value) : 0n),
         0n,
       ),
       // TODO
