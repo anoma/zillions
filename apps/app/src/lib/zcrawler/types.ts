@@ -2,6 +2,7 @@
 
 export type Pool = "sapling" | "orchard";
 
+/** A note this wallet owns, as `try_decrypt_full` reads it out of a chunk. */
 export interface DecryptedNote {
   pool: Pool;
   /** "external" (received) or "internal" (change). */
@@ -10,6 +11,15 @@ export interface DecryptedNote {
   value: number;
   /** This note's own nullifier (hex); shows on-chain when spent. */
   nf_mine: string;
+  /** The note's memo as text; absent when it carries none. */
+  memo?: string;
+  /** The diversified address the note was sent to (raw bytes, hex). */
+  recipient: string;
+  height: number;
+  /** The note's transaction within its block. */
+  tx_index: number;
+  /** Position in the pool's note commitment tree. */
+  position: number;
 }
 
 export type Note = DecryptedNote & {

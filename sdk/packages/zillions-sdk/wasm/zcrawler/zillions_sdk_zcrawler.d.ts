@@ -3,11 +3,22 @@
 /**
  * Trial-decrypt one pool's compact notes against `ufvk`.
  *
- * `notes` is the `/sync` payload: an array of that pool's notes. `pool` is
+ * `notes` is the `/notes/compact` payload: an array of that pool's notes. `pool` is
  * `"sapling"` or `"orchard"`; the array itself doesn't say which it is.
  * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
  */
 export function try_decrypt(network: string, ufvk: string, pool: string, notes: any): any;
+/**
+ * Trial-decrypt one pool's full notes against `ufvk`.
+ *
+ * `notes` is the `/notes/full` payload: an array of that pool's notes, whole
+ * ciphertexts included. Returns the hits:
+ * `[{ pool, scope, value, memo, recipient, height, tx_index, position }]`.
+ *
+ * Worth fetching only for a chunk `try_decrypt` already found a note in — a
+ * full chunk is ~50× a compact one.
+ */
+export function try_decrypt_full(network: string, ufvk: string, pool: string, notes: any): any;
 
 export interface PcztTransparentIoJson {
   value?: number;
@@ -94,6 +105,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
+  readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
   readonly __wbg_pczt_free: (a: number, b: number) => void;
   readonly pczt_to_json: (a: number) => any;
   readonly pczt_from_json: (a: any) => number;

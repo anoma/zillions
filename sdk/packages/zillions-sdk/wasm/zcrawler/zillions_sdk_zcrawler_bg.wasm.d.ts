@@ -1,6 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export const try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
+export const try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
 export const __wbg_pczt_free: (a: number, b: number) => void;
 export const pczt_to_json: (a: number) => any;
 export const pczt_from_json: (a: any) => number;

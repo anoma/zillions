@@ -171,7 +171,7 @@ function takeFromExternrefTable0(idx) {
 /**
  * Trial-decrypt one pool's compact notes against `ufvk`.
  *
- * `notes` is the `/sync` payload: an array of that pool's notes. `pool` is
+ * `notes` is the `/notes/compact` payload: an array of that pool's notes. `pool` is
  * `"sapling"` or `"orchard"`; the array itself doesn't say which it is.
  * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
  * @param {string} network
@@ -188,6 +188,35 @@ export function try_decrypt(network, ufvk, pool, notes) {
     const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
     const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, notes);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Trial-decrypt one pool's full notes against `ufvk`.
+ *
+ * `notes` is the `/notes/full` payload: an array of that pool's notes, whole
+ * ciphertexts included. Returns the hits:
+ * `[{ pool, scope, value, memo, recipient, height, tx_index, position }]`.
+ *
+ * Worth fetching only for a chunk `try_decrypt` already found a note in — a
+ * full chunk is ~50× a compact one.
+ * @param {string} network
+ * @param {string} ufvk
+ * @param {string} pool
+ * @param {any} notes
+ * @returns {any}
+ */
+export function try_decrypt_full(network, ufvk, pool, notes) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.try_decrypt_full(ptr0, len0, ptr1, len1, ptr2, len2, notes);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }

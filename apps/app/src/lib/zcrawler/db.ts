@@ -21,6 +21,18 @@ db.version(3)
   })
   .upgrade((tx) => tx.table("sync").clear());
 
+// Notes are dropped too: pre-v4 rows were written from compact data alone and
+// carry none of the fields full decryption adds.
+db.version(4)
+  .stores({
+    notes: "id",
+    sync: "id",
+  })
+  .upgrade(async (tx) => {
+    await tx.table("notes").clear();
+    await tx.table("sync").clear();
+  });
+
 export const loadNotes = (accountId: string): Promise<Note[]> =>
   db.notes.where("id").startsWith(accountId).toArray();
 

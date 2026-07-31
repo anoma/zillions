@@ -2,8 +2,11 @@ import type { Pool } from "./types";
 
 const CRAWLER_URL = import.meta.env.VITE_CRAWLER_URL ?? "http://localhost:8080";
 
-/** One pool's notes for a chunk. Only wasm reads their shape; TS forwards them. */
-export type SyncData = unknown[];
+/** One pool's notes for a compact chunk. Only wasm reads their shape; TS forwards them. */
+export type CompactNotesData = unknown[];
+
+/** One pool's notes for a full chunk. Only wasm reads their shape; TS forwards them. */
+export type FullNotesData = unknown[];
 
 /**
  * Hex chars of a nullifier sent to the indexer, which answers with every
@@ -30,8 +33,18 @@ async function get<T>(url: string): Promise<T> {
   return res.json();
 }
 
-export async function fetchSync(chunk: number, pool: Pool) {
-  return get<SyncData>(`${CRAWLER_URL}/sync?chunk=${chunk}&pool=${pool}`);
+/** A chunk's notes, compact: only what trial decryption needs to reject one. */
+export async function fetchCompactNotes(chunk: number, pool: Pool) {
+  return get<CompactNotesData>(
+    `${CRAWLER_URL}/notes/compact?chunk=${chunk}&pool=${pool}`,
+  );
+}
+
+/** The same chunk with whole ciphertexts — ~50× the bytes. Hit chunks only. */
+export async function fetchFullNotes(chunk: number, pool: Pool) {
+  return get<FullNotesData>(
+    `${CRAWLER_URL}/notes/full?chunk=${chunk}&pool=${pool}`,
+  );
 }
 
 /** `birthday` (a block height) raises each pool's `first_chunk` to that floor. */

@@ -4,9 +4,12 @@
  * decryption is stateless, so running many in parallel needs no shared state.
  */
 
-import initZcrawler, { try_decrypt } from "@zillions/sdk/zcrawler";
-import { fetchSync } from "./indexer";
-import type { ChunkRequest, ChunkWorkerResponse, DecryptedNote } from "./types";
+import initZcrawler, {
+  try_decrypt,
+  try_decrypt_full,
+} from "@zillions/sdk/zcrawler";
+import { fetchCompactNotes, fetchFullNotes } from "./indexer";
+import type { ChunkRequest, ChunkWorkerResponse } from "./types";
 
 // TODO revisit how config (network, indexer URL) reaches the worker: read from
 // import.meta.env at module load as now, injected at worker creation, or passed
@@ -29,9 +32,21 @@ worker.onmessage = async (e) => {
   const { chunk, ufvk, pool } = e.data;
   try {
     await (ready ??= initZcrawler());
-    const sync = await fetchSync(chunk, pool);
-    const hits = try_decrypt(NETWORK, ufvk, pool, sync) as DecryptedNote[];
-    worker.postMessage({ chunk, hits });
+    const compactNotes = await fetchCompactNotes(chunk, pool);
+    const compactHits = try_decrypt(NETWORK, ufvk, pool, compactNotes);
+
+    if (!compactHits.length) {
+      worker.postMessage({ chunk, hits: compactHits });
+      return;
+    }
+
+    // The chunk holds something of ours, so it is worth its full ciphertexts:
+    // they carry what the compact prefix cannot, the memo above all.
+    const fullNotes = await fetchFullNotes(chunk, pool);
+    worker.postMessage({
+      chunk,
+      hits: try_decrypt_full(NETWORK, ufvk, pool, fullNotes),
+    });
   } catch (err) {
     worker.postMessage({ chunk, error: String(err) });
   }
