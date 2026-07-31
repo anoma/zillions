@@ -38,3 +38,15 @@ export type ChunkWorkerError = {
 
 /** Worker → main: a chunk's result, or the error that chunk hit. */
 export type ChunkWorkerResponse = ChunkWorkerSuccess | ChunkWorkerError;
+
+/** The contiguous chunk range already scanned for a pool; `to < from` is empty. */
+export interface ChunkRange {
+  from: number;
+  to: number;
+}
+
+export interface SyncStatus {
+  id: string;
+  percentage: number;
+  scanned: Record<Pool, ChunkRange>;
+}

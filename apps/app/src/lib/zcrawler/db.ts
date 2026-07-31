@@ -1,18 +1,6 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 
-import type { Note, Pool } from "./types";
-
-/** The contiguous chunk range already scanned for a pool; `to < from` is empty. */
-export interface ChunkRange {
-  from: number;
-  to: number;
-}
-
-export interface SyncStatus {
-  id: string;
-  percentage: number;
-  scanned: Record<Pool, ChunkRange>;
-}
+import type { Note, SyncStatus } from "./types";
 
 export const db = new Dexie("zcrawler") as Dexie & {
   notes: Table<Note, string>;
@@ -33,17 +21,12 @@ db.version(3)
   })
   .upgrade((tx) => tx.table("sync").clear());
 
-export const emptySyncStatus = (accountId: string): SyncStatus => ({
-  id: accountId,
-  percentage: 0,
-  scanned: { sapling: { from: 0, to: -1 }, orchard: { from: 0, to: -1 } },
-});
-
 export const loadNotes = (accountId: string): Promise<Note[]> =>
   db.notes.where("id").startsWith(accountId).toArray();
 
-export const loadSyncStatus = async (accountId: string): Promise<SyncStatus> =>
-  (await db.sync.get(accountId)) ?? emptySyncStatus(accountId);
+export const loadSyncStatus = async (
+  accountId: string,
+): Promise<SyncStatus | undefined> => await db.sync.get(accountId);
 
 export const saveSyncState = (notes: Note[], syncStatus: SyncStatus) =>
   db.transaction("rw", db.notes, db.sync, async () => {

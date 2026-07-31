@@ -1,14 +1,8 @@
 import { dedupe, singleton } from "../utils";
 import { crawlChunks } from "./crawl";
-import {
-  emptySyncStatus,
-  loadNotes,
-  loadSyncStatus,
-  saveSyncState,
-  type SyncStatus,
-} from "./db";
+import { loadNotes, loadSyncStatus, saveSyncState } from "./db";
 import { type ChunksData, fetchChunks, fetchNullifiers } from "./indexer";
-import type { ChunkWorkerSuccess, Note, Pool } from "./types";
+import type { ChunkWorkerSuccess, Note, Pool, SyncStatus } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
 
@@ -25,6 +19,12 @@ const percentageOf = (scanned: SyncStatus["scanned"], chunks: ChunksData) => {
   );
   return total > 0 ? Math.min(100, (done / total) * 100) : 100;
 };
+
+const emptySyncStatus = (accountId: string): SyncStatus => ({
+  id: accountId,
+  percentage: 0,
+  scanned: { sapling: { from: 0, to: -1 }, orchard: { from: 0, to: -1 } },
+});
 
 export class ZWallet {
   readonly id: string;
@@ -56,13 +56,15 @@ export class ZWallet {
   };
 
   #seed = singleton(async () => {
+    // TODO review if we should have a unified method to load the whole wallet
     const [notes, syncStatus] = await Promise.all([
       loadNotes(this.id),
       loadSyncStatus(this.id),
     ]);
-
     this.#notes = notes;
-    this.#syncStatus = syncStatus;
+    if (syncStatus) {
+      this.#syncStatus = syncStatus;
+    }
     for (const note of notes) {
       if (!note.spent) this.#unspentNotes.set(note.nf_mine, note);
     }
