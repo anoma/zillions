@@ -1,5 +1,6 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { ZWallet } from "../lib/zcrawler/ZWallet";
+import { useInvalidateOnSync } from "./useInvalidateOnSync";
 import { useWallet } from "./useWallet";
 
 export function getTransactionHistory(wallet: ZWallet) {
@@ -11,5 +12,7 @@ export function getTransactionHistory(wallet: ZWallet) {
 
 export function useGetTransactionHistory() {
   const wallet = useWallet();
-  return useQuery(getTransactionHistory(wallet));
+  const options = getTransactionHistory(wallet);
+  useInvalidateOnSync(options);
+  return useQuery(options);
 }

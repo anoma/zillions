@@ -1,3 +1,4 @@
+import type { TransactionReceipt } from "../sdk/types";
 import { dedupe, singleton } from "../utils";
 import { crawlChunks } from "./crawl";
 import { loadNotes, loadSyncStatus, saveSyncState } from "./db";
@@ -219,8 +220,27 @@ export class ZWallet {
     };
   }
 
-  async getTransactionHistory() {
-    // TODO
-    return [];
+  /**
+   * One entry per received note, newest first. Spends, memos, txids and
+   * timestamps need the enhance phase; until then `txid` is the note id, so the
+   * explorer link and hash on the receipt card are placeholders.
+   */
+  async getTransactionHistory(): Promise<TransactionReceipt[]> {
+    return [...this.#notes]
+      .sort((a, b) => b.height - a.height || b.tx_index - a.tx_index)
+      .map((note) => ({
+        txid: note.id,
+        tx_type: "Received",
+        value: BigInt(note.value),
+        fee: 0n,
+        block_height: note.height,
+        confirmations: 0,
+        status: "Confirmed",
+        memo: note.memo,
+        timestamp: undefined,
+        pool: note.pool,
+        to_address: undefined,
+        from_address: undefined,
+      }));
   }
 }

@@ -1,6 +1,6 @@
-import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { ZWallet } from "../lib/zcrawler/ZWallet";
+import { useInvalidateOnSync } from "./useInvalidateOnSync";
 import { useWallet } from "./useWallet";
 
 export function getBalance(wallet: ZWallet) {
@@ -12,13 +12,7 @@ export function getBalance(wallet: ZWallet) {
 
 export function useGetBalance() {
   const wallet = useWallet();
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    return wallet.subscribeSyncProgress(() => {
-      queryClient.invalidateQueries(getBalance(wallet));
-    });
-  }, [queryClient, wallet]);
-
-  return useQuery(getBalance(wallet));
+  const options = getBalance(wallet);
+  useInvalidateOnSync(options);
+  return useQuery(options);
 }
