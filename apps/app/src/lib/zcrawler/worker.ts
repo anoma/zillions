@@ -36,17 +36,16 @@ worker.onmessage = async (e) => {
     const compactHits = try_decrypt(NETWORK, ufvk, pool, compactNotes);
 
     if (!compactHits.length) {
-      worker.postMessage({ chunk, hits: compactHits });
+      worker.postMessage({ chunk, hits: compactHits, sent: [] });
       return;
     }
 
     // The chunk holds something of ours, so it is worth its full ciphertexts:
-    // they carry what the compact prefix cannot, the memo above all.
+    // they carry what the compact prefix cannot — the memo above all, and the
+    // outgoing ciphertexts that make our own sends visible.
     const fullNotes = await fetchFullNotes(chunk, pool);
-    worker.postMessage({
-      chunk,
-      hits: try_decrypt_full(NETWORK, ufvk, pool, fullNotes),
-    });
+    const { hits, sent } = try_decrypt_full(NETWORK, ufvk, pool, fullNotes);
+    worker.postMessage({ chunk, hits, sent });
   } catch (err) {
     worker.postMessage({ chunk, error: String(err) });
   }

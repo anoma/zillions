@@ -198,8 +198,12 @@ export function try_decrypt(network, ufvk, pool, notes) {
  * Trial-decrypt one pool's full notes against `ufvk`.
  *
  * `notes` is the `/notes/full` payload: an array of that pool's notes, whole
- * ciphertexts included. Returns the hits:
- * `[{ pool, scope, value, memo, recipient, height, tx_index, position }]`.
+ * ciphertexts included. Returns
+ * `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
+ *    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
+ *
+ * `sent` stays empty unless the payload carries `cv` and `out_ciphertext`:
+ * recovering an output we created needs both.
  *
  * Worth fetching only for a chunk `try_decrypt` already found a note in — a
  * full chunk is ~50× a compact one.

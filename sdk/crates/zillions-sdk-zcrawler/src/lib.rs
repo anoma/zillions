@@ -22,7 +22,10 @@ use orchard::note_encryption::{CompactAction, OrchardDomain};
 use sapling::note::ExtractedNoteCommitment as SaplingCmu;
 use sapling::note_encryption::{CompactOutputDescription, SaplingDomain};
 use zcash_keys::keys::UnifiedFullViewingKey;
-use zcash_note_encryption::{batch, EphemeralKeyBytes, ShieldedOutput, ENC_CIPHERTEXT_SIZE};
+use zcash_note_encryption::{
+    batch, try_output_recovery_with_ovk, EphemeralKeyBytes, ShieldedOutput, ENC_CIPHERTEXT_SIZE,
+    OUT_CIPHERTEXT_SIZE,
+};
 use zcash_primitives::transaction::components::sapling::zip212_enforcement;
 use zcash_protocol::consensus::BlockHeight;
 use zillions_sdk_common::Network;
@@ -69,6 +72,12 @@ struct FullNote {
     tx_index: u16,
     #[serde(default)]
     rho: String,
+    /// Outgoing ciphertext and the value commitment its key binds to. Both are
+    /// needed to recover an output we sent; absent, only incoming decryption runs.
+    #[serde(default)]
+    out_ciphertext: String,
+    #[serde(default)]
+    cv: String,
 }
 
 /// A [`FullNote`] in the shape `batch::try_note_decryption` wants. `C` is the
@@ -132,6 +141,29 @@ struct FullHit {
     position: u64,
 }
 
+/// An output this wallet created, recovered with its outgoing viewing key:
+/// what was sent, and to whom. Our own change is excluded — it decrypts as a
+/// note of ours on the incoming side.
+#[derive(Serialize)]
+struct SentOutput {
+    pool: &'static str,
+    value: u64,
+    /// The diversified address the output was sent to (raw bytes, hex).
+    recipient: String,
+    /// The memo as text, or `None` when it carries none.
+    memo: Option<String>,
+    height: u32,
+    tx_index: u16,
+    position: u64,
+}
+
+/// One chunk's decryption: the notes this wallet received, and the outputs it sent.
+#[derive(Serialize)]
+struct FullChunk {
+    hits: Vec<FullHit>,
+    sent: Vec<SentOutput>,
+}
+
 /// External + internal (change) scopes — a note may be addressed to either.
 const SCOPES: [(&str, Scope); 2] = [
     ("external", Scope::External),
@@ -154,6 +186,14 @@ fn memo_text(memo: &[u8]) -> Option<String> {
             String::from_utf8(memo[..end].to_vec()).ok()
         }
     }
+}
+
+/// The two fields outgoing recovery needs, when the endpoint carries them.
+fn outgoing_parts(n: &FullNote) -> Result<Option<([u8; 32], [u8; OUT_CIPHERTEXT_SIZE])>, String> {
+    if n.cv.is_empty() || n.out_ciphertext.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some((hex_n(&n.cv)?, hex_n(&n.out_ciphertext)?)))
 }
 
 fn sapling_ivks(
@@ -256,11 +296,14 @@ fn decrypt_full(
     ufvk: &str,
     pool: &str,
     notes: &[FullNote],
-) -> Result<Vec<FullHit>, String> {
+) -> Result<FullChunk, String> {
     let network: Network = network.parse().map_err(|_| "invalid network".to_string())?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
 
     let mut hits = Vec::new();
+    let mut sent = Vec::new();
+    // Outputs that decrypt as ours: change, so never an outgoing payment.
+    let mut mine = vec![false; notes.len()];
 
     // Sapling: one domain per output (ZIP-212 enforcement is height-dependent).
     if let ("sapling", Some(dfvk)) = (pool, ufvk.sapling()) {
@@ -288,6 +331,7 @@ fn decrypt_full(
             .enumerate()
         {
             if let Some(((note, addr, memo), scope_idx)) = res {
+                mine[i] = true;
                 hits.push(FullHit {
                     pool: "sapling",
                     scope: SCOPES[scope_idx].0,
@@ -299,6 +343,42 @@ fn decrypt_full(
                     tx_index: notes[i].tx_index,
                     position: notes[i].position,
                 });
+            }
+        }
+
+        // Outputs we created: the ock binds to our ovk, so only our own
+        // transactions can be recovered. Both scopes, since a shielding tx
+        // pays the internal one.
+        let ovks: Vec<_> = SCOPES.iter().map(|(_, s)| dfvk.to_ovk(*s)).collect();
+        for (i, (domain, output)) in outputs.iter().enumerate() {
+            let Some((cv, out)) = outgoing_parts(&notes[i])? else {
+                continue;
+            };
+            if mine[i] {
+                continue;
+            }
+            // A cv we can't parse costs this output's outgoing details; it must
+            // never cost the chunk the notes we received in it.
+            let Some(cv) = Option::from(
+                sapling::value::ValueCommitment::from_bytes_not_small_order(&cv),
+            ) else {
+                continue;
+            };
+            for ovk in &ovks {
+                if let Some((note, addr, memo)) =
+                    try_output_recovery_with_ovk(domain, ovk, output, &cv, &out)
+                {
+                    sent.push(SentOutput {
+                        pool: "sapling",
+                        value: note.value().inner(),
+                        recipient: hex::encode(addr.to_bytes()),
+                        memo: memo_text(&memo),
+                        height: notes[i].height,
+                        tx_index: notes[i].tx_index,
+                        position: notes[i].position,
+                    });
+                    break;
+                }
             }
         }
     }
@@ -335,6 +415,7 @@ fn decrypt_full(
             .enumerate()
         {
             if let Some(((note, addr, memo), scope_idx)) = res {
+                mine[i] = true;
                 hits.push(FullHit {
                     pool: "orchard",
                     scope: SCOPES[scope_idx].0,
@@ -348,9 +429,38 @@ fn decrypt_full(
                 });
             }
         }
+
+        let ovks: Vec<_> = SCOPES.iter().map(|(_, s)| fvk.to_ovk(*s)).collect();
+        for (i, (domain, output)) in outputs.iter().enumerate() {
+            let Some((cv, out)) = outgoing_parts(&notes[i])? else {
+                continue;
+            };
+            if mine[i] {
+                continue;
+            }
+            let Some(cv) = Option::from(orchard::value::ValueCommitment::from_bytes(&cv)) else {
+                continue;
+            };
+            for ovk in &ovks {
+                if let Some((note, addr, memo)) =
+                    try_output_recovery_with_ovk(domain, ovk, output, &cv, &out)
+                {
+                    sent.push(SentOutput {
+                        pool: "orchard",
+                        value: note.value().inner(),
+                        recipient: hex::encode(addr.to_raw_address_bytes()),
+                        memo: memo_text(&memo),
+                        height: notes[i].height,
+                        tx_index: notes[i].tx_index,
+                        position: notes[i].position,
+                    });
+                    break;
+                }
+            }
+        }
     }
 
-    Ok(hits)
+    Ok(FullChunk { hits, sent })
 }
 
 /// Trial-decrypt one pool's compact notes against `ufvk`.
@@ -376,8 +486,12 @@ pub fn try_decrypt(network: &str, ufvk: &str, pool: &str, notes: JsValue) -> Res
 /// Trial-decrypt one pool's full notes against `ufvk`.
 ///
 /// `notes` is the `/notes/full` payload: an array of that pool's notes, whole
-/// ciphertexts included. Returns the hits:
-/// `[{ pool, scope, value, memo, recipient, height, tx_index, position }]`.
+/// ciphertexts included. Returns
+/// `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
+///    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
+///
+/// `sent` stays empty unless the payload carries `cv` and `out_ciphertext`:
+/// recovering an output we created needs both.
 ///
 /// Worth fetching only for a chunk `try_decrypt` already found a note in — a
 /// full chunk is ~50× a compact one.
@@ -403,9 +517,9 @@ mod tests {
     use zcash_keys::keys::UnifiedSpendingKey;
 
     /// One real `/notes/full` note per pool, as the endpoint serves them.
-    const SAPLING_FULL: &str = r#"[{"cmu":"ba4ac76a334caebe4c785428055e15f407523fda0e90c9316b2b64a13925072d","enc_ciphertext":"fbfe66029933107a0ca7ab0bfa714909426ede15a8493a12893eecf1bd766f37d4c91ba90e4d3fbc4e784d8bf68019637481a1a66949046030508b04d29a51d7dce6b48375248be2104897a085189ea1064f87da7080954254fa63e8b511e1979fb491393527936025160b6017c8cb5a24c6b73a6c49f8c6d90496e69e36908edaac74fb3aaf6a4adbddae30cb7e33b1298b7aa53b7373c9376b3d09222f217d17a09308e9aca005f7bff5af03aef526cb33a919a74d0587d85702bb9bba8d9f45b4ed480cda1515269c1c3d1779182801de8a459dbace4341d7893c1052ece462b27e573607220da6c83f8da67a1480b78d9a3f96c473b2187f9f46a2a6ae1e200a9abfce3d342b48ba2c9a6e7209e770eadb1fcc382d6194056253592e1eaaf0a6fc859836c27e61027b618efdad7af095a30c9585397ed68a5ef9b8e19a716d850d9e0dc8ef4659938e7e579620e2ebfee84631d6dd116f6d9a0e773419d2b0aa79f160c95eaa3d6ce52a999841ec2cf985fc4d850fc41a0e049f4bfcd15d7f6d6adb76edc7d1e95feda0ab1c5c16bc8416fbdb22b41f3ba7920ac40d865967df2e2cd0c033c8b7adf08895166f0cb2ce61928334258042bda21f49ed0b2a2eb10b2d3654cf92e0be2406f033a214a6edfea201b95d414c9afb6dc87e10b1ff919d322b75470f1d5a0de5726d8f1ed0ee40b5bffd66074255e7fc2b57bbba773a2826c23d10158a5202afb9dd1bd8a332876ff84e162d749a9fbc135d71549c3451e9b93219e57db56d33b69f315fc3d7ec68facefedc438b357330f54321ef894110","eph_key":"e67d6a5d03d47b675c7e53a93d25791cc93e315a9fe0dbc528625c6d2bc10b39","height":3378506,"out_ciphertext":"a4e3bfd9465d94571f0efefe463a14abccdd73ad8c2e6606a21cad0c021610c237da5fb042f5040649ae9b4fdf7ef2313566ffd132957516610272a54fabce8ddcc3fa89d9b8c89bf821570306fb8861","position":73920512,"tx_index":3}]"#;
+    const SAPLING_FULL: &str = r#"[{"cmu":"cebda1a5c30582e5d630430ab42b7c24681e119ab2f32fe0c00a01a91f6d5658","cv":"0930a6cf8fd0e681b01b9328c6aefdde84347cdb6c5751e4574e2f4552f5a73b","enc_ciphertext":"374621524a15dc1084366032b5f81c583c5a8c710a535a452c068b89b8851c89ac6a61ad060f558dee56e77cb8dfa7740e4309faa77c34fce8474693fa5abbd112a7339069e3dd168d004aa2b38513b6c841a13b6a59c179bf21755a11cfd66b243480fa4d52a805ee328502c7f7e8880e401c0dc5e7b0422054f8863bf510ddde1383ea27bdb42844391d3225f3376bd78fe632815cb0bd82397fd78a8f04218de6ef846291046adedbb8e11c2d55e1cbf1b3f09ba147b2f3d573ce2c534f95646f5ae792c6b393d03bbc6fbd882d390f9f761150dbf3ba98e6503c2d8aae46bd68eac88fee48932a286f75aa47179b9ed82439a3644eb879460718fcd4778fc5a588f3c962862680f46378154877556435d352099d0d09dca1b5f61052dba3dfadee0683367b5382331e2dee62c3d33cd376bc04a4023bf8f8f533464b5b1a127996684a39c780180a587f3d4543e75b85f834d8873bb2942a678df693b369a2da562cb79f6f46ede3bda31d149b653ea4658ba070a82bdadb162a6c4c7fffb3c7c146ee2b457fdf18a867af4b629ab724e5c1dbf5ba10ee83fe9f32dd20ff5c82a8d6b3f165f81cc9ea513930f0bfdaf9adba9c97ea47d0f4680c9a527f99776401504c9be0f00843cdf45c090559c2ae6ba646918bf0e19c06e0f47655a56eaffecd4effa8131991580adb7f997cc079b0c8ceb520228ededc4a02f36ee10d6fd95a7d4851f414945f38477370e439b54d359237c06aa0f3b15ec7abf060f9d4ca14327a0d7433c11235e549e5564e1d18e6d18c085edc5bbd0046368a2def83aa6a","eph_key":"010d9b3a567a8e662acc9bb928ceadf3da7a722fd2694495d85cfe750414ba65","height":3401974,"out_ciphertext":"57e1bae21d53639fe4dd0a66f2d8a9852622caa9e15702ca14e39ff2921fed386fc159d623ee12eab45136805f5b1d9e52e2c7faba83876075b3e68d16e1d1eafb0a6e17646fd183dc1c1ff7e3666ad0","position":73928704,"tx_index":1}]"#;
 
-    const ORCHARD_FULL: &str = r#"[{"cmx":"5dd6a051898ccf617d5bbce6938cc0d6de5f6cbcb7287b475ca6477ea5aad80e","enc_ciphertext":"0cc74ba7c65f5a87193b4f126a37233c2f453e4697e9b45d9a129471358f8eebd1a0bd1b48d705b45006c0f97e954130b495662768cb9bb1ab9001fd17f5491ca1b9afbeffdd0797f74c75d1390f06e0333fb92a914e9ee14c6fbbaea48792ed2344a4765827a670f1bc32e08095be7b29c99cdaa5376f0ce51a573d7a37468624edaceb4b4e8c7a4862eaad2513f7f7b008688918ce898a23cf8460db4afd3b4ed274ff26468a214d5d0bea4544c16be5536642932886f7be030fd7cb51ac831d3aa0ba45c9572f15da9a33a1d5410e8df7fb7046c8dc1b875e0fd7dd5ff7915830e29e3eba575f055b981f9e8141a790172b4edede71b6dda14cc0c6876351cd3a2f8e6cc2a82be6e0b7b42a733964dc026cee47105b33c3a51ffc3438d352099cc3612c3a1a1ee3030ef4e9a609a15b00a46f04a45ad2eb8cd1a2768ca73558f455a96d996ea405adcf7a1a2f294a5c73b8e646494bb7e01edf61d6eaa73e5a465e54329f8f4c0b86466758538e4d50abe3627b5a16f610bbe69aee816c1253e1346a9edde9808b06880fef4865c7f72a2019efe65535d2b28d52ede40053497d02dba6344ab8354b4346f8f14bd37b1b58ce0bc250c192c53d1139aa9ad647b3b432979e1bfae08912724559808fc8c5c9d43cef7514dd26551f40b188a1f2ea3aefc914b8feafa56a459adc637d27025524de03917d4c24e2ea09c90df01ceeb18902ac5f6e15860c9e4a1f3b05004494410cd5688243d944edfa002c54353b8a231158df47d73891c936767fa536d3be15099e5975b92f807d485c8c0a4870fd02","eph_key":"87b4a72d1d91c4f2e285794cff0275e4e2157aed6b848fb54d2f3a65604d6c98","height":3333259,"out_ciphertext":"d23b1e92bc2dda1dfb9f57c3ba35fe06e9c084e94fe1046b21b53c89d1e75d15db12a3cc90f3f137d4ae93f1f57a203bddf67e543ad24518eca0e3b87997b0a91a4f7b282fe051f0556930c3ffe8eb5e","position":49971200,"rho":"0e828a1201388e296301a49f6b0cbb6bb5104cdba44f6006ee2c28c847635b24","tx_index":18}]"#;
+    const ORCHARD_FULL: &str = r#"[{"cmx":"10fa5bd9c6b31c30dd476182377d904358176a6cc72ffafcf575c9729ef6a524","cv":"950f9f378ed36594b034355aec1aa3a53f806475c4dd296f6679b506c8451628","enc_ciphertext":"fde30399b57f77ec7294cc71ab278bf518a3742e24d53adc3b5f835a1b0fe43660f9ca9964035a6c1e0ea52691857a08e8fe51e92574c4ab39f75d6c3311121dc6ca4c65ee09f47e84f95e4c3c1955915edf015a0d7b7cce469d1c5199065d4fa2b4f3737dee7486418ecb8fe9c377b675dffa128efa0c0e393d39612443ed1ca6b6c185ef839f9c73dd55297201a7c0bbe5afca55c0322d9fcf9725c23702591ef5e7cb9943b5577a996dba6fb094904530834cf066e8c4fcc2470bfd5126020349da7a65ab0c3906beb2089df4090d4dd0d31e3d212826591449ded57ccd5f57f6f044e8b268c19dc65a02cb4f006f74803f549c9399ff034a6584d358353155efd065cff9e3ba5566f0f3527b4ee94b2b4dfddfb54d9cffea85819be8db30790ba39011097fff20990f9457a28754525fda90d27271a8e84ec719d8f2e5083c885867ca275f76abac699ce09e4c0a88e870ce1cd3ade4252f7cebf21a6d811ea0b63901830c0c77c5da56e3c80bb856fc8731d5c32cb95cd35866183a4e69738ff8ade7bf6026246e6b7f792e6076a7f077abe1f3e550dde3665252ce53ab22612a16b8a1b2bfea62c0ef52fefef49c49229444b3729e73bfbf7c648f85385b0a07ec7bf5386d21f24f165db38aa727c3a2bafdbad841936724c567759f4e2daba46f26f0aeb530a80bcd00d3c1b71f4c48e8e407e028adf1c2df1a92e05095ee97674f62bdeb842d579f14dc31814c533c79e2ce4a7d2c6623f6553beb41c458da12e3fcee1991c8efbd74f463beba22ba32519e19b48ea594c9b01d49ab19333c48","eph_key":"08016d948050cd3b439ea4bd6e813f42a2cd3136df7bb1fc48b039c8b281149f","height":3424128,"out_ciphertext":"b50f388f3f20d6515ea2e138adc2248ac59578cb261424348e13ffa6c36327980c64ce7126859c42ac9fe9b179f6316545e93e2b61c1adb9d247421a32d3ed876821fe04d2406a8a639d4fd4bab40999","position":50216960,"rho":"030d6225143e40197fa77ce04722f537075f5313e62b46f9f6e77646ae6a2326","tx_index":4}]"#;
 
     // Real compact notes captured from the indexer (not ours) exercise the full
     // parse → prepare-ivk → batch-decrypt path on both pools. A fresh-seed UFVK
@@ -450,9 +564,75 @@ mod tests {
         let sapling: Vec<FullNote> = serde_json::from_str(SAPLING_FULL).expect("sapling array");
         let orchard: Vec<FullNote> = serde_json::from_str(ORCHARD_FULL).expect("orchard array");
 
-        assert_eq!(orchard[0].position, 49971200);
-        assert_eq!(decrypt_full("main", &ufvk, "sapling", &sapling).expect("sapling runs").len(), 0);
-        assert_eq!(decrypt_full("main", &ufvk, "orchard", &orchard).expect("orchard runs").len(), 0);
+        assert_eq!(orchard[0].position, 50216960);
+        let sapling = decrypt_full("main", &ufvk, "sapling", &sapling).expect("sapling runs");
+        let orchard = decrypt_full("main", &ufvk, "orchard", &orchard).expect("orchard runs");
+        assert_eq!(sapling.hits.len(), 0);
+        assert_eq!(orchard.hits.len(), 0);
+        // They carry real `cv` and `out_ciphertext`, so outgoing recovery runs
+        // over real bytes too — and recovers nothing, these being strangers'.
+        assert_eq!(sapling.sent.len(), 0);
+        assert_eq!(orchard.sent.len(), 0);
+    }
+
+    /// Encrypt a sapling output to a stranger under our own OVK, exactly as a
+    /// send does, and check `decrypt_full` recovers value, recipient and memo
+    /// from `out_ciphertext` — the only way our own payments are visible.
+    #[test]
+    fn recovers_our_own_sapling_output() {
+        use rand_core::OsRng;
+        use sapling::note_encryption::sapling_note_encryption;
+        use zcash_note_encryption::Domain;
+        use sapling::value::{NoteValue, ValueCommitTrapdoor, ValueCommitment};
+        use sapling::{Note, Rseed};
+
+        let dfvk = |seed: u8| {
+            UnifiedSpendingKey::from_seed(&Network::MainNetwork, &[seed; 32], zip32::AccountId::ZERO)
+                .expect("usk")
+                .sapling()
+                .to_diversifiable_full_viewing_key()
+        };
+        let ours = dfvk(7);
+        let (_, theirs) = dfvk(9).default_address();
+
+        let value = NoteValue::from_raw(123_456);
+        let note = Note::from_parts(theirs, value, Rseed::AfterZip212([0u8; 32]));
+        let mut memo = [0u8; 512];
+        memo[..4].copy_from_slice(b"paid");
+
+        let cmu = note.cmu();
+        let encryptor =
+            sapling_note_encryption(Some(ours.to_ovk(Scope::External)), note, memo, &mut OsRng);
+        let cv = ValueCommitment::derive(value, ValueCommitTrapdoor::random(OsRng));
+
+        let full = vec![FullNote {
+            cmu: hex::encode(cmu.to_bytes()),
+            enc_ciphertext: hex::encode(encryptor.encrypt_note_plaintext()),
+            eph_key: hex::encode(SaplingDomain::epk_bytes(encryptor.epk()).0),
+            height: 3_378_506,
+            position: 73_920_512,
+            tx_index: 3,
+            rho: String::new(),
+            out_ciphertext: hex::encode(encryptor.encrypt_outgoing_plaintext(
+                &cv,
+                &cmu,
+                &mut OsRng,
+            )),
+            cv: hex::encode(cv.to_bytes()),
+        }];
+
+        let ufvk = UnifiedSpendingKey::from_seed(&Network::MainNetwork, &[7u8; 32], zip32::AccountId::ZERO)
+            .expect("usk")
+            .to_unified_full_viewing_key()
+            .encode(&Network::MainNetwork);
+        let chunk = decrypt_full("main", &ufvk, "sapling", &full).expect("runs");
+
+        // Not ours to receive — only to have sent.
+        assert_eq!(chunk.hits.len(), 0);
+        assert_eq!(chunk.sent.len(), 1);
+        assert_eq!(chunk.sent[0].value, 123_456);
+        assert_eq!(chunk.sent[0].recipient, hex::encode(theirs.to_bytes()));
+        assert_eq!(chunk.sent[0].memo.as_deref(), Some("paid"));
     }
 
     #[test]

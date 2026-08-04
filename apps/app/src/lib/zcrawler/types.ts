@@ -22,10 +22,17 @@ export interface DecryptedNote {
   position: number;
 }
 
+/** A transaction's place in the chain — its identity until txids are served. */
+export interface TxLocator {
+  height: number;
+  tx_index: number;
+}
+
 export type Note = DecryptedNote & {
   /** `accountId_pool_chunk_index` — stable as long as chunk boundaries are. */
   id: string;
-  spent?: boolean;
+  /** Where it was spent, `false` once checked and unspent, absent until checked. */
+  spent?: false | TxLocator;
 };
 
 /** Main → worker: decrypt one chunk of one pool. */
@@ -35,10 +42,29 @@ export interface ChunkRequest {
   pool: Pool;
 }
 
-/** A worker's decrypted output for one chunk: the notes this UFVK owns. */
+/** An output this wallet created, recovered with its outgoing viewing key. */
+export interface SentOutput {
+  pool: Pool;
+  /** Value in zatoshis, as the recipient received it. */
+  value: number;
+  /** The diversified address it was sent to (raw bytes, hex). */
+  recipient: string;
+  memo?: string;
+  height: number;
+  tx_index: number;
+  position: number;
+}
+
+export type Sent = SentOutput & {
+  /** `accountId_pool_position` — positions are unique within a pool. */
+  id: string;
+};
+
+/** A worker's decrypted output for one chunk: what this UFVK received and sent. */
 export type ChunkWorkerSuccess = {
   chunk: number;
   hits: DecryptedNote[];
+  sent: SentOutput[];
 };
 
 export type ChunkWorkerError = {

@@ -1,4 +1,4 @@
-import type { Pool } from "./types";
+import type { Pool, TxLocator } from "./types";
 
 const CRAWLER_URL = import.meta.env.VITE_CRAWLER_URL ?? "http://localhost:8080";
 
@@ -13,7 +13,7 @@ export type FullNotesData = unknown[];
  * nullifier sharing that prefix so it never learns which one we asked about.
  * The server rejects any other length, so this has to track its bucket size.
  */
-const PREFIX_LENGTH = 4;
+const PREFIX_LENGTH = 6;
 
 export interface ChunksData {
   chunk_size: number;
@@ -53,10 +53,13 @@ export async function fetchChunks(birthday?: number) {
   return get<ChunksData>(`${CRAWLER_URL}/chunks${query}`);
 }
 
+/** A revealed nullifier, with the transaction that revealed it. */
+export type SpentNullifier = TxLocator & { nf: string };
+
 /** Every revealed nullifier sharing `nf`'s prefix — the bucket it hides in. */
 export async function fetchNullifiers(nf: string, pool: Pool) {
   const prefix = nf.slice(0, PREFIX_LENGTH);
-  return get<string[]>(
+  return get<SpentNullifier[]>(
     `${CRAWLER_URL}/nullifiers?pool=${pool}&prefix=${prefix}`,
   );
 }

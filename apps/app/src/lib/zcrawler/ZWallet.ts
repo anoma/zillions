@@ -1,9 +1,9 @@
-import type { TransactionReceipt } from "../sdk/types";
 import { dedupe, singleton } from "../utils";
 import { crawlChunks } from "./crawl";
-import { loadNotes, loadSyncStatus, saveSyncState } from "./db";
+import { loadNotes, loadSent, loadSyncStatus, saveSyncState } from "./db";
+import { buildHistory } from "./history";
 import { type ChunksData, fetchChunks, fetchNullifiers } from "./indexer";
-import type { ChunkWorkerSuccess, Note, Pool, SyncStatus } from "./types";
+import type { ChunkWorkerSuccess, Note, Pool, Sent, SyncStatus } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
 
@@ -34,6 +34,7 @@ export class ZWallet {
   readonly #birthday?: number;
 
   #notes: Note[] = [];
+  #sent: Sent[] = [];
   #unspentNotes: Map<string, Note> = new Map();
   #syncStatus: SyncStatus;
   #syncProgressListeners: Set<SyncEventListener> = new Set();
@@ -58,11 +59,13 @@ export class ZWallet {
 
   #seed = singleton(async () => {
     // TODO review if we should have a unified method to load the whole wallet
-    const [notes, syncStatus] = await Promise.all([
+    const [notes, sent, syncStatus] = await Promise.all([
       loadNotes(this.id),
+      loadSent(this.id),
       loadSyncStatus(this.id),
     ]);
     this.#notes = notes;
+    this.#sent = sent;
     if (syncStatus) {
       this.#syncStatus = syncStatus;
     }
@@ -140,9 +143,13 @@ export class ZWallet {
   /** Applies one chunk's notes, then persists and announces progress. */
   #applyChunk = (
     pool: Pool,
-    { chunk, hits }: ChunkWorkerSuccess,
+    { chunk, hits, sent }: ChunkWorkerSuccess,
     chunks: ChunksData,
   ) => {
+    for (const out of sent) {
+      this.#sent.push({ ...out, id: `${this.id}_${pool}_${out.position}` });
+    }
+
     const found = hits.map((hit, i) => {
       const note: Note = {
         ...hit,
@@ -171,7 +178,12 @@ export class ZWallet {
           if (this.#abort.signal.aborted) return;
           const bucket = await fetchNullifiers(note.nf_mine, note.pool);
           // Indexer hex case must not decide equality; `nf_mine` is lowercase.
-          note.spent = bucket.some((nf) => nf.toLowerCase() === note.nf_mine);
+          const spend = bucket.find(
+            ({ nf }) => nf.toLowerCase() === note.nf_mine,
+          );
+          note.spent = spend
+            ? { height: spend.height, tx_index: spend.tx_index }
+            : false;
           if (note.spent) {
             this.#unspentNotes.delete(note.nf_mine);
           }
@@ -203,7 +215,7 @@ export class ZWallet {
       // TODO review if it's safe to persist the note.nf_mine.
       // Otherwise we need to compute them during the seed phase.
       // The sync phase already compute them in memory only.
-      .then(() => saveSyncState(this.#notes, snapshot))
+      .then(() => saveSyncState(this.#notes, this.#sent, snapshot))
       .catch((err) => console.error("[sync] save failed", err));
   };
 
@@ -220,27 +232,7 @@ export class ZWallet {
     };
   }
 
-  /**
-   * One entry per received note, newest first. Spends, memos, txids and
-   * timestamps need the enhance phase; until then `txid` is the note id, so the
-   * explorer link and hash on the receipt card are placeholders.
-   */
-  async getTransactionHistory(): Promise<TransactionReceipt[]> {
-    return [...this.#notes]
-      .sort((a, b) => b.height - a.height || b.tx_index - a.tx_index)
-      .map((note) => ({
-        txid: note.id,
-        tx_type: "Received",
-        value: BigInt(note.value),
-        fee: 0n,
-        block_height: note.height,
-        confirmations: 0,
-        status: "Confirmed",
-        memo: note.memo,
-        timestamp: undefined,
-        pool: note.pool,
-        to_address: undefined,
-        from_address: undefined,
-      }));
+  async getTransactionHistory() {
+    return buildHistory(this.#notes, this.#sent);
   }
 }

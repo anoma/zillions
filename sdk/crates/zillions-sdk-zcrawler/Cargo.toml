@@ -43,6 +43,8 @@ getrandom = { workspace = true, features = ["js"] }
 # dev-dep features never reach the wasm --lib build.
 zcash_keys = { workspace = true, features = ["orchard", "sapling", "transparent-inputs"] }
 serde_json.workspace = true
+# Only the round-trip test encrypts anything; the lib never needs an RNG.
+rand_core = { version = "0.6", features = ["getrandom"] }
 
 [lints]
 workspace = true

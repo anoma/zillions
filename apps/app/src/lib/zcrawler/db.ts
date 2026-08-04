@@ -1,9 +1,10 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 
-import type { Note, SyncStatus } from "./types";
+import type { Note, Sent, SyncStatus } from "./types";
 
 export const db = new Dexie("zcrawler") as Dexie & {
   notes: Table<Note, string>;
+  sent: Table<Sent, string>;
   sync: EntityTable<SyncStatus, "id">;
 };
 
@@ -33,15 +34,36 @@ db.version(4)
     await tx.table("sync").clear();
   });
 
+// Notes are dropped again: pre-v5 rows carry a boolean `spent` with no locator,
+// and outgoing outputs were never recovered at all.
+db.version(5)
+  .stores({
+    notes: "id",
+    sent: "id",
+    sync: "id",
+  })
+  .upgrade(async (tx) => {
+    await tx.table("notes").clear();
+    await tx.table("sync").clear();
+  });
+
 export const loadNotes = (accountId: string): Promise<Note[]> =>
   db.notes.where("id").startsWith(accountId).toArray();
+
+export const loadSent = (accountId: string): Promise<Sent[]> =>
+  db.sent.where("id").startsWith(accountId).toArray();
 
 export const loadSyncStatus = async (
   accountId: string,
 ): Promise<SyncStatus | undefined> => await db.sync.get(accountId);
 
-export const saveSyncState = (notes: Note[], syncStatus: SyncStatus) =>
-  db.transaction("rw", db.notes, db.sync, async () => {
+export const saveSyncState = (
+  notes: Note[],
+  sent: Sent[],
+  syncStatus: SyncStatus,
+) =>
+  db.transaction("rw", db.notes, db.sent, db.sync, async () => {
     if (notes.length) await db.notes.bulkPut(notes);
+    if (sent.length) await db.sent.bulkPut(sent);
     await db.sync.put(syncStatus);
   });
