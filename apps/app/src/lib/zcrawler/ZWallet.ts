@@ -177,9 +177,10 @@ export class ZWallet {
         for (const note of notes) {
           if (this.#abort.signal.aborted) return;
           const bucket = await fetchNullifiers(note.nf_mine, note.pool);
-          // Indexer hex case must not decide equality; `nf_mine` is lowercase.
-          const spend = bucket.find(
-            ({ nf }) => nf.toLowerCase() === note.nf_mine,
+          // The indexer keeps only a nullifier's leading bytes, and its hex
+          // case must not decide the match; `nf_mine` is lowercase.
+          const spend = bucket.find(({ nf_tag }) =>
+            note.nf_mine.startsWith(nf_tag.toLowerCase()),
           );
           note.spent = spend
             ? { height: spend.height, tx_index: spend.tx_index }

@@ -53,8 +53,8 @@ export async function fetchChunks(birthday?: number) {
   return get<ChunksData>(`${CRAWLER_URL}/chunks${query}`);
 }
 
-/** A revealed nullifier, with the transaction that revealed it. */
-export type SpentNullifier = TxLocator & { nf: string };
+/** A revealed nullifier's leading bytes, with the transaction that revealed it. */
+export type SpentNullifier = TxLocator & { nf_tag: string };
 
 /** Every revealed nullifier sharing `nf`'s prefix — the bucket it hides in. */
 export async function fetchNullifiers(nf: string, pool: Pool) {
