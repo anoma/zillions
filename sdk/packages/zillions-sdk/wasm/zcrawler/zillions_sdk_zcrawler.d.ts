@@ -3,14 +3,14 @@
 /**
  * Trial-decrypt a `/notes/compact` Sapling chunk against `ufvk`.
  *
- * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
+ * Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
  */
 export function try_decrypt_sapling(network: string, ufvk: string, notes: any): any;
 /**
  * Trial-decrypt an Orchard `/ciphertexts` chunk, the raw response body,
  * against `ufvk`.
  *
- * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
+ * Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
  */
 export function try_decrypt_orchard(network: string, ufvk: string, body: Uint8Array): any;
 /**

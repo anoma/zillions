@@ -171,7 +171,7 @@ function takeFromExternrefTable0(idx) {
 /**
  * Trial-decrypt a `/notes/compact` Sapling chunk against `ufvk`.
  *
- * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
+ * Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
  * @param {string} network
  * @param {string} ufvk
  * @param {any} notes
@@ -199,7 +199,7 @@ function passArray8ToWasm0(arg, malloc) {
  * Trial-decrypt an Orchard `/ciphertexts` chunk, the raw response body,
  * against `ufvk`.
  *
- * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
+ * Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
  * @param {string} network
  * @param {string} ufvk
  * @param {Uint8Array} body

@@ -10,9 +10,11 @@ import initZcrawler, {
   try_decrypt_sapling,
 } from "@zillions/sdk/zcrawler";
 import {
+  CHUNK_SIZE,
   fetchCompactNotes,
   fetchFullNotes,
   fetchOrchardCiphertexts,
+  OLD_CHUNK_SIZE,
 } from "./indexer";
 import type { ChunkRequest, ChunkWorkerResponse } from "./types";
 
@@ -29,6 +31,28 @@ const worker = self as unknown as {
   onmessage: ((e: MessageEvent<ChunkRequest>) => void) | null;
   postMessage: (msg: ChunkWorkerResponse) => void;
 };
+
+/**
+ * The full notes behind a chunk's compact hits. Full notes still come from the
+ * old server, whose chunks are a quarter of an Orchard chunk on the new one, so
+ * only the old chunks holding a hit are fetched.
+ */
+async function fetchFull(
+  chunk: number,
+  pool: ChunkRequest["pool"],
+  compactHits: { index: number }[],
+) {
+  if (pool !== "orchard") return fetchFullNotes(chunk, pool);
+  const oldChunks = new Set(
+    compactHits.map(({ index }) =>
+      Math.floor((chunk * CHUNK_SIZE + index) / OLD_CHUNK_SIZE),
+    ),
+  );
+  const parts = await Promise.all(
+    [...oldChunks].map((old) => fetchFullNotes(old, pool)),
+  );
+  return parts.flat();
+}
 
 worker.onmessage = async (e) => {
   // TODO can we save JS ↔ WASM boundary time by registering the ufvk?
@@ -58,7 +82,7 @@ worker.onmessage = async (e) => {
     // The chunk holds something of ours, so it is worth its full ciphertexts:
     // they carry what the compact prefix cannot — the memo above all, and the
     // outgoing ciphertexts that make our own sends visible.
-    const fullNotes = await fetchFullNotes(chunk, pool);
+    const fullNotes = await fetchFull(chunk, pool, compactHits);
     const { hits, sent } = try_decrypt_full(NETWORK, ufvk, pool, fullNotes);
     worker.postMessage({ chunk, hits, sent });
   } catch (err) {

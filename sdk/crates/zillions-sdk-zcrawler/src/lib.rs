@@ -109,6 +109,8 @@ struct Hit {
     value: u64,
     /// This note's own nullifier (hex); it appears on-chain when the note is spent.
     nf_mine: String,
+    /// Where the note sits among the notes it was decrypted from.
+    index: usize,
 }
 
 /// A note the UFVK owns, read from its whole ciphertext: everything [`Hit`]
@@ -240,6 +242,7 @@ fn decrypt_sapling(network: &str, ufvk: &str, notes: &[SaplingNote]) -> Result<V
                 scope: SCOPES[scope_idx].0,
                 value: note.value().inner(),
                 nf_mine: hex::encode(note.nf(nk, notes[i].position).0),
+                index: i,
             });
         }
     }
@@ -286,13 +289,17 @@ fn decrypt_orchard(network: &str, ufvk: &str, body: &[u8]) -> Result<Vec<Hit>, S
         .collect::<Result<Vec<_>, String>>()?;
 
     let mut hits = Vec::new();
-    for res in batch::try_compact_note_decryption(&ivks, &outputs) {
+    for (i, res) in batch::try_compact_note_decryption(&ivks, &outputs)
+        .into_iter()
+        .enumerate()
+    {
         if let Some(((note, _addr), scope_idx)) = res {
             hits.push(Hit {
                 pool: "orchard",
                 scope: SCOPES[scope_idx].0,
                 value: note.value().inner(),
                 nf_mine: hex::encode(note.nullifier(fvk).to_bytes()),
+                index: i,
             });
         }
     }
@@ -473,7 +480,7 @@ fn decrypt_full(
 
 /// Trial-decrypt a `/notes/compact` Sapling chunk against `ufvk`.
 ///
-/// Returns the hits: `[{ pool, scope, value, nf_mine }]`.
+/// Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
 #[wasm_bindgen]
 pub fn try_decrypt_sapling(network: &str, ufvk: &str, notes: JsValue) -> Result<JsValue, JsError> {
     let notes: Vec<SaplingNote> =
@@ -485,7 +492,7 @@ pub fn try_decrypt_sapling(network: &str, ufvk: &str, notes: JsValue) -> Result<
 /// Trial-decrypt an Orchard `/ciphertexts` chunk, the raw response body,
 /// against `ufvk`.
 ///
-/// Returns the hits: `[{ pool, scope, value, nf_mine }]`.
+/// Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
 #[wasm_bindgen]
 pub fn try_decrypt_orchard(network: &str, ufvk: &str, body: &[u8]) -> Result<JsValue, JsError> {
     let hits = decrypt_orchard(network, ufvk, body).map_err(|e| JsError::new(&e))?;
