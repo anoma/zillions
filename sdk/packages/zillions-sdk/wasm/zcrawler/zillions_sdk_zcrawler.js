@@ -169,25 +169,50 @@ function takeFromExternrefTable0(idx) {
     return value;
 }
 /**
- * Trial-decrypt one pool's compact notes against `ufvk`.
+ * Trial-decrypt a `/notes/compact` Sapling chunk against `ufvk`.
  *
- * `notes` is the `/notes/compact` payload: an array of that pool's notes. `pool` is
- * `"sapling"` or `"orchard"`; the array itself doesn't say which it is.
  * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
  * @param {string} network
  * @param {string} ufvk
- * @param {string} pool
  * @param {any} notes
  * @returns {any}
  */
-export function try_decrypt(network, ufvk, pool, notes) {
+export function try_decrypt_sapling(network, ufvk, notes) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const ret = wasm.try_decrypt_sapling(ptr0, len0, ptr1, len1, notes);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+/**
+ * Trial-decrypt an Orchard `/ciphertexts` chunk, the raw response body,
+ * against `ufvk`.
+ *
+ * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
+ * @param {string} network
+ * @param {string} ufvk
+ * @param {Uint8Array} body
+ * @returns {any}
+ */
+export function try_decrypt_orchard(network, ufvk, body) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, notes);
+    const ret = wasm.try_decrypt_orchard(ptr0, len0, ptr1, len1, ptr2, len2);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -205,7 +230,7 @@ export function try_decrypt(network, ufvk, pool, notes) {
  * `sent` stays empty unless the payload carries `cv` and `out_ciphertext`:
  * recovering an output we created needs both.
  *
- * Worth fetching only for a chunk `try_decrypt` already found a note in — a
+ * Worth fetching only for a chunk a compact pass already found a note in — a
  * full chunk is ~50× a compact one.
  * @param {string} network
  * @param {string} ufvk
@@ -230,13 +255,6 @@ export function try_decrypt_full(network, ufvk, pool, notes) {
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
-}
-
-function passArray8ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 1, 1) >>> 0;
-    getUint8ArrayMemory0().set(arg, ptr / 1);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
 }
 
 const PcztFinalization = (typeof FinalizationRegistry === 'undefined')

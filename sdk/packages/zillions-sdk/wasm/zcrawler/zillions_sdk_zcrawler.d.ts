@@ -1,13 +1,18 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Trial-decrypt one pool's compact notes against `ufvk`.
+ * Trial-decrypt a `/notes/compact` Sapling chunk against `ufvk`.
  *
- * `notes` is the `/notes/compact` payload: an array of that pool's notes. `pool` is
- * `"sapling"` or `"orchard"`; the array itself doesn't say which it is.
  * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
  */
-export function try_decrypt(network: string, ufvk: string, pool: string, notes: any): any;
+export function try_decrypt_sapling(network: string, ufvk: string, notes: any): any;
+/**
+ * Trial-decrypt an Orchard `/ciphertexts` chunk, the raw response body,
+ * against `ufvk`.
+ *
+ * Returns the hits: `[{ pool, scope, value, nf_mine }]`.
+ */
+export function try_decrypt_orchard(network: string, ufvk: string, body: Uint8Array): any;
 /**
  * Trial-decrypt one pool's full notes against `ufvk`.
  *
@@ -19,7 +24,7 @@ export function try_decrypt(network: string, ufvk: string, pool: string, notes: 
  * `sent` stays empty unless the payload carries `cv` and `out_ciphertext`:
  * recovering an output we created needs both.
  *
- * Worth fetching only for a chunk `try_decrypt` already found a note in — a
+ * Worth fetching only for a chunk a compact pass already found a note in — a
  * full chunk is ~50× a compact one.
  */
 export function try_decrypt_full(network: string, ufvk: string, pool: string, notes: any): any;
@@ -108,7 +113,8 @@ export class Pczt {
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
-  readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
+  readonly try_decrypt_sapling: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
+  readonly try_decrypt_orchard: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
   readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
   readonly __wbg_pczt_free: (a: number, b: number) => void;
   readonly pczt_to_json: (a: number) => any;

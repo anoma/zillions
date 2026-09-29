@@ -5,10 +5,15 @@
  */
 
 import initZcrawler, {
-  try_decrypt,
   try_decrypt_full,
+  try_decrypt_orchard,
+  try_decrypt_sapling,
 } from "@zillions/sdk/zcrawler";
-import { fetchCompactNotes, fetchFullNotes } from "./indexer";
+import {
+  fetchCompactNotes,
+  fetchFullNotes,
+  fetchOrchardCiphertexts,
+} from "./indexer";
 import type { ChunkRequest, ChunkWorkerResponse } from "./types";
 
 // TODO revisit how config (network, indexer URL) reaches the worker: read from
@@ -32,8 +37,18 @@ worker.onmessage = async (e) => {
   const { chunk, ufvk, pool } = e.data;
   try {
     await (ready ??= initZcrawler());
-    const compactNotes = await fetchCompactNotes(chunk, pool);
-    const compactHits = try_decrypt(NETWORK, ufvk, pool, compactNotes);
+    const compactHits =
+      pool === "orchard"
+        ? try_decrypt_orchard(
+            NETWORK,
+            ufvk,
+            await fetchOrchardCiphertexts(chunk),
+          )
+        : try_decrypt_sapling(
+            NETWORK,
+            ufvk,
+            await fetchCompactNotes(chunk, pool),
+          );
 
     if (!compactHits.length) {
       worker.postMessage({ chunk, hits: compactHits, sent: [] });

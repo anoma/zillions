@@ -1,6 +1,8 @@
 import type { Pool, TxLocator } from "./types";
 
 const CRAWLER_URL = import.meta.env.VITE_CRAWLER_URL ?? "http://localhost:8080";
+const WEBSERVER_URL =
+  import.meta.env.VITE_WEBSERVER_URL ?? "http://localhost:1234/api/v1";
 
 /** One pool's notes for a compact chunk. Only wasm reads their shape; TS forwards them. */
 export type CompactNotesData = unknown[];
@@ -27,10 +29,20 @@ export interface ChunksData {
   };
 }
 
-async function get<T>(url: string): Promise<T> {
+async function fetchOk(url: string) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
-  return res.json();
+  return res;
+}
+
+async function get<T>(url: string): Promise<T> {
+  return (await fetchOk(url)).json();
+}
+
+/** A chunk of compact Orchard notes, still binary: only wasm reads it. */
+export async function fetchOrchardCiphertexts(chunk: number) {
+  const res = await fetchOk(`${WEBSERVER_URL}/orchard/ciphertexts/${chunk}`);
+  return new Uint8Array(await res.arrayBuffer());
 }
 
 /** A chunk's notes, compact: only what trial decryption needs to reject one. */

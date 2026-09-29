@@ -23,6 +23,8 @@ wasm-bindgen.workspace = true
 serde.workspace = true
 serde-wasm-bindgen.workspace = true
 hex = "0.4"
+# Decodes the new server's binary chunk header; records are sliced by hand.
+postcard = { version = "1", default-features = false }
 
 # Only the note-encryption + key surface — no proving circuits (default-features
 # off drops halo2/bellman) and no transparent-inputs (drops the secp256k1 C dep),
