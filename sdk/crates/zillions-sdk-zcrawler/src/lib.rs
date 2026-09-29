@@ -7,9 +7,8 @@
 //! batch of notes, return the ones that decrypt to the wallet. No wallet DB, no
 //! commitment tree, no network — just detection.
 //!
-//! Two tiers, matching the indexer's: compact notes carry only enough to reject
-//! a note, and [`try_decrypt_orchard`] / [`try_decrypt_sapling`] answer value
-//! and nullifier from them. `/notes/full` carries the whole ciphertext, and
+//! Two tiers, matching the indexer's: `/ciphertexts` carries only enough to
+//! reject a note, and [`try_decrypt`] answers value and nullifier from it. `/notes/full` carries the whole ciphertext, and
 //! [`try_decrypt_full`] adds what the compact prefix cannot hold — the memo
 //! above all.
 
@@ -21,7 +20,7 @@ use orchard::note::ExtractedNoteCommitment as OrchardCmx;
 use orchard::note::Nullifier;
 use orchard::note_encryption::{CompactAction, OrchardDomain};
 use sapling::note::ExtractedNoteCommitment as SaplingCmu;
-use sapling::note_encryption::{CompactOutputDescription, SaplingDomain};
+use sapling::note_encryption::{CompactOutputDescription, SaplingDomain, Zip212Enforcement};
 use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_note_encryption::{
     batch, try_output_recovery_with_ovk, EphemeralKeyBytes, ShieldedOutput, COMPACT_NOTE_SIZE,
@@ -31,21 +30,16 @@ use zcash_primitives::transaction::components::sapling::zip212_enforcement;
 use zcash_protocol::consensus::BlockHeight;
 use zillions_sdk_common::Network;
 
+/// Notes per `/ciphertexts` chunk: record `i` of chunk `c` sits at tree
+/// position `c × CHUNK_SIZE + i`.
+const CHUNK_SIZE: u64 = 1 << 14;
+
+/// One `/ciphertexts` Sapling record: `eph_key ‖ enc_head ‖ cmu`.
+const SAPLING_RECORD_LEN: usize = 32 + COMPACT_NOTE_SIZE + 32;
+
 /// One `/ciphertexts` Orchard record: `eph_key ‖ enc_head ‖ cmx ‖ rho`, where
 /// rho is the action's nullifier, reused as this note's rho.
 const ORCHARD_RECORD_LEN: usize = 32 + COMPACT_NOTE_SIZE + 32 + 32;
-
-/// One Sapling compact output. Extra endpoint fields are ignored.
-#[derive(Deserialize)]
-struct SaplingNote {
-    cmu: String,
-    enc_head: String,
-    eph_key: String,
-    /// Block height, for height-dependent ZIP-212 enforcement.
-    height: u32,
-    /// Note commitment tree position, which the Sapling nullifier binds to.
-    position: u64,
-}
 
 /// One note with its whole ciphertext, as `/notes/full` serves it. Both pools
 /// share the shape; `rho` is Orchard's and `position` Sapling's.
@@ -202,30 +196,66 @@ fn orchard_ivks(fvk: &orchard::keys::FullViewingKey) -> Vec<orchard::keys::Prepa
         .collect()
 }
 
-fn decrypt_sapling(network: &str, ufvk: &str, notes: &[SaplingNote]) -> Result<Vec<Hit>, String> {
+/// A `/ciphertexts` chunk body, split open. Postcard lays it out as
+/// `varint(min_height) ‖ varint(median_height) ‖ varint(max_height) ‖
+/// varint(count)`, then `count` records of `record_len` bytes each.
+struct ChunkBody<'a> {
+    min_height: u32,
+    max_height: u32,
+    records: std::slice::ChunksExact<'a, u8>,
+}
+
+fn chunk_body(body: &[u8], record_len: usize) -> Result<ChunkBody<'_>, String> {
+    let ((min_height, _median, max_height, count), records) =
+        postcard::take_from_bytes::<(u32, u32, u32, usize)>(body).map_err(|e| e.to_string())?;
+    if count.checked_mul(record_len) != Some(records.len()) {
+        return Err(format!("chunk holds {} bytes for {count} records", records.len()));
+    }
+    Ok(ChunkBody {
+        min_height,
+        max_height,
+        records: records.chunks_exact(record_len),
+    })
+}
+
+/// ZIP-212 enforcement for a whole chunk, which carries only its height
+/// bounds. A chunk that crosses a rule change gets the grace period, which
+/// accepts both plaintext formats: at worst a false hit, which the full pass,
+/// with exact heights, then rejects.
+fn chunk_enforcement(network: &Network, min_height: u32, max_height: u32) -> Zip212Enforcement {
+    let low = zip212_enforcement(network, BlockHeight::from(min_height));
+    let high = zip212_enforcement(network, BlockHeight::from(max_height));
+    if low == high {
+        low
+    } else {
+        Zip212Enforcement::GracePeriod
+    }
+}
+
+fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result<Vec<Hit>, String> {
     let network: Network = network.parse().map_err(|_| "invalid network".to_string())?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
     let Some(dfvk) = ufvk.sapling() else {
         return Ok(Vec::new());
     };
 
-    // One domain per output: ZIP-212 enforcement is height-dependent.
+    let body = chunk_body(body, SAPLING_RECORD_LEN)?;
+    let enforcement = chunk_enforcement(&network, body.min_height, body.max_height);
     let nk = &dfvk.fvk().vk.nk;
     let ivks = sapling_ivks(dfvk);
-    let outputs = notes
-        .iter()
-        .map(|n| {
-            let cmu = Option::<SaplingCmu>::from(SaplingCmu::from_bytes(&hex_n(&n.cmu)?))
+    let outputs = body
+        .records
+        .map(|r| {
+            let (eph_key, r) = r.split_at(32);
+            let (enc_head, cmu) = r.split_at(COMPACT_NOTE_SIZE);
+            let cmu = Option::<SaplingCmu>::from(SaplingCmu::from_bytes(cmu.try_into().unwrap()))
                 .ok_or("bad sapling commitment")?;
-            // Pre-Canopy notes used the old rseed format, so enforcement must
-            // be resolved per note height, not hardcoded.
-            let enforcement = zip212_enforcement(&network, BlockHeight::from(n.height));
             Ok((
                 SaplingDomain::new(enforcement),
                 CompactOutputDescription {
-                    ephemeral_key: EphemeralKeyBytes(hex_n(&n.eph_key)?),
+                    ephemeral_key: EphemeralKeyBytes(eph_key.try_into().unwrap()),
                     cmu,
-                    enc_ciphertext: hex_n(&n.enc_head)?,
+                    enc_ciphertext: enc_head.try_into().unwrap(),
                 },
             ))
         })
@@ -237,28 +267,17 @@ fn decrypt_sapling(network: &str, ufvk: &str, notes: &[SaplingNote]) -> Result<V
         .enumerate()
     {
         if let Some(((note, _addr), scope_idx)) = res {
+            let position = u64::from(chunk) * CHUNK_SIZE + i as u64;
             hits.push(Hit {
                 pool: "sapling",
                 scope: SCOPES[scope_idx].0,
                 value: note.value().inner(),
-                nf_mine: hex::encode(note.nf(nk, notes[i].position).0),
+                nf_mine: hex::encode(note.nf(nk, position).0),
                 index: i,
             });
         }
     }
     Ok(hits)
-}
-
-/// The records of a `/ciphertexts` chunk body. Postcard lays it out as
-/// `varint(min_height) ‖ varint(median_height) ‖ varint(max_height) ‖
-/// varint(count)`, then `count` records of `record_len` bytes each.
-fn chunk_records(body: &[u8], record_len: usize) -> Result<std::slice::ChunksExact<'_, u8>, String> {
-    let ((_min, _median, _max, count), records) =
-        postcard::take_from_bytes::<(u32, u32, u32, usize)>(body).map_err(|e| e.to_string())?;
-    if count.checked_mul(record_len) != Some(records.len()) {
-        return Err(format!("chunk holds {} bytes for {count} records", records.len()));
-    }
-    Ok(records.chunks_exact(record_len))
 }
 
 fn decrypt_orchard(network: &str, ufvk: &str, body: &[u8]) -> Result<Vec<Hit>, String> {
@@ -270,7 +289,8 @@ fn decrypt_orchard(network: &str, ufvk: &str, body: &[u8]) -> Result<Vec<Hit>, S
 
     // Each action carries its own rho, so the domain is per-output.
     let ivks = orchard_ivks(fvk);
-    let outputs = chunk_records(body, ORCHARD_RECORD_LEN)?
+    let outputs = chunk_body(body, ORCHARD_RECORD_LEN)?
+        .records
         .map(|r| {
             let (eph_key, r) = r.split_at(32);
             let (enc_head, r) = r.split_at(COMPACT_NOTE_SIZE);
@@ -478,24 +498,18 @@ fn decrypt_full(
     Ok(FullChunk { hits, sent })
 }
 
-/// Trial-decrypt a `/notes/compact` Sapling chunk against `ufvk`.
+/// Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
+/// against `ufvk`. `chunk` is its number, which fixes each note's position.
 ///
 /// Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
 #[wasm_bindgen]
-pub fn try_decrypt_sapling(network: &str, ufvk: &str, notes: JsValue) -> Result<JsValue, JsError> {
-    let notes: Vec<SaplingNote> =
-        serde_wasm_bindgen::from_value(notes).map_err(|e| JsError::new(&e.to_string()))?;
-    let hits = decrypt_sapling(network, ufvk, &notes).map_err(|e| JsError::new(&e))?;
-    serde_wasm_bindgen::to_value(&hits).map_err(|e| JsError::new(&e.to_string()))
-}
-
-/// Trial-decrypt an Orchard `/ciphertexts` chunk, the raw response body,
-/// against `ufvk`.
-///
-/// Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
-#[wasm_bindgen]
-pub fn try_decrypt_orchard(network: &str, ufvk: &str, body: &[u8]) -> Result<JsValue, JsError> {
-    let hits = decrypt_orchard(network, ufvk, body).map_err(|e| JsError::new(&e))?;
+pub fn try_decrypt(network: &str, ufvk: &str, pool: &str, chunk: u32, body: &[u8]) -> Result<JsValue, JsError> {
+    let hits = match pool {
+        "sapling" => decrypt_sapling(network, ufvk, chunk, body),
+        "orchard" => decrypt_orchard(network, ufvk, body),
+        _ => return Err(JsError::new("unknown pool")),
+    }
+    .map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&hits).map_err(|e| JsError::new(&e.to_string()))
 }
 
@@ -548,29 +562,27 @@ mod tests {
             .expect("usk");
         let ufvk = usk.to_unified_full_viewing_key().encode(&Network::MainNetwork);
 
-        let sapling = [SaplingNote {
-            cmu: "1e184cee50a61ef8bad79f28a360ae0383b4c2a563723744abb8994145e5d109".into(),
-            eph_key: "cb476002450613bae9a8fa4240a80f459ca338ab4ac9d0ccd69507d0a4bef985".into(),
-            enc_head: "67294ab5a43ac6750a760eb171df88bf67d5847fe3bd1d7ac9f4d2bd3e1e69da31868f810a478d3d5b39366f43e11a8b88ddf384".into(),
-            height: 3342508,
-            position: 73908202,
-        }];
-        let orchard = orchard_body(&[concat!(
+        let sapling = ciphertexts(3_342_508, &[concat!(
+            "cb476002450613bae9a8fa4240a80f459ca338ab4ac9d0ccd69507d0a4bef985", // eph_key
+            "67294ab5a43ac6750a760eb171df88bf67d5847fe3bd1d7ac9f4d2bd3e1e69da31868f810a478d3d5b39366f43e11a8b88ddf384", // enc_head
+            "1e184cee50a61ef8bad79f28a360ae0383b4c2a563723744abb8994145e5d109", // cmu
+        )]);
+        let orchard = ciphertexts(3_424_128, &[concat!(
             "8c03e7196525e7c5370766dcddf8be8592be5a12bdef5de0e0852189a4ceb233", // eph_key
             "87d64a0108dec58c38e80bda117b779a8677477347ebe720b5fccb09d188c1632faa0d30abea7f23223df164cdcf3c0a7e5f344d", // enc_head
             "44ba39dbcf4e55c2b2c308eed761a4ffce3f6ae32ec7f01554bb3b2c61eb2936", // cmx
             "08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39", // rho
         )]);
 
-        assert_eq!(decrypt_sapling(network, &ufvk, &sapling).expect("sapling runs").len(), 0);
+        assert_eq!(decrypt_sapling(network, &ufvk, 4511, &sapling).expect("sapling runs").len(), 0);
         assert_eq!(decrypt_orchard(network, &ufvk, &orchard).expect("orchard runs").len(), 0);
     }
 
-    /// A `/ciphertexts` Orchard body around hex records, as the new server encodes it.
-    fn orchard_body(records: &[&str]) -> Vec<u8> {
+    /// A `/ciphertexts` body around hex records, all at `height`, as the new
+    /// server encodes it.
+    fn ciphertexts(height: u32, records: &[&str]) -> Vec<u8> {
         let mut header = [0u8; 32];
-        let header = postcard::to_slice(&(3_424_128u32, 3_424_128u32, 3_424_128u32, records.len()), &mut header)
-            .expect("header");
+        let header = postcard::to_slice(&(height, height, height, records.len()), &mut header).expect("header");
         let mut body = header.to_vec();
         for record in records {
             body.extend(hex::decode(record).expect("hex"));
@@ -581,11 +593,21 @@ mod tests {
     #[test]
     fn rejects_a_truncated_chunk() {
         let record = "00".repeat(ORCHARD_RECORD_LEN);
-        let mut body = orchard_body(&[&record, &record]);
-        assert_eq!(chunk_records(&body, ORCHARD_RECORD_LEN).expect("whole").len(), 2);
+        let mut body = ciphertexts(3_424_128, &[&record, &record]);
+        assert_eq!(chunk_body(&body, ORCHARD_RECORD_LEN).expect("whole").records.len(), 2);
 
         body.pop();
-        assert!(chunk_records(&body, ORCHARD_RECORD_LEN).is_err());
+        assert!(chunk_body(&body, ORCHARD_RECORD_LEN).is_err());
+    }
+
+    // Mainnet Canopy is 1_046_400, and its grace period runs 32_256 blocks.
+    #[test]
+    fn chunk_enforcement_widens_across_a_rule_change() {
+        let net = Network::MainNetwork;
+        assert_eq!(chunk_enforcement(&net, 1_000_000, 1_000_100), Zip212Enforcement::Off);
+        assert_eq!(chunk_enforcement(&net, 3_000_000, 3_000_100), Zip212Enforcement::On);
+        assert_eq!(chunk_enforcement(&net, 1_046_000, 1_047_000), Zip212Enforcement::GracePeriod);
+        assert_eq!(chunk_enforcement(&net, 1_000_000, 2_000_000), Zip212Enforcement::GracePeriod);
     }
 
     // Same idea for the full tier, over real `/notes/full` notes: the whole
@@ -689,15 +711,5 @@ mod tests {
 
         // An empty text memo is a memo, not the absence of one.
         assert_eq!(memo_text(&[0u8; 512]).as_deref(), Some(""));
-    }
-
-    // The Sapling array must deserialize from the raw `/notes/compact` shape.
-    #[test]
-    fn parses_sync_arrays() {
-        let sapling: Vec<SaplingNote> = serde_json::from_str(
-            r#"[{"cmu":"cebda1a5c30582e5d630430ab42b7c24681e119ab2f32fe0c00a01a91f6d5658","enc_head":"374621524a15dc1084366032b5f81c583c5a8c710a535a452c068b89b8851c89ac6a61ad060f558dee56e77cb8dfa7740e4309fa","eph_key":"010d9b3a567a8e662acc9bb928ceadf3da7a722fd2694495d85cfe750414ba65","height":3401974,"position":73928704}]"#,
-        )
-        .expect("sapling array");
-        assert_eq!(sapling[0].position, 73928704);
     }
 }

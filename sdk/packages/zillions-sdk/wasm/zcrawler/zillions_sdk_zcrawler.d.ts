@@ -1,18 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Trial-decrypt a `/notes/compact` Sapling chunk against `ufvk`.
+ * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
+ * against `ufvk`. `chunk` is its number, which fixes each note's position.
  *
  * Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
  */
-export function try_decrypt_sapling(network: string, ufvk: string, notes: any): any;
-/**
- * Trial-decrypt an Orchard `/ciphertexts` chunk, the raw response body,
- * against `ufvk`.
- *
- * Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
- */
-export function try_decrypt_orchard(network: string, ufvk: string, body: Uint8Array): any;
+export function try_decrypt(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array): any;
 /**
  * Trial-decrypt one pool's full notes against `ufvk`.
  *
@@ -113,8 +107,7 @@ export class Pczt {
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
-  readonly try_decrypt_sapling: (a: number, b: number, c: number, d: number, e: any) => [number, number, number];
-  readonly try_decrypt_orchard: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+  readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
   readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
   readonly __wbg_pczt_free: (a: number, b: number) => void;
   readonly pczt_to_json: (a: number) => any;

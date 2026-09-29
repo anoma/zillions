@@ -5,15 +5,13 @@
  */
 
 import initZcrawler, {
+  try_decrypt,
   try_decrypt_full,
-  try_decrypt_orchard,
-  try_decrypt_sapling,
 } from "@zillions/sdk/zcrawler";
 import {
   CHUNK_SIZE,
-  fetchCompactNotes,
+  fetchCiphertexts,
   fetchFullNotes,
-  fetchOrchardCiphertexts,
   OLD_CHUNK_SIZE,
 } from "./indexer";
 import type { ChunkRequest, ChunkWorkerResponse } from "./types";
@@ -34,15 +32,14 @@ const worker = self as unknown as {
 
 /**
  * The full notes behind a chunk's compact hits. Full notes still come from the
- * old server, whose chunks are a quarter of an Orchard chunk on the new one, so
- * only the old chunks holding a hit are fetched.
+ * old server, whose chunks are a quarter of the new one's, so only the old
+ * chunks holding a hit are fetched.
  */
 async function fetchFull(
   chunk: number,
   pool: ChunkRequest["pool"],
   compactHits: { index: number }[],
 ) {
-  if (pool !== "orchard") return fetchFullNotes(chunk, pool);
   const oldChunks = new Set(
     compactHits.map(({ index }) =>
       Math.floor((chunk * CHUNK_SIZE + index) / OLD_CHUNK_SIZE),
@@ -61,18 +58,8 @@ worker.onmessage = async (e) => {
   const { chunk, ufvk, pool } = e.data;
   try {
     await (ready ??= initZcrawler());
-    const compactHits =
-      pool === "orchard"
-        ? try_decrypt_orchard(
-            NETWORK,
-            ufvk,
-            await fetchOrchardCiphertexts(chunk),
-          )
-        : try_decrypt_sapling(
-            NETWORK,
-            ufvk,
-            await fetchCompactNotes(chunk, pool),
-          );
+    const body = await fetchCiphertexts(chunk, pool);
+    const compactHits = try_decrypt(NETWORK, ufvk, pool, chunk, body);
 
     if (!compactHits.length) {
       worker.postMessage({ chunk, hits: compactHits, sent: [] });

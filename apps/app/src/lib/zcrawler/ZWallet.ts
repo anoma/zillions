@@ -2,7 +2,7 @@ import { dedupe, singleton } from "../utils";
 import { crawlChunks } from "./crawl";
 import { loadNotes, loadSent, loadSyncStatus, saveSyncState } from "./db";
 import { buildHistory } from "./history";
-import { type ChunksData, fetchChunks, fetchNullifiers } from "./indexer";
+import { CHUNKS, type ChunksData, fetchNullifiers } from "./indexer";
 import type { ChunkWorkerSuccess, Note, Pool, Sent, SyncStatus } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
@@ -30,8 +30,6 @@ const emptySyncStatus = (accountId: string): SyncStatus => ({
 export class ZWallet {
   readonly id: string;
   readonly #ufvk: string;
-  /** Block height below which nothing is crawled. Absent means full history. */
-  readonly #birthday?: number;
 
   #notes: Note[] = [];
   #sent: Sent[] = [];
@@ -44,10 +42,11 @@ export class ZWallet {
   /** Spend lookups are chained: one bucket in flight, newest notes first. */
   #checking: Promise<unknown> = Promise.resolve();
 
+  // ponytail: `birthday` is accepted but ignored; every chunk in range is
+  // crawled until the crawl stops on chunk heights instead.
   constructor(options: { id: string; ufvk: string; birthday?: number }) {
     this.id = options.id;
     this.#ufvk = options.ufvk;
-    this.#birthday = options.birthday;
     this.#syncStatus = emptySyncStatus(this.id);
     this.#seed();
   }
@@ -92,9 +91,9 @@ export class ZWallet {
     this.#emitProgress();
 
     // Notes carried over from an earlier sync may have been spent since. Kicked
-    // off before the fetch so the bucket lookups overlap it.
+    // off first so the bucket lookups overlap the crawl.
     this.#checkSpends([...this.#unspentNotes.values()]);
-    const chunks = await fetchChunks(this.#birthday);
+    const chunks = CHUNKS;
 
     for (const pool of POOLS) {
       const { first_chunk, last_chunk } = chunks[pool];

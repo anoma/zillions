@@ -163,56 +163,40 @@ function getStringFromWasm0(ptr, len) {
     return cachedTextDecoder.decode(getUint8ArrayMemory0().slice(ptr, ptr + len));
 }
 
-function takeFromExternrefTable0(idx) {
-    const value = wasm.__wbindgen_export_5.get(idx);
-    wasm.__externref_table_dealloc(idx);
-    return value;
-}
-/**
- * Trial-decrypt a `/notes/compact` Sapling chunk against `ufvk`.
- *
- * Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
- * @param {string} network
- * @param {string} ufvk
- * @param {any} notes
- * @returns {any}
- */
-export function try_decrypt_sapling(network, ufvk, notes) {
-    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt_sapling(ptr0, len0, ptr1, len1, notes);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
-
 function passArray8ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 1, 1) >>> 0;
     getUint8ArrayMemory0().set(arg, ptr / 1);
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }
+
+function takeFromExternrefTable0(idx) {
+    const value = wasm.__wbindgen_export_5.get(idx);
+    wasm.__externref_table_dealloc(idx);
+    return value;
+}
 /**
- * Trial-decrypt an Orchard `/ciphertexts` chunk, the raw response body,
- * against `ufvk`.
+ * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
+ * against `ufvk`. `chunk` is its number, which fixes each note's position.
  *
  * Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
  * @param {string} network
  * @param {string} ufvk
+ * @param {string} pool
+ * @param {number} chunk
  * @param {Uint8Array} body
  * @returns {any}
  */
-export function try_decrypt_orchard(network, ufvk, body) {
+export function try_decrypt(network, ufvk, pool, chunk, body) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
+    const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt_orchard(ptr0, len0, ptr1, len1, ptr2, len2);
+    const ptr3 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
