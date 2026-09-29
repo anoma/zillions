@@ -64,22 +64,20 @@ export async function fetchFullNotes(chunk: number, pool: Pool) {
 }
 
 /**
- * `birthday` (a block height) raises each pool's `first_chunk` to that floor.
+ * ponytail: Orchard's range on the new server, hardcoded until it serves its
+ * tree size. 3061 is the first chunk the dev index holds in full, 3080 was the
+ * tip chunk when this was set; a birthday does not move either.
+ */
+const ORCHARD_CHUNKS = { first_chunk: 3061, last_chunk: 3080 };
+
+/**
+ * `birthday` (a block height) raises Sapling's `first_chunk` to that floor.
  * Orchard's range is on the new server's grid, Sapling's on the old one's.
  */
 export async function fetchChunks(birthday?: number) {
   const query = birthday === undefined ? "" : `?birthday=${birthday}`;
   const chunks = await get<ChunksData>(`${CRAWLER_URL}/chunks${query}`);
-  // ponytail: read off the old server until the new one serves a range.
-  // Rounding the floor up skips the chunk the index starts partway through,
-  // which the new server refuses; with a birthday it can also skip up to three
-  // old chunks just above it.
-  const ratio = CHUNK_SIZE / OLD_CHUNK_SIZE;
-  chunks.orchard = {
-    first_chunk: Math.ceil(chunks.orchard.first_chunk / ratio),
-    last_chunk: Math.floor(chunks.orchard.last_chunk / ratio),
-  };
-  return chunks;
+  return { ...chunks, orchard: ORCHARD_CHUNKS };
 }
 
 /** A revealed nullifier's leading bytes, with the transaction that revealed it. */
