@@ -181,8 +181,8 @@ export type IpcContract = {
       flow: AccountFlow;
       path: Bip44Path;
       /**
-       * Key material derived OFFLINE in the setup tab by the wallet façade
-       * (@zillions-sdk/keys). Persisted so storage reflects the real
+       * Key material derived OFFLINE in the setup tab by @zillions/zcore.
+       * Persisted so storage reflects the real
        * receivers / viewing key rather than re-deriving in the (vault) backend.
        */
       transparentAddress: string;

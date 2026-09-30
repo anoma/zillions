@@ -75,8 +75,8 @@ const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
   ];
 
   // nodePolyfills injects shim imports into every module that touches
-  // `global`/`Buffer`, including the workspace-linked @zillions-sdk/keys.
-  // Those injected specifiers can't resolve from the SDK package's own
+  // `global`/`Buffer`, including workspace-linked ones like @zillions/zcore.
+  // Those injected specifiers can't resolve from a linked package's own
   // directory under pnpm's strict layout, so pin them to our copy.
   const polyfillShims = ["global", "buffer", "process"].map((shim) => ({
     find: new RegExp(`^vite-plugin-node-polyfills/shims/${shim}$`),
@@ -110,7 +110,7 @@ export default defineConfig({
     action: {
       default_title: "Zillions Keychain",
     },
-    // WebAssembly (@zillions/crypto, @zillions-sdk/keys) compiles in the
+    // WebAssembly (@zillions/crypto, @zillions/zcore) compiles in the
     // service worker and extension pages, which the default MV3 CSP
     // (`script-src 'self'`) forbids. `'wasm-unsafe-eval'` is the only addition
     // Chrome MV3 allows for this and is what enables WASM instantiation.
@@ -118,13 +118,11 @@ export default defineConfig({
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
     },
     // `injected.js` is the MAIN-world provider script the content script
-    // injects into pages (sets `window.zc`). WASM: `crypto_bg.wasm`
-    // (@zillions/crypto) is small and inlined; `zillions_sdk_keys_bg.wasm`
-    // (@zillions-sdk/keys, ~2 MB) is emitted as a file the page fetches —
-    // list both so resolution is explicit.
+    // injects into pages (sets `window.zc`), and `crypto_bg.wasm`
+    // (@zillions/crypto). zcore's wasm only loads in extension pages.
     web_accessible_resources: [
       {
-        resources: ["injected.js", "crypto_bg.wasm", "zillions_sdk_keys_bg.wasm"],
+        resources: ["injected.js", "crypto_bg.wasm"],
         matches: ["<all_urls>"],
       },
     ],

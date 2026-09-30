@@ -3,5 +3,3 @@ packages:
   - packages/*
   - apps/keychain
   - apps/keychain/src/packages/types
-  - sdk
-  - sdk/packages/*

@@ -5,8 +5,6 @@
   "bootstrap-sha": "8f06b7db724744241336f61e417c24dec720090f",
   "packages": {
     "apps/app": {},
-    "apps/keychain": {},
-    "sdk/packages/zillions-sdk-sapling-params": {},
-    "sdk/packages/zillions-sdk": {}
+    "apps/keychain": {}
   }
 }
