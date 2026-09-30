@@ -409,19 +409,30 @@ pub(crate) mod tests {
 
     /// An Ironwood note of `value` to our own address, mined at `height`.
     pub(crate) fn ironwood_note(value: u64, height: u32, position: u64) -> NoteData {
+        orchard_family_note("ironwood", Scope::External, value, height, position)
+    }
+
+    /// An Orchard (`"orchard"`, V2) or Ironwood (V3) note of `value` to our
+    /// own address on `scope`, mined at `height`.
+    pub(crate) fn orchard_family_note(pool: &str, scope: Scope, value: u64, height: u32, position: u64) -> NoteData {
         let usk = UnifiedSpendingKey::from_seed(&Network::MainNetwork, &SEED, AccountId::ZERO).unwrap();
         let fvk = usk.to_unified_full_viewing_key().orchard().unwrap().clone();
         let rho = Rho::from_bytes(&[position as u8 + 1; 32].map(|b| b & 0x3f)).unwrap();
         let rseed = RandomSeed::from_bytes([position as u8; 32], &rho).unwrap();
+        let version = if pool == "orchard" { orchard::NoteVersion::V2 } else { orchard::NoteVersion::V3 };
         let note = orchard::Note::from_parts(
-            fvk.address_at(0u32, Scope::External),
+            fvk.address_at(0u32, scope),
             orchard::value::NoteValue::from_raw(value),
             rho,
             rseed,
-            orchard::NoteVersion::V3,
+            version,
         )
         .unwrap();
-        NoteData::for_tests("ironwood", crate::notes::encode_orchard(&note), position, height)
+        let mut data = NoteData::for_tests(pool, crate::notes::encode_orchard(&note), position, height);
+        if scope == Scope::Internal {
+            data.set_internal();
+        }
+        data
     }
 
     fn wallet(notes: Vec<NoteData>) -> Wallet {

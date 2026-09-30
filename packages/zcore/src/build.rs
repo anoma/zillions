@@ -426,25 +426,29 @@ pub(crate) fn pczt<N>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::send::tests::{ironwood_note, wallet_ufvk, SEED, TIP};
+    use crate::send::tests::{orchard_family_note, wallet_ufvk, SEED, TIP};
     use crate::wallet::WalletData;
     use orchard::note::ExtractedNoteCommitment;
 
-    /// A wallet with one Ironwood note at `position` 3 of a five-leaf tree, and
-    /// that tree as ziziphus would serve it.
-    pub(crate) fn wallet_and_trees(value: u64) -> (Wallet, Trees, orchard::Anchor) {
-        let data = ironwood_note(value, TIP - 100, 3);
-        let note = crate::notes::decode_orchard(&data.note_hex(), orchard::NoteVersion::V3).unwrap();
+    /// A wallet with one note of `pool` (`"orchard"` or `"ironwood"`) at
+    /// `position` 3 of a five-leaf tree, and that tree as ziziphus serves it.
+    pub(crate) fn wallet_and_trees(pool: &str, value: u64) -> (Wallet, Trees, orchard::Anchor) {
+        let data = orchard_family_note(pool, zip32::Scope::External, value, TIP - 100, 3);
+        let version = if pool == "orchard" { orchard::NoteVersion::V2 } else { orchard::NoteVersion::V3 };
+        let note = crate::notes::decode_orchard(&data.note_hex(), version).unwrap();
         let ours = MerkleHashOrchard::from_cmx(&ExtractedNoteCommitment::from(note.commitment()));
         let leaves: Vec<_> = (0..5u64)
             .map(|i| if i == 3 { ours } else { crate::witness::tests::leaf(i) })
             .collect();
         let tip = crate::witness::tests::snapshot(&leaves);
         let anchor = orchard::Anchor::from(Tip::<MerkleHashOrchard>::new(&tip).unwrap().root());
-        let trees = Trees::from([(
+        // Change and payments may land in Ironwood whatever the note's pool.
+        let empty = crate::witness::tests::snapshot::<MerkleHashOrchard>(&[]);
+        let mut trees = Trees::from([(
             "ironwood".to_string(),
-            TreeData { tip: postcard::to_allocvec(&tip).unwrap(), chunks: HashMap::new() },
+            TreeData { tip: postcard::to_allocvec(&empty).unwrap(), chunks: HashMap::new() },
         )]);
+        trees.insert(pool.to_string(), TreeData { tip: postcard::to_allocvec(&tip).unwrap(), chunks: HashMap::new() });
         let wallet = Wallet::new(Network::MainNetwork, &WalletData { tip: TIP, notes: vec![data], utxos: vec![] }).unwrap();
         (wallet, trees, anchor)
     }
@@ -498,6 +502,26 @@ mod tests {
         assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);
     }
 
+    /// An Orchard note after NU6.3: its bundle may only return value to the
+    /// note's own address, so upstream's plan and our build must route the
+    /// payment and change so the restricted bundle still proves and verifies.
+    #[test]
+    fn sends_from_orchard_after_nu6_3_end_to_end() {
+        let (wallet, trees, _) = wallet_and_trees("orchard", 200_000);
+        let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
+        let to = crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1).unwrap().remove(0);
+        let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
+        let signed = crate::roles::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
+        let (_, raw) = crate::roles::prove(signed, None).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
+        let orchard = tx.orchard_bundle().expect("the note is spent from Orchard");
+        // Post-NU6.3 Orchard bundles carry the cross-address restriction.
+        assert!(!orchard.flags().cross_address_enabled());
+        assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);
+    }
+
     #[test]
     fn sends_from_sapling_end_to_end() {
         sapling_send(false);
@@ -545,7 +569,7 @@ mod tests {
 
     #[test]
     fn builds_a_pczt_spending_an_ironwood_note() {
-        let (wallet, trees, anchor) = wallet_and_trees(200_000);
+        let (wallet, trees, anchor) = wallet_and_trees("ironwood", 200_000);
         let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
         let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
         let to = crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1).unwrap().remove(0);
@@ -563,7 +587,7 @@ mod tests {
     /// Ironwood proof and signatures the extractor verifies.
     #[test]
     fn sends_from_ironwood_end_to_end() {
-        let (wallet, trees, _) = wallet_and_trees(200_000);
+        let (wallet, trees, _) = wallet_and_trees("ironwood", 200_000);
         let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
         let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
         let to = crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1).unwrap().remove(0);

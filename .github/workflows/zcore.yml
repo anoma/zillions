@@ -1,0 +1,48 @@
+name: zcore
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "packages/zcore/**"
+      - "packages/sapling-params/**"
+      - ".github/workflows/zcore.yml"
+  pull_request:
+    paths:
+      - "packages/zcore/**"
+      - "packages/sapling-params/**"
+      - ".github/workflows/zcore.yml"
+  # Advisories land without our code changing.
+  schedule:
+    - cron: "0 6 * * *"
+
+jobs:
+  test:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/zcore
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/zcore
+      # Release: the end-to-end tests build Halo2 keys and Groth16 proofs.
+      - run: cargo test --release --locked
+
+  audit:
+    runs-on: ubuntu-latest
+    # Findings are reported as check runs, and as issues on scheduled runs.
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: packages/zcore

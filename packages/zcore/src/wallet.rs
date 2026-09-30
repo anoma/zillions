@@ -463,3 +463,91 @@ impl Wallet {
         })
     }
 }
+
+/// Selection pinned to `zcash_client_sqlite` 0.22's rules, which the adapter
+/// mirrors: if a bump changes them upstream, these name what to re-check.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::send::tests::{orchard_family_note, wallet_ufvk, TIP};
+
+    fn wallet(notes: Vec<NoteData>, utxos: Vec<UtxoData>) -> Wallet {
+        Wallet::new(Network::MainNetwork, &WalletData { tip: TIP, notes, utxos }).unwrap()
+    }
+
+    fn target() -> TargetHeight {
+        TargetHeight::from(BlockHeight::from(TIP + 1))
+    }
+
+    fn picked(wallet: &Wallet, value: TargetValue) -> Vec<(u64, u64)> {
+        let notes = wallet
+            .select_spendable_notes(ACCOUNT, value, &[ShieldedPool::Ironwood], target(), ConfirmationsPolicy::default(), &[], LockFilter::Unfiltered)
+            .unwrap();
+        notes.ironwood().iter().map(|n| (u64::from(n.note_commitment_tree_position()), n.note().value().inner())).collect()
+    }
+
+    fn at_least(z: u64) -> TargetValue {
+        TargetValue::AtLeast(Zatoshis::from_u64(z).unwrap())
+    }
+
+    #[test]
+    fn dust_is_never_selected() {
+        let note = |value, position| orchard_family_note("ironwood", Scope::External, value, TIP - 100, position);
+        // Exactly the marginal fee is still dust: sqlite keeps `value > MARGINAL_FEE`.
+        let wallet = wallet(vec![note(5_000, 1), note(5_001, 2), note(200_000, 3)], vec![]);
+        let all = picked(&wallet, TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable));
+        assert_eq!(all, [(2, 5_001), (3, 200_000)]);
+    }
+
+    #[test]
+    fn oldest_notes_first_until_covered() {
+        let note = |position| orchard_family_note("ironwood", Scope::External, 50_000, TIP - 100, position);
+        let wallet = wallet(vec![note(7), note(3), note(5)], vec![]);
+        // 60,000 needs two notes: the two oldest, not the first listed.
+        assert_eq!(picked(&wallet, at_least(60_000)), [(3, 50_000), (5, 50_000)]);
+    }
+
+    #[test]
+    fn change_is_spendable_sooner_than_received_funds() {
+        // Upstream: trusted (our own change) needs 3 confirmations, anything
+        // received from outside needs 10.
+        let received = orchard_family_note("ironwood", Scope::External, 50_000, TIP - 5, 1);
+        let change = orchard_family_note("ironwood", Scope::Internal, 50_000, TIP - 5, 2);
+        let wallet = wallet(vec![received, change], vec![]);
+        assert_eq!(picked(&wallet, at_least(10_000)), [(2, 50_000)]);
+    }
+
+    #[test]
+    fn largest_coins_first_until_covered_after_fee() {
+        let ours = crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 0, 1).unwrap().remove(0);
+        let utxos = vec![
+            UtxoData::for_tests(&ours, 30_000, 0, TIP - 50),
+            UtxoData::for_tests(&ours, 200_000, 1, TIP - 50),
+            UtxoData::for_tests(&ours, 80_000, 2, TIP - 50),
+            // Dust never goes in.
+            UtxoData::for_tests(&ours, 5_000, 3, TIP - 50),
+        ];
+        let wallet = wallet(vec![], utxos);
+        let pick = |goal| {
+            wallet
+                .select_spendable_transparent_outputs(
+                    ACCOUNT,
+                    target(),
+                    ConfirmationsPolicy::default(),
+                    zcash_client_backend::data_api::CoinbaseFilter::default(),
+                    None,
+                    goal,
+                    10,
+                    &StandardFeeRule::Zip317,
+                    LockFilter::Unfiltered,
+                )
+                .unwrap()
+                .iter()
+                .map(|o| u64::from(o.value()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(pick(at_least(50_000)), [200_000]);
+        assert_eq!(pick(at_least(250_000)), [200_000, 80_000]);
+        assert_eq!(pick(TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable)), [200_000, 80_000, 30_000]);
+    }
+}
