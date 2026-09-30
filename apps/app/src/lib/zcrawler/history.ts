@@ -72,9 +72,9 @@ export function buildHistory(
         memo: details?.memo,
         timestamp: undefined,
         pool: pools.size === 1 ? [...pools][0] : "mixed",
-        // The recipient is raw diversified bytes; encoding them needs the
-        // address encoder, so the badge reads "Shielded" until it lands.
-        to_address: undefined,
+        // Only a send knows its counterparty: on the receiving side the
+        // recipient is our own address, and the sender is never revealed.
+        to_address: sent.length ? details.recipient : undefined,
         from_address: undefined,
       };
     });
