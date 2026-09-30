@@ -25,14 +25,14 @@ use orchard::note::ExtractedNoteCommitment as OrchardCmx;
 use orchard::note::Nullifier;
 use orchard::keys::PreparedIncomingViewingKey as OrchardIvk;
 use orchard::note_encryption::{
-    CompactAction, DomainVersion, IronwoodVersion, NoteEncryptionDomain, OrchardDomain, OrchardVersion,
+    CompactAction, DomainVersion, IronwoodVersion, NoteEncryptionDomain, OrchardVersion,
 };
 use sapling::note::ExtractedNoteCommitment as SaplingCmu;
 use sapling::note_encryption::{CompactOutputDescription, SaplingDomain, Zip212Enforcement};
 use zcash_keys::address::{Address, UnifiedAddress};
 use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_note_encryption::{
-    batch, try_output_recovery_with_ovk, BatchDomain, EphemeralKeyBytes, ShieldedOutput,
+    batch, try_output_recovery_with_ovk, BatchDomain, Domain, EphemeralKeyBytes, ShieldedOutput,
     COMPACT_NOTE_SIZE, ENC_CIPHERTEXT_SIZE, OUT_CIPHERTEXT_SIZE,
 };
 use zcash_primitives::transaction::components::sapling::zip212_enforcement;
@@ -90,7 +90,10 @@ impl ShieldedOutput<SaplingDomain, ENC_CIPHERTEXT_SIZE> for FullOutput<SaplingCm
     }
 }
 
-impl ShieldedOutput<OrchardDomain, ENC_CIPHERTEXT_SIZE> for FullOutput<OrchardCmx> {
+impl<V: DomainVersion> ShieldedOutput<NoteEncryptionDomain<V>, ENC_CIPHERTEXT_SIZE> for FullOutput<OrchardCmx>
+where
+    NoteEncryptionDomain<V>: Domain<ExtractedCommitmentBytes = [u8; 32]>,
+{
     fn ephemeral_key(&self) -> EphemeralKeyBytes {
         self.eph_key.clone()
     }
@@ -376,6 +379,108 @@ where
     Ok(Compact { count, min_height, hits })
 }
 
+/// Orchard and Ironwood full decryption, told apart by the note plaintext
+/// version `V` accepts; see [`decrypt_orchard`].
+fn decrypt_full_orchard<V: DomainVersion>(
+    network: &Network,
+    fvk: &orchard::keys::FullViewingKey,
+    pool: &'static str,
+    notes: &[FullNote],
+) -> Result<FullChunk, String>
+where
+    NoteEncryptionDomain<V>: BatchDomain<
+        IncomingViewingKey = OrchardIvk,
+        OutgoingViewingKey = orchard::keys::OutgoingViewingKey,
+        ValueCommitment = orchard::value::ValueCommitment,
+        Note = orchard::Note,
+        Recipient = orchard::Address,
+        Memo = [u8; 512],
+        ExtractedCommitmentBytes = [u8; 32],
+    >,
+{
+    let mut hits = Vec::new();
+    let mut sent = Vec::new();
+    // Outputs that decrypt as ours: change, so never an outgoing payment.
+    let mut mine = vec![false; notes.len()];
+
+    // Each action carries its own rho, so the domain is per-output.
+    let ivks = orchard_ivks(fvk);
+    let outputs = notes
+        .iter()
+        .map(|n| {
+            let cm = Option::<OrchardCmx>::from(OrchardCmx::from_bytes(&hex_n(&n.cmu)?))
+                .ok_or("bad orchard commitment")?;
+            let enc: [u8; ENC_CIPHERTEXT_SIZE] = hex_n(&n.enc_ciphertext)?;
+            let eph_key = EphemeralKeyBytes(hex_n(&n.eph_key)?);
+            // The domain is only constructible from an action, so the
+            // compact prefix of this ciphertext stands in for one.
+            let head = enc[..52].try_into().map_err(|_| "short ciphertext")?;
+            let action = CompactAction::from_parts(
+                Option::<Nullifier>::from(Nullifier::from_bytes(&hex_n(&n.rho)?))
+                    .ok_or("bad orchard nullifier")?,
+                cm,
+                eph_key.clone(),
+                head,
+            );
+            Ok((
+                NoteEncryptionDomain::<V>::for_compact_action(&action),
+                FullOutput { eph_key, cm, enc },
+            ))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    for (i, res) in batch::try_note_decryption(&ivks, &outputs)
+        .into_iter()
+        .enumerate()
+    {
+        if let Some(((note, addr, memo), scope_idx)) = res {
+            mine[i] = true;
+            hits.push(FullHit {
+                pool,
+                scope: SCOPES[scope_idx].0,
+                value: note.value().inner(),
+                nf_mine: hex::encode(note.nullifier(fvk).to_bytes()),
+                memo: memo_text(&memo),
+                recipient: encode_orchard(network, &addr),
+                height: notes[i].height,
+                tx_index: notes[i].tx_index,
+                position: notes[i].position,
+            });
+        }
+    }
+
+    let ovks: Vec<_> = SCOPES.iter().map(|(_, s)| fvk.to_ovk(*s)).collect();
+    for (i, (domain, output)) in outputs.iter().enumerate() {
+        let Some((cv, out)) = outgoing_parts(&notes[i])? else {
+            continue;
+        };
+        if mine[i] {
+            continue;
+        }
+        let Some(cv) = Option::from(orchard::value::ValueCommitment::from_bytes(&cv)) else {
+            continue;
+        };
+        for ovk in &ovks {
+            if let Some((note, addr, memo)) =
+                try_output_recovery_with_ovk(domain, ovk, output, &cv, &out)
+            {
+                sent.push(SentOutput {
+                    pool,
+                    value: note.value().inner(),
+                    recipient: encode_orchard(network, &addr),
+                    memo: memo_text(&memo),
+                    height: notes[i].height,
+                    tx_index: notes[i].tx_index,
+                    position: notes[i].position,
+                });
+                break;
+            }
+        }
+    }
+
+    Ok(FullChunk { hits, sent })
+}
+
 fn decrypt_full(
     network: &str,
     ufvk: &str,
@@ -384,6 +489,11 @@ fn decrypt_full(
 ) -> Result<FullChunk, String> {
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+    match (pool, ufvk.orchard()) {
+        ("orchard", Some(fvk)) => return decrypt_full_orchard::<OrchardVersion>(&network, fvk, "orchard", notes),
+        ("ironwood", Some(fvk)) => return decrypt_full_orchard::<IronwoodVersion>(&network, fvk, "ironwood", notes),
+        _ => {}
+    }
 
     let mut hits = Vec::new();
     let mut sent = Vec::new();
@@ -468,83 +578,6 @@ fn decrypt_full(
         }
     }
 
-    // Orchard: each action carries its own rho, so the domain is per-output.
-    if let ("orchard", Some(fvk)) = (pool, ufvk.orchard()) {
-        let ivks = orchard_ivks(fvk);
-        let outputs = notes
-            .iter()
-            .map(|n| {
-                let cm = Option::<OrchardCmx>::from(OrchardCmx::from_bytes(&hex_n(&n.cmu)?))
-                    .ok_or("bad orchard commitment")?;
-                let enc: [u8; ENC_CIPHERTEXT_SIZE] = hex_n(&n.enc_ciphertext)?;
-                let eph_key = EphemeralKeyBytes(hex_n(&n.eph_key)?);
-                // OrchardDomain is only constructible from an action, so the
-                // compact prefix of this ciphertext stands in for one.
-                let head = enc[..52].try_into().map_err(|_| "short ciphertext")?;
-                let action = CompactAction::from_parts(
-                    Option::<Nullifier>::from(Nullifier::from_bytes(&hex_n(&n.rho)?))
-                        .ok_or("bad orchard nullifier")?,
-                    cm,
-                    eph_key.clone(),
-                    head,
-                );
-                Ok((
-                    OrchardDomain::for_compact_action(&action),
-                    FullOutput { eph_key, cm, enc },
-                ))
-            })
-            .collect::<Result<Vec<_>, String>>()?;
-
-        for (i, res) in batch::try_note_decryption(&ivks, &outputs)
-            .into_iter()
-            .enumerate()
-        {
-            if let Some(((note, addr, memo), scope_idx)) = res {
-                mine[i] = true;
-                hits.push(FullHit {
-                    pool: "orchard",
-                    scope: SCOPES[scope_idx].0,
-                    value: note.value().inner(),
-                    nf_mine: hex::encode(note.nullifier(fvk).to_bytes()),
-                    memo: memo_text(&memo),
-                    recipient: encode_orchard(&network, &addr),
-                    height: notes[i].height,
-                    tx_index: notes[i].tx_index,
-                    position: notes[i].position,
-                });
-            }
-        }
-
-        let ovks: Vec<_> = SCOPES.iter().map(|(_, s)| fvk.to_ovk(*s)).collect();
-        for (i, (domain, output)) in outputs.iter().enumerate() {
-            let Some((cv, out)) = outgoing_parts(&notes[i])? else {
-                continue;
-            };
-            if mine[i] {
-                continue;
-            }
-            let Some(cv) = Option::from(orchard::value::ValueCommitment::from_bytes(&cv)) else {
-                continue;
-            };
-            for ovk in &ovks {
-                if let Some((note, addr, memo)) =
-                    try_output_recovery_with_ovk(domain, ovk, output, &cv, &out)
-                {
-                    sent.push(SentOutput {
-                        pool: "orchard",
-                        value: note.value().inner(),
-                        recipient: encode_orchard(&network, &addr),
-                        memo: memo_text(&memo),
-                        height: notes[i].height,
-                        tx_index: notes[i].tx_index,
-                        position: notes[i].position,
-                    });
-                    break;
-                }
-            }
-        }
-    }
-
     Ok(FullChunk { hits, sent })
 }
 
@@ -583,7 +616,7 @@ pub fn try_decrypt_full(
     pool: &str,
     notes: JsValue,
 ) -> Result<JsValue, JsError> {
-    if pool != "sapling" && pool != "orchard" {
+    if !["sapling", "orchard", "ironwood"].contains(&pool) {
         return Err(JsError::new("unknown pool"));
     }
     let notes: Vec<FullNote> =
@@ -677,6 +710,23 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!((hits[0].pool, hits[0].scope, hits[0].value), ("ironwood", "external", 123_456));
         assert!(decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body).expect("runs").hits.is_empty());
+
+        // The whole ciphertext through the full path: same answer, plus where it sits.
+        let full = FullNote {
+            cmu: hex::encode(ExtractedNoteCommitment::from(note.commitment()).to_bytes()),
+            enc_ciphertext: hex::encode(enc),
+            eph_key: hex::encode(IronwoodDomain::epk_bytes(encryption.epk()).0),
+            height: 3_430_000,
+            position: 7,
+            tx_index: 2,
+            rho: hex::encode(rho_bytes),
+            out_ciphertext: String::new(),
+            cv: String::new(),
+        };
+        let chunk = decrypt_full("main", &ufvk, "ironwood", std::slice::from_ref(&full)).expect("runs");
+        assert_eq!(chunk.hits.len(), 1);
+        assert_eq!((chunk.hits[0].pool, chunk.hits[0].value, chunk.hits[0].position), ("ironwood", 123_456, 7));
+        assert!(decrypt_full("main", &ufvk, "orchard", &[full]).expect("runs").hits.is_empty());
     }
 
     #[test]

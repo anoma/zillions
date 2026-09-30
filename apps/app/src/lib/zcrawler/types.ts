@@ -1,6 +1,6 @@
 /** Shared message and result types across the zcrawler main ↔ worker boundary. */
 
-export type Pool = "sapling" | "orchard";
+export type Pool = "sapling" | "orchard" | "ironwood";
 
 /** A note this wallet owns, as `try_decrypt_full` reads it out of a chunk. */
 export interface DecryptedNote {

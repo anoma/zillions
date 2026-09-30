@@ -9,7 +9,8 @@ import type { ChunkWorkerSuccess, Note, Pool, Sent, SyncStatus } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
 
-const POOLS = ["orchard", "sapling"] as const satisfies Pool[];
+/** Newest pool first: that's where recent activity lands. */
+const POOLS = ["ironwood", "orchard", "sapling"] as const satisfies Pool[];
 
 const percentageOf = (scanned: SyncStatus["scanned"], chunks: ChunksData) => {
   const done = POOLS.reduce(
@@ -26,7 +27,11 @@ const percentageOf = (scanned: SyncStatus["scanned"], chunks: ChunksData) => {
 const emptySyncStatus = (accountId: string): SyncStatus => ({
   id: accountId,
   percentage: 0,
-  scanned: { sapling: { from: 0, to: -1 }, orchard: { from: 0, to: -1 } },
+  scanned: {
+    ironwood: { from: 0, to: -1 },
+    orchard: { from: 0, to: -1 },
+    sapling: { from: 0, to: -1 },
+  },
 });
 
 export class ZWallet {

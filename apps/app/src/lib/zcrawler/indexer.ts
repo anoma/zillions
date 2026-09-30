@@ -18,16 +18,10 @@ const PREFIX_LENGTH = 6;
 export const CHUNK_SIZE = 2 ** 14;
 export const OLD_CHUNK_SIZE = 4096;
 
-export interface ChunksData {
-  orchard: {
-    first_chunk: number;
-    last_chunk: number;
-  };
-  sapling: {
-    first_chunk: number;
-    last_chunk: number;
-  };
-}
+export type ChunksData = Record<
+  Pool,
+  { first_chunk: number; last_chunk: number }
+>;
 
 async function fetchOk(url: string) {
   const res = await fetch(url);
@@ -61,6 +55,7 @@ export async function fetchFullNotes(chunk: number, pool: Pool) {
  * last was the tip chunk when this was set.
  */
 export const CHUNKS: ChunksData = {
+  ironwood: { first_chunk: 0, last_chunk: 39 },
   orchard: { first_chunk: 3061, last_chunk: 3080 },
   sapling: { first_chunk: 4513, last_chunk: 4514 },
 };

@@ -23,7 +23,7 @@ export type TransactionReceipt = {
   status: "Confirmed" | "Pending" | "Expired";
   memo: string | undefined;
   timestamp?: number;
-  pool: "orchard" | "sapling" | "transparent" | "mixed";
+  pool: "ironwood" | "orchard" | "sapling" | "transparent" | "mixed";
   to_address: string | undefined;
   from_address: string | undefined;
 };
