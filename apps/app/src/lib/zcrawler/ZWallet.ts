@@ -12,6 +12,13 @@ import {
 import { buildHistory, historyHeights } from "./history";
 import { type ChunksData, fetchChunks, fetchNullifiers } from "./indexer";
 import { type Block, fetchBlock } from "./lightwalletd";
+import {
+  maxSend,
+  planSend,
+  sendPczt,
+  type SendRequest,
+  type WalletData,
+} from "./send";
 import { proposeShield } from "./shield";
 import {
   type OwnUtxo,
@@ -340,6 +347,40 @@ export class ZWallet {
       ),
     };
   }
+
+  /** What a send may spend: unspent notes and UTXOs, at the chain tip. */
+  #walletData = (): WalletData => {
+    const { utxos, tip } = this.#transparent;
+    invariant(tip !== undefined, "The wallet is still syncing");
+    return {
+      tip,
+      notes: this.#notes
+        .filter((n) => n.spent === false)
+        .map((n) => ({
+          pool: n.pool,
+          scope: n.scope,
+          note: n.note,
+          output_index: n.output_index,
+          position: n.position,
+          height: n.height,
+          // Only names the note: a block not fetched yet mustn't hold a send up.
+          txid:
+            this.#blocks.get(n.height)?.txids.get(n.tx_index) ??
+            n.position.toString(16).padStart(64, "0"),
+        })),
+      utxos,
+    };
+  };
+
+  planSend = (send: SendRequest) => planSend(this.#walletData(), send);
+
+  maxSend = (send: SendRequest) => maxSend(this.#walletData(), send);
+
+  /** The unsigned PCZT for `send`, for the keychain account that signs it. */
+  sendPczt = (
+    send: SendRequest,
+    account: { seedFingerprint: string; hdIndex: number },
+  ) => sendPczt(this.#walletData(), send, this.#ufvk, account);
 
   /** An unsigned PCZT shielding every transparent coin, for the next block. */
   proposeShield = (account: { seedFingerprint: string; hdIndex: number }) => {

@@ -72,4 +72,6 @@ export const shortenAddress = (
 
 export const isTransparentAddress = (s: string): boolean => s.startsWith("t");
 
-export const isShieldedAddress = (s: string): boolean => s.startsWith("u");
+/** Unified (`u1…`) or Sapling (`zs1…`) addresses, on either network. */
+export const isShieldedAddress = (s: string): boolean =>
+  s.startsWith("u") || s.startsWith("zs") || s.startsWith("ztestsapling");

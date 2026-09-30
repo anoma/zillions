@@ -81,6 +81,32 @@ export async function fetchChunks(): Promise<ChunksData> {
   ) as ChunksData;
 }
 
+/**
+ * A pool's note commitment tree at ziziphus's tip, raw, and how many notes it
+ * holds. The tip moves with every block, so a snapshot gone stale between the
+ * redirect and the read is asked for again.
+ */
+export async function fetchTreeTip(pool: Pool) {
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(`${WEBSERVER_URL}/${pool}/tip`);
+    if (res.ok) {
+      const size = Number(new URL(res.url).pathname.split("/").pop());
+      return { size, body: new Uint8Array(await res.arrayBuffer()) };
+    }
+    if (res.status !== 404 || attempt === 3) {
+      throw new Error(`HTTP ${res.status} ${pool} tree tip`);
+    }
+  }
+}
+
+/** A frozen chunk of a pool's tree, raw. Immutable, so the HTTP cache keeps it. */
+export async function fetchTreeChunk(pool: Pool, chunk: number) {
+  const res = await fetchOk(`${WEBSERVER_URL}/${pool}/trees/${chunk}`);
+  if (res.status === 202)
+    throw new Error(`${pool} tree chunk ${chunk} isn't frozen yet`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 /** A revealed nullifier's leading bytes, with the transaction that revealed it. */
 export type SpentNullifier = TxLocator & { nf_tag: string };
 

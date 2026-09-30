@@ -41,6 +41,11 @@ export function TotalBalance() {
           )}
         </div>
         <div className="flex gap-2">
+          <Link to="/send">
+            <ActionButton size="sm" className="w-50">
+              Send
+            </ActionButton>
+          </Link>
           <Link to="/receive">
             <ActionButton size="sm" className="w-50" outlineColor="black">
               Receive
@@ -53,6 +58,14 @@ export function TotalBalance() {
         <div className="my-3 lg:my-6">
           <ZecValue zat={shieldedBalance} className="text-xl xl:text-3xl" />
         </div>
+        <Link
+          to="/unshield"
+          className={twMerge(!shieldedBalance && "max-lg:hidden lg:invisible")}
+        >
+          <ActionButton size="xs" outlineColor="black">
+            Unshield
+          </ActionButton>
+        </Link>
       </div>
       <div className="lg:mr-15">
         <Label>Transparent balance</Label>
