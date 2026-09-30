@@ -1,11 +1,17 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 
+import type { Block } from "./lightwalletd";
+import type { TransparentCache } from "./transparent";
 import type { Note, Sent, SyncStatus } from "./types";
+
+type StoredBlock = Block & { height: number };
 
 export const db = new Dexie("zcrawler") as Dexie & {
   notes: Table<Note, string>;
   sent: Table<Sent, string>;
   sync: EntityTable<SyncStatus, "id">;
+  transparent: EntityTable<TransparentCache, "id">;
+  blocks: EntityTable<StoredBlock, "height">;
 };
 
 db.version(2).stores({
@@ -47,6 +53,14 @@ db.version(5)
     await tx.table("sync").clear();
   });
 
+db.version(6).stores({
+  notes: "id",
+  sent: "id",
+  sync: "id",
+  transparent: "id",
+  blocks: "height",
+});
+
 export const loadNotes = (accountId: string): Promise<Note[]> =>
   db.notes.where("id").startsWith(accountId).toArray();
 
@@ -67,3 +81,14 @@ export const saveSyncState = (
     if (sent.length) await db.sent.bulkPut(sent);
     await db.sync.put(syncStatus);
   });
+
+export const loadTransparent = (accountId: string) =>
+  db.transparent.get(accountId);
+
+export const saveTransparent = (cache: TransparentCache) =>
+  db.transparent.put(cache);
+
+/** Blocks are the chain's, not an account's: every account shares them. */
+export const loadBlocks = (heights: number[]) => db.blocks.bulkGet(heights);
+
+export const saveBlocks = (blocks: StoredBlock[]) => db.blocks.bulkPut(blocks);

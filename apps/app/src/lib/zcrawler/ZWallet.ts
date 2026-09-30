@@ -1,10 +1,21 @@
 import { dedupe, singleton } from "../utils";
 import { crawlChunks } from "./crawl";
-import { loadNotes, loadSent, loadSyncStatus, saveSyncState } from "./db";
+import {
+  loadBlocks,
+  loadNotes,
+  loadSent,
+  loadSyncStatus,
+  saveBlocks,
+  saveSyncState,
+} from "./db";
 import { buildHistory, historyHeights } from "./history";
 import { type ChunksData, fetchChunks, fetchNullifiers } from "./indexer";
 import { type Block, fetchBlock, type Utxo } from "./lightwalletd";
-import { syncTransparent, type TransparentTx } from "./transparent";
+import {
+  REORG_DEPTH,
+  syncTransparent,
+  type TransparentTx,
+} from "./transparent";
 import type { ChunkWorkerSuccess, Note, Pool, Sent, SyncStatus } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
@@ -46,8 +57,8 @@ export class ZWallet {
   /** Note and sent-output ids already held, so a re-read chunk can't double them. */
   #applied: Set<string> = new Set();
   #syncStatus: SyncStatus;
-  /** The transparent side, rebuilt whole each sync. */
-  #transparent: { utxos: Utxo[]; txs: TransparentTx[] } = {
+  /** The transparent side; `tip` is absent until a sync lands. */
+  #transparent: { utxos: Utxo[]; txs: TransparentTx[]; tip?: number } = {
     utxos: [],
     txs: [],
   };
@@ -90,6 +101,7 @@ export class ZWallet {
       if (!note.spent) this.#unspentNotes.set(note.nf_mine, note);
     }
     for (const out of sent) this.#applied.add(out.id);
+    await this.#restoreBlocks([...historyHeights(notes, sent, [])]);
   });
 
   subscribeSyncProgress = (listener: SyncEventListener) => {
@@ -111,7 +123,7 @@ export class ZWallet {
 
     // Transparent takes seconds, so it lands long before the shielded crawl;
     // announcing it on arrival shows that balance straight away.
-    const transparent = syncTransparent(this.#ufvk)
+    const transparent = syncTransparent(this.id, this.#ufvk)
       .then((result) => {
         this.#transparent = result;
         this.#emitProgress();
@@ -254,18 +266,35 @@ export class ZWallet {
    * seen from both sides show once, and every entry its time.
    */
   #fetchBlocks = async () => {
-    const heights = [
+    const heights = await this.#restoreBlocks([
       ...historyHeights(this.#notes, this.#sent, this.#transparent.txs),
-    ].filter((height) => !this.#blocks.has(height));
+    ]);
     // A block that fails is simply asked for again next sync.
     const blocks = await Promise.allSettled(heights.map(fetchBlock));
+    const fetched: (Block & { height: number })[] = [];
     blocks.forEach((block, i) => {
-      if (block.status === "fulfilled")
+      if (block.status === "fulfilled") {
         this.#blocks.set(heights[i], block.value);
-      else
+        fetched.push({ ...block.value, height: heights[i] });
+      } else
         console.error("[sync] block lookup failed", heights[i], block.reason);
     });
+    // A block a reorg can still replace is only held until the page closes.
+    const { tip } = this.#transparent;
+    if (tip !== undefined) {
+      await saveBlocks(
+        fetched.filter(({ height }) => height <= tip - REORG_DEPTH),
+      ).catch((err) => console.error("[sync] block save failed", err));
+    }
     this.#emitProgress();
+  };
+
+  /** Takes the stored blocks among `heights`; returns those still missing. */
+  #restoreBlocks = async (heights: number[]) => {
+    const wanted = heights.filter((height) => !this.#blocks.has(height));
+    const stored = await loadBlocks(wanted);
+    stored.forEach((block) => block && this.#blocks.set(block.height, block));
+    return wanted.filter((height) => !this.#blocks.has(height));
   };
 
   /** Recomputes progress from the scanned window, then persists and announces it. */

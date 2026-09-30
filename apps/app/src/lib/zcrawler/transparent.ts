@@ -1,13 +1,14 @@
 /**
  * Transparent balance and history: addresses derived offline from the viewing
- * key, their activity read from lightwalletd. Nothing is persisted; a sync
- * takes seconds, so each one starts over.
+ * key, their activity read from lightwalletd. What a sync learns is kept, so
+ * the next one asks only about blocks since, and nothing at an unmoved tip.
  */
 
 import initZcore, {
   derive_transparent,
   parse_transaction,
 } from "@zillions/zcore";
+import { loadTransparent, saveTransparent } from "./db";
 import {
   fetchAddressTransactions,
   fetchLatestHeight,
@@ -22,7 +23,12 @@ const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 /** Unused addresses in a row after which a chain counts as exhausted (BIP-44). */
 const GAP_LIMIT = 20;
 
+/** Blocks below the tip a reorg can still replace; zcashd refuses deeper ones. */
+export const REORG_DEPTH = 100;
+
 const SCOPES = ["external", "internal"] as const;
+
+type Scope = (typeof SCOPES)[number];
 
 let ready: Promise<unknown> | undefined;
 
@@ -32,6 +38,32 @@ interface ParsedTx {
   inputs: { txid: string; index: number }[];
   outputs: { index: number; value: number; address?: string }[];
 }
+
+export interface TransparentCache {
+  id: string;
+  tip: number;
+  /** Heights up to here are past any reorg; the ones above are fetched again. */
+  final: number;
+  /** Per chain: the highest address index used, and how many were checked. */
+  chains: Record<Scope, { lastUsed: number; checked: number }>;
+  txs: (ParsedTx & { height: number })[];
+  /** The address an input spent from, by the `txid:index` it names. */
+  senders: Record<string, string>;
+  utxos: Utxo[];
+}
+
+const emptyCache = (id: string): TransparentCache => ({
+  id,
+  tip: 0,
+  final: 0,
+  chains: {
+    external: { lastUsed: -1, checked: 0 },
+    internal: { lastUsed: -1, checked: 0 },
+  },
+  txs: [],
+  senders: {},
+  utxos: [],
+});
 
 /** One transaction's effect on the wallet's transparent funds. */
 export interface TransparentTx {
@@ -59,53 +91,85 @@ async function senderOf(input: ParsedTx["inputs"][number]) {
 }
 
 /**
- * The used addresses on one chain, walked until `GAP_LIMIT` in a row show no
- * activity, and the transactions touching them.
+ * One chain's activity up to `tip`, until `GAP_LIMIT` addresses in a row show
+ * none; addresses already checked are asked only about blocks above `final`.
  */
 async function discover(
   ufvk: string,
-  scope: (typeof SCOPES)[number],
+  scope: Scope,
   tip: number,
+  final: number,
+  known: TransparentCache["chains"][Scope],
 ) {
-  const addresses: string[] = [];
   const txs: RawTransaction[] = [];
-  for (
-    let from = 0, lastUsed = -1;
-    from <= lastUsed + GAP_LIMIT;
-    from += GAP_LIMIT
-  ) {
+  let { lastUsed } = known;
+  let from = 0;
+  for (; from <= lastUsed + GAP_LIMIT; from += GAP_LIMIT) {
     const window = derive_transparent(NETWORK, ufvk, scope, from, GAP_LIMIT);
     const activity = await Promise.all(
-      window.map((address) => fetchAddressTransactions(address, 1, tip)),
+      window.map((address, i) =>
+        fetchAddressTransactions(
+          address,
+          from + i < known.checked ? final + 1 : 1,
+          tip,
+        ),
+      ),
     );
     activity.forEach((found, i) => {
       if (!found.length) return;
-      lastUsed = from + i;
-      addresses.push(window[i]);
+      lastUsed = Math.max(lastUsed, from + i);
       txs.push(...found);
     });
   }
-  return { addresses, txs };
+  return { txs, chain: { lastUsed, checked: from } };
 }
 
 export async function syncTransparent(
+  accountId: string,
   ufvk: string,
-): Promise<{ utxos: Utxo[]; txs: TransparentTx[] }> {
+): Promise<{ utxos: Utxo[]; txs: TransparentTx[]; tip: number }> {
   await (ready ??= initZcore());
+  const cache = (await loadTransparent(accountId)) ?? emptyCache(accountId);
   const tip = await fetchLatestHeight();
-  const chains = await Promise.all(
-    SCOPES.map((scope) => discover(ufvk, scope, tip)),
-  );
-  const addresses = chains.flatMap((chain) => chain.addresses);
-  const mine = new Set(addresses);
-  const utxos = await fetchUtxos(addresses);
 
+  const moved = tip !== cache.tip;
+  // Above `final` a reorg may have replaced them: they're fetched again.
+  const kept = moved
+    ? cache.txs.filter((tx) => tx.height <= cache.final)
+    : cache.txs;
   // A transaction touching two of our addresses arrives once for each.
-  const parsed = new Map<string, ParsedTx & { height: number }>();
-  for (const raw of chains.flatMap((chain) => chain.txs)) {
-    const tx: ParsedTx = parse_transaction(NETWORK, raw.height, raw.data);
-    parsed.set(tx.txid, { ...tx, height: raw.height });
+  const parsed = new Map(kept.map((tx) => [tx.txid, tx]));
+  let { chains, utxos } = cache;
+  if (moved) {
+    const found = await Promise.all(
+      SCOPES.map((scope) =>
+        discover(ufvk, scope, tip, cache.final, cache.chains[scope]),
+      ),
+    );
+    for (const raw of found.flatMap(({ txs }) => txs)) {
+      const tx: ParsedTx = parse_transaction(NETWORK, raw.height, raw.data);
+      parsed.set(tx.txid, { ...tx, height: raw.height });
+    }
+    chains = { external: found[0].chain, internal: found[1].chain };
   }
+
+  // Every address checked is ours, used or not.
+  const mine = new Set(
+    SCOPES.flatMap((scope) =>
+      derive_transparent(NETWORK, ufvk, scope, 0, chains[scope].checked),
+    ),
+  );
+  if (moved) utxos = await fetchUtxos([...mine]);
+
+  const { senders } = cache;
+  const sender = async (input: ParsedTx["inputs"][number]) => {
+    const key = `${input.txid}:${input.index}`;
+    if (!(key in senders)) {
+      const address = await senderOf(input).catch(() => undefined);
+      if (address) senders[key] = address;
+    }
+    return senders[key];
+  };
 
   // Each of our outputs, so the input that later spends it can be priced
   // and placed: an input names only the output it consumes.
@@ -139,9 +203,7 @@ export async function syncTransparent(
         spent: spent.reduce((sum, own) => sum + own.value, 0n),
         // Funds from outside name their sender only in the transaction that
         // paid it, so that one is fetched.
-        from:
-          spent[0]?.address ??
-          (inputs[0] && (await senderOf(inputs[0]).catch(() => undefined))),
+        from: spent[0]?.address ?? (inputs[0] && (await sender(inputs[0]))),
         // Only a payer names an outside recipient; paid to us, it's our address.
         to: spent.length
           ? (paid?.address ?? received[0]?.address)
@@ -149,5 +211,15 @@ export async function syncTransparent(
       };
     }),
   );
-  return { utxos, txs };
+
+  await saveTransparent({
+    id: accountId,
+    tip,
+    final: tip - REORG_DEPTH,
+    chains,
+    txs: [...parsed.values()],
+    senders,
+    utxos,
+  });
+  return { utxos, txs, tip };
 }
