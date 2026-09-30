@@ -16,6 +16,7 @@ import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
 import { LocalStorage } from "../../storage";
+import { buildPcztSummary, initZillionsSdk } from "../crypto/zillions";
 import { Keyring } from "../keyring";
 import { VaultService } from "../vault";
 import { AccountRepository } from "../vault/accounts";
@@ -183,9 +184,14 @@ export class ApprovalsService {
 
   // ---- trusted-UI-facing (approval popup + Connected Sites) ----
 
-  /** Display summary for a pending PCZT: returns with zcore's transaction building. */
-  async queryPcztSummary(_msgId: string): Promise<PcztSummary> {
-    throw new Error("Transaction summaries are not available yet");
+  /** Display summary for a pending PCZT. */
+  async queryPcztSummary(msgId: string): Promise<PcztSummary> {
+    const pending = this.pendingTxs.get(msgId);
+    if (!pending) {
+      throw new Error(`Transaction data not found for ${msgId}`);
+    }
+    await initZillionsSdk();
+    return buildPcztSummary(pending.pczt);
   }
 
   /** The approval popup confirmed: sign and settle the dapp's promise. */

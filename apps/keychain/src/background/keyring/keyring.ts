@@ -21,6 +21,7 @@ import {
 import {
   computeSeedFingerprint,
   initZillionsSdk,
+  signPczt,
   spendingKeys,
   type SpendingKeys,
 } from "../crypto/zillions";
@@ -106,9 +107,35 @@ export class Keyring {
     };
   }
 
-  /** Sign a PCZT: returns with zcore's transaction building. */
-  public async sign(_pczt: string, _signer?: string): Promise<string> {
-    throw new Error("Signing is not available yet");
+  /**
+   * Sign a PCZT (base64 in/out).
+   *
+   * The signing account is the `signer` address when given, else the active
+   * account. A derived shielded child carries no secret of its own — the
+   * mnemonic lives on its parent — so the secret is revealed from the parent
+   * record while the hd index comes from the resolved account's path. Only
+   * mnemonic-backed accounts can sign.
+   */
+  public async sign(pczt: string, signer?: string): Promise<string> {
+    await this.vaultService.assertIsUnlocked();
+    await initZillionsSdk();
+
+    let record: KeyStoreType | undefined;
+    if (signer) {
+      record = await this.accounts.findByAddress(signer);
+      if (!record) {
+        throw new Error(`Account for ${signer} not found!`);
+      }
+    } else {
+      const active = await this.accounts.getActiveAccount();
+      record = active ? await this.accounts.findById(active.id) : undefined;
+      if (!record) {
+        throw new Error("No active account to sign with");
+      }
+    }
+
+    const { seed, hdIndex } = await this.resolveSeed(record);
+    return signPczt(pczt, seed, hdIndex);
   }
 
   /**

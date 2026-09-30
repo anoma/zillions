@@ -1,15 +1,16 @@
 /**
  * Zcash keys from a seed, via `@zillions/zcore`: the account's viewing key
- * and default addresses, the seed fingerprint, and the spending-key reveal.
- * Offline key math, used by the setup tab and the background alike.
- *
- * Signing transactions returns with zcore's transaction building.
+ * and default addresses, the seed fingerprint, the spending-key reveal, and
+ * PCZT signing. Offline key math, used by the setup tab and the background.
  */
 import initZcore, {
   derive_account,
+  pczt_summary,
   seed_fingerprint,
+  sign_pczt,
   spending_keys,
 } from "@zillions/zcore";
+import type { PcztSummary } from "@zillions/types";
 
 let initialized: Promise<unknown> | undefined;
 
@@ -75,3 +76,42 @@ export type SpendingKeys = {
  */
 export const spendingKeys = (seed: Uint8Array, hdIndex: number): SpendingKeys =>
   spending_keys(getNetwork(), seed, hdIndex);
+
+/**
+ * A PCZT crosses the IPC boundary (provider <-> background) as base64-encoded
+ * bytes. Chunked conversion keeps large PCZTs off the call stack.
+ */
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+};
+
+const base64ToBytes = (s: string): Uint8Array =>
+  Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+/**
+ * Signs every input of `pczt` (base64) that the seed's account `hdIndex`
+ * holds; throws if it holds none.
+ */
+export const signPczt = (
+  pczt: string,
+  seed: Uint8Array,
+  hdIndex: number
+): string =>
+  bytesToBase64(sign_pczt(getNetwork(), base64ToBytes(pczt), seed, hdIndex));
+
+/** What a PCZT (base64) moves, for the approval screen. */
+export const buildPcztSummary = (pczt: string): PcztSummary => {
+  const summary = pczt_summary(getNetwork(), base64ToBytes(pczt));
+  return {
+    ...summary,
+    saplingInputs: [],
+    saplingOutputs: [],
+    orchardInputs: [],
+    raw: summary,
+  };
+};
