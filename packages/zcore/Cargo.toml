@@ -36,14 +36,19 @@ postcard = { version = "1", default-features = false }
 zcash_keys = { version = "0.16", default-features = false, features = ["orchard", "sapling", "transparent-inputs", "unstable"] }
 transparent = { package = "zcash_transparent", version = "0.10", default-features = false, features = ["transparent-inputs"] }
 zcash_protocol = "0.10"
-zcash_primitives = { version = "0.30", default-features = false }
+zcash_primitives = { version = "0.30", default-features = false, features = ["transparent-inputs"] }
+# Shielding's PCZT roles: the app creates and proves, the keychain signs.
+pczt = { version = "0.9", default-features = false, features = ["orchard", "transparent", "zcp-builder", "io-finalizer", "signer", "prover", "spend-finalizer", "tx-extractor"] }
+bip32 = { version = "=0.6.0-pre.1", default-features = false }
+rand_core = { version = "0.6", features = ["getrandom"] }
+# wasm32 has no OS randomness: the browser's crypto supplies it.
+getrandom = { version = "0.2", features = ["js"] }
 zcash_note_encryption = "0.4"
 sapling = { package = "sapling-crypto", version = "0.7", default-features = false, features = ["std"] }
-orchard = { version = "0.15", default-features = false, features = ["std"] }
+orchard = { version = "0.15", default-features = false, features = ["std", "circuit"] }
 zip32 = { version = "0.2", default-features = false }
 
 [dev-dependencies]
 # Only the tests build spending keys and encrypt notes.
 zcash_keys = { version = "0.16", features = ["orchard", "sapling", "transparent-inputs"] }
-rand_core = { version = "0.6", features = ["getrandom"] }
 serde_json = "1"

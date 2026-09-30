@@ -21,9 +21,32 @@ export function derive_transparent(network: string, ufvk: string, scope: string,
 export function parse_transaction(network: string, height: number, data: Uint8Array): any;
 
 /**
+ * What a PCZT moves: `{ network, transparentInputs, transparentOutputs,
+ * orchardOutputs, fee }`, values in zatoshis as strings.
+ */
+export function pczt_summary(network: string, pczt: Uint8Array): any;
+
+/**
+ * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`.
+ * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
+ */
+export function prove_pczt(pczt: Uint8Array): any;
+
+/**
  * The seed's ZIP-32 fingerprint, hex. Names the seed without revealing it.
  */
 export function seed_fingerprint(seed: Uint8Array): string;
+
+/**
+ * An unsigned PCZT shielding `utxos` (`[{ txid, index, value, address,
+ * scope, address_index }]`) into the account's own Ironwood address.
+ */
+export function shield_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, utxos: any, target_height: number): Uint8Array;
+
+/**
+ * The PCZT with every input the seed's account `hd_index` holds signed.
+ */
+export function sign_pczt(network: string, pczt: Uint8Array, seed: Uint8Array, hd_index: number): Uint8Array;
 
 /**
  * The account's spending secret in both encodings: `{ orchard, sapling }`.
@@ -61,7 +84,11 @@ export interface InitOutput {
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pczt_summary: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly prove_pczt: (a: number, b: number) => [number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
+    readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number) => [number, number, number, number];
+    readonly sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];

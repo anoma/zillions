@@ -16,6 +16,7 @@
 //! record layout, but V3 note plaintexts, so it decrypts in `IronwoodDomain`.
 
 mod keys;
+mod shield;
 mod transparent_tx;
 
 use serde::{Deserialize, Serialize};
@@ -197,7 +198,7 @@ fn encode_orchard(network: &Network, addr: &orchard::Address) -> String {
         .unwrap_or_else(|| hex::encode(addr.to_raw_address_bytes()))
 }
 
-fn hex_n<const N: usize>(s: &str) -> Result<[u8; N], String> {
+pub(crate) fn hex_n<const N: usize>(s: &str) -> Result<[u8; N], String> {
     let v = hex::decode(s).map_err(|e| e.to_string())?;
     v.try_into().map_err(|_| format!("expected {N} bytes"))
 }
