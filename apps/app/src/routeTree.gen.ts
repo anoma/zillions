@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TransactionsRouteImport } from './routes/transactions'
+import { Route as ShieldRouteImport } from './routes/shield'
 import { Route as ReceiveRouteImport } from './routes/receive'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TxIdRouteImport } from './routes/tx.$id'
@@ -17,6 +18,11 @@ import { Route as TxIdRouteImport } from './routes/tx.$id'
 const TransactionsRoute = TransactionsRouteImport.update({
   id: '/transactions',
   path: '/transactions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShieldRoute = ShieldRouteImport.update({
+  id: '/shield',
+  path: '/shield',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReceiveRoute = ReceiveRouteImport.update({
@@ -38,12 +44,14 @@ const TxIdRoute = TxIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/receive': typeof ReceiveRoute
+  '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
   '/tx/$id': typeof TxIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/receive': typeof ReceiveRoute
+  '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
   '/tx/$id': typeof TxIdRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/receive': typeof ReceiveRoute
+  '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
   '/tx/$id': typeof TxIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/receive' | '/transactions' | '/tx/$id'
+  fullPaths: '/' | '/receive' | '/shield' | '/transactions' | '/tx/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/receive' | '/transactions' | '/tx/$id'
-  id: '__root__' | '/' | '/receive' | '/transactions' | '/tx/$id'
+  to: '/' | '/receive' | '/shield' | '/transactions' | '/tx/$id'
+  id: '__root__' | '/' | '/receive' | '/shield' | '/transactions' | '/tx/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ReceiveRoute: typeof ReceiveRoute
+  ShieldRoute: typeof ShieldRoute
   TransactionsRoute: typeof TransactionsRoute
   TxIdRoute: typeof TxIdRoute
 }
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/transactions'
       fullPath: '/transactions'
       preLoaderRoute: typeof TransactionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shield': {
+      id: '/shield'
+      path: '/shield'
+      fullPath: '/shield'
+      preLoaderRoute: typeof ShieldRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/receive': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ReceiveRoute: ReceiveRoute,
+  ShieldRoute: ShieldRoute,
   TransactionsRoute: TransactionsRoute,
   TxIdRoute: TxIdRoute,
 }

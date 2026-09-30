@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { twMerge } from "tailwind-merge";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -58,6 +59,16 @@ export function TotalBalance() {
         <div className="my-3 lg:my-6">
           <ZecValue zat={transparentBalance} className="text-xl xl:text-3xl" />
         </div>
+        <Link
+          to="/shield"
+          className={twMerge(
+            !transparentBalance && "max-lg:hidden lg:invisible",
+          )}
+        >
+          <ActionButton size="xs" outlineColor="black">
+            Shield
+          </ActionButton>
+        </Link>
       </div>
     </div>
   );

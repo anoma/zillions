@@ -1,3 +1,4 @@
+import { invariant } from "../invariant";
 import { dedupe, singleton } from "../utils";
 import { crawlChunks } from "./crawl";
 import {
@@ -10,8 +11,10 @@ import {
 } from "./db";
 import { buildHistory, historyHeights } from "./history";
 import { type ChunksData, fetchChunks, fetchNullifiers } from "./indexer";
-import { type Block, fetchBlock, type Utxo } from "./lightwalletd";
+import { type Block, fetchBlock } from "./lightwalletd";
+import { proposeShield } from "./shield";
 import {
+  type OwnUtxo,
   REORG_DEPTH,
   syncTransparent,
   type TransparentTx,
@@ -58,7 +61,7 @@ export class ZWallet {
   #applied: Set<string> = new Set();
   #syncStatus: SyncStatus;
   /** The transparent side; `tip` is absent until a sync lands. */
-  #transparent: { utxos: Utxo[]; txs: TransparentTx[]; tip?: number } = {
+  #transparent: { utxos: OwnUtxo[]; txs: TransparentTx[]; tip?: number } = {
     utxos: [],
     txs: [],
   };
@@ -337,6 +340,13 @@ export class ZWallet {
       ),
     };
   }
+
+  /** An unsigned PCZT shielding every transparent coin, for the next block. */
+  proposeShield = (account: { seedFingerprint: string; hdIndex: number }) => {
+    const { utxos, tip } = this.#transparent;
+    invariant(tip !== undefined && utxos.length > 0, "Nothing to shield");
+    return proposeShield(this.#ufvk, account, utxos, tip + 1);
+  };
 
   async getTransactionHistory() {
     return buildHistory(

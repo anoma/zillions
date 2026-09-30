@@ -30,6 +30,9 @@ const SCOPES = ["external", "internal"] as const;
 
 type Scope = (typeof SCOPES)[number];
 
+/** A UTXO with where its address sits on the account's chains: what spending it needs. */
+export type OwnUtxo = Utxo & { scope: Scope; address_index: number };
+
 let ready: Promise<unknown> | undefined;
 
 /** `parse_transaction`'s result. Txids are in explorer byte order. */
@@ -127,7 +130,7 @@ async function discover(
 export async function syncTransparent(
   accountId: string,
   ufvk: string,
-): Promise<{ utxos: Utxo[]; txs: TransparentTx[]; tip: number }> {
+): Promise<{ utxos: OwnUtxo[]; txs: TransparentTx[]; tip: number }> {
   await (ready ??= initZcore());
   const cache = (await loadTransparent(accountId)) ?? emptyCache(accountId);
   const tip = await fetchLatestHeight();
@@ -154,12 +157,15 @@ export async function syncTransparent(
   }
 
   // Every address checked is ours, used or not.
-  const mine = new Set(
+  const mine = new Map(
     SCOPES.flatMap((scope) =>
-      derive_transparent(NETWORK, ufvk, scope, 0, chains[scope].checked),
+      derive_transparent(NETWORK, ufvk, scope, 0, chains[scope].checked).map(
+        (address, address_index) =>
+          [address, { scope, address_index }] as const,
+      ),
     ),
   );
-  if (moved) utxos = await fetchUtxos([...mine]);
+  if (moved) utxos = await fetchUtxos([...mine.keys()]);
 
   const { senders } = cache;
   const sender = async (input: ParsedTx["inputs"][number]) => {
@@ -221,5 +227,9 @@ export async function syncTransparent(
     senders,
     utxos,
   });
-  return { utxos, txs, tip };
+  return {
+    utxos: utxos.map((utxo) => ({ ...utxo, ...mine.get(utxo.address)! })),
+    txs,
+    tip,
+  };
 }

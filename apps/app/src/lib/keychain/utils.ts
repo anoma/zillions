@@ -22,6 +22,19 @@ export function waitForWindowProp<K extends keyof Window>(
   });
 }
 
+/** PCZTs cross to the keychain as base64. */
+export const bytesToBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+};
+
+export const base64ToBytes = (s: string): Uint8Array =>
+  Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
 /** Compare dotted numeric versions; suffixes after digits are ignored. */
 export function compareVersions(a: string, b: string): number {
   const pa = a.split(".").map((n) => parseInt(n, 10) || 0);

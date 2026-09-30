@@ -224,3 +224,12 @@ export async function fetchTransaction(txid: string): Promise<RawTransaction> {
   const raw = fields(tx);
   return { data: bytes(raw, 1), height: num(raw, 2) };
 }
+
+/** Broadcasts a raw transaction; lightwalletd relays the node's verdict. */
+export async function sendTransaction(raw: Uint8Array) {
+  const [reply] = await call("SendTransaction", message([[1, raw]]));
+  const response = fields(reply);
+  if (num(response, 1) !== 0) {
+    throw new Error(`Broadcast rejected: ${text(response, 2)}`);
+  }
+}
