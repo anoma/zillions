@@ -11,6 +11,7 @@ import initZcore, {
 import {
   fetchAddressTransactions,
   fetchLatestHeight,
+  fetchTransaction,
   fetchUtxos,
   type RawTransaction,
   type Utxo,
@@ -40,6 +41,21 @@ export interface TransparentTx {
   received: bigint;
   /** Our earlier outputs this transaction spent. */
   spent: bigint;
+  /** Where the funds came from: our address it spent from, else the sender's. */
+  from?: string;
+  /** Where they went: ours if paid to us, else the outside address it paid. */
+  to?: string;
+}
+
+/** A coinbase input spends nothing; its prevout txid is all zeros. */
+const COINBASE = "0".repeat(64);
+
+/** The address that received the output an input spends, from its transaction. */
+async function senderOf(input: ParsedTx["inputs"][number]) {
+  if (input.txid === COINBASE) return undefined;
+  const raw = await fetchTransaction(input.txid);
+  const tx: ParsedTx = parse_transaction(NETWORK, raw.height, raw.data);
+  return tx.outputs[input.index]?.address;
 }
 
 /**
@@ -91,28 +107,47 @@ export async function syncTransparent(
     parsed.set(tx.txid, { ...tx, height: raw.height });
   }
 
-  // What each of our outputs was worth, so the input that later spends it
-  // can be priced: an input names only the output it consumes.
-  const ours = new Map<string, bigint>();
+  // Each of our outputs, so the input that later spends it can be priced
+  // and placed: an input names only the output it consumes.
+  const ours = new Map<string, { value: bigint; address: string }>();
   for (const tx of parsed.values()) {
     for (const out of tx.outputs) {
       if (out.address && mine.has(out.address)) {
-        ours.set(`${tx.txid}:${out.index}`, BigInt(out.value));
+        ours.set(`${tx.txid}:${out.index}`, {
+          value: BigInt(out.value),
+          address: out.address,
+        });
       }
     }
   }
 
-  const txs = [...parsed.values()].map(({ txid, height, inputs, outputs }) => ({
-    txid,
-    height,
-    received: outputs.reduce(
-      (sum, out) => sum + (ours.get(`${txid}:${out.index}`) ?? 0n),
-      0n,
-    ),
-    spent: inputs.reduce(
-      (sum, input) => sum + (ours.get(`${input.txid}:${input.index}`) ?? 0n),
-      0n,
-    ),
-  }));
+  const txs = await Promise.all(
+    [...parsed.values()].map(async ({ txid, height, inputs, outputs }) => {
+      const received = outputs.flatMap((out) => {
+        const own = ours.get(`${txid}:${out.index}`);
+        return own ? [own] : [];
+      });
+      const spent = inputs.flatMap((input) => {
+        const own = ours.get(`${input.txid}:${input.index}`);
+        return own ? [own] : [];
+      });
+      const paid = outputs.find((out) => out.address && !mine.has(out.address));
+      return {
+        txid,
+        height,
+        received: received.reduce((sum, own) => sum + own.value, 0n),
+        spent: spent.reduce((sum, own) => sum + own.value, 0n),
+        // Funds from outside name their sender only in the transaction that
+        // paid it, so that one is fetched.
+        from:
+          spent[0]?.address ??
+          (inputs[0] && (await senderOf(inputs[0]).catch(() => undefined))),
+        // Only a payer names an outside recipient; paid to us, it's our address.
+        to: spent.length
+          ? (paid?.address ?? received[0]?.address)
+          : received[0]?.address,
+      };
+    }),
+  );
   return { utxos, txs };
 }

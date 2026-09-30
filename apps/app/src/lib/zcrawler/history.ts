@@ -63,41 +63,60 @@ function receipt(
     timestamp: time,
     from_address: undefined,
   };
-  const t = transparent && transparent.received - transparent.spent;
-  if (!shielded) {
+  // An entry holds at least one side.
+  const s = shielded && shieldedSide(shielded);
+  const side = s && { memo: s.memo, pool: s.pool, to_address: s.to_address };
+  if (!transparent) {
     return {
       ...base,
-      tx_type: t! >= 0n ? "Received" : "Sent",
-      value: t!,
-      memo: undefined,
-      pool: "transparent",
-      to_address: undefined,
+      ...side!,
+      tx_type: s!.value < 0n ? "Sent" : "Received",
+      value: s!.value,
+      fee: s!.fee,
     };
   }
 
-  const s = shieldedSide(shielded);
-  const side = { memo: s.memo, pool: s.pool, to_address: s.to_address };
-  if (t === undefined) {
+  const t = transparent.received - transparent.spent;
+  if (!s || !side) {
     return {
       ...base,
-      ...side,
-      tx_type: s.value < 0n ? "Sent" : "Received",
-      value: s.value,
-      fee: s.fee,
+      tx_type: t >= 0n ? "Received" : "Sent",
+      value: t,
+      memo: undefined,
+      pool: "transparent",
+      from_address: transparent.from,
+      to_address: transparent.to,
     };
   }
   // Both sides: whatever the two don't account for between them is the fee.
   const fee = max0(-(s.value + t));
+  // Addresses are only ever transparent ones: a shielded side shows as such.
   if (t > 0n && s.value < 0n) {
-    return { ...base, ...side, tx_type: "Unshielded", value: t, fee };
+    return {
+      ...base,
+      ...side,
+      tx_type: "Unshielded",
+      value: t,
+      fee,
+      to_address: transparent.to,
+    };
   }
   if (t < 0n && s.value > 0n) {
-    return { ...base, ...side, tx_type: "Shielded", value: s.value, fee };
+    return {
+      ...base,
+      ...side,
+      tx_type: "Shielded",
+      value: s.value,
+      fee,
+      from_address: transparent.from,
+    };
   }
   const value = s.value + t;
   return {
     ...base,
     ...side,
+    from_address: transparent.from,
+    to_address: side.to_address ?? transparent.to,
     pool: "mixed",
     tx_type: value < 0n ? "Sent" : "Received",
     value,

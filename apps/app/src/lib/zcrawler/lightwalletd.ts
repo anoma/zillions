@@ -214,3 +214,13 @@ export async function fetchBlock(height: number): Promise<Block> {
   });
   return { time: num(block, 5), txids: new Map(txids) };
 }
+
+/** A mined transaction by txid, given in explorer byte order. */
+export async function fetchTransaction(txid: string): Promise<RawTransaction> {
+  const internal = Uint8Array.from(
+    txid.match(/../g)!.map((byte) => parseInt(byte, 16)),
+  ).reverse();
+  const [tx] = await call("GetTransaction", message([[3, internal]]));
+  const raw = fields(tx);
+  return { data: bytes(raw, 1), height: num(raw, 2) };
+}
