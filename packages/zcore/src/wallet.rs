@@ -280,9 +280,10 @@ impl InputSource for Wallet {
     }
 
     fn anchor_computable(&self, _: ShieldedPool, _: BlockHeight) -> Result<bool, String> {
-        // ponytail: assumes ziziphus serves a root at every height; ask it once
-        // witnesses are fetched.
-        Ok(true)
+        // Only asked for a ZIP 318 bucket anchor. ziziphus serves the root at
+        // its current tip alone, so none is: sends fall back to an ordinary
+        // (padded) shape until it keeps roots at bucket boundaries.
+        Ok(false)
     }
 
     fn select_spendable_notes(

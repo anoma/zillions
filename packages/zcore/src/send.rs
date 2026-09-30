@@ -25,6 +25,7 @@ use zcash_protocol::{PoolType, ShieldedPool};
 
 use crate::parse_network;
 use crate::wallet::{Wallet, WalletData, ACCOUNT};
+use zcash_client_backend::data_api::InputSource;
 
 /// What the user asked to send.
 #[derive(Deserialize)]
@@ -100,6 +101,13 @@ fn propose(wallet: &Wallet, send: &SendRequest, amount: Zatoshis) -> Result<Wall
         .flatten()
         .and_then(|activation| policy.bucketed(zip318.anchor_bucket_interval(), target_height, activation))
         .filter(|_| spend_policy.permits_shielded(ShieldedPool::Orchard));
+    // Only if the tree root at the bucket boundary can be had.
+    let bucketed = match bucketed {
+        Some(b) => wallet
+            .anchor_computable(ShieldedPool::Orchard, b.anchor_height(target_height))?
+            .then_some(b),
+        None => None,
+    };
     let canonical = match bucketed.map(|bucketed| {
         let orchard_only = SpendPolicy::shielded_pools([ShieldedPool::Orchard])
             .with_locked_input_policy(spend_policy.locked_input_policy().clone())
