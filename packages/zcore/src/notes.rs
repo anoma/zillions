@@ -1,6 +1,3 @@
-// Copyright 2026 Heliax AG
-// SPDX-License-Identifier: Apache-2.0, MIT
-
 //! A note as spending needs it, carried from decryption to the send planner
 //! as one hex string that only wasm reads. Viewing-key material only: it lets
 //! a spend be built, never authorised.

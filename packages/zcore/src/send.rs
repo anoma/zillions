@@ -1,6 +1,3 @@
-// Copyright 2026 Heliax AG
-// SPDX-License-Identifier: Apache-2.0, MIT
-
 //! Planning a send with upstream's policy: `zcash_client_backend` picks the
 //! notes, change and fee; this module only feeds it our wallet ([`Wallet`])
 //! and reports the plan.

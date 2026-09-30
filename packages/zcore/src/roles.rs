@@ -1,6 +1,3 @@
-// Copyright 2026 Heliax AG
-// SPDX-License-Identifier: Apache-2.0, MIT
-
 //! The PCZT roles past creation: the keychain's signer, the app's prover and
 //! transaction extractor, and the summary the keychain's approval shows.
 //! Creation is `build.rs`'s, from a plan.

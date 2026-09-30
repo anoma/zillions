@@ -1,6 +1,3 @@
-# Copyright 2026 Heliax AG
-# SPDX-License-Identifier: Apache-2.0, MIT
-
 [package]
 name = "zcore"
 version = "0.1.0"

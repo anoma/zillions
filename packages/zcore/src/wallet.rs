@@ -1,6 +1,3 @@
-// Copyright 2026 Heliax AG
-// SPDX-License-Identifier: Apache-2.0, MIT
-
 //! The wallet as upstream's planner sees it: our unspent notes and UTXOs behind
 //! `zcash_client_backend`'s `InputSource`, so upstream decides what to spend.
 //!

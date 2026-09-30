@@ -1,6 +1,3 @@
-// Copyright 2026 Heliax AG
-// SPDX-License-Identifier: Apache-2.0, MIT
-
 //! Transparent: address derivation from the viewing key, and reading the
 //! transparent side of raw transactions. No network and no state; the app
 //! finds which addresses are used and fetches their transactions.

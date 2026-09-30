@@ -1,6 +1,3 @@
-// Copyright 2026 Heliax AG
-// SPDX-License-Identifier: Apache-2.0, MIT
-
 //! Merkle witnesses from ziziphus's two-tier trees, assembled offline so the
 //! server never learns which notes are ours.
 //!

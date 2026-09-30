@@ -1,6 +1,3 @@
-// Copyright 2024 Heliax AG
-// SPDX-License-Identifier: Apache-2.0, MIT
-
 //! Stateless trial decryption of shielded outputs.
 //!
 //! The one CPU-critical piece kept in wasm for the new sync: given a UFVK and a

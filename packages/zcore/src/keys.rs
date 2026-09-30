@@ -1,6 +1,3 @@
-// Copyright 2026 Heliax AG
-// SPDX-License-Identifier: Apache-2.0, MIT
-
 //! An account's keys from its BIP-39 seed, for the keychain: the viewing key
 //! and default addresses it hands the app, the fingerprint that names the
 //! seed, and the spending keys its reveal screen shows. Offline key math.

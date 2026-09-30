@@ -1,6 +1,3 @@
-// Copyright 2026 Heliax AG
-// SPDX-License-Identifier: Apache-2.0, MIT
-
 //! A planned send into a PCZT for the keychain to sign: upstream's plan
 //! carried out as upstream would, following zcash_client_backend 0.24.0
 //! `build_proposed_transaction` and `create_pczt_from_proposal`
