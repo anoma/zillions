@@ -1883,8 +1883,10 @@ name = "zcore"
 version = "0.1.0"
 dependencies = [
  "bip32",
+ "ff",
  "getrandom",
  "hex",
+ "jubjub",
  "orchard",
  "pczt",
  "postcard",

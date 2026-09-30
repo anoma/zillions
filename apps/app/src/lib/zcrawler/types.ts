@@ -18,8 +18,12 @@ export interface DecryptedNote {
   height: number;
   /** The note's transaction within its block. */
   tx_index: number;
+  /** Its index among the transaction's outputs in this pool. */
+  output_index: number;
   /** Position in the pool's note commitment tree. */
   position: number;
+  /** What spending it needs (hex). Only wasm reads its shape. */
+  note: string;
 }
 
 /** A transaction's place in the chain — its identity until txids are served. */

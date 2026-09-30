@@ -16,6 +16,7 @@
 //! record layout, but V3 note plaintexts, so it decrypts in `IronwoodDomain`.
 
 mod keys;
+mod notes;
 mod shield;
 mod transparent_tx;
 
@@ -144,7 +145,11 @@ struct FullHit {
     recipient: String,
     height: u32,
     tx_index: u16,
+    /// Its index among the transaction's outputs in this pool.
+    output_index: u16,
     position: u64,
+    /// What spending it needs, for the planner; see [`notes`].
+    note: String,
 }
 
 /// An output this wallet created, recovered with its outgoing viewing key:
@@ -381,6 +386,11 @@ where
     Ok(Compact { count, min_height, hits })
 }
 
+fn output_indices(notes: &[FullNote]) -> Vec<u16> {
+    let places: Vec<_> = notes.iter().map(|n| (n.position, n.height, n.tx_index)).collect();
+    notes::output_indices(&places)
+}
+
 /// Orchard and Ironwood full decryption, told apart by the note plaintext
 /// version `V` accepts; see [`decrypt_orchard`].
 fn decrypt_full_orchard<V: DomainVersion>(
@@ -407,6 +417,7 @@ where
 
     // Each action carries its own rho, so the domain is per-output.
     let ivks = orchard_ivks(fvk);
+    let indices = output_indices(notes);
     let outputs = notes
         .iter()
         .map(|n| {
@@ -446,7 +457,9 @@ where
                 recipient: encode_orchard(network, &addr),
                 height: notes[i].height,
                 tx_index: notes[i].tx_index,
+                output_index: indices[i],
                 position: notes[i].position,
+                note: notes::encode_orchard(&note),
             });
         }
     }
@@ -506,6 +519,7 @@ fn decrypt_full(
     if let ("sapling", Some(dfvk)) = (pool, ufvk.sapling()) {
         let nk = &dfvk.fvk().vk.nk;
         let ivks = sapling_ivks(dfvk);
+        let indices = output_indices(notes);
         let outputs = notes
             .iter()
             .map(|n| {
@@ -538,7 +552,9 @@ fn decrypt_full(
                     recipient: encode_sapling(&network, &addr),
                     height: notes[i].height,
                     tx_index: notes[i].tx_index,
+                    output_index: indices[i],
                     position: notes[i].position,
+                    note: notes::encode_sapling(&note),
                 });
             }
         }
@@ -728,6 +744,9 @@ mod tests {
         let chunk = decrypt_full("main", &ufvk, "ironwood", std::slice::from_ref(&full)).expect("runs");
         assert_eq!(chunk.hits.len(), 1);
         assert_eq!((chunk.hits[0].pool, chunk.hits[0].value, chunk.hits[0].position), ("ironwood", 123_456, 7));
+        // What it carries for spending rebuilds the very note.
+        let spendable = notes::decode_orchard(&chunk.hits[0].note, NoteVersion::V3).expect("decodes");
+        assert_eq!(ExtractedNoteCommitment::from(spendable.commitment()), ExtractedNoteCommitment::from(note.commitment()));
         assert!(decrypt_full("main", &ufvk, "orchard", &[full]).expect("runs").hits.is_empty());
     }
 
