@@ -47,8 +47,8 @@ export function derive_transparent(network, ufvk, scope, from, count) {
 }
 
 /**
- * A new shielded address of the account `ufvk` names, Orchard and Sapling,
- * unlinkable to its others.
+ * A new shielded address of the account `ufvk` names, unlinkable to its
+ * others; nothing needs to remember it, the viewing key finds what it receives.
  * @param {string} network
  * @param {string} ufvk
  * @returns {string}
@@ -185,7 +185,7 @@ export function plan_shield(network, wallet) {
 }
 
 /**
- * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`. The
+ * Proves a signed PCZT and extracts its transaction: `{ txid, raw, expiry_height }`. The
  * Sapling parameters are needed only when [`needs_sapling_params`] says so.
  * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
  * @param {Uint8Array} pczt

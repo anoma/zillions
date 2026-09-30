@@ -14,8 +14,8 @@ export function derive_account(network: string, seed: Uint8Array, hd_index: numb
 export function derive_transparent(network: string, ufvk: string, scope: string, from: number, count: number): string[];
 
 /**
- * A new shielded address of the account `ufvk` names, Orchard and Sapling,
- * unlinkable to its others.
+ * A new shielded address of the account `ufvk` names, unlinkable to its
+ * others; nothing needs to remember it, the viewing key finds what it receives.
  */
 export function fresh_address(network: string, ufvk: string): string;
 
@@ -56,7 +56,7 @@ export function plan_send(network: string, wallet: any, send: any): any;
 export function plan_shield(network: string, wallet: any): any;
 
 /**
- * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`. The
+ * Proves a signed PCZT and extracts its transaction: `{ txid, raw, expiry_height }`. The
  * Sapling parameters are needed only when [`needs_sapling_params`] says so.
  * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
  */

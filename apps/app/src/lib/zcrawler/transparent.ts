@@ -8,7 +8,7 @@ import initZcore, {
   derive_transparent,
   parse_transaction,
 } from "@zillions/zcore";
-import { loadTransparent, saveTransparent } from "./db";
+import { loadTransparent, updateTransparent } from "./db";
 import {
   fetchAddressTransactions,
   fetchLatestHeight,
@@ -53,6 +53,8 @@ export interface TransparentCache {
   /** The address an input spent from, by the `txid:index` it names. */
   senders: Record<string, string>;
   utxos: Utxo[];
+  /** Internal addresses sent unshields not yet seen mined, until they expire. */
+  reserved?: { index: number; expiryHeight: number }[];
 }
 
 const emptyCache = (id: string): TransparentCache => ({
@@ -131,13 +133,7 @@ async function discover(
 export async function syncTransparent(
   accountId: string,
   ufvk: string,
-): Promise<{
-  utxos: OwnUtxo[];
-  txs: TransparentTx[];
-  tip: number;
-  /** Where the next unshield goes: the internal chain's first unused address. */
-  unshieldTo: string;
-}> {
+): Promise<{ utxos: OwnUtxo[]; txs: TransparentTx[]; tip: number }> {
   await (ready ??= initZcore());
   const cache = (await loadTransparent(accountId)) ?? emptyCache(accountId);
   const tip = await fetchLatestHeight();
@@ -225,7 +221,7 @@ export async function syncTransparent(
     }),
   );
 
-  await saveTransparent({
+  await updateTransparent(accountId, (latest) => ({
     id: accountId,
     tip,
     final: tip - REORG_DEPTH,
@@ -233,19 +229,52 @@ export async function syncTransparent(
     txs: [...parsed.values()],
     senders,
     utxos,
-  });
+    // Read inside the write: an unshield may have been sent during this sync.
+    // Expiry 0 means the transaction never expires.
+    reserved: latest?.reserved?.filter(
+      (r) =>
+        r.index > chains.internal.lastUsed &&
+        (r.expiryHeight === 0 || r.expiryHeight > tip),
+    ),
+  }));
   return {
     utxos: utxos.map((utxo) => ({ ...utxo, ...mine.get(utxo.address)! })),
     txs,
     tip,
-    // ponytail: unused means unused on chain, so two unshields before the
-    // first is mined share an address; track pending ones if that matters.
-    unshieldTo: derive_transparent(
-      NETWORK,
-      ufvk,
-      "internal",
-      chains.internal.lastUsed + 1,
-      1,
-    )[0],
   };
 }
+
+/**
+ * Where the next unshield goes: the first internal address neither used nor
+ * held by a pending unshield. Null before the first sync, or while pending
+ * unshields fill the gap limit: going past it would hide funds from other
+ * wallets restoring the phrase.
+ */
+export async function nextUnshield(accountId: string, ufvk: string) {
+  const cache = await loadTransparent(accountId);
+  if (!cache) return null;
+  const { lastUsed } = cache.chains.internal;
+  const held = new Set(cache.reserved?.map((r) => r.index));
+  for (
+    let index = lastUsed + 1;
+    index <= lastUsed + GAP_LIMITS.internal;
+    index++
+  ) {
+    if (held.has(index)) continue;
+    await (ready ??= initZcore());
+    const [address] = derive_transparent(NETWORK, ufvk, "internal", index, 1);
+    return { index, address };
+  }
+  return null;
+}
+
+/** Holds internal address `index` for an unshield sent to it, until it's mined or expires. */
+export const reserveUnshield = (
+  accountId: string,
+  index: number,
+  expiryHeight: number,
+) =>
+  updateTransparent(accountId, (cache = emptyCache(accountId)) => ({
+    ...cache,
+    reserved: [...(cache.reserved ?? []), { index, expiryHeight }],
+  }));

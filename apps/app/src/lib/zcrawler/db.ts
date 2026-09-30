@@ -85,8 +85,16 @@ export const saveSyncState = (
 export const loadTransparent = (accountId: string) =>
   db.transparent.get(accountId);
 
-export const saveTransparent = (cache: TransparentCache) =>
-  db.transparent.put(cache);
+/** Rewrites an account's transparent cache atomically, so a sync and an unshield never drop each other's writes. */
+export const updateTransparent = (
+  id: string,
+  update: (cache: TransparentCache | undefined) => TransparentCache,
+) =>
+  db.transaction("rw", db.transparent, async () => {
+    const next = update(await db.transparent.get(id));
+    await db.transparent.put(next);
+    return next;
+  });
 
 /** Blocks are the chain's, not an account's: every account shares them. */
 export const loadBlocks = (heights: number[]) => db.blocks.bulkGet(heights);

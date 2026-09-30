@@ -1,12 +1,14 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
-import { useUnshieldAddress } from "../hooks/useAddresses";
+import { unshieldAddress, useUnshieldAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useSend, useSendPlan } from "../hooks/useSend";
+import { useWallet } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
 import { TransferSuccess } from "./TransferSuccess";
@@ -27,7 +29,10 @@ function UnshieldRoute() {
   const [isMax, setIsMax] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
 
-  const to = useUnshieldAddress().data ?? "";
+  const wallet = useWallet();
+  const queryClient = useQueryClient();
+  const next = useUnshieldAddress().data;
+  const to = next?.address ?? "";
   const typed = (() => {
     try {
       return zecToZatoshi(amountString);
@@ -45,8 +50,8 @@ function UnshieldRoute() {
 
   const onSubmit = () => {
     setValidationMessage("");
-    const problem = !to
-      ? "Wait for the wallet to sync"
+    const problem = !next
+      ? "Wait for the wallet to sync, or for earlier unshields to confirm"
       : amount <= 0n
         ? "Set an amount"
         : amount > availableBalance
@@ -56,7 +61,15 @@ function UnshieldRoute() {
       setValidationMessage(problem);
       return;
     }
-    send.mutate({ from: "shielded", to, amount });
+    send.mutate(
+      { from: "shielded", to, amount },
+      {
+        onSuccess: async ({ expiryHeight }) => {
+          await wallet.unshieldSent(next.index, expiryHeight);
+          await queryClient.invalidateQueries(unshieldAddress(wallet));
+        },
+      },
+    );
   };
 
   if (send.data) {

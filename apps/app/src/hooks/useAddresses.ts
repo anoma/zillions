@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import initZcore, { fresh_address } from "@zillions/zcore";
 import { useEffect, useState } from "react";
+import type { ZWallet } from "../lib/zcrawler/ZWallet";
 import { useAccount } from "./useAccount";
 import { useInvalidateOnSync } from "./useInvalidateOnSync";
 import { useWallet } from "./useWallet";
@@ -27,12 +28,16 @@ export function useFreshAddress(round = 0) {
   return fresh?.ufvk === ufvk ? fresh.address : undefined;
 }
 
-export function useUnshieldAddress() {
-  const wallet = useWallet();
-  const options = queryOptions({
+export function unshieldAddress(wallet: ZWallet) {
+  return queryOptions({
     queryKey: ["unshieldAddress", wallet.id],
     queryFn: () => wallet.unshieldAddress(),
   });
+}
+
+/** `{ index, address }` of the next unshield; see `nextUnshield` for when it's null. */
+export function useUnshieldAddress() {
+  const options = unshieldAddress(useWallet());
   useInvalidateOnSync(options);
   return useQuery(options);
 }

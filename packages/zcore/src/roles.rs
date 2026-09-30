@@ -238,6 +238,8 @@ pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
 struct Extracted {
     txid: String,
     raw: Vec<u8>,
+    /// The last height it can be mined at; 0 for never.
+    expiry_height: u32,
 }
 
 /// The Sapling proving parameters, read once their hashes have been checked.
@@ -317,7 +319,7 @@ pub fn needs_sapling_params(pczt: &[u8]) -> Result<bool, JsError> {
     Ok(Prover::new(parse(pczt)?).requires_sapling_proofs())
 }
 
-/// Proves a signed PCZT and extracts its transaction: `{ txid, raw }`. The
+/// Proves a signed PCZT and extracts its transaction: `{ txid, raw, expiry_height }`. The
 /// Sapling parameters are needed only when [`needs_sapling_params`] says so.
 /// Building the Halo2 proving key alone takes seconds; run it off the UI thread.
 #[wasm_bindgen]
@@ -326,6 +328,8 @@ pub fn prove_pczt(pczt: &[u8], sapling_spend: Option<Vec<u8>>, sapling_output: O
         (Some(spend), Some(output)) => Some(SaplingParams::read(&spend, &output).map_err(|e| JsError::new(&e))?),
         _ => None,
     };
-    let (txid, raw) = prove(parse(pczt)?, sapling.as_ref()).map_err(|e| JsError::new(&e))?;
-    serde_wasm_bindgen::to_value(&Extracted { txid, raw }).map_err(|e| JsError::new(&e.to_string()))
+    let pczt = parse(pczt)?;
+    let expiry_height = *pczt.global().expiry_height();
+    let (txid, raw) = prove(pczt, sapling.as_ref()).map_err(|e| JsError::new(&e))?;
+    serde_wasm_bindgen::to_value(&Extracted { txid, raw, expiry_height }).map_err(|e| JsError::new(&e.to_string()))
 }

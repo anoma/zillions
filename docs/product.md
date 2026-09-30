@@ -137,8 +137,9 @@ Moves shielded funds to one of the account's own transparent addresses.
 - Each unshield goes to a **fresh transparent address** of the account, one
   never shown anywhere, and never the one the account shields from or
   receives on, so observers can't pair the funds going in with the funds
-  coming out (see 2.8, address rotation). — *Built*; a second unshield
-  sent before the first is confirmed still reuses its address. — *Planned*
+  coming out (see 2.8, address rotation). Unshields waiting to confirm each
+  get their own; at most five can wait at once, so every address stays
+  findable when the recovery phrase is restored elsewhere. — *Built*
 - Checks: amount set, enough balance.
 - Fee preview, Keychain approval, receipt as in Send.
 

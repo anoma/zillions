@@ -75,8 +75,15 @@ export function useSend() {
             : account.shielded.address,
         pczt: bytesToBase64(pczt),
       });
-      const txid = await submitTransaction(base64ToBytes(signed));
-      return { txid, fee: BigInt(plan.fee), timestamp: Date.now() };
+      const { txid, expiryHeight } = await submitTransaction(
+        base64ToBytes(signed),
+      );
+      return {
+        txid,
+        expiryHeight,
+        fee: BigInt(plan.fee),
+        timestamp: Date.now(),
+      };
     },
   });
 }

@@ -4,16 +4,14 @@
  */
 
 import initZcore, { prove_pczt } from "@zillions/zcore";
-import type { SaplingParams } from "./submit";
+import type { Proved, SaplingParams } from "./submit";
 
 // `self` typed as Window in a DOM-lib project; cast to the message surface we use.
 const worker = self as unknown as {
   onmessage:
     | ((e: MessageEvent<{ pczt: Uint8Array; sapling?: SaplingParams }>) => void)
     | null;
-  postMessage: (
-    msg: { ok: { txid: string; raw: Uint8Array } } | { error: string },
-  ) => void;
+  postMessage: (msg: { ok: Proved } | { error: string }) => void;
 };
 
 worker.onmessage = async ({ data: { pczt, sapling } }) => {

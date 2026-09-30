@@ -21,8 +21,10 @@ import {
   type WalletData,
 } from "./send";
 import {
+  nextUnshield,
   type OwnUtxo,
   REORG_DEPTH,
+  reserveUnshield,
   syncTransparent,
   type TransparentTx,
 } from "./transparent";
@@ -68,12 +70,7 @@ export class ZWallet {
   #applied: Set<string> = new Set();
   #syncStatus: SyncStatus;
   /** The transparent side; `tip` is absent until a sync lands. */
-  #transparent: {
-    utxos: OwnUtxo[];
-    txs: TransparentTx[];
-    tip?: number;
-    unshieldTo?: string;
-  } = {
+  #transparent: { utxos: OwnUtxo[]; txs: TransparentTx[]; tip?: number } = {
     utxos: [],
     txs: [],
   };
@@ -379,8 +376,12 @@ export class ZWallet {
 
   planSend = (send: SendRequest) => planSend(this.#walletData(), send);
 
-  /** The next unshield's destination, shown nowhere; null until transparent sync lands. */
-  unshieldAddress = () => this.#transparent.unshieldTo ?? null;
+  /** The next unshield's destination, shown nowhere; see `nextUnshield` for when it's null. */
+  unshieldAddress = () => nextUnshield(this.id, this.#ufvk);
+
+  /** Records an unshield sent to `unshieldAddress()`'s `index`, so the next one goes elsewhere. */
+  unshieldSent = (index: number, expiryHeight: number) =>
+    reserveUnshield(this.id, index, expiryHeight);
 
   maxSend = (send: SendRequest) => maxSend(this.#walletData(), send);
 

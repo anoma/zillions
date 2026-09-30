@@ -48,10 +48,18 @@ const loadSaplingParams = () =>
       throw err;
     }));
 
+/** `prove_pczt`'s result. */
+export interface Proved {
+  txid: string;
+  raw: Uint8Array;
+  /** The last height it can be mined at; 0 for never. */
+  expiry_height: number;
+}
+
 /** Proves a signed PCZT in a worker: it takes tens of seconds. */
 function prove(pczt: Uint8Array, sapling?: SaplingParams) {
   const worker = new ProveWorker();
-  return new Promise<{ txid: string; raw: Uint8Array }>((resolve, reject) => {
+  return new Promise<Proved>((resolve, reject) => {
     worker.onmessage = ({ data }) =>
       "error" in data ? reject(new Error(data.error)) : resolve(data.ok);
     worker.onerror = (e) => reject(new Error(e.message || "prover failed"));
@@ -59,13 +67,13 @@ function prove(pczt: Uint8Array, sapling?: SaplingParams) {
   }).finally(() => worker.terminate());
 }
 
-/** Proves and broadcasts a signed PCZT; returns the transaction's id. */
+/** Proves and broadcasts a signed PCZT; returns its id and expiry height. */
 export async function submitTransaction(signed: Uint8Array) {
   await initZcore();
   const sapling = needs_sapling_params(signed)
     ? await loadSaplingParams()
     : undefined;
-  const { txid, raw } = await prove(signed, sapling);
+  const { txid, raw, expiry_height } = await prove(signed, sapling);
   await sendTransaction(raw);
-  return txid;
+  return { txid, expiryHeight: expiry_height };
 }

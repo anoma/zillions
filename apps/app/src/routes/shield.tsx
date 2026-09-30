@@ -49,7 +49,7 @@ function ShieldRoute() {
         signer: account.transparent.address,
         pczt: bytesToBase64(pczt),
       });
-      const txid = await submitTransaction(base64ToBytes(signed));
+      const { txid } = await submitTransaction(base64ToBytes(signed));
       return { txid, value, fee, timestamp: Date.now() };
     },
   });
