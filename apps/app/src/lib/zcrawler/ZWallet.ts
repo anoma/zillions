@@ -118,66 +118,68 @@ export class ZWallet {
     this.#checkSpends([...this.#unspentNotes.values()]);
     const chunks = CHUNKS;
 
-    for (const pool of POOLS) {
-      const { first_chunk, last_chunk } = chunks[pool];
-      const scanned = this.#syncStatus.scanned[pool];
+    // History's blocks are looked up whatever becomes of the crawl: what it
+    // did find, and the transparent side, still deserve their txids and times.
+    try {
+      for (const pool of POOLS) {
+        const { first_chunk, last_chunk } = chunks[pool];
+        const scanned = this.#syncStatus.scanned[pool];
 
-      // An untouched wallet starts with an empty window pinned at the tip, so
-      // the whole history falls to the downward crawl below.
-      if (scanned.to < scanned.from) {
-        scanned.from = last_chunk + 1;
+        // An untouched wallet starts with an empty window pinned at the tip, so
+        // the whole history falls to the downward crawl below.
+        if (scanned.to < scanned.from) {
+          scanned.from = last_chunk + 1;
+          scanned.to = last_chunk;
+        }
+
+        // Chunks minted since the last sync, plus the window's top chunk again:
+        // it may have been the tip, still filling, when it was read. Crawled
+        // downward like everything else, so the window's top only moves once the
+        // whole range has landed.
+        await crawlChunks({
+          ufvk: this.#ufvk,
+          pool,
+          from: last_chunk,
+          to: scanned.to,
+          signal: this.#abort.signal,
+          onChunk: (result) => this.#applyChunk(pool, result, chunks),
+        });
+        if (this.#abort.signal.aborted) break;
         scanned.to = last_chunk;
+        this.#advance(chunks);
+
+        // The unscanned history below the window, newest chunk first, down to
+        // the first chunk that starts before the birthday: every chunk below it
+        // is older still.
+        const floor = new AbortController();
+        await crawlChunks({
+          ufvk: this.#ufvk,
+          pool,
+          from: scanned.from - 1,
+          to: first_chunk,
+          signal: AbortSignal.any([this.#abort.signal, floor.signal]),
+          onChunk: (result) => {
+            if (floor.signal.aborted) return;
+            scanned.from = result.chunk;
+            this.#applyChunk(pool, result, chunks);
+            if (
+              this.#birthday !== undefined &&
+              result.minHeight < this.#birthday
+            ) {
+              scanned.from = first_chunk;
+              floor.abort();
+              this.#advance(chunks);
+            }
+          },
+        });
       }
-
-      // Chunks minted since the last sync, plus the window's top chunk again:
-      // it may have been the tip, still filling, when it was read. Crawled
-      // downward like everything else, so the window's top only moves once the
-      // whole range has landed.
-      await crawlChunks({
-        ufvk: this.#ufvk,
-        pool,
-        from: last_chunk,
-        to: scanned.to,
-        signal: this.#abort.signal,
-        onChunk: (result) => this.#applyChunk(pool, result, chunks),
-      });
-      if (this.#abort.signal.aborted) break;
-      scanned.to = last_chunk;
-      this.#advance(chunks);
-
-      // The unscanned history below the window, newest chunk first, down to
-      // the first chunk that starts before the birthday: every chunk below it
-      // is older still.
-      const floor = new AbortController();
-      await crawlChunks({
-        ufvk: this.#ufvk,
-        pool,
-        from: scanned.from - 1,
-        to: first_chunk,
-        signal: AbortSignal.any([this.#abort.signal, floor.signal]),
-        onChunk: (result) => {
-          if (floor.signal.aborted) return;
-          scanned.from = result.chunk;
-          this.#applyChunk(pool, result, chunks);
-          if (
-            this.#birthday !== undefined &&
-            result.minHeight < this.#birthday
-          ) {
-            scanned.from = first_chunk;
-            floor.abort();
-            this.#advance(chunks);
-          }
-        },
-      });
+    } finally {
+      await transparent;
+      await this.#checking;
+      await this.#fetchBlocks();
+      await this.#saving;
+      console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
     }
-
-    await transparent;
-    await this.#checking;
-    await this.#fetchBlocks().catch((err) =>
-      console.error("[sync] block lookup failed", err),
-    );
-    await this.#saving;
-    console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
   });
 
   /** Applies one chunk's notes, then persists and announces progress. */
@@ -249,8 +251,14 @@ export class ZWallet {
     const heights = [
       ...historyHeights(this.#notes, this.#sent, this.#transparent.txs),
     ].filter((height) => !this.#blocks.has(height));
-    const blocks = await Promise.all(heights.map(fetchBlock));
-    heights.forEach((height, i) => this.#blocks.set(height, blocks[i]));
+    // A block that fails is simply asked for again next sync.
+    const blocks = await Promise.allSettled(heights.map(fetchBlock));
+    blocks.forEach((block, i) => {
+      if (block.status === "fulfilled")
+        this.#blocks.set(heights[i], block.value);
+      else
+        console.error("[sync] block lookup failed", heights[i], block.reason);
+    });
     this.#emitProgress();
   };
 
