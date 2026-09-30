@@ -15,6 +15,7 @@
 //! Ironwood (NU6.3) is Orchard's protocol in its own pool: the same keys and
 //! record layout, but V3 note plaintexts, so it decrypts in `IronwoodDomain`.
 
+mod build;
 mod keys;
 mod notes;
 mod send;

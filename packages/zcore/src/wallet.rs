@@ -50,6 +50,10 @@ pub(crate) struct NoteData {
 
 #[cfg(test)]
 impl NoteData {
+    pub(crate) fn note_hex(&self) -> String {
+        self.note.clone()
+    }
+
     pub(crate) fn for_tests(pool: &str, note: String, position: u64, height: u32) -> Self {
         NoteData {
             pool: pool.into(),

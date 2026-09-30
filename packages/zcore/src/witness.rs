@@ -44,6 +44,7 @@ impl Node for sapling::Node {
 
 /// `/{pool}/tip/{tree_size}`'s postcard body.
 #[derive(Deserialize)]
+#[cfg_attr(test, derive(serde::Serialize))]
 pub(crate) struct TipBody {
     pub(crate) tree_size: u64,
     /// Unused: the root comes from `roots`. (Served as far more than the ≤ 18
@@ -186,12 +187,17 @@ impl<'a, H: Node> Tip<'a, H> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use incrementalmerkletree::frontier::Frontier;
     use orchard::tree::MerkleHashOrchard as H;
 
-    fn leaf(i: u64) -> H {
+    /// A tip snapshot of `leaves`, all in the filling chunk.
+    pub(crate) fn snapshot(leaves: &[H]) -> TipBody {
+        TipBody { tree_size: leaves.len() as u64, ommers: vec![], roots: vec![], active_chunk: heap(leaves) }
+    }
+
+    pub(crate) fn leaf(i: u64) -> H {
         // Any valid field element serves as a leaf; the empty leaf's root
         // shifted by position keeps them distinct.
         let mut bytes = H::empty_leaf().to_bytes();

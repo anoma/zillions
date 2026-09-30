@@ -196,10 +196,18 @@ struct Flow {
     value: u64,
 }
 
+/// A note a plan spends: its witness needs its pool's tree at `position`.
+#[derive(Serialize)]
+struct Spent {
+    pool: &'static str,
+    position: u64,
+}
+
 /// One transaction of a plan: what it spends, pays, keeps as change, and costs.
 #[derive(Serialize)]
 struct StepSummary {
     inputs: Vec<Flow>,
+    notes: Vec<Spent>,
     payments: Vec<Flow>,
     change: Vec<Flow>,
     fee: u64,
@@ -221,11 +229,13 @@ fn summarize(proposal: &WalletProposal) -> PlanSummary {
                 .iter()
                 .map(|o| Flow { pool: "transparent", value: o.value().into() })
                 .collect();
+            let mut notes = Vec::new();
             if let Some(shielded) = step.shielded_inputs() {
-                inputs.extend(shielded.notes().iter().map(|n| Flow {
-                    pool: pool_name(PoolType::Shielded(n.note().pool())),
-                    value: n.note().value().into(),
-                }));
+                for n in shielded.notes() {
+                    let pool = pool_name(PoolType::Shielded(n.note().pool()));
+                    inputs.push(Flow { pool, value: n.note().value().into() });
+                    notes.push(Spent { pool, position: n.note_commitment_tree_position().into() });
+                }
             }
             let request = step.transaction_request();
             let payments = step
@@ -246,7 +256,7 @@ fn summarize(proposal: &WalletProposal) -> PlanSummary {
                 .iter()
                 .map(|c| Flow { pool: pool_name(c.output_pool()), value: c.value().into() })
                 .collect();
-            StepSummary { inputs, payments, change, fee: step.balance().fee_required().into() }
+            StepSummary { inputs, notes, payments, change, fee: step.balance().fee_required().into() }
         })
         .collect();
     PlanSummary { fee: steps.iter().map(|s| s.fee).sum(), steps }
@@ -270,6 +280,31 @@ pub fn plan_send(network: &str, wallet: JsValue, send: JsValue) -> Result<JsValu
     serde_wasm_bindgen::to_value(&summarize(&proposal)).map_err(|e| JsError::new(&e.to_string()))
 }
 
+/// The unsigned PCZT for `send`, planned as [`plan_send`] plans it, for the
+/// seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`. `trees` maps
+/// each pool spent from to `{ tip, chunks: { [chunk]: body } }`: ziziphus's
+/// raw tip snapshot and the frozen chunks holding the notes `plan_send` named.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn send_pczt(
+    network: &str,
+    ufvk: &str,
+    seed_fingerprint: &str,
+    hd_index: u32,
+    wallet: JsValue,
+    send: JsValue,
+    trees: JsValue,
+) -> Result<Vec<u8>, JsError> {
+    let (wallet, send) = inputs(network, wallet, send).map_err(|e| JsError::new(&e))?;
+    let trees: crate::build::Trees = serde_wasm_bindgen::from_value(trees).map_err(|e| JsError::new(&e.to_string()))?;
+    let ufvk = zcash_keys::keys::UnifiedFullViewingKey::decode(&wallet.network, ufvk).map_err(|e| JsError::new(&e))?;
+    let fingerprint = crate::hex_n::<32>(seed_fingerprint).map_err(|e| JsError::new(&e))?;
+    let amount = Zatoshis::from_u64(send.amount).map_err(|_| JsError::new("amount out of range"))?;
+    let proposal = propose(&wallet, &send, amount).map_err(|e| JsError::new(&e))?;
+    let pczt = crate::build::pczt(&wallet, &ufvk, fingerprint, hd_index, &proposal, &trees).map_err(|e| JsError::new(&e))?;
+    pczt.serialize().map_err(|e| JsError::new(&format!("{e:?}")))
+}
+
 /// The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
 #[wasm_bindgen]
 pub fn max_send(network: &str, wallet: JsValue, send: JsValue) -> Result<u64, JsError> {
@@ -287,7 +322,12 @@ pub(crate) mod tests {
     use zip32::{AccountId, Scope};
 
     pub(crate) const SEED: [u8; 32] = [7u8; 32];
-    const TIP: u32 = 3_450_000;
+    pub(crate) const TIP: u32 = 3_450_000;
+
+    /// Plans `amount` from the shielded balance to `to`.
+    pub(crate) fn plan(wallet: &Wallet, to: &str, amount: u64) -> WalletProposal {
+        propose(wallet, &send(to, amount), Zatoshis::from_u64(amount).unwrap()).unwrap()
+    }
 
     /// An Ironwood note of `value` to our own address, mined at `height`.
     pub(crate) fn ironwood_note(value: u64, height: u32, position: u64) -> NoteData {
