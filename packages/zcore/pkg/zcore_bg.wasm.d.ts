@@ -9,6 +9,7 @@ export const pczt_summary: (a: number, b: number, c: number, d: number) => [numb
 export const plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
 export const prove_pczt: (a: number, b: number) => [number, number, number];
 export const seed_fingerprint: (a: number, b: number) => [number, number, number, number];
+export const send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any) => [number, number, number, number];
 export const shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number) => [number, number, number, number];
 export const sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
 export const spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];

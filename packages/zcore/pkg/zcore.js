@@ -165,6 +165,36 @@ export function seed_fingerprint(seed) {
 }
 
 /**
+ * The unsigned PCZT for `send`, planned as [`plan_send`] plans it, for the
+ * seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`. `trees` maps
+ * each pool spent from to `{ tip, chunks: { [chunk]: body } }`: ziziphus's
+ * raw tip snapshot and the frozen chunks holding the notes `plan_send` named.
+ * @param {string} network
+ * @param {string} ufvk
+ * @param {string} seed_fingerprint
+ * @param {number} hd_index
+ * @param {any} wallet
+ * @param {any} send
+ * @param {any} trees
+ * @returns {Uint8Array}
+ */
+export function send_pczt(network, ufvk, seed_fingerprint, hd_index, wallet, send, trees) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(seed_fingerprint, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.send_pczt(ptr0, len0, ptr1, len1, ptr2, len2, hd_index, wallet, send, trees);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
  * An unsigned PCZT shielding `utxos` (`[{ txid, index, value, address,
  * scope, address_index }]`) into the account's own Ironwood address.
  * @param {string} network
@@ -396,6 +426,10 @@ function __wbg_get_imports() {
             const ret = arg0.done;
             return ret;
         },
+        __wbg_entries_fb6397112b1de25f: function(arg0) {
+            const ret = Object.entries(arg0);
+            return ret;
+        },
         __wbg_getRandomValues_c44a50d8cfdaebeb: function() { return handleError(function (arg0, arg1) {
             arg0.getRandomValues(arg1);
         }, arguments); },
@@ -403,6 +437,10 @@ function __wbg_get_imports() {
             const ret = Reflect.get(arg0, arg1);
             return ret;
         }, arguments); },
+        __wbg_get_6c896e0571ddae51: function(arg0, arg1) {
+            const ret = arg0[arg1 >>> 0];
+            return ret;
+        },
         __wbg_get_unchecked_288889d017702237: function(arg0, arg1) {
             const ret = arg0[arg1 >>> 0];
             return ret;

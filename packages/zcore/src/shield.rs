@@ -34,6 +34,7 @@ use zcash_protocol::value::Zatoshis;
 use zip32::fingerprint::SeedFingerprint;
 use zip32::{AccountId, Scope};
 
+
 use crate::parse_network;
 
 const HARDENED: u32 = 0x8000_0000;
@@ -165,21 +166,34 @@ pub(crate) fn create(
         .map_err(to_pczt_error)
 }
 
-/// Signs every transparent input whose key the seed's account `hd_index` holds.
+/// Signs every input the seed's account `hd_index` holds: transparent coins
+/// by their BIP 44 path, shielded notes by their ZIP 32 account. Sapling spends
+/// also get the proof generation key their prover needs, for the key scope
+/// their own nullifier proves they were received on.
 pub(crate) fn sign(network: &Network, pczt: Pczt, seed: &[u8], hd_index: u32) -> Result<Pczt, String> {
     let fingerprint = SeedFingerprint::from_seed(seed).ok_or("seed must be 32 to 252 bytes")?;
     let account = AccountId::try_from(hd_index).map_err(|_| "account index out of range")?;
     let usk = UnifiedSpendingKey::from_seed(network, seed, account).map_err(to_pczt_error)?;
-    let coin_type = bip32::ChildNumber(network.network_type().coin_type() | HARDENED);
+    let coin = network.network_type().coin_type();
+    let ours = |derivation: Option<AccountId>| derivation == Some(account);
 
-    let mut ours = Vec::new();
+    let sapling_external = usk.sapling().clone();
+    let sapling_internal = sapling_external.derive_internal();
+    let sapling_keys = [(Scope::External, &sapling_external), (Scope::Internal, &sapling_internal)];
+
+    let mut transparent_spends = Vec::new();
+    let mut sapling_spends = Vec::new();
+    let mut orchard_spends = Vec::new();
+    let mut ironwood_spends = Vec::new();
     let pczt = Verifier::new(pczt)
         .with_transparent::<Infallible, _>(|bundle| {
             for (i, input) in bundle.inputs().iter().enumerate() {
                 for derivation in input.bip32_derivation().values() {
-                    if let Some((id, scope, index)) = derivation.extract_bip_44_fields(&fingerprint, coin_type) {
+                    if let Some((id, scope, index)) =
+                        derivation.extract_bip_44_fields(&fingerprint, bip32::ChildNumber(coin | HARDENED))
+                    {
                         if id == account {
-                            ours.push((i, scope, index));
+                            transparent_spends.push((i, scope, index));
                         }
                     }
                 }
@@ -187,27 +201,102 @@ pub(crate) fn sign(network: &Network, pczt: Pczt, seed: &[u8], hd_index: u32) ->
             Ok(())
         })
         .map_err(to_pczt_error)?
+        .with_sapling::<String, _>(|bundle| {
+            for (i, spend) in bundle.spends().iter().enumerate() {
+                let derived = spend
+                    .zip32_derivation()
+                    .as_ref()
+                    .and_then(|d| d.extract_account_index(&fingerprint, zip32::ChildIndex::hardened(coin)));
+                if !ours(derived) {
+                    continue;
+                }
+                let (_, key) = sapling_keys
+                    .iter()
+                    .find(|(_, key)| spend.verify_nullifier(Some(key.to_diversifiable_full_viewing_key().fvk())).is_ok())
+                    .ok_or_else(|| {
+                        pczt::roles::verifier::SaplingError::Custom(
+                            "a Sapling spend names this account but isn't its note".to_string(),
+                        )
+                    })?;
+                sapling_spends.push((i, (*key).clone()));
+            }
+            Ok(())
+        })
+        .map_err(to_pczt_error)?
+        .with_orchard::<Infallible, _>(|bundle| {
+            for (i, action) in bundle.actions().iter().enumerate() {
+                let derived = action
+                    .spend()
+                    .zip32_derivation()
+                    .as_ref()
+                    .and_then(|d| d.extract_account_index(&fingerprint, zip32::ChildIndex::hardened(coin)));
+                if ours(derived) {
+                    orchard_spends.push(i);
+                }
+            }
+            Ok(())
+        })
+        .map_err(to_pczt_error)?
+        .with_ironwood::<Infallible, _>(|bundle| {
+            for (i, action) in bundle.actions().iter().enumerate() {
+                let derived = action
+                    .spend()
+                    .zip32_derivation()
+                    .as_ref()
+                    .and_then(|d| d.extract_account_index(&fingerprint, zip32::ChildIndex::hardened(coin)));
+                if ours(derived) {
+                    ironwood_spends.push(i);
+                }
+            }
+            Ok(())
+        })
+        .map_err(to_pczt_error)?
         .finish();
-    if ours.is_empty() {
+    if transparent_spends.is_empty() && sapling_spends.is_empty() && orchard_spends.is_empty() && ironwood_spends.is_empty() {
         return Err("no input belongs to this account".into());
     }
 
+    let pczt = Updater::new(pczt)
+        .update_sapling_with(|mut updater| {
+            for (i, key) in &sapling_spends {
+                updater.update_spend_with(*i, |mut spend| spend.set_proof_generation_key(key.expsk.proof_generation_key()))?;
+            }
+            Ok(())
+        })
+        .map_err(to_pczt_error)?
+        .finish();
+
     let mut signer = Signer::new(pczt).map_err(to_pczt_error)?;
-    for (i, scope, index) in ours {
+    for (i, scope, index) in transparent_spends {
         let sk = usk.transparent().derive_secret_key(scope, index).map_err(to_pczt_error)?;
         signer.sign_transparent(i, &sk).map_err(to_pczt_error)?;
+    }
+    for (i, key) in &sapling_spends {
+        signer.sign_sapling(*i, &key.expsk.ask).map_err(to_pczt_error)?;
+    }
+    let ask = orchard::keys::SpendAuthorizingKey::from(usk.orchard());
+    for i in orchard_spends {
+        signer.sign_orchard(i, &ask).map_err(to_pczt_error)?;
+    }
+    for i in ironwood_spends {
+        signer.sign_ironwood(i, &ask).map_err(to_pczt_error)?;
     }
     Ok(signer.finish())
 }
 
 /// A PCZT's value flows, as the keychain's approval screen shows them.
+/// Shielded inputs are totals per pool: a spend's own value may be redacted,
+/// but each bundle keeps its net value.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Summary {
+pub(crate) struct Summary {
     network: &'static str,
     transparent_inputs: Vec<Flow>,
     transparent_outputs: Vec<Flow>,
-    /// Real (not padding) outputs across Orchard and Ironwood.
+    sapling_inputs: Vec<Flow>,
+    sapling_outputs: Vec<Flow>,
+    /// Orchard and Ironwood together.
+    orchard_inputs: Vec<Flow>,
     orchard_outputs: Vec<Flow>,
     fee: String,
 }
@@ -218,7 +307,7 @@ struct Flow {
     value: String,
 }
 
-fn summarize(network: &Network, pczt: &Pczt) -> Summary {
+pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
     // The two standard scripts, which are all this wallet builds or holds.
     let address = |script: &[u8]| {
         use transparent::address::TransparentAddress::{PublicKeyHash, ScriptHash};
@@ -230,31 +319,44 @@ fn summarize(network: &Network, pczt: &Pczt) -> Summary {
         };
         Some(Address::Transparent(address).encode(network))
     };
-    let transparent_inputs: Vec<_> = pczt
-        .transparent()
-        .inputs()
-        .iter()
-        .map(|i| (address(i.script_pubkey()), *i.value()))
-        .collect();
-    let transparent_outputs: Vec<_> = pczt
-        .transparent()
+    let transparent_inputs: Vec<_> =
+        pczt.transparent().inputs().iter().map(|i| (address(i.script_pubkey()), *i.value())).collect();
+    let transparent_outputs: Vec<_> =
+        pczt.transparent().outputs().iter().map(|o| (address(o.script_pubkey()), *o.value())).collect();
+    // Padding outputs carry no value and name no one.
+    let real = |value: Option<u64>, address: &Option<String>| value.filter(|v| *v > 0 || address.is_some());
+    let sapling_outputs: Vec<_> = pczt
+        .sapling()
         .outputs()
         .iter()
-        .map(|o| (address(o.script_pubkey()), *o.value()))
+        .filter_map(|o| real(*o.value(), o.user_address()).map(|v| (o.user_address().clone(), v)))
         .collect();
-    let orchard_outputs: Vec<_> = [pczt.orchard(), pczt.ironwood()]
-        .into_iter()
+    let orchard_family = [pczt.orchard(), pczt.ironwood()];
+    let orchard_outputs: Vec<_> = orchard_family
+        .iter()
         .flat_map(|bundle| bundle.actions())
-        .filter_map(|action| {
-            let output = action.output();
-            let value = (*output.value())?;
-            (value > 0 || output.user_address().is_some()).then(|| (output.user_address().clone(), value))
-        })
+        .filter_map(|a| real(*a.output().value(), a.output().user_address()).map(|v| (a.output().user_address().clone(), v)))
         .collect();
-    let spent: u64 = transparent_inputs.iter().map(|(_, v)| v).sum();
-    let paid: u64 = transparent_outputs.iter().chain(&orchard_outputs).map(|(_, v)| v).sum();
+
+    // A bundle's net value is what its spends brought in beyond its outputs.
+    let sapling_net = *pczt.sapling().value_sum();
+    let orchard_net: i128 = orchard_family
+        .iter()
+        .map(|b| {
+            let (magnitude, negative) = *b.value_sum();
+            if negative { -i128::from(magnitude) } else { i128::from(magnitude) }
+        })
+        .sum();
+    let sum = |list: &[(Option<String>, u64)]| list.iter().map(|(_, v)| i128::from(*v)).sum::<i128>();
+    let sapling_in = sapling_net + sum(&sapling_outputs);
+    let orchard_in = orchard_net + sum(&orchard_outputs);
+    let fee = sum(&transparent_inputs) - sum(&transparent_outputs) + sapling_net + orchard_net;
+
     let flows = |list: Vec<(Option<String>, u64)>| {
         list.into_iter().map(|(address, value)| Flow { address, value: value.to_string() }).collect()
+    };
+    let total = |value: i128| {
+        (value > 0).then(|| Flow { address: None, value: value.to_string() }).into_iter().collect()
     };
     Summary {
         network: match network {
@@ -263,9 +365,11 @@ fn summarize(network: &Network, pczt: &Pczt) -> Summary {
         },
         transparent_inputs: flows(transparent_inputs),
         transparent_outputs: flows(transparent_outputs),
+        sapling_inputs: total(sapling_in),
+        sapling_outputs: flows(sapling_outputs),
+        orchard_inputs: total(orchard_in),
         orchard_outputs: flows(orchard_outputs),
-        // ponytail: shielded spends aren't counted yet; only shielding is built.
-        fee: spent.saturating_sub(paid).to_string(),
+        fee: fee.to_string(),
     }
 }
 

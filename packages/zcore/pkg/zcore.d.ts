@@ -50,6 +50,14 @@ export function prove_pczt(pczt: Uint8Array): any;
 export function seed_fingerprint(seed: Uint8Array): string;
 
 /**
+ * The unsigned PCZT for `send`, planned as [`plan_send`] plans it, for the
+ * seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`. `trees` maps
+ * each pool spent from to `{ tip, chunks: { [chunk]: body } }`: ziziphus's
+ * raw tip snapshot and the frozen chunks holding the notes `plan_send` named.
+ */
+export function send_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, wallet: any, send: any, trees: any): Uint8Array;
+
+/**
  * An unsigned PCZT shielding `utxos` (`[{ txid, index, value, address,
  * scope, address_index }]`) into the account's own Ironwood address.
  */
@@ -101,6 +109,7 @@ export interface InitOutput {
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly prove_pczt: (a: number, b: number) => [number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
+    readonly send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any) => [number, number, number, number];
     readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number) => [number, number, number, number];
     readonly sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];

@@ -429,4 +429,31 @@ mod tests {
         assert_eq!((outputs.len(), *outputs[0].value()), (1, 50_000));
         assert_eq!(outputs[0].user_address().as_deref(), None);
     }
+
+    /// Plan → PCZT → keychain signature → proof → a transaction whose
+    /// Ironwood proof and signatures the extractor verifies.
+    #[test]
+    fn sends_from_ironwood_end_to_end() {
+        let (wallet, trees, _) = wallet_and_trees(200_000);
+        let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
+        let to = crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1).unwrap().remove(0);
+        let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
+
+        assert!(crate::shield::sign(&Network::MainNetwork, unsigned.clone(), &[8u8; 32], 0).is_err());
+        // What the keychain shows: 200,000 in from Ironwood, 50,000 out, the
+        // rest as change, and a fee that balances it.
+        let summary = serde_json::to_value(crate::shield::summarize(&Network::MainNetwork, &unsigned)).unwrap();
+        assert_eq!(summary["orchardInputs"][0]["value"], "200000");
+        let fee: u64 = summary["fee"].as_str().unwrap().parse().unwrap();
+        let change: u64 = summary["orchardOutputs"].as_array().unwrap().iter().map(|o| o["value"].as_str().unwrap().parse::<u64>().unwrap()).sum();
+        assert_eq!(50_000 + change + fee, 200_000);
+
+        let signed = crate::shield::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
+        let (_, raw) = crate::shield::prove(signed).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
+        assert!(tx.ironwood_bundle().is_some());
+        assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);
+    }
 }

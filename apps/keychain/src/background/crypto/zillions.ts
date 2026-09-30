@@ -95,7 +95,7 @@ const base64ToBytes = (s: string): Uint8Array =>
 
 /**
  * Signs every input of `pczt` (base64) that the seed's account `hdIndex`
- * holds; throws if it holds none.
+ * holds, transparent and shielded alike; throws if it holds none.
  */
 export const signPczt = (
   pczt: string,
@@ -104,14 +104,11 @@ export const signPczt = (
 ): string =>
   bytesToBase64(sign_pczt(getNetwork(), base64ToBytes(pczt), seed, hdIndex));
 
-/** What a PCZT (base64) moves, for the approval screen. */
+/**
+ * What a PCZT (base64) moves, for the approval screen. Orchard and Ironwood
+ * are shown together; shielded inputs are per-pool totals.
+ */
 export const buildPcztSummary = (pczt: string): PcztSummary => {
   const summary = pczt_summary(getNetwork(), base64ToBytes(pczt));
-  return {
-    ...summary,
-    saplingInputs: [],
-    saplingOutputs: [],
-    orchardInputs: [],
-    raw: summary,
-  };
+  return { ...summary, raw: summary };
 };
