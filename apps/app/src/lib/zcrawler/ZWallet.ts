@@ -30,10 +30,14 @@ const emptySyncStatus = (accountId: string): SyncStatus => ({
 export class ZWallet {
   readonly id: string;
   readonly #ufvk: string;
+  /** Block height below which nothing is crawled. Absent means full history. */
+  readonly #birthday?: number;
 
   #notes: Note[] = [];
   #sent: Sent[] = [];
   #unspentNotes: Map<string, Note> = new Map();
+  /** Note and sent-output ids already held, so a re-read chunk can't double them. */
+  #applied: Set<string> = new Set();
   #syncStatus: SyncStatus;
   #syncProgressListeners: Set<SyncEventListener> = new Set();
   #abort = new AbortController();
@@ -42,11 +46,10 @@ export class ZWallet {
   /** Spend lookups are chained: one bucket in flight, newest notes first. */
   #checking: Promise<unknown> = Promise.resolve();
 
-  // ponytail: `birthday` is accepted but ignored; every chunk in range is
-  // crawled until the crawl stops on chunk heights instead.
   constructor(options: { id: string; ufvk: string; birthday?: number }) {
     this.id = options.id;
     this.#ufvk = options.ufvk;
+    this.#birthday = options.birthday;
     this.#syncStatus = emptySyncStatus(this.id);
     this.#seed();
   }
@@ -69,8 +72,10 @@ export class ZWallet {
       this.#syncStatus = syncStatus;
     }
     for (const note of notes) {
+      this.#applied.add(note.id);
       if (!note.spent) this.#unspentNotes.set(note.nf_mine, note);
     }
+    for (const out of sent) this.#applied.add(out.id);
   });
 
   subscribeSyncProgress = (listener: SyncEventListener) => {
@@ -106,13 +111,15 @@ export class ZWallet {
         scanned.to = last_chunk;
       }
 
-      // Chunks minted since the last sync. Crawled downward like everything
-      // else, so the window's top only moves once the whole range has landed.
+      // Chunks minted since the last sync, plus the window's top chunk again:
+      // it may have been the tip, still filling, when it was read. Crawled
+      // downward like everything else, so the window's top only moves once the
+      // whole range has landed.
       await crawlChunks({
         ufvk: this.#ufvk,
         pool,
         from: last_chunk,
-        to: scanned.to + 1,
+        to: scanned.to,
         signal: this.#abort.signal,
         onChunk: (result) => this.#applyChunk(pool, result, chunks),
       });
@@ -120,16 +127,28 @@ export class ZWallet {
       scanned.to = last_chunk;
       this.#advance(chunks);
 
-      // The unscanned history below the window, newest chunk first.
+      // The unscanned history below the window, newest chunk first, down to
+      // the first chunk that starts before the birthday: every chunk below it
+      // is older still.
+      const floor = new AbortController();
       await crawlChunks({
         ufvk: this.#ufvk,
         pool,
         from: scanned.from - 1,
         to: first_chunk,
-        signal: this.#abort.signal,
+        signal: AbortSignal.any([this.#abort.signal, floor.signal]),
         onChunk: (result) => {
+          if (floor.signal.aborted) return;
           scanned.from = result.chunk;
           this.#applyChunk(pool, result, chunks);
+          if (
+            this.#birthday !== undefined &&
+            result.minHeight < this.#birthday
+          ) {
+            scanned.from = first_chunk;
+            floor.abort();
+            this.#advance(chunks);
+          }
         },
       });
     }
@@ -142,19 +161,24 @@ export class ZWallet {
   /** Applies one chunk's notes, then persists and announces progress. */
   #applyChunk = (
     pool: Pool,
-    { chunk, hits, sent }: ChunkWorkerSuccess,
+    { hits, sent }: ChunkWorkerSuccess,
     chunks: ChunksData,
   ) => {
     for (const out of sent) {
-      this.#sent.push({ ...out, id: `${this.id}_${pool}_${out.position}` });
+      const id = `${this.id}_${pool}_${out.position}`;
+      if (this.#applied.has(id)) continue;
+      this.#applied.add(id);
+      this.#sent.push({ ...out, id });
     }
 
-    const found = hits.map((hit, i) => {
+    const found = hits.flatMap((hit) => {
       const note: Note = {
         ...hit,
-        id: `${this.id}_${pool}_${chunk}_${i}`,
+        id: `${this.id}_${pool}_${hit.position}`,
         spent: undefined,
       };
+      if (this.#applied.has(note.id)) return [];
+      this.#applied.add(note.id);
       this.#notes.push(note);
       this.#unspentNotes.set(note.nf_mine, note);
       return note;

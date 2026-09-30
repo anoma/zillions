@@ -56,10 +56,14 @@ worker.onmessage = async (e) => {
   try {
     await (ready ??= initZcrawler());
     const body = await fetchCiphertexts(chunk, pool);
-    const compactHits = try_decrypt(NETWORK, ufvk, pool, chunk, body);
+    const {
+      count,
+      min_height: minHeight,
+      hits: compactHits,
+    } = try_decrypt(NETWORK, ufvk, pool, chunk, body);
 
     if (!compactHits.length) {
-      worker.postMessage({ chunk, hits: compactHits, sent: [] });
+      worker.postMessage({ chunk, count, minHeight, hits: [], sent: [] });
       return;
     }
 
@@ -68,7 +72,7 @@ worker.onmessage = async (e) => {
     // outgoing ciphertexts that make our own sends visible.
     const fullNotes = await fetchFull(chunk, pool, compactHits);
     const { hits, sent } = try_decrypt_full(NETWORK, ufvk, pool, fullNotes);
-    worker.postMessage({ chunk, hits, sent });
+    worker.postMessage({ chunk, count, minHeight, hits, sent });
   } catch (err) {
     worker.postMessage({ chunk, error: String(err) });
   }

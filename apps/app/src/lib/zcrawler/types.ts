@@ -13,7 +13,7 @@ export interface DecryptedNote {
   nf_mine: string;
   /** The note's memo as text; absent when it carries none. */
   memo?: string;
-  /** The diversified address the note was sent to (raw bytes, hex). */
+  /** The encoded address the note was sent to — one of ours. */
   recipient: string;
   height: number;
   /** The note's transaction within its block. */
@@ -29,7 +29,7 @@ export interface TxLocator {
 }
 
 export type Note = DecryptedNote & {
-  /** `accountId_pool_chunk_index` — stable as long as chunk boundaries are. */
+  /** `accountId_pool_position` — positions are unique within a pool. */
   id: string;
   /** Where it was spent, `false` once checked and unspent, absent until checked. */
   spent?: false | TxLocator;
@@ -47,7 +47,7 @@ export interface SentOutput {
   pool: Pool;
   /** Value in zatoshis, as the recipient received it. */
   value: number;
-  /** The diversified address it was sent to (raw bytes, hex). */
+  /** The encoded address it was sent to. */
   recipient: string;
   memo?: string;
   height: number;
@@ -63,6 +63,10 @@ export type Sent = SentOutput & {
 /** A worker's decrypted output for one chunk: what this UFVK received and sent. */
 export type ChunkWorkerSuccess = {
   chunk: number;
+  /** Notes the chunk held; fewer than a full chunk's while it is the tip. */
+  count: number;
+  /** The lowest block height among the chunk's notes. */
+  minHeight: number;
   hits: DecryptedNote[];
   sent: SentOutput[];
 };

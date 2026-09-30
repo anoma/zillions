@@ -5,7 +5,7 @@
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
  * against `ufvk`. `chunk` is its number, which fixes each note's position.
  *
- * Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
+ * Returns `{ count, min_height, hits: [{ pool, scope, value, nf_mine, index }] }`.
  */
 export function try_decrypt(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array): any;
 

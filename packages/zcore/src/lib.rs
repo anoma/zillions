@@ -113,6 +113,15 @@ struct Hit {
     index: usize,
 }
 
+/// One `/ciphertexts` chunk's decryption: how many notes it held and the
+/// lowest height among them, which place it on the chain, and the hits.
+#[derive(Serialize)]
+struct Compact {
+    count: usize,
+    min_height: u32,
+    hits: Vec<Hit>,
+}
+
 /// A note the UFVK owns, read from its whole ciphertext: everything [`Hit`]
 /// has plus what only the full note plaintext carries, and where it sits.
 #[derive(Serialize)]
@@ -257,14 +266,15 @@ fn chunk_enforcement(network: &Network, min_height: u32, max_height: u32) -> Zip
     }
 }
 
-fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result<Vec<Hit>, String> {
+fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result<Compact, String> {
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+    let body = chunk_body(body, SAPLING_RECORD_LEN)?;
+    let (count, min_height) = (body.records.len(), body.min_height);
     let Some(dfvk) = ufvk.sapling() else {
-        return Ok(Vec::new());
+        return Ok(Compact { count, min_height, hits: Vec::new() });
     };
 
-    let body = chunk_body(body, SAPLING_RECORD_LEN)?;
     let enforcement = chunk_enforcement(&network, body.min_height, body.max_height);
     let nk = &dfvk.fvk().vk.nk;
     let ivks = sapling_ivks(dfvk);
@@ -302,7 +312,7 @@ fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result
             });
         }
     }
-    Ok(hits)
+    Ok(Compact { count, min_height, hits })
 }
 
 /// Orchard and Ironwood compact decryption: one protocol, told apart only by
@@ -312,20 +322,22 @@ fn decrypt_orchard<V: DomainVersion>(
     ufvk: &str,
     pool: &'static str,
     body: &[u8],
-) -> Result<Vec<Hit>, String>
+) -> Result<Compact, String>
 where
     NoteEncryptionDomain<V>: BatchDomain<IncomingViewingKey = OrchardIvk, Note = orchard::Note>,
     CompactAction: ShieldedOutput<NoteEncryptionDomain<V>, COMPACT_NOTE_SIZE>,
 {
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+    let body = chunk_body(body, ORCHARD_RECORD_LEN)?;
+    let (count, min_height) = (body.records.len(), body.min_height);
     let Some(fvk) = ufvk.orchard() else {
-        return Ok(Vec::new());
+        return Ok(Compact { count, min_height, hits: Vec::new() });
     };
 
     // Each action carries its own rho, so the domain is per-output.
     let ivks = orchard_ivks(fvk);
-    let outputs = chunk_body(body, ORCHARD_RECORD_LEN)?
+    let outputs = body
         .records
         .map(|r| {
             let (eph_key, r) = r.split_at(32);
@@ -359,7 +371,7 @@ where
             });
         }
     }
-    Ok(hits)
+    Ok(Compact { count, min_height, hits })
 }
 
 fn decrypt_full(
@@ -537,17 +549,17 @@ fn decrypt_full(
 /// Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
 /// against `ufvk`. `chunk` is its number, which fixes each note's position.
 ///
-/// Returns the hits: `[{ pool, scope, value, nf_mine, index }]`.
+/// Returns `{ count, min_height, hits: [{ pool, scope, value, nf_mine, index }] }`.
 #[wasm_bindgen]
 pub fn try_decrypt(network: &str, ufvk: &str, pool: &str, chunk: u32, body: &[u8]) -> Result<JsValue, JsError> {
-    let hits = match pool {
+    let compact = match pool {
         "sapling" => decrypt_sapling(network, ufvk, chunk, body),
         "orchard" => decrypt_orchard::<OrchardVersion>(network, ufvk, "orchard", body),
         "ironwood" => decrypt_orchard::<IronwoodVersion>(network, ufvk, "ironwood", body),
         _ => return Err(JsError::new("unknown pool")),
     }
     .map_err(|e| JsError::new(&e))?;
-    serde_wasm_bindgen::to_value(&hits).map_err(|e| JsError::new(&e.to_string()))
+    serde_wasm_bindgen::to_value(&compact).map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// Trial-decrypt one pool's full notes against `ufvk`.
@@ -611,8 +623,8 @@ mod tests {
             "08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39", // rho
         )]);
 
-        assert_eq!(decrypt_sapling(network, &ufvk, 4511, &sapling).expect("sapling runs").len(), 0);
-        assert_eq!(decrypt_orchard::<OrchardVersion>(network, &ufvk, "orchard", &orchard).expect("orchard runs").len(), 0);
+        assert_eq!(decrypt_sapling(network, &ufvk, 4511, &sapling).expect("sapling runs").hits.len(), 0);
+        assert_eq!(decrypt_orchard::<OrchardVersion>(network, &ufvk, "orchard", &orchard).expect("orchard runs").hits.len(), 0);
     }
 
     /// A `/ciphertexts` body around hex records, all at `height`, as the new
@@ -657,10 +669,12 @@ mod tests {
         let body = ciphertexts(3_430_000, &[&hex::encode(record)]);
 
         let ufvk = ufvk.encode(&Network::MainNetwork);
-        let hits = decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body).expect("runs");
+        let compact = decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body).expect("runs");
+        assert_eq!((compact.count, compact.min_height), (1, 3_430_000));
+        let hits = compact.hits;
         assert_eq!(hits.len(), 1);
         assert_eq!((hits[0].pool, hits[0].scope, hits[0].value), ("ironwood", "external", 123_456));
-        assert!(decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body).expect("runs").is_empty());
+        assert!(decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body).expect("runs").hits.is_empty());
     }
 
     #[test]
