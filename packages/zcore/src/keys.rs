@@ -1,13 +1,15 @@
 //! An account's keys from its BIP-39 seed, for the keychain: the viewing key
 //! and default addresses it hands the app, the fingerprint that names the
-//! seed, and the spending keys its reveal screen shows. Offline key math.
+//! seed, and the spending keys its reveal screen shows. Plus fresh shielded
+//! addresses from the viewing key, for both. Offline key math.
 
+use rand_core::{OsRng, RngCore};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use zcash_keys::encoding::{encode_extended_spending_key, AddressCodec};
-use zcash_keys::keys::{Era, UnifiedAddressRequest, UnifiedSpendingKey};
+use zcash_keys::keys::{Era, ReceiverRequirement, UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey};
 use zcash_protocol::consensus::{Network, NetworkConstants};
-use zip32::{AccountId, fingerprint::SeedFingerprint};
+use zip32::{AccountId, DiversifierIndex, fingerprint::SeedFingerprint};
 
 use crate::parse_network;
 
@@ -58,6 +60,33 @@ pub fn seed_fingerprint(seed: &[u8]) -> Result<String, JsError> {
     Ok(hex::encode(fp.to_bytes()))
 }
 
+/// Orchard and Sapling, never transparent.
+const ORCHARD_SAPLING: UnifiedAddressRequest = UnifiedAddressRequest::unsafe_custom(
+    ReceiverRequirement::Require,
+    ReceiverRequirement::Require,
+    ReceiverRequirement::Omit,
+);
+
+fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
+    let ufvk = UnifiedFullViewingKey::decode(network, ufvk)?;
+    // Random, not a counter: the keychain and the app hand out addresses with no shared state.
+    let mut j = [0u8; 11];
+    OsRng.fill_bytes(&mut j);
+    // Sapling works on about half the indices; take the next one it does.
+    let (address, _) = ufvk
+        .find_address(DiversifierIndex::from(j), ORCHARD_SAPLING)
+        .map_err(|e| e.to_string())?;
+    Ok(address.encode(network))
+}
+
+/// A new shielded address of the account `ufvk` names, unlinkable to its
+/// others; nothing needs to remember it, the viewing key finds what it receives.
+#[wasm_bindgen]
+pub fn fresh_address(network: &str, ufvk: &str) -> Result<String, JsError> {
+    let network = parse_network(network).map_err(|e| JsError::new(&e))?;
+    fresh(&network, ufvk).map_err(|e| JsError::new(&e))
+}
+
 #[derive(Serialize)]
 struct SpendingKeys {
     /// The whole unified spending key in librustzcash's storage encoding, hex:
@@ -98,5 +127,30 @@ mod tests {
 
         // Another index is another account.
         assert_ne!(account.ufvk, super::account(&network, &seed, 1).unwrap().ufvk);
+    }
+
+    #[test]
+    fn fresh_addresses_are_new_shielded_and_ours() {
+        use zcash_keys::address::Address;
+
+        let network = Network::MainNetwork;
+        let account = account(&network, &[7u8; 32], 0).unwrap();
+        let ufvk = UnifiedFullViewingKey::decode(&network, &account.ufvk).unwrap();
+
+        let a = fresh(&network, &account.ufvk).unwrap();
+        let b = fresh(&network, &account.ufvk).unwrap();
+        assert_ne!(a, b);
+        assert_ne!(a, account.unified);
+        for encoded in [a, b] {
+            let Some(Address::Unified(ua)) = Address::decode(&network, &encoded) else {
+                panic!("not a unified address")
+            };
+            assert!(ua.transparent().is_none());
+            // The account's keys, not just any: both receivers decrypt to it.
+            let orchard = ua.orchard().unwrap();
+            assert!(ufvk.orchard().unwrap().scope_for_address(orchard).is_some());
+            let sapling = ua.sapling().unwrap();
+            assert!(ufvk.sapling().unwrap().decrypt_diversifier(sapling).is_some());
+        }
     }
 }

@@ -14,6 +14,12 @@ export function derive_account(network: string, seed: Uint8Array, hd_index: numb
 export function derive_transparent(network: string, ufvk: string, scope: string, from: number, count: number): string[];
 
 /**
+ * A new shielded address of the account `ufvk` names, Orchard and Sapling,
+ * unlinkable to its others.
+ */
+export function fresh_address(network: string, ufvk: string): string;
+
+/**
  * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
  */
 export function max_send(network: string, wallet: any, send: any): bigint;
@@ -115,6 +121,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
     readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
