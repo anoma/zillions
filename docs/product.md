@@ -85,6 +85,14 @@ indexer (ziziphus) to reach the wallet's notes.
 
 - Choose **shielded** or **transparent**.
 - Shows the address as a QR code and as text, with one-click copy.
+- **Shielded**: a fresh address each time the screen opens, so payers can't
+  compare notes and link their payments to one wallet. Earlier addresses keep
+  working, and everything they receive joins the same balance. Shielded
+  addresses carry no transparent part: sharing one never reveals a
+  transparent address. — *Planned* (today the same shielded address is shown
+  every time).
+- **Transparent**: one stable address, shown separately, for exchanges and
+  wallets that can't send to shielded addresses.
 
 ### 2.3 Send — Built
 
@@ -127,10 +135,11 @@ Moves shielded funds to one of the account's own transparent addresses.
 
 - Shows the available shielded amount; the user enters an amount, with
   tap-to-fill for the maximum.
-- Each unshield goes to a **fresh transparent address** of the account, never
-  the one the account shields from or receives on, so observers can't pair
-  the funds going in with the funds coming out. — *Planned* (today it uses
-  the account's main transparent address; see 2.8, address rotation).
+- Each unshield goes to a **fresh transparent address** of the account, one
+  never shown anywhere, and never the one the account shields from or
+  receives on, so observers can't pair the funds going in with the funds
+  coming out. — *Planned* (today it uses the account's main transparent
+  address; see 2.8, address rotation).
 - Checks: amount set, enough balance.
 - Fee preview, Keychain approval, receipt as in Send.
 
@@ -165,10 +174,13 @@ Moves shielded funds to one of the account's own transparent addresses.
 - Header shows the active account, with its shielded and transparent addresses
   (copyable).
 - **Switch account** from the header.
-- **Transparent address rotation.** — *Planned*. The account uses more than
-  one transparent address: a fresh one for each unshield (2.5), and
-  potentially for receiving (2.2). All of them count toward its balance and
-  history, and the Keychain signs for any of them.
+- **Address rotation.** — *Planned*. An account uses many addresses: a fresh
+  shielded one each time it shows one (2.2, 3.2), one stable transparent one
+  for receiving, and a fresh transparent one for each unshield (2.5). All of
+  them count toward its balance and history, and the Keychain signs for any
+  of them. The wallet only hands out addresses that other Zcash wallets find
+  when restoring the same recovery phrase, so no funds are lost by moving
+  wallets.
 - Links: Help, Privacy policy, X (Twitter).
 
 ## 3. Keychain (browser extension)
@@ -194,6 +206,9 @@ user's behalf.
 
 - List accounts, select the active one.
 - View an account: its addresses.
+- **Copy an address to share at any time, even without the app open**: a
+  fresh shielded address each time, and the stable transparent one. —
+  *Planned* (fresh shielded addresses; see 2.8).
 - Rename, delete.
 - Reveal, after re-entering the password: the **recovery phrase**, the
   **viewing key** (lets someone see, not spend), and the **spending keys**.
@@ -255,3 +270,14 @@ Challenges to check, one by one:
 - Recovery-phrase passphrase on import (3.1)?
 - Keep or drop the optional creation block height on import (3.1)?
 - Offline Keychain challenges (3.5): each to be checked.
+
+## References
+
+How other Zcash wallets do things we also do, for comparison. Zodl (formerly
+Zashi) is the Zcash reference wallet; its address rotation is the model for
+2.2, 2.5 and 2.8.
+
+- Zodl Android: https://github.com/zodl-inc/zodl-android
+- Zodl Android SDK: https://github.com/zodl-inc/zodl-android-wallet-sdk
+- Zodl iOS: https://github.com/zodl-inc/zodl-ios
+- Zodl iOS (Swift) SDK: https://github.com/zodl-inc/zodl-swift-wallet-sdk
