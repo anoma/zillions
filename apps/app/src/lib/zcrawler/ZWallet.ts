@@ -1,8 +1,10 @@
 import { dedupe, singleton } from "../utils";
 import { crawlChunks } from "./crawl";
 import { loadNotes, loadSent, loadSyncStatus, saveSyncState } from "./db";
-import { buildHistory } from "./history";
+import { buildHistory, buildTransparentHistory } from "./history";
 import { CHUNKS, type ChunksData, fetchNullifiers } from "./indexer";
+import type { Utxo } from "./lightwalletd";
+import { syncTransparent, type TransparentTx } from "./transparent";
 import type { ChunkWorkerSuccess, Note, Pool, Sent, SyncStatus } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
@@ -39,6 +41,11 @@ export class ZWallet {
   /** Note and sent-output ids already held, so a re-read chunk can't double them. */
   #applied: Set<string> = new Set();
   #syncStatus: SyncStatus;
+  /** The transparent side, rebuilt whole each sync. */
+  #transparent: { utxos: Utxo[]; txs: TransparentTx[] } = {
+    utxos: [],
+    txs: [],
+  };
   #syncProgressListeners: Set<SyncEventListener> = new Set();
   #abort = new AbortController();
   /** Saves are chained so two overlapping writes can't reorder the sync tip. */
@@ -94,6 +101,15 @@ export class ZWallet {
     const startTime = Date.now();
     await this.#seed();
     this.#emitProgress();
+
+    // Transparent takes seconds, so it lands long before the shielded crawl;
+    // announcing it on arrival shows that balance straight away.
+    const transparent = syncTransparent(this.#ufvk)
+      .then((result) => {
+        this.#transparent = result;
+        this.#emitProgress();
+      })
+      .catch((err) => console.error("[sync] transparent failed", err));
 
     // Notes carried over from an earlier sync may have been spent since. Kicked
     // off first so the bucket lookups overlap the crawl.
@@ -153,6 +169,7 @@ export class ZWallet {
       });
     }
 
+    await transparent;
     await this.#checking;
     await this.#saving;
     console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
@@ -252,11 +269,17 @@ export class ZWallet {
       // TODO
       pendingChange: 0n,
       pendingSpendable: 0n,
-      unshieldedBalance: 0n,
+      unshieldedBalance: this.#transparent.utxos.reduce(
+        (sum, utxo) => sum + BigInt(utxo.value),
+        0n,
+      ),
     };
   }
 
   async getTransactionHistory() {
-    return buildHistory(this.#notes, this.#sent);
+    return [
+      ...buildHistory(this.#notes, this.#sent),
+      ...buildTransparentHistory(this.#transparent.txs),
+    ].sort((a, b) => b.block_height - a.block_height);
   }
 }

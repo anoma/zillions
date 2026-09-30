@@ -1,4 +1,5 @@
 import type { TransactionReceipt } from "../sdk/types";
+import type { TransparentTx } from "./transparent";
 import type { Note, Sent, TxLocator } from "./types";
 
 /** A transaction's identity in history, until real txids are served. */
@@ -78,4 +79,24 @@ export function buildHistory(
         from_address: undefined,
       };
     });
+}
+
+/** One entry per transparent transaction, valued by its net effect on us. */
+export function buildTransparentHistory(
+  txs: TransparentTx[],
+): TransactionReceipt[] {
+  return txs.map(({ txid, height, received, spent }) => ({
+    txid,
+    tx_type: received >= spent ? "Received" : "Sent",
+    value: received - spent,
+    fee: 0n,
+    block_height: height,
+    confirmations: 0,
+    status: "Confirmed",
+    memo: undefined,
+    timestamp: undefined,
+    pool: "transparent",
+    to_address: undefined,
+    from_address: undefined,
+  }));
 }
