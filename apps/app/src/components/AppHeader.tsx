@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
@@ -12,10 +13,14 @@ import { Tooltip } from "./Tooltip";
 
 function AccountProfile() {
   const account = useAccount();
-  // ponytail: fresh per mount (page load, account switch), not per hover.
-  const shielded = useFreshAddress() ?? "";
+  // Rotated once the tooltip closes, so it never changes while it's read.
+  const [shown, setShown] = useState(0);
+  const shielded = useFreshAddress(shown) ?? "";
   return (
-    <div className="relative group/tooltip">
+    <div
+      className="relative group/tooltip"
+      onMouseLeave={() => setShown((n) => n + 1)}
+    >
       <div className="h-10 flex items-center gap-2 p-2">
         <span className="text-sm">{account.transparent.alias}</span>
       </div>

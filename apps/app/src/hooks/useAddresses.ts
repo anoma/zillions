@@ -7,8 +7,8 @@ import { useWallet } from "./useWallet";
 
 const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 
-/** A new shielded address per mount of the caller; undefined while it's made. */
-export function useFreshAddress() {
+/** A new shielded address per mount of the caller and per change of `round`; undefined while it's made. */
+export function useFreshAddress(round = 0) {
   const ufvk = useAccount().shielded.viewingKey;
   const [fresh, setFresh] = useState<{ ufvk: string; address: string }>();
 
@@ -21,7 +21,7 @@ export function useFreshAddress() {
     return () => {
       live = false;
     };
-  }, [ufvk]);
+  }, [ufvk, round]);
 
   // Never the previous account's address while the new one is made.
   return fresh?.ufvk === ufvk ? fresh.address : undefined;

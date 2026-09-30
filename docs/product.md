@@ -171,8 +171,7 @@ Moves shielded funds to one of the account's own transparent addresses.
   app explains how to get it (including a download link).
 - Checks that the Keychain version is recent enough.
 - Header shows the active account, with its shielded and transparent addresses
-  (copyable). A fresh shielded one each time it's shown. — *Planned* (today
-  fresh each time the app opens or switches account)
+  (copyable). A fresh shielded one each time it's shown. — *Built*
 - **Switch account** from the header.
 - **Address rotation.** — *Built*. An account uses many addresses: a fresh
   shielded one each time it shows one (2.2, 3.2), one stable transparent one
