@@ -1,4 +1,3 @@
-import { initSdk } from "@zillions/sdk";
 import { useEffect, useState, type ReactNode } from "react";
 import { waitForKeychainInjection } from "../lib/keychain/keychain";
 import { PageLoader } from "./PageLoader";
@@ -10,7 +9,7 @@ export function AppLoader({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      await Promise.all([initSdk(), waitForKeychainInjection()]);
+      await waitForKeychainInjection();
       setLoading(false);
     })();
   }, []);

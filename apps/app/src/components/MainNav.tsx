@@ -1,7 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { twMerge } from "tailwind-merge";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
-import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { HouseIcon } from "../icons/HouseIcon";
 import { RotateCcwIcon } from "../icons/RotateCcwIcon";
 import { XIcon } from "../icons/XLogo";
@@ -24,7 +23,6 @@ export function MainNav() {
           {(
             [
               { label: "Wallet", to: "/", icon: HouseIcon },
-              { label: "Send", to: "/send", icon: ArrowUpIcon },
               { label: "Receive", to: "/receive", icon: ArrowDownIcon },
               {
                 label: "Transactions",
