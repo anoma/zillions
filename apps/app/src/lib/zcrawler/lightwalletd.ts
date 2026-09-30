@@ -196,3 +196,21 @@ export async function fetchAddressTransactions(
     return { data: bytes(raw, 1), height: num(raw, 2) };
   });
 }
+
+/** What history needs from a block: when it was mined, and its txids by index. */
+export interface Block {
+  /** Unix seconds. */
+  time: number;
+  /** Transactions with a shielded part only: a compact block omits the rest. */
+  txids: Map<number, string>;
+}
+
+export async function fetchBlock(height: number): Promise<Block> {
+  const [compact] = await call("GetBlock", message([[1, height]]));
+  const block = fields(compact);
+  const txids = (block.get(7) ?? []).map((raw): [number, string] => {
+    const tx = fields(raw as Uint8Array);
+    return [num(tx, 1), displayTxid(bytes(tx, 2))];
+  });
+  return { time: num(block, 5), txids: new Map(txids) };
+}

@@ -1,9 +1,9 @@
 import { dedupe, singleton } from "../utils";
 import { crawlChunks } from "./crawl";
 import { loadNotes, loadSent, loadSyncStatus, saveSyncState } from "./db";
-import { buildHistory, buildTransparentHistory } from "./history";
+import { buildHistory, historyHeights } from "./history";
 import { CHUNKS, type ChunksData, fetchNullifiers } from "./indexer";
-import type { Utxo } from "./lightwalletd";
+import { type Block, fetchBlock, type Utxo } from "./lightwalletd";
 import { syncTransparent, type TransparentTx } from "./transparent";
 import type { ChunkWorkerSuccess, Note, Pool, Sent, SyncStatus } from "./types";
 
@@ -46,6 +46,8 @@ export class ZWallet {
     utxos: [],
     txs: [],
   };
+  /** Blocks history names, for their txids and times. They never change. */
+  #blocks: Map<number, Block> = new Map();
   #syncProgressListeners: Set<SyncEventListener> = new Set();
   #abort = new AbortController();
   /** Saves are chained so two overlapping writes can't reorder the sync tip. */
@@ -171,6 +173,9 @@ export class ZWallet {
 
     await transparent;
     await this.#checking;
+    await this.#fetchBlocks().catch((err) =>
+      console.error("[sync] block lookup failed", err),
+    );
     await this.#saving;
     console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
   });
@@ -235,6 +240,20 @@ export class ZWallet {
       .catch((err) => console.error("[sync] spend check failed", err));
   };
 
+  /**
+   * Fetches the blocks behind every transaction in history, once each: they
+   * give shielded transactions their txids, which is what lets a transaction
+   * seen from both sides show once, and every entry its time.
+   */
+  #fetchBlocks = async () => {
+    const heights = [
+      ...historyHeights(this.#notes, this.#sent, this.#transparent.txs),
+    ].filter((height) => !this.#blocks.has(height));
+    const blocks = await Promise.all(heights.map(fetchBlock));
+    heights.forEach((height, i) => this.#blocks.set(height, blocks[i]));
+    this.#emitProgress();
+  };
+
   /** Recomputes progress from the scanned window, then persists and announces it. */
   #advance = (chunks: ChunksData) => {
     this.#syncStatus.percentage = percentageOf(
@@ -277,9 +296,11 @@ export class ZWallet {
   }
 
   async getTransactionHistory() {
-    return [
-      ...buildHistory(this.#notes, this.#sent),
-      ...buildTransparentHistory(this.#transparent.txs),
-    ].sort((a, b) => b.block_height - a.block_height);
+    return buildHistory(
+      this.#notes,
+      this.#sent,
+      this.#transparent.txs,
+      this.#blocks,
+    );
   }
 }

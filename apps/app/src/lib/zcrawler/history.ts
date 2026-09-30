@@ -1,11 +1,12 @@
 import type { TransactionReceipt } from "../sdk/types";
+import type { Block } from "./lightwalletd";
 import type { TransparentTx } from "./transparent";
 import type { Note, Sent, TxLocator } from "./types";
 
-/** A transaction's identity in history, until real txids are served. */
+/** A shielded transaction's identity until its block names it. */
 const locatorId = ({ height, tx_index }: TxLocator) => `${height}_${tx_index}`;
 
-/** Everything one transaction did to this wallet. */
+/** Everything one transaction did to this wallet's shielded notes. */
 type TxGroup = {
   locator: TxLocator;
   received: Note[];
@@ -14,89 +15,156 @@ type TxGroup = {
   sent: Sent[];
 };
 
+/** One transaction, from either side or both. */
+type Entry = {
+  height: number;
+  shielded?: TxGroup;
+  transparent?: TransparentTx;
+};
+
+const max0 = (n: bigint) => (n > 0n ? n : 0n);
+
 const sum = (of: { value: number }[]) =>
   of.reduce((total, { value }) => total + BigInt(value), 0n);
 
+/** A shielded group's net effect, and what it shows as on its own. */
+function shieldedSide({ received, spent, sent }: TxGroup) {
+  // Spending without a recovered output still means it left the wallet:
+  // fall back to what the inputs were worth net of change, fee included.
+  const outgoing = sent.length > 0 || spent.length > 0;
+  const outflow = sent.length ? sum(sent) : sum(spent) - sum(received);
+  const pools = new Set([...received, ...spent, ...sent].map((p) => p.pool));
+  const [details] = sent.length ? sent : received;
+  return {
+    value: outgoing ? -outflow : sum(received),
+    // With every output accounted for, what our inputs held beyond them is
+    // the fee; every shielded input is ours, since only we can spend them.
+    // Below zero means an input was never found, so the fee is unknown.
+    fee: sent.length ? max0(sum(spent) - sum(received) - sum(sent)) : 0n,
+    pool: pools.size === 1 ? [...pools][0] : ("mixed" as const),
+    memo: details?.memo,
+    // Only a send knows its counterparty: on the receiving side the
+    // recipient is our own address, and the sender is never revealed.
+    to_address: sent.length ? details.recipient : undefined,
+  };
+}
+
+function receipt(
+  txid: string,
+  { height, shielded, transparent }: Entry,
+  time?: number,
+): TransactionReceipt {
+  const base = {
+    txid,
+    fee: 0n,
+    block_height: height,
+    confirmations: 0,
+    status: "Confirmed" as const,
+    timestamp: time,
+    from_address: undefined,
+  };
+  const t = transparent && transparent.received - transparent.spent;
+  if (!shielded) {
+    return {
+      ...base,
+      tx_type: t! >= 0n ? "Received" : "Sent",
+      value: t!,
+      memo: undefined,
+      pool: "transparent",
+      to_address: undefined,
+    };
+  }
+
+  const s = shieldedSide(shielded);
+  const side = { memo: s.memo, pool: s.pool, to_address: s.to_address };
+  if (t === undefined) {
+    return {
+      ...base,
+      ...side,
+      tx_type: s.value < 0n ? "Sent" : "Received",
+      value: s.value,
+      fee: s.fee,
+    };
+  }
+  // Both sides: whatever the two don't account for between them is the fee.
+  const fee = max0(-(s.value + t));
+  if (t > 0n && s.value < 0n) {
+    return { ...base, ...side, tx_type: "Unshielded", value: t, fee };
+  }
+  if (t < 0n && s.value > 0n) {
+    return { ...base, ...side, tx_type: "Shielded", value: s.value, fee };
+  }
+  const value = s.value + t;
+  return {
+    ...base,
+    ...side,
+    pool: "mixed",
+    tx_type: value < 0n ? "Sent" : "Received",
+    value,
+  };
+}
+
 /**
- * One entry per transaction, newest first: everything the wallet received in
- * it, spent in it, and sent from it.
+ * One entry per transaction, newest first, across both sides: a transaction
+ * that moved funds between transparent and shielded shows once, as Shielded
+ * or Unshielded, with its fee.
  *
- * `txid` is the locator, not a real hash, so the receipt card's hash and
- * explorer link stay placeholders. Fees need the transparent side of a
- * transaction, and timestamps a block header; neither is fetched.
+ * Shielded transactions are named through `blocks`; one whose block isn't
+ * there yet keeps a placeholder id and can't be matched with its
+ * transparent side.
  */
 export function buildHistory(
   notes: Note[],
   sent: Sent[],
+  transparent: TransparentTx[],
+  blocks: Map<number, Block>,
 ): TransactionReceipt[] {
-  const txs = new Map<string, TxGroup>();
+  const groups = new Map<string, TxGroup>();
   const at = (locator: TxLocator) => {
     const id = locatorId(locator);
-    let tx = txs.get(id);
-    if (!tx) {
-      tx = { locator, received: [], spent: [], sent: [] };
-      txs.set(id, tx);
+    let group = groups.get(id);
+    if (!group) {
+      group = { locator, received: [], spent: [], sent: [] };
+      groups.set(id, group);
     }
-    return tx;
+    return group;
   };
-
   for (const note of notes) {
     at(note).received.push(note);
     if (note.spent) at(note.spent).spent.push(note);
   }
   for (const out of sent) at(out).sent.push(out);
 
-  return [...txs.values()]
-    .sort(
-      (a, b) =>
-        b.locator.height - a.locator.height ||
-        b.locator.tx_index - a.locator.tx_index,
-    )
-    .map(({ locator, received, spent, sent }) => {
-      // Spending without a recovered output still means it left the wallet:
-      // fall back to what the inputs were worth net of change, fee included.
-      const outgoing = sent.length > 0 || spent.length > 0;
-      const outflow = sent.length ? sum(sent) : sum(spent) - sum(received);
-      const pools = new Set(
-        [...received, ...spent, ...sent].map((p) => p.pool),
-      );
-      const [details] = sent.length ? sent : received;
+  const entries = new Map<string, Entry>();
+  for (const group of groups.values()) {
+    const { height, tx_index } = group.locator;
+    const txid =
+      blocks.get(height)?.txids.get(tx_index) ?? locatorId(group.locator);
+    entries.set(txid, { height, shielded: group });
+  }
+  for (const tx of transparent) {
+    const entry = entries.get(tx.txid) ?? { height: tx.height };
+    entries.set(tx.txid, { ...entry, transparent: tx });
+  }
 
-      return {
-        txid: locatorId(locator),
-        tx_type: outgoing ? "Sent" : "Received",
-        value: outgoing ? -outflow : sum(received),
-        fee: 0n,
-        block_height: locator.height,
-        confirmations: 0,
-        status: "Confirmed",
-        memo: details?.memo,
-        timestamp: undefined,
-        pool: pools.size === 1 ? [...pools][0] : "mixed",
-        // Only a send knows its counterparty: on the receiving side the
-        // recipient is our own address, and the sender is never revealed.
-        to_address: sent.length ? details.recipient : undefined,
-        from_address: undefined,
-      };
-    });
+  return [...entries]
+    .map(([txid, entry]) =>
+      receipt(txid, entry, blocks.get(entry.height)?.time),
+    )
+    .sort((a, b) => b.block_height - a.block_height);
 }
 
-/** One entry per transparent transaction, valued by its net effect on us. */
-export function buildTransparentHistory(
-  txs: TransparentTx[],
-): TransactionReceipt[] {
-  return txs.map(({ txid, height, received, spent }) => ({
-    txid,
-    tx_type: received >= spent ? "Received" : "Sent",
-    value: received - spent,
-    fee: 0n,
-    block_height: height,
-    confirmations: 0,
-    status: "Confirmed",
-    memo: undefined,
-    timestamp: undefined,
-    pool: "transparent",
-    to_address: undefined,
-    from_address: undefined,
-  }));
+/** Every height history names, so their blocks can be fetched. */
+export function historyHeights(
+  notes: Note[],
+  sent: Sent[],
+  transparent: TransparentTx[],
+) {
+  return new Set([
+    ...notes.flatMap((n) =>
+      n.spent ? [n.height, n.spent.height] : [n.height],
+    ),
+    ...sent.map((s) => s.height),
+    ...transparent.map((t) => t.height),
+  ]);
 }
