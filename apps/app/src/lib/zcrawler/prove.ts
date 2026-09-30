@@ -4,19 +4,24 @@
  */
 
 import initZcore, { prove_pczt } from "@zillions/zcore";
+import type { SaplingParams } from "./submit";
 
 // `self` typed as Window in a DOM-lib project; cast to the message surface we use.
 const worker = self as unknown as {
-  onmessage: ((e: MessageEvent<Uint8Array>) => void) | null;
+  onmessage:
+    | ((e: MessageEvent<{ pczt: Uint8Array; sapling?: SaplingParams }>) => void)
+    | null;
   postMessage: (
     msg: { ok: { txid: string; raw: Uint8Array } } | { error: string },
   ) => void;
 };
 
-worker.onmessage = async ({ data }) => {
+worker.onmessage = async ({ data: { pczt, sapling } }) => {
   try {
     await initZcore();
-    worker.postMessage({ ok: prove_pczt(data) });
+    worker.postMessage({
+      ok: prove_pczt(pczt, sapling?.spend, sapling?.output),
+    });
   } catch (e) {
     worker.postMessage({ error: e instanceof Error ? e.message : String(e) });
   }

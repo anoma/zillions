@@ -414,6 +414,65 @@ mod tests {
         (wallet, trees, anchor)
     }
 
+    /// The Sapling parameters, from the repo's params package.
+    fn sapling_params() -> crate::shield::SaplingParams {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../sapling-params");
+        let spend = std::fs::read(format!("{dir}/sapling-spend.params")).unwrap();
+        let output = std::fs::read(format!("{dir}/sapling-output.params")).unwrap();
+        crate::shield::SaplingParams::read(&spend, &output).unwrap()
+    }
+
+    /// Plan → PCZT → signature and proof generation key → Groth16 proofs → a
+    /// transaction whose Sapling proofs and signatures the extractor verifies.
+    /// A change note (`internal`) needs the internal proof generation key.
+    fn sapling_send(internal: bool) {
+        use zcash_keys::keys::UnifiedSpendingKey;
+        let network = Network::MainNetwork;
+        let usk = UnifiedSpendingKey::from_seed(&network, &SEED, zip32::AccountId::ZERO).unwrap();
+        let key = if internal { usk.sapling().derive_internal() } else { usk.sapling().clone() };
+        let (_, ours) = key.default_address();
+        let note = sapling::Note::from_parts(ours, sapling::value::NoteValue::from_raw(200_000), sapling::Rseed::AfterZip212([5u8; 32]));
+        let leaves: Vec<sapling::Node> = (0..5u8)
+            .map(|i| {
+                let other = sapling::Note::from_parts(ours, sapling::value::NoteValue::from_raw(u64::from(i)), sapling::Rseed::AfterZip212([i; 32]));
+                sapling::Node::from_cmu(&if i == 2 { note.cmu() } else { other.cmu() })
+            })
+            .collect();
+        let tip = crate::witness::tests::snapshot(&leaves);
+        let trees = Trees::from([(
+            "sapling".to_string(),
+            TreeData { tip: postcard::to_allocvec(&tip).unwrap(), chunks: HashMap::new() },
+        )]);
+        let mut data = crate::wallet::NoteData::for_tests("sapling", crate::notes::encode_sapling(&note), 2, TIP - 100);
+        if internal {
+            data.set_internal();
+        }
+        let wallet = Wallet::new(network, &WalletData { tip: TIP, notes: vec![data], utxos: vec![] }).unwrap();
+
+        let ufvk = UnifiedFullViewingKey::decode(&network, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
+        let to = crate::transparent_tx::derive(&network, &wallet_ufvk(), "external", 5, 1).unwrap().remove(0);
+        let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
+
+        let signed = crate::shield::sign(&network, unsigned, &SEED, 0).unwrap();
+        assert!(crate::shield::prove(signed.clone(), None).is_err(), "Sapling proofs need the parameters");
+        let (_, raw) = crate::shield::prove(signed, Some(&sapling_params())).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
+        assert_eq!(tx.sapling_bundle().unwrap().shielded_spends().len(), 1);
+        assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);
+    }
+
+    #[test]
+    fn sends_from_sapling_end_to_end() {
+        sapling_send(false);
+    }
+
+    #[test]
+    fn sends_sapling_change_end_to_end() {
+        sapling_send(true);
+    }
+
     #[test]
     fn builds_a_pczt_spending_an_ironwood_note() {
         let (wallet, trees, anchor) = wallet_and_trees(200_000);
@@ -451,7 +510,7 @@ mod tests {
         assert_eq!(50_000 + change + fee, 200_000);
 
         let signed = crate::shield::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
-        let (_, raw) = crate::shield::prove(signed).unwrap();
+        let (_, raw) = crate::shield::prove(signed, None).unwrap();
         let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
         assert!(tx.ironwood_bundle().is_some());
         assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);

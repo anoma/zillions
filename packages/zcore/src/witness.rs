@@ -26,6 +26,8 @@ const UPPER_DEPTH: u8 = 32 - CHUNK_DEPTH;
 /// A tree node that round-trips through ziziphus's 32 bytes.
 pub(crate) trait Node: Hashable + Clone {
     fn read(bytes: &[u8]) -> Result<Self, String>;
+    #[cfg(test)]
+    fn write(&self) -> [u8; 32];
 }
 
 impl Node for orchard::tree::MerkleHashOrchard {
@@ -33,12 +35,20 @@ impl Node for orchard::tree::MerkleHashOrchard {
         let bytes: [u8; 32] = bytes.try_into().map_err(|_| "hash is not 32 bytes")?;
         Option::from(Self::from_bytes(&bytes)).ok_or_else(|| "bad orchard tree node".into())
     }
+    #[cfg(test)]
+    fn write(&self) -> [u8; 32] {
+        self.to_bytes()
+    }
 }
 
 impl Node for sapling::Node {
     fn read(bytes: &[u8]) -> Result<Self, String> {
         let bytes: [u8; 32] = bytes.try_into().map_err(|_| "hash is not 32 bytes")?;
         Option::from(Self::from_bytes(bytes)).ok_or_else(|| "bad sapling tree node".into())
+    }
+    #[cfg(test)]
+    fn write(&self) -> [u8; 32] {
+        self.to_bytes()
     }
 }
 
@@ -193,7 +203,7 @@ pub(crate) mod tests {
     use orchard::tree::MerkleHashOrchard as H;
 
     /// A tip snapshot of `leaves`, all in the filling chunk.
-    pub(crate) fn snapshot(leaves: &[H]) -> TipBody {
+    pub(crate) fn snapshot<N: Node>(leaves: &[N]) -> TipBody {
         TipBody { tree_size: leaves.len() as u64, ommers: vec![], roots: vec![], active_chunk: heap(leaves) }
     }
 
@@ -209,21 +219,21 @@ pub(crate) mod tests {
 
     /// A chunk heap as ziziphus stores it: leaves, complete subtrees hashed,
     /// every other node left as the empty leaf.
-    fn heap(leaves: &[H]) -> Vec<u8> {
-        let mut nodes = vec![H::empty_leaf(); CHUNK_NODES];
+    fn heap<N: Node>(leaves: &[N]) -> Vec<u8> {
+        let mut nodes = vec![N::empty_leaf(); CHUNK_NODES];
         for (i, l) in leaves.iter().enumerate() {
-            nodes[CHUNK_LEAVES as usize - 1 + i] = *l;
+            nodes[CHUNK_LEAVES as usize - 1 + i] = l.clone();
         }
         for level in 1..=CHUNK_DEPTH {
             let row = (1usize << (CHUNK_DEPTH - level)) - 1;
             for j in 0..(1usize << (CHUNK_DEPTH - level)) {
                 if ((j as u64 + 1) << level) <= leaves.len() as u64 {
                     let i = row + j;
-                    nodes[i] = H::combine(Level::from(level - 1), &nodes[2 * i + 1], &nodes[2 * i + 2]);
+                    nodes[i] = N::combine(Level::from(level - 1), &nodes[2 * i + 1], &nodes[2 * i + 2]);
                 }
             }
         }
-        nodes.iter().flat_map(|n| n.to_bytes()).collect()
+        nodes.iter().flat_map(|n| n.write()).collect()
     }
 
     /// Real ziziphus data: a frozen chunk's leaves hash to the root the tip

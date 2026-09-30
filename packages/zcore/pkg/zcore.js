@@ -64,6 +64,21 @@ export function max_send(network, wallet, send) {
 }
 
 /**
+ * Whether proving `pczt` needs the Sapling parameters (~51 MB to fetch).
+ * @param {Uint8Array} pczt
+ * @returns {boolean}
+ */
+export function needs_sapling_params(pczt) {
+    const ptr0 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.needs_sapling_params(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
+}
+
+/**
  * The transparent side of a raw transaction mined at `height`, which fixes
  * the consensus rules it is read under: `{ txid, inputs: [{ txid, index }],
  * outputs: [{ index, value, address }] }`.
@@ -123,15 +138,22 @@ export function plan_send(network, wallet, send) {
 }
 
 /**
- * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`.
+ * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`. The
+ * Sapling parameters are needed only when [`needs_sapling_params`] says so.
  * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
  * @param {Uint8Array} pczt
+ * @param {Uint8Array | null} [sapling_spend]
+ * @param {Uint8Array | null} [sapling_output]
  * @returns {any}
  */
-export function prove_pczt(pczt) {
+export function prove_pczt(pczt, sapling_spend, sapling_output) {
     const ptr0 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.prove_pczt(ptr0, len0);
+    var ptr1 = isLikeNone(sapling_spend) ? 0 : passArray8ToWasm0(sapling_spend, wasm.__wbindgen_malloc);
+    var len1 = WASM_VECTOR_LEN;
+    var ptr2 = isLikeNone(sapling_output) ? 0 : passArray8ToWasm0(sapling_output, wasm.__wbindgen_malloc);
+    var len2 = WASM_VECTOR_LEN;
+    const ret = wasm.prove_pczt(ptr0, len0, ptr1, len1, ptr2, len2);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }

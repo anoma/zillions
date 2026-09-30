@@ -54,6 +54,10 @@ impl NoteData {
         self.note.clone()
     }
 
+    pub(crate) fn set_internal(&mut self) {
+        self.scope = "internal".into();
+    }
+
     pub(crate) fn for_tests(pool: &str, note: String, position: u64, height: u32) -> Self {
         NoteData {
             pool: pool.into(),

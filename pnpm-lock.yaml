@@ -29,6 +29,9 @@ importers:
       '@zillions/keychain-types':
         specifier: workspace:*
         version: link:../keychain/src/packages/types
+      '@zillions/sapling-params':
+        specifier: workspace:*
+        version: link:../../packages/sapling-params
       '@zillions/zcore':
         specifier: workspace:*
         version: link:../../packages/zcore
@@ -243,6 +246,8 @@ importers:
         version: 0.20.27(@types/node@24.13.2)(eslint@8.57.1)(jiti@2.7.0)(rolldown@1.1.4)(yaml@2.9.0)
 
   apps/keychain/src/packages/types: {}
+
+  packages/sapling-params: {}
 
   packages/zcore: {}
 

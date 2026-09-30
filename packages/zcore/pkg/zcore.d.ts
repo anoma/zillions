@@ -19,6 +19,11 @@ export function derive_transparent(network: string, ufvk: string, scope: string,
 export function max_send(network: string, wallet: any, send: any): bigint;
 
 /**
+ * Whether proving `pczt` needs the Sapling parameters (~51 MB to fetch).
+ */
+export function needs_sapling_params(pczt: Uint8Array): boolean;
+
+/**
  * The transparent side of a raw transaction mined at `height`, which fixes
  * the consensus rules it is read under: `{ txid, inputs: [{ txid, index }],
  * outputs: [{ index, value, address }] }`.
@@ -39,10 +44,11 @@ export function pczt_summary(network: string, pczt: Uint8Array): any;
 export function plan_send(network: string, wallet: any, send: any): any;
 
 /**
- * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`.
+ * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`. The
+ * Sapling parameters are needed only when [`needs_sapling_params`] says so.
  * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
  */
-export function prove_pczt(pczt: Uint8Array): any;
+export function prove_pczt(pczt: Uint8Array, sapling_spend?: Uint8Array | null, sapling_output?: Uint8Array | null): any;
 
 /**
  * The seed's ZIP-32 fingerprint, hex. Names the seed without revealing it.
@@ -104,10 +110,11 @@ export interface InitOutput {
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
+    readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
-    readonly prove_pczt: (a: number, b: number) => [number, number, number];
+    readonly prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
     readonly send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any) => [number, number, number, number];
     readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number) => [number, number, number, number];

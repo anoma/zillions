@@ -9,7 +9,7 @@ import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
-import { submitShield } from "../lib/zcrawler/shield";
+import { submitTransaction } from "../lib/zcrawler/submit";
 import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/shield")({
@@ -46,7 +46,7 @@ function ShieldRoute() {
         signer: account.transparent.address,
         pczt: bytesToBase64(pczt),
       });
-      const txid = await submitShield(base64ToBytes(signed));
+      const txid = await submitTransaction(base64ToBytes(signed));
       return { txid, value, fee, timestamp: Date.now() };
     },
   });

@@ -380,9 +380,30 @@ struct Extracted {
     raw: Vec<u8>,
 }
 
-pub(crate) fn prove(pczt: Pczt) -> Result<(String, Vec<u8>), String> {
+/// The Sapling proving parameters, read once their hashes have been checked.
+pub(crate) struct SaplingParams {
+    spend: sapling::circuit::SpendParameters,
+    output: sapling::circuit::OutputParameters,
+}
+
+impl SaplingParams {
+    /// Reads `sapling-spend.params` and `sapling-output.params`. Their
+    /// encodings aren't re-checked: the caller verified the files' hashes.
+    pub(crate) fn read(spend: &[u8], output: &[u8]) -> Result<Self, String> {
+        Ok(SaplingParams {
+            spend: sapling::circuit::SpendParameters::read(spend, false).map_err(|e| format!("spend params: {e}"))?,
+            output: sapling::circuit::OutputParameters::read(output, false).map_err(|e| format!("output params: {e}"))?,
+        })
+    }
+}
+
+pub(crate) fn prove(pczt: Pczt, sapling: Option<&SaplingParams>) -> Result<(String, Vec<u8>), String> {
     let circuit = OrchardCircuitVersion::PostNu6_3;
     let mut prover = Prover::new(pczt);
+    if prover.requires_sapling_proofs() {
+        let params = sapling.ok_or("Sapling proofs need the Sapling parameters")?;
+        prover = prover.create_sapling_proofs(&params.spend, &params.output).map_err(to_pczt_error)?;
+    }
     if prover.requires_orchard_proof() || prover.requires_ironwood_proof() {
         let pk = ProvingKey::build(circuit);
         if prover.requires_orchard_proof() {
@@ -394,7 +415,12 @@ pub(crate) fn prove(pczt: Pczt) -> Result<(String, Vec<u8>), String> {
     }
     let pczt = SpendFinalizer::new(prover.finish()).finalize_spends().map_err(to_pczt_error)?;
     let vk = VerifyingKey::build(circuit);
-    let tx = TransactionExtractor::new(pczt).with_orchard(&vk).extract().map_err(to_pczt_error)?;
+    let sapling_vks = sapling.map(|p| (p.spend.verifying_key(), p.output.verifying_key()));
+    let mut extractor = TransactionExtractor::new(pczt).with_orchard(&vk);
+    if let Some((spend_vk, output_vk)) = &sapling_vks {
+        extractor = extractor.with_sapling(spend_vk, output_vk);
+    }
+    let tx = extractor.extract().map_err(to_pczt_error)?;
     let mut raw = Vec::new();
     tx.write(&mut raw).map_err(|e| e.to_string())?;
     Ok((tx.txid().to_string(), raw))
@@ -443,11 +469,22 @@ pub fn pczt_summary(network: &str, pczt: &[u8]) -> Result<JsValue, JsError> {
     serde_wasm_bindgen::to_value(&summary).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// Proves a signed PCZT and extracts its transaction: `{ txid, raw }`.
+/// Whether proving `pczt` needs the Sapling parameters (~51 MB to fetch).
+#[wasm_bindgen]
+pub fn needs_sapling_params(pczt: &[u8]) -> Result<bool, JsError> {
+    Ok(Prover::new(parse(pczt)?).requires_sapling_proofs())
+}
+
+/// Proves a signed PCZT and extracts its transaction: `{ txid, raw }`. The
+/// Sapling parameters are needed only when [`needs_sapling_params`] says so.
 /// Building the Halo2 proving key alone takes seconds; run it off the UI thread.
 #[wasm_bindgen]
-pub fn prove_pczt(pczt: &[u8]) -> Result<JsValue, JsError> {
-    let (txid, raw) = prove(parse(pczt)?).map_err(|e| JsError::new(&e))?;
+pub fn prove_pczt(pczt: &[u8], sapling_spend: Option<Vec<u8>>, sapling_output: Option<Vec<u8>>) -> Result<JsValue, JsError> {
+    let sapling = match (sapling_spend, sapling_output) {
+        (Some(spend), Some(output)) => Some(SaplingParams::read(&spend, &output).map_err(|e| JsError::new(&e))?),
+        _ => None,
+    };
+    let (txid, raw) = prove(parse(pczt)?, sapling.as_ref()).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&Extracted { txid, raw }).map_err(|e| JsError::new(&e.to_string()))
 }
 
@@ -490,7 +527,7 @@ mod tests {
         // Another account's seed signs nothing.
         assert!(sign(&network, pczt.clone(), &[8u8; 32], 0).is_err());
         let signed = sign(&network, pczt, &seed, 0).unwrap();
-        let (txid, raw) = prove(signed).unwrap();
+        let (txid, raw) = prove(signed, None).unwrap();
         let tx = zcash_primitives::transaction::Transaction::read(&raw[..], BranchId::Nu6_3).unwrap();
         assert_eq!(tx.txid().to_string(), txid);
         assert!(tx.ironwood_bundle().is_some());
