@@ -2,6 +2,20 @@
 /* eslint-disable */
 
 /**
+ * Transparent addresses `from..from + count` on one BIP-44 chain of the
+ * viewing key's account: `"external"` (receiving) or `"internal"` (change).
+ * Empty when the viewing key has no transparent part.
+ */
+export function derive_transparent(network: string, ufvk: string, scope: string, from: number, count: number): string[];
+
+/**
+ * The transparent side of a raw transaction mined at `height`, which fixes
+ * the consensus rules it is read under: `{ txid, inputs: [{ txid, index }],
+ * outputs: [{ index, value, address }] }`.
+ */
+export function parse_transaction(network: string, height: number, data: Uint8Array): any;
+
+/**
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
  * against `ufvk`. `chunk` is its number, which fixes each note's position.
  *
@@ -29,6 +43,8 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
@@ -41,6 +57,8 @@ export interface InitOutput {
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __externref_table_dealloc: (a: number) => void;
+    readonly __externref_drop_slice: (a: number, b: number) => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

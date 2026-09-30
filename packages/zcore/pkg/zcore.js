@@ -1,6 +1,54 @@
 /* @ts-self-types="./zcore.d.ts" */
 
 /**
+ * Transparent addresses `from..from + count` on one BIP-44 chain of the
+ * viewing key's account: `"external"` (receiving) or `"internal"` (change).
+ * Empty when the viewing key has no transparent part.
+ * @param {string} network
+ * @param {string} ufvk
+ * @param {string} scope
+ * @param {number} from
+ * @param {number} count
+ * @returns {string[]}
+ */
+export function derive_transparent(network, ufvk, scope, from, count) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(scope, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.derive_transparent(ptr0, len0, ptr1, len1, ptr2, len2, from, count);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayJsValueFromWasm0(ret[0], ret[1]);
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v4;
+}
+
+/**
+ * The transparent side of a raw transaction mined at `height`, which fixes
+ * the consensus rules it is read under: `{ txid, inputs: [{ txid, index }],
+ * outputs: [{ index, value, address }] }`.
+ * @param {string} network
+ * @param {number} height
+ * @param {Uint8Array} data
+ * @returns {any}
+ */
+export function parse_transaction(network, height, data) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.parse_transaction(ptr0, len0, height, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
  * against `ufvk`. `chunk` is its number, which fixes each note's position.
  *
@@ -335,6 +383,17 @@ function debugString(val) {
     }
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
+}
+
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_externrefs.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
 }
 
 function getArrayU8FromWasm0(ptr, len) {

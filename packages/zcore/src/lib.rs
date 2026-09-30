@@ -15,6 +15,8 @@
 //! Ironwood (NU6.3) is Orchard's protocol in its own pool: the same keys and
 //! record layout, but V3 note plaintexts, so it decrypts in `IronwoodDomain`.
 
+mod transparent_tx;
+
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use zip32::Scope;
@@ -170,7 +172,7 @@ const SCOPES: [(&str, Scope); 2] = [
 ];
 
 /// `"main"` or `"test"`, as the app configures it.
-fn parse_network(network: &str) -> Result<Network, String> {
+pub(crate) fn parse_network(network: &str) -> Result<Network, String> {
     match network {
         "main" => Ok(Network::MainNetwork),
         "test" => Ok(Network::TestNetwork),
