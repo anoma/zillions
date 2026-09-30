@@ -47,6 +47,23 @@ export function derive_transparent(network, ufvk, scope, from, count) {
 }
 
 /**
+ * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
+ * @param {string} network
+ * @param {any} wallet
+ * @param {any} send
+ * @returns {bigint}
+ */
+export function max_send(network, wallet, send) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.max_send(ptr0, len0, wallet, send);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return BigInt.asUintN(64, ret[0]);
+}
+
+/**
  * The transparent side of a raw transaction mined at `height`, which fixes
  * the consensus rules it is read under: `{ txid, inputs: [{ txid, index }],
  * outputs: [{ index, value, address }] }`.
@@ -80,6 +97,25 @@ export function pczt_summary(network, pczt) {
     const ptr1 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
     const ret = wasm.pczt_summary(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
+ * is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
+ * change, fee }], fee }`, values in zatoshis.
+ * @param {string} network
+ * @param {any} wallet
+ * @param {any} send
+ * @returns {any}
+ */
+export function plan_send(network, wallet, send) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.plan_send(ptr0, len0, wallet, send);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }

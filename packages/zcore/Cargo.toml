@@ -51,6 +51,12 @@ jubjub = "0.10"
 ff = "0.13"
 zip32 = { version = "0.2", default-features = false }
 
+# Upstream wallet policy for sends: note selection, change, fees, ZIP 318.
+# No sync, gRPC or tokio.
+zcash_client_backend = { version = "0.24", default-features = false, features = ["orchard", "transparent-inputs"] }
+zcash_address = "0.13"
+incrementalmerkletree = "0.8"
+
 [dev-dependencies]
 # Only the tests build spending keys and encrypt notes.
 zcash_keys = { version = "0.16", features = ["orchard", "sapling", "transparent-inputs"] }

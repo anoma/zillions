@@ -14,6 +14,11 @@ export function derive_account(network: string, seed: Uint8Array, hd_index: numb
 export function derive_transparent(network: string, ufvk: string, scope: string, from: number, count: number): string[];
 
 /**
+ * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
+ */
+export function max_send(network: string, wallet: any, send: any): bigint;
+
+/**
  * The transparent side of a raw transaction mined at `height`, which fixes
  * the consensus rules it is read under: `{ txid, inputs: [{ txid, index }],
  * outputs: [{ index, value, address }] }`.
@@ -25,6 +30,13 @@ export function parse_transaction(network: string, height: number, data: Uint8Ar
  * orchardOutputs, fee }`, values in zatoshis as strings.
  */
 export function pczt_summary(network: string, pczt: Uint8Array): any;
+
+/**
+ * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
+ * is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
+ * change, fee }], fee }`, values in zatoshis.
+ */
+export function plan_send(network: string, wallet: any, send: any): any;
 
 /**
  * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`.
@@ -83,8 +95,10 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly prove_pczt: (a: number, b: number) => [number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
     readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number) => [number, number, number, number];

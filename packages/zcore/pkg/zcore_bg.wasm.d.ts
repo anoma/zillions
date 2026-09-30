@@ -3,8 +3,10 @@
 export const memory: WebAssembly.Memory;
 export const derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+export const max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
 export const parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pczt_summary: (a: number, b: number, c: number, d: number) => [number, number, number];
+export const plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
 export const prove_pczt: (a: number, b: number) => [number, number, number];
 export const seed_fingerprint: (a: number, b: number) => [number, number, number, number];
 export const shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number) => [number, number, number, number];

@@ -17,6 +17,8 @@
 
 mod keys;
 mod notes;
+mod send;
+mod wallet;
 mod shield;
 mod transparent_tx;
 
