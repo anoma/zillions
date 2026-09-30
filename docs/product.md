@@ -50,10 +50,13 @@ fully: holding, seeing, receiving and spending.
 
 | Pool | See balance | Receive | See history | Spend |
 |---|---|---|---|---|
-| Transparent | Working | Working | Working | Disabled (shielding: Built) |
-| Sapling | Working | Working | Working | Disabled |
-| Orchard | Working | Working | Working | Disabled |
-| Ironwood | Working | Working | Working | Planned |
+| Transparent | Working | Working | Working | Built |
+| Sapling | Working | Working | Working | Built |
+| Orchard | Working | Working | Working | Built |
+| Ironwood | Working | Working | Working | Built |
+
+Spending is *Built*: it awaits a first real transaction, which needs the tree
+indexer (ziziphus) to reach the wallet's notes.
 
 - Every kind of spend is required: from any pool the wallet holds funds in, to
   any kind of Zcash address.
@@ -74,9 +77,8 @@ fully: holding, seeing, receiving and spending.
   shown separately.
 - **Pending** amounts (sent or received but not yet confirmed) are shown and
   included in the total. — *Disabled*: comes back with sending.
-- Shortcut buttons: **Send** (*Disabled*), **Receive**, **Shield** (shown when
-  there is a transparent balance), **Unshield** (shown when there is a shielded
-  balance; *Disabled*).
+- Shortcut buttons: **Send**, **Receive**, **Shield** (shown when there is a
+  transparent balance), **Unshield** (shown when there is a shielded balance).
 - Recent transactions (see 2.6).
 
 ### 2.2 Receive — Working
@@ -84,17 +86,17 @@ fully: holding, seeing, receiving and spending.
 - Choose **shielded** or **transparent**.
 - Shows the address as a QR code and as text, with one-click copy.
 
-### 2.3 Send — Disabled, must come back with every feature below
+### 2.3 Send — Built
 
 - **From**: choose the shielded or the transparent balance. Within that
   balance the wallet picks the funds itself (see 1); there is no pool choice.
 - Shows the **available** amount for the chosen source.
 - **Amount** entry in ZEC.
-- **Tap-to-fill** the maximum sendable amount (the available balance less the
-  fee). — *Planned* (built on an unreleased branch).
+- **Tap-to-fill** (Max): the maximum sendable amount, the available balance
+  less the fee, kept up to date as the recipient changes.
 - **To**: paste any Zcash address (transparent, Sapling or unified). The field
   shows at a glance whether the recipient is transparent or shielded.
-- **Memo**: an optional message to a shielded recipient. — *Planned*.
+- **Memo**: an optional message to a shielded recipient.
 - **Fee preview** before confirming, updating as the form changes.
 - Checks before sending: amount set, recipient set, enough balance.
 - **Privacy notice** under the button: "This transfer is shielded",
@@ -108,19 +110,24 @@ fully: holding, seeing, receiving and spending.
 Moves transparent funds into the shielded balance.
 
 - Shows the transparent amount available and the **fee** that will be paid.
-- Shields **all** transparent funds by default. — *Built*.
-- **Partial shielding**: the user enters how much to shield, with
-  tap-to-fill for the maximum. — *Planned*.
+- Shields **all** transparent funds; there is no partial shielding. A coin is
+  spent whole, so shielding part of a balance would either shield more than
+  asked or send the rest back to a transparent address (see Principles:
+  Privacy). To move part of the funds out again, use Unshield.
 - Approval happens in the Keychain.
 - Tells the user that preparing the transaction takes up to a minute.
 - Receipt as in Send.
 
-### 2.5 Unshield — Disabled, must come back
+### 2.5 Unshield — Built
 
-Moves shielded funds to the account's own transparent address.
+Moves shielded funds to one of the account's own transparent addresses.
 
 - Shows the available shielded amount; the user enters an amount, with
   tap-to-fill for the maximum.
+- Each unshield goes to a **fresh transparent address** of the account, never
+  the one the account shields from or receives on, so observers can't pair
+  the funds going in with the funds coming out. — *Planned* (today it uses
+  the account's main transparent address; see 2.8, address rotation).
 - Checks: amount set, enough balance.
 - Fee preview, Keychain approval, receipt as in Send.
 
@@ -155,6 +162,10 @@ Moves shielded funds to the account's own transparent address.
 - Header shows the active account, with its shielded and transparent addresses
   (copyable).
 - **Switch account** from the header.
+- **Transparent address rotation.** — *Planned*. The account uses more than
+  one transparent address: a fresh one for each unshield (2.5), and
+  potentially for receiving (2.2). All of them count toward its balance and
+  history, and the Keychain signs for any of them.
 - Links: Help, Privacy policy, X (Twitter).
 
 ## 3. Keychain (browser extension)
@@ -191,7 +202,7 @@ user's behalf.
 - List connected sites; disconnect one or all.
 - Sites may ask to change the active account; the user approves.
 
-### 3.4 Approve transactions — Working for shielding; others come back with Send
+### 3.4 Approve transactions — Built
 
 - A site asks the Keychain to sign a transaction.
 - The approval window shows: network, where funds come from, where they go,
