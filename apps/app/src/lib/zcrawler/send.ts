@@ -4,7 +4,13 @@
  * the keychain signs. Submitting it is `submit.ts`'s.
  */
 
-import initZcore, { max_send, plan_send, send_pczt } from "@zillions/zcore";
+import initZcore, {
+  max_send,
+  plan_send,
+  plan_shield,
+  send_pczt,
+  shield_pczt,
+} from "@zillions/zcore";
 import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./indexer";
 import type { OwnUtxo } from "./transparent";
 import type { Note, Pool } from "./types";
@@ -59,9 +65,20 @@ export async function maxSend(wallet: WalletData, send: SendRequest) {
   return BigInt(max_send(NETWORK, wallet, request(send)));
 }
 
-/** Each pool's tree tip, plus the frozen chunks holding `notes`. */
-async function fetchTrees(notes: PlanStep["notes"]) {
-  const pools = [...new Set(notes.map((n) => n.pool))];
+const SHIELDED: Pool[] = ["sapling", "orchard", "ironwood"];
+
+/**
+ * The tree tip of every shielded pool a plan spends from or pays into (each
+ * anchors to its real root), plus the frozen chunks holding its notes.
+ */
+async function fetchTrees(plan: SendPlan) {
+  const notes = plan.steps.flatMap((s) => s.notes);
+  const flows = plan.steps.flatMap((s) => [
+    ...s.inputs,
+    ...s.payments,
+    ...s.change,
+  ]);
+  const pools = SHIELDED.filter((pool) => flows.some((f) => f.pool === pool));
   const trees = await Promise.all(
     pools.map(async (pool) => {
       const tip = await fetchTreeTip(pool);
@@ -103,7 +120,7 @@ export async function sendPczt(
   account: { seedFingerprint: string; hdIndex: number },
 ) {
   const plan = await planSend(wallet, send);
-  const trees = await fetchTrees(plan.steps.flatMap((s) => s.notes));
+  const trees = await fetchTrees(plan);
   const pczt: Uint8Array = send_pczt(
     NETWORK,
     ufvk,
@@ -111,6 +128,31 @@ export async function sendPczt(
     account.hdIndex,
     wallet,
     request(send),
+    trees,
+  );
+  return { pczt, plan };
+}
+
+/** Plans shielding every transparent coin into Ironwood. */
+export async function planShield(wallet: WalletData) {
+  await initZcore();
+  return plan_shield(NETWORK, wallet) as SendPlan;
+}
+
+/** The unsigned PCZT shielding every transparent coin, and its plan. */
+export async function shieldPczt(
+  wallet: WalletData,
+  ufvk: string,
+  account: { seedFingerprint: string; hdIndex: number },
+) {
+  const plan = await planShield(wallet);
+  const trees = await fetchTrees(plan);
+  const pczt: Uint8Array = shield_pczt(
+    NETWORK,
+    ufvk,
+    account.seedFingerprint,
+    account.hdIndex,
+    wallet,
     trees,
   );
   return { pczt, plan };

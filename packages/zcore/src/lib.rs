@@ -18,10 +18,10 @@
 mod build;
 mod keys;
 mod notes;
+mod roles;
 mod send;
 mod wallet;
 mod witness;
-mod shield;
 mod transparent_tx;
 
 use serde::{Deserialize, Serialize};

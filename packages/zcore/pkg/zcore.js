@@ -138,6 +138,23 @@ export function plan_send(network, wallet, send) {
 }
 
 /**
+ * Plans shielding every transparent coin: the same summary as [`plan_send`],
+ * with the shielded value as change.
+ * @param {string} network
+ * @param {any} wallet
+ * @returns {any}
+ */
+export function plan_shield(network, wallet) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.plan_shield(ptr0, len0, wallet);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`. The
  * Sapling parameters are needed only when [`needs_sapling_params`] says so.
  * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
@@ -217,24 +234,24 @@ export function send_pczt(network, ufvk, seed_fingerprint, hd_index, wallet, sen
 }
 
 /**
- * An unsigned PCZT shielding `utxos` (`[{ txid, index, value, address,
- * scope, address_index }]`) into the account's own Ironwood address.
+ * The unsigned PCZT shielding every transparent coin, planned as
+ * [`plan_shield`] plans it; `trees` as for [`send_pczt`].
  * @param {string} network
  * @param {string} ufvk
  * @param {string} seed_fingerprint
  * @param {number} hd_index
- * @param {any} utxos
- * @param {number} target_height
+ * @param {any} wallet
+ * @param {any} trees
  * @returns {Uint8Array}
  */
-export function shield_pczt(network, ufvk, seed_fingerprint, hd_index, utxos, target_height) {
+export function shield_pczt(network, ufvk, seed_fingerprint, hd_index, wallet, trees) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
     const ptr2 = passStringToWasm0(seed_fingerprint, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.shield_pczt(ptr0, len0, ptr1, len1, ptr2, len2, hd_index, utxos, target_height);
+    const ret = wasm.shield_pczt(ptr0, len0, ptr1, len1, ptr2, len2, hd_index, wallet, trees);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }

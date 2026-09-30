@@ -10,7 +10,8 @@ use wasm_bindgen::prelude::*;
 use zcash_address::ZcashAddress;
 use zcash_client_backend::data_api::anchor_retention::{AnchorRetentionInterval, PoolMigrationParams};
 use zcash_client_backend::data_api::wallet::input_selection::{
-    GreedyInputSelector, InputSelector, InputSelectorError, NoteSelection, SpendPolicy, TransparentSpendPolicy,
+    GreedyInputSelector, InputSelector, InputSelectorError, NoteSelection, ShieldingSelector, SpendPolicy,
+    TransparentSpendPolicy,
 };
 use zcash_client_backend::data_api::wallet::{ConfirmationsPolicy, TargetHeight};
 use zcash_client_backend::fees::zip317::SingleOutputChangeStrategy;
@@ -155,6 +156,44 @@ fn propose(wallet: &Wallet, send: &SendRequest, amount: Zatoshis) -> Result<Wall
     Ok(proposal)
 }
 
+/// Least a shielding may move: below it the fee eats too much of the value.
+/// The previous app's rule, and the mobile Zcash SDKs' default.
+const SHIELDING_THRESHOLD: Zatoshis = Zatoshis::const_from_u64(100_000);
+
+/// Upstream's shielding: every transparent coin into the account's own
+/// Ironwood, as change on its internal address.
+fn propose_shield(wallet: &Wallet) -> Result<Proposal<StandardFeeRule, std::convert::Infallible>, String> {
+    let params = wallet.network;
+    let policy = ConfirmationsPolicy::default();
+    let target_height = TargetHeight::from(wallet.tip + 1);
+    let mut from: Vec<_> = wallet.utxos.iter().map(|(o, _, _)| *o.recipient_address()).collect();
+    from.sort_unstable();
+    from.dedup();
+    let change = SingleOutputChangeStrategy::<StandardFeeRule, Wallet>::new(
+        StandardFeeRule::Zip317,
+        None,
+        ShieldedPool::Ironwood,
+        DustOutputPolicy::default(),
+    );
+    let proposal = GreedyInputSelector::<Wallet>::new()
+        .propose_shielding(
+            &params,
+            wallet,
+            &change,
+            SHIELDING_THRESHOLD,
+            &from,
+            ACCOUNT,
+            target_height,
+            policy.anchor_height(target_height),
+            &PoolMigrationParams::new(AnchorRetentionInterval::ZIP_318),
+            policy,
+            zcash_client_backend::data_api::CoinbaseFilter::default(),
+        )
+        .map_err(|e| e.to_string())?;
+    proposal.check_transaction_size().map_err(|e| e.to_string())?;
+    Ok(proposal)
+}
+
 /// The largest amount upstream will plan: its own fees decide, so this only
 /// searches. ponytail: ~40 plans per call; switch to upstream's
 /// `propose_send_max` once it is public.
@@ -219,7 +258,7 @@ struct PlanSummary {
     fee: u64,
 }
 
-fn summarize(proposal: &WalletProposal) -> PlanSummary {
+fn summarize<N>(proposal: &Proposal<StandardFeeRule, N>) -> PlanSummary {
     let steps: Vec<_> = proposal
         .steps()
         .iter()
@@ -305,6 +344,41 @@ pub fn send_pczt(
     pczt.serialize().map_err(|e| JsError::new(&format!("{e:?}")))
 }
 
+/// Plans shielding every transparent coin: the same summary as [`plan_send`],
+/// with the shielded value as change.
+#[wasm_bindgen]
+pub fn plan_shield(network: &str, wallet: JsValue) -> Result<JsValue, JsError> {
+    let wallet = shield_wallet(network, wallet).map_err(|e| JsError::new(&e))?;
+    let proposal = propose_shield(&wallet).map_err(|e| JsError::new(&e))?;
+    serde_wasm_bindgen::to_value(&summarize(&proposal)).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// The unsigned PCZT shielding every transparent coin, planned as
+/// [`plan_shield`] plans it; `trees` as for [`send_pczt`].
+#[wasm_bindgen]
+pub fn shield_pczt(
+    network: &str,
+    ufvk: &str,
+    seed_fingerprint: &str,
+    hd_index: u32,
+    wallet: JsValue,
+    trees: JsValue,
+) -> Result<Vec<u8>, JsError> {
+    let wallet = shield_wallet(network, wallet).map_err(|e| JsError::new(&e))?;
+    let trees: crate::build::Trees = serde_wasm_bindgen::from_value(trees).map_err(|e| JsError::new(&e.to_string()))?;
+    let ufvk = zcash_keys::keys::UnifiedFullViewingKey::decode(&wallet.network, ufvk).map_err(|e| JsError::new(&e))?;
+    let fingerprint = crate::hex_n::<32>(seed_fingerprint).map_err(|e| JsError::new(&e))?;
+    let proposal = propose_shield(&wallet).map_err(|e| JsError::new(&e))?;
+    let pczt = crate::build::pczt(&wallet, &ufvk, fingerprint, hd_index, &proposal, &trees).map_err(|e| JsError::new(&e))?;
+    pczt.serialize().map_err(|e| JsError::new(&format!("{e:?}")))
+}
+
+fn shield_wallet(network: &str, wallet: JsValue) -> Result<Wallet, String> {
+    let network = parse_network(network)?;
+    let data: WalletData = serde_wasm_bindgen::from_value(wallet).map_err(|e| e.to_string())?;
+    Wallet::new(network, &data)
+}
+
 /// The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
 #[wasm_bindgen]
 pub fn max_send(network: &str, wallet: JsValue, send: JsValue) -> Result<u64, JsError> {
@@ -323,6 +397,10 @@ pub(crate) mod tests {
 
     pub(crate) const SEED: [u8; 32] = [7u8; 32];
     pub(crate) const TIP: u32 = 3_450_000;
+
+    pub(crate) fn plan_shield(wallet: &Wallet) -> Proposal<StandardFeeRule, std::convert::Infallible> {
+        propose_shield(wallet).unwrap()
+    }
 
     /// Plans `amount` from the shielded balance to `to`.
     pub(crate) fn plan(wallet: &Wallet, to: &str, amount: u64) -> WalletProposal {

@@ -17,9 +17,9 @@ import {
   planSend,
   sendPczt,
   type SendRequest,
+  shieldPczt,
   type WalletData,
 } from "./send";
-import { proposeShield } from "./shield";
 import {
   type OwnUtxo,
   REORG_DEPTH,
@@ -382,11 +382,23 @@ export class ZWallet {
     account: { seedFingerprint: string; hdIndex: number },
   ) => sendPczt(this.#walletData(), send, this.#ufvk, account);
 
-  /** An unsigned PCZT shielding every transparent coin, for the next block. */
-  proposeShield = (account: { seedFingerprint: string; hdIndex: number }) => {
-    const { utxos, tip } = this.#transparent;
-    invariant(tip !== undefined && utxos.length > 0, "Nothing to shield");
-    return proposeShield(this.#ufvk, account, utxos, tip + 1);
+  /**
+   * The unsigned PCZT shielding every transparent coin into Ironwood, what it
+   * shields, and its fee.
+   */
+  proposeShield = async (account: {
+    seedFingerprint: string;
+    hdIndex: number;
+  }) => {
+    const { pczt, plan } = await shieldPczt(
+      this.#walletData(),
+      this.#ufvk,
+      account,
+    );
+    const shielded = plan.steps
+      .flatMap((s) => s.change)
+      .reduce((sum, c) => sum + BigInt(c.value), 0n);
+    return { pczt, value: shielded, fee: BigInt(plan.fee) };
   };
 
   async getTransactionHistory() {

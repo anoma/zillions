@@ -110,6 +110,8 @@ indexer (ziziphus) to reach the wallet's notes.
 Moves transparent funds into the shielded balance.
 
 - Shows the transparent amount available and the **fee** that will be paid.
+- Needs at least **0.001 ZEC**: below that the fee eats too much of it, and
+  the screen says so.
 - Shields **all** transparent funds; there is no partial shielding. A coin is
   spent whole, so shielding part of a balance would either shield more than
   asked or send the rest back to a transparent address (see Principles:

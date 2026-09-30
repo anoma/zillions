@@ -95,18 +95,44 @@ fn input_sources(step_has: [bool; 3]) -> Option<NonEmpty<PoolType>> {
     NonEmpty::from_vec(sources)
 }
 
+/// The shielded pools a step spends from, pays into or keeps change in.
+pub(crate) fn touched_pools<N>(step: &zcash_client_backend::proposal::Step<N>) -> Vec<&'static str> {
+    let name = |pool: ShieldedPool| match pool {
+        ShieldedPool::Sapling => "sapling",
+        ShieldedPool::Orchard => "orchard",
+        ShieldedPool::Ironwood => "ironwood",
+    };
+    let inputs = step
+        .shielded_inputs()
+        .into_iter()
+        .flat_map(|s| s.notes().iter().map(|n| n.note().pool()));
+    let outputs = step
+        .payment_pools()
+        .values()
+        .copied()
+        .chain(step.balance().proposed_change().iter().map(|c| c.output_pool()))
+        .filter_map(|p| match p {
+            PoolType::Shielded(pool) => Some(pool),
+            PoolType::Transparent => None,
+        });
+    let mut pools: Vec<_> = inputs.chain(outputs).map(name).collect();
+    pools.sort_unstable();
+    pools.dedup();
+    pools
+}
+
 fn zip32_path(network: &Network, hd_index: u32) -> Vec<u32> {
     vec![32 | HARDENED, network.network_type().coin_type() | HARDENED, hd_index | HARDENED]
 }
 
 /// The PCZT for a single-step plan. `fingerprint` and `hd_index` name the
 /// seed account, so the keychain can find its keys.
-pub(crate) fn pczt(
+pub(crate) fn pczt<N>(
     wallet: &Wallet,
     ufvk: &UnifiedFullViewingKey,
     fingerprint: [u8; 32],
     hd_index: u32,
-    proposal: &Proposal<StandardFeeRule, u32>,
+    proposal: &Proposal<StandardFeeRule, N>,
     trees: &Trees,
 ) -> Result<Pczt, String> {
     let network = wallet.network;
@@ -122,17 +148,26 @@ pub(crate) fn pczt(
         .filter_map(|pool| trees.get(pool).map(|data| (pool, data)))
         .map(|(pool, data)| Ok((pool, PoolTree::read(data)?)))
         .collect::<Result<_, String>>()?;
-    let orchard_root = |pool| -> Result<Option<orchard::Anchor>, String> {
-        trees.get(pool).map(|t| Ok(orchard::Anchor::from(t.tip::<MerkleHashOrchard>()?.root()))).transpose()
+    // Every shielded pool the step spends from or pays into anchors to its
+    // tree's real root at ziziphus's tip. The builder wants an anchor for each
+    // pool; one with no actions has no bundle, so its anchor goes unused.
+    for pool in touched_pools(step) {
+        if !trees.contains_key(pool) {
+            return Err(format!("no {pool} tree data for this transaction"));
+        }
+    }
+    let orchard_root = |pool| -> Result<orchard::Anchor, String> {
+        trees
+            .get(pool)
+            .map(|t| Ok(orchard::Anchor::from(t.tip::<MerkleHashOrchard>()?.root())))
+            .unwrap_or_else(|| Ok(orchard::Anchor::empty_tree()))
     };
-    // A pool without tree data still anchors outputs: the empty tree's root
-    // is a valid historical one. ponytail: as in shielding; spends need data.
     let sapling_anchor = match trees.get("sapling") {
         Some(t) => sapling::Anchor::from(t.tip::<sapling::Node>()?.root()),
         None => sapling::Anchor::empty_tree(),
     };
-    let orchard_anchor = orchard_root("orchard")?.unwrap_or_else(orchard::Anchor::empty_tree);
-    let ironwood_anchor = orchard_root("ironwood")?.unwrap_or_else(orchard::Anchor::empty_tree);
+    let orchard_anchor = orchard_root("orchard")?;
+    let ironwood_anchor = orchard_root("ironwood")?;
 
     let mut builder = Builder::new(
         network,
@@ -415,11 +450,11 @@ mod tests {
     }
 
     /// The Sapling parameters, from the repo's params package.
-    fn sapling_params() -> crate::shield::SaplingParams {
+    fn sapling_params() -> crate::roles::SaplingParams {
         let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../sapling-params");
         let spend = std::fs::read(format!("{dir}/sapling-spend.params")).unwrap();
         let output = std::fs::read(format!("{dir}/sapling-output.params")).unwrap();
-        crate::shield::SaplingParams::read(&spend, &output).unwrap()
+        crate::roles::SaplingParams::read(&spend, &output).unwrap()
     }
 
     /// Plan → PCZT → signature and proof generation key → Groth16 proofs → a
@@ -455,9 +490,9 @@ mod tests {
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
         let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
 
-        let signed = crate::shield::sign(&network, unsigned, &SEED, 0).unwrap();
-        assert!(crate::shield::prove(signed.clone(), None).is_err(), "Sapling proofs need the parameters");
-        let (_, raw) = crate::shield::prove(signed, Some(&sapling_params())).unwrap();
+        let signed = crate::roles::sign(&network, unsigned, &SEED, 0).unwrap();
+        assert!(crate::roles::prove(signed.clone(), None).is_err(), "Sapling proofs need the parameters");
+        let (_, raw) = crate::roles::prove(signed, Some(&sapling_params())).unwrap();
         let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
         assert_eq!(tx.sapling_bundle().unwrap().shielded_spends().len(), 1);
         assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);
@@ -471,6 +506,41 @@ mod tests {
     #[test]
     fn sends_sapling_change_end_to_end() {
         sapling_send(true);
+    }
+
+    /// Upstream's shielding plan → PCZT anchored to ziziphus's Ironwood root →
+    /// transparent signature → proof → a verified transaction.
+    #[test]
+    fn shields_end_to_end() {
+        let network = Network::MainNetwork;
+        let ours = crate::transparent_tx::derive(&network, &wallet_ufvk(), "external", 0, 1).unwrap().remove(0);
+        let utxo = crate::wallet::UtxoData::for_tests(&ours, 100_000, 1, TIP - 50);
+        let wallet = Wallet::new(network, &WalletData { tip: TIP, notes: vec![], utxos: vec![utxo] }).unwrap();
+        // Ironwood already holds five notes, none of them ours.
+        let leaves: Vec<_> = (0..5u64).map(crate::witness::tests::leaf).collect();
+        let tip = crate::witness::tests::snapshot(&leaves);
+        let anchor = orchard::Anchor::from(Tip::<MerkleHashOrchard>::new(&tip).unwrap().root());
+        let trees = Trees::from([(
+            "ironwood".to_string(),
+            TreeData { tip: postcard::to_allocvec(&tip).unwrap(), chunks: HashMap::new() },
+        )]);
+        let ufvk = UnifiedFullViewingKey::decode(&network, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
+
+        let proposal = crate::send::tests::plan_shield(&wallet);
+        assert!(pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &Trees::new()).is_err(), "needs Ironwood's tree");
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
+        assert_eq!(unsigned.ironwood().anchor(), &Some(anchor.to_bytes()));
+
+        // One coin into two padded Ironwood actions: 3 × 5,000.
+        let summary = serde_json::to_value(crate::roles::summarize(&network, &unsigned)).unwrap();
+        assert_eq!((summary["fee"].as_str(), summary["orchardOutputs"][0]["value"].as_str()), (Some("15000"), Some("85000")));
+
+        let signed = crate::roles::sign(&network, unsigned, &SEED, 0).unwrap();
+        let (_, raw) = crate::roles::prove(signed, None).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
+        assert!(tx.ironwood_bundle().is_some());
+        assert_eq!(tx.transparent_bundle().unwrap().vin.len(), 1);
     }
 
     #[test]
@@ -500,17 +570,17 @@ mod tests {
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
         let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
 
-        assert!(crate::shield::sign(&Network::MainNetwork, unsigned.clone(), &[8u8; 32], 0).is_err());
+        assert!(crate::roles::sign(&Network::MainNetwork, unsigned.clone(), &[8u8; 32], 0).is_err());
         // What the keychain shows: 200,000 in from Ironwood, 50,000 out, the
         // rest as change, and a fee that balances it.
-        let summary = serde_json::to_value(crate::shield::summarize(&Network::MainNetwork, &unsigned)).unwrap();
+        let summary = serde_json::to_value(crate::roles::summarize(&Network::MainNetwork, &unsigned)).unwrap();
         assert_eq!(summary["orchardInputs"][0]["value"], "200000");
         let fee: u64 = summary["fee"].as_str().unwrap().parse().unwrap();
         let change: u64 = summary["orchardOutputs"].as_array().unwrap().iter().map(|o| o["value"].as_str().unwrap().parse::<u64>().unwrap()).sum();
         assert_eq!(50_000 + change + fee, 200_000);
 
-        let signed = crate::shield::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
-        let (_, raw) = crate::shield::prove(signed, None).unwrap();
+        let signed = crate::roles::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
+        let (_, raw) = crate::roles::prove(signed, None).unwrap();
         let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
         assert!(tx.ironwood_bundle().is_some());
         assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);

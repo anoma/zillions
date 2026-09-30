@@ -44,6 +44,12 @@ export function pczt_summary(network: string, pczt: Uint8Array): any;
 export function plan_send(network: string, wallet: any, send: any): any;
 
 /**
+ * Plans shielding every transparent coin: the same summary as [`plan_send`],
+ * with the shielded value as change.
+ */
+export function plan_shield(network: string, wallet: any): any;
+
+/**
  * Proves a signed PCZT and extracts its transaction: `{ txid, raw }`. The
  * Sapling parameters are needed only when [`needs_sapling_params`] says so.
  * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
@@ -64,10 +70,10 @@ export function seed_fingerprint(seed: Uint8Array): string;
 export function send_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, wallet: any, send: any, trees: any): Uint8Array;
 
 /**
- * An unsigned PCZT shielding `utxos` (`[{ txid, index, value, address,
- * scope, address_index }]`) into the account's own Ironwood address.
+ * The unsigned PCZT shielding every transparent coin, planned as
+ * [`plan_shield`] plans it; `trees` as for [`send_pczt`].
  */
-export function shield_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, utxos: any, target_height: number): Uint8Array;
+export function shield_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, wallet: any, trees: any): Uint8Array;
 
 /**
  * The PCZT with every input the seed's account `hd_index` holds signed.
@@ -114,10 +120,11 @@ export interface InitOutput {
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
+    readonly plan_shield: (a: number, b: number, c: any) => [number, number, number];
     readonly prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
     readonly send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any) => [number, number, number, number];
-    readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number) => [number, number, number, number];
+    readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any) => [number, number, number, number];
     readonly sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];

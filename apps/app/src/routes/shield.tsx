@@ -12,6 +12,9 @@ import { zatoshiToZec } from "../lib/utils";
 import { submitTransaction } from "../lib/zcrawler/submit";
 import { TransferSuccess } from "./TransferSuccess";
 
+/** Least a shielding may move: zcore's rule, as the fee would eat the rest. */
+const SHIELDING_THRESHOLD = 100_000n;
+
 export const Route = createFileRoute("/shield")({
   component: ShieldRoute,
 });
@@ -34,7 +37,7 @@ function ShieldRoute() {
         available.toString(),
       ],
       queryFn: () => wallet.proposeShield({ seedFingerprint, hdIndex }),
-      enabled: available > 0n,
+      enabled: available >= SHIELDING_THRESHOLD,
       retry: false,
     }),
   );
@@ -66,6 +69,7 @@ function ShieldRoute() {
   }
 
   const error = shield.error ?? proposal.error;
+  const tooLittle = available > 0n && available < SHIELDING_THRESHOLD;
 
   return (
     <div className="p-10">
@@ -130,6 +134,12 @@ function ShieldRoute() {
         {shield.isPending && (
           <div className="mt-2 text-sm text-center font-medium">
             Proving takes up to a minute after you approve in the keychain.
+          </div>
+        )}
+
+        {tooLittle && (
+          <div className="mt-2 text-sm text-center font-medium">
+            Shielding needs at least <ZecValue zat={SHIELDING_THRESHOLD} />
           </div>
         )}
 
