@@ -20,9 +20,6 @@ export const Route = createFileRoute("/send")({
   component: SendRoute,
 });
 
-/** A memo fits in 512 bytes of UTF-8. */
-const MEMO_BYTES = 512;
-
 function SendRoute() {
   const account = useAccount();
   const balance = useGetBalance();
@@ -31,7 +28,6 @@ function SendRoute() {
   const [amountString, setAmountString] = useState("");
   const [isMax, setIsMax] = useState(false);
   const [to, setTo] = useState("");
-  const [memo, setMemo] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
 
   const from = isTransparentFrom ? "transparent" : "shielded";
@@ -44,13 +40,9 @@ function SendRoute() {
   })();
   const isTransparentTo = isTransparentAddress(to);
   const isShieldedTo = isShieldedAddress(to);
-  // Only a shielded recipient can read a memo.
-  const sentMemo = isShieldedTo && memo ? memo : undefined;
 
-  const { plan, maxAmount } = useSendPlan(
-    { from, to, amount: typed, memo: sentMemo },
-    isMax,
-  );
+  // No memo from the UI; `SendRequest.memo` stays for ones the app sets.
+  const { plan, maxAmount } = useSendPlan({ from, to, amount: typed }, isMax);
   const amount = isMax ? (maxAmount.data ?? 0n) : typed;
   const send = useSend();
 
@@ -59,7 +51,6 @@ function SendRoute() {
     : isTransparentFrom
       ? balance.data.unshieldedBalance
       : balance.data.shieldedBalance;
-  const memoBytes = new TextEncoder().encode(memo).length;
 
   const onSubmit = () => {
     setValidationMessage("");
@@ -69,14 +60,12 @@ function SendRoute() {
         ? "Set an amount"
         : amount > availableBalance
           ? "Insufficient balance"
-          : memoBytes > MEMO_BYTES
-            ? "The memo is too long"
-            : undefined;
+          : undefined;
     if (problem) {
       setValidationMessage(problem);
       return;
     }
-    send.mutate({ from, to, amount, memo: sentMemo });
+    send.mutate({ from, to, amount });
   };
 
   if (send.data) {
@@ -180,32 +169,6 @@ function SendRoute() {
               setTo(e.target.value.trim());
               setValidationMessage("");
             }}
-          />
-        </label>
-
-        <label className="mt-4">
-          <div className="text-xs font-medium mb-1 flex justify-between">
-            <span>Memo (optional)</span>
-            {isShieldedTo && (
-              <span
-                className={twMerge(memoBytes > MEMO_BYTES && "text-red-500")}
-              >
-                {memoBytes}/{MEMO_BYTES}
-              </span>
-            )}
-          </div>
-          <textarea
-            name="memo"
-            rows={2}
-            placeholder={
-              isTransparentTo
-                ? "Transparent addresses can't receive a memo"
-                : "A private message to the recipient"
-            }
-            disabled={isTransparentTo}
-            className="w-full px-4 py-2 font-medium rounded-lg border border-gray-300 outline-none resize-none disabled:opacity-50"
-            value={memo}
-            onChange={(e) => setMemo(e.target.value)}
           />
         </label>
 

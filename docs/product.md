@@ -96,7 +96,8 @@ indexer (ziziphus) to reach the wallet's notes.
   less the fee, kept up to date as the recipient changes.
 - **To**: paste any Zcash address (transparent, Sapling or unified). The field
   shows at a glance whether the recipient is transparent or shielded.
-- **Memo**: an optional message to a shielded recipient.
+- **Memo**: not offered to the user. The wallet can still attach one to a
+  shielded payment itself (kept for app-set memos later).
 - **Fee preview** before confirming, updating as the form changes.
 - Checks before sending: amount set, recipient set, enough balance.
 - **Privacy notice** under the button: "This transfer is shielded",
