@@ -49,16 +49,37 @@ export async function fetchFullNotes(chunk: number, pool: Pool) {
   );
 }
 
+/** A pool's note count, from where `/tip` redirects; throws if it names none. */
+async function treeSize(pool: Pool) {
+  // HEAD skips the snapshot body; a stale one 404s, but its URL has the size.
+  const res = await fetch(`${WEBSERVER_URL}/${pool}/tip`, { method: "HEAD" });
+  const size = Number(new URL(res.url).pathname.split("/").pop());
+  if (!Number.isInteger(size)) throw new Error(`No tree size for ${pool}`);
+  return size;
+}
+
 /**
- * ponytail: each pool's range on the new server, hardcoded until it serves its
- * tree size. The first chunk is the lowest the dev index holds in full, the
- * last was the tip chunk when this was set.
+ * TODO review: the local server's `/tip` reports 0 and it doesn't index from
+ * chunk 0, so its real ranges stand in for `fetchChunks` until it does both.
  */
-export const CHUNKS: ChunksData = {
+const CHUNKS_OVERRIDE: ChunksData | undefined = {
   ironwood: { first_chunk: 0, last_chunk: 39 },
-  orchard: { first_chunk: 3061, last_chunk: 3080 },
-  sapling: { first_chunk: 4513, last_chunk: 4514 },
+  orchard: { first_chunk: 3052, last_chunk: 3080 },
+  sapling: { first_chunk: 4511, last_chunk: 4515 },
 };
+
+/** Each pool's chunk range from chunk 0; an empty pool ends at `last_chunk` -1. */
+export async function fetchChunks(): Promise<ChunksData> {
+  if (CHUNKS_OVERRIDE) return CHUNKS_OVERRIDE;
+  const pools = ["ironwood", "orchard", "sapling"] as const;
+  const sizes = await Promise.all(pools.map(treeSize));
+  return Object.fromEntries(
+    pools.map((pool, i) => [
+      pool,
+      { first_chunk: 0, last_chunk: Math.ceil(sizes[i] / CHUNK_SIZE) - 1 },
+    ]),
+  ) as ChunksData;
+}
 
 /** A revealed nullifier's leading bytes, with the transaction that revealed it. */
 export type SpentNullifier = TxLocator & { nf_tag: string };

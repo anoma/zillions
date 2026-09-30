@@ -2,7 +2,7 @@ import { dedupe, singleton } from "../utils";
 import { crawlChunks } from "./crawl";
 import { loadNotes, loadSent, loadSyncStatus, saveSyncState } from "./db";
 import { buildHistory, historyHeights } from "./history";
-import { CHUNKS, type ChunksData, fetchNullifiers } from "./indexer";
+import { type ChunksData, fetchChunks, fetchNullifiers } from "./indexer";
 import { type Block, fetchBlock, type Utxo } from "./lightwalletd";
 import { syncTransparent, type TransparentTx } from "./transparent";
 import type { ChunkWorkerSuccess, Note, Pool, Sent, SyncStatus } from "./types";
@@ -121,13 +121,14 @@ export class ZWallet {
     // Notes carried over from an earlier sync may have been spent since. Kicked
     // off first so the bucket lookups overlap the crawl.
     this.#checkSpends([...this.#unspentNotes.values()]);
-    const chunks = CHUNKS;
 
     // History's blocks are looked up whatever becomes of the crawl: what it
     // did find, and the transparent side, still deserve their txids and times.
     try {
+      const chunks = await fetchChunks();
       for (const pool of POOLS) {
         const { first_chunk, last_chunk } = chunks[pool];
+        if (last_chunk < first_chunk) continue;
         const scanned = this.#syncStatus.scanned[pool];
 
         // An untouched wallet starts with an empty window pinned at the tip, so
