@@ -32,6 +32,9 @@ importers:
       '@zillions/sdk':
         specifier: workspace:*
         version: link:../../sdk/packages/zillions-sdk
+      '@zillions/zcore':
+        specifier: workspace:*
+        version: link:../../packages/zcore
       dexie:
         specifier: ^4.4.4
         version: 4.4.4
@@ -243,6 +246,8 @@ importers:
         version: 0.20.27(@types/node@24.13.2)(eslint@8.57.1)(jiti@2.7.0)(rolldown@1.1.4)(yaml@2.9.0)
 
   apps/keychain/src/packages/types: {}
+
+  packages/zcore: {}
 
   sdk:
     devDependencies:

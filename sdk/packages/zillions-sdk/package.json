@@ -16,7 +16,6 @@
     "index.ts",
     "wallet.ts",
     "keys.ts",
-    "zcrawler.ts",
     "requests.ts",
     "params.ts",
     "vite-plugin.ts"
@@ -27,7 +26,6 @@
     ".": "./index.ts",
     "./wallet": "./wallet.ts",
     "./keys": "./keys.ts",
-    "./zcrawler": "./zcrawler.ts",
     "./requests": "./requests.ts",
     "./params": "./params.ts",
     "./vite-plugin": "./vite-plugin.ts"

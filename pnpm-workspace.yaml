@@ -1,5 +1,6 @@
 packages:
   - apps/app
+  - packages/*
   - apps/keychain
   - apps/keychain/src/packages/types
   - sdk

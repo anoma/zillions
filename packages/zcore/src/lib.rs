@@ -8,9 +8,12 @@
 //! commitment tree, no network — just detection.
 //!
 //! Two tiers, matching the indexer's: `/ciphertexts` carries only enough to
-//! reject a note, and [`try_decrypt`] answers value and nullifier from it. `/notes/full` carries the whole ciphertext, and
-//! [`try_decrypt_full`] adds what the compact prefix cannot hold — the memo
-//! above all.
+//! reject a note, and [`try_decrypt`] answers value and nullifier from it.
+//! `/notes/full` carries the whole ciphertext, and [`try_decrypt_full`] adds
+//! what the compact prefix cannot hold — the memo above all.
+//!
+//! Ironwood (NU6.3) is Orchard's protocol in its own pool: the same keys and
+//! record layout, but V3 note plaintexts, so it decrypts in `IronwoodDomain`.
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -18,17 +21,20 @@ use zip32::Scope;
 
 use orchard::note::ExtractedNoteCommitment as OrchardCmx;
 use orchard::note::Nullifier;
-use orchard::note_encryption::{CompactAction, OrchardDomain};
+use orchard::keys::PreparedIncomingViewingKey as OrchardIvk;
+use orchard::note_encryption::{
+    CompactAction, DomainVersion, IronwoodVersion, NoteEncryptionDomain, OrchardDomain, OrchardVersion,
+};
 use sapling::note::ExtractedNoteCommitment as SaplingCmu;
 use sapling::note_encryption::{CompactOutputDescription, SaplingDomain, Zip212Enforcement};
+use zcash_keys::address::{Address, UnifiedAddress};
 use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_note_encryption::{
-    batch, try_output_recovery_with_ovk, EphemeralKeyBytes, ShieldedOutput, COMPACT_NOTE_SIZE,
-    ENC_CIPHERTEXT_SIZE, OUT_CIPHERTEXT_SIZE,
+    batch, try_output_recovery_with_ovk, BatchDomain, EphemeralKeyBytes, ShieldedOutput,
+    COMPACT_NOTE_SIZE, ENC_CIPHERTEXT_SIZE, OUT_CIPHERTEXT_SIZE,
 };
 use zcash_primitives::transaction::components::sapling::zip212_enforcement;
-use zcash_protocol::consensus::BlockHeight;
-use zillions_sdk_common::Network;
+use zcash_protocol::consensus::{BlockHeight, Network};
 
 /// Notes per `/ciphertexts` chunk: record `i` of chunk `c` sits at tree
 /// position `c × CHUNK_SIZE + i`.
@@ -37,8 +43,8 @@ const CHUNK_SIZE: u64 = 1 << 14;
 /// One `/ciphertexts` Sapling record: `eph_key ‖ enc_head ‖ cmu`.
 const SAPLING_RECORD_LEN: usize = 32 + COMPACT_NOTE_SIZE + 32;
 
-/// One `/ciphertexts` Orchard record: `eph_key ‖ enc_head ‖ cmx ‖ rho`, where
-/// rho is the action's nullifier, reused as this note's rho.
+/// One `/ciphertexts` Orchard or Ironwood record: `eph_key ‖ enc_head ‖ cmx ‖
+/// rho`, where rho is the action's nullifier, reused as this note's rho.
 const ORCHARD_RECORD_LEN: usize = 32 + COMPACT_NOTE_SIZE + 32 + 32;
 
 /// One note with its whole ciphertext, as `/notes/full` serves it. Both pools
@@ -118,7 +124,7 @@ struct FullHit {
     nf_mine: String,
     /// The note's memo as text, or `None` when it carries none.
     memo: Option<String>,
-    /// The diversified address the note was sent to (raw bytes, hex).
+    /// The encoded address the note was sent to — one of ours.
     recipient: String,
     height: u32,
     tx_index: u16,
@@ -132,7 +138,7 @@ struct FullHit {
 struct SentOutput {
     pool: &'static str,
     value: u64,
-    /// The diversified address the output was sent to (raw bytes, hex).
+    /// The encoded address the output was sent to.
     recipient: String,
     /// The memo as text, or `None` when it carries none.
     memo: Option<String>,
@@ -153,6 +159,28 @@ const SCOPES: [(&str, Scope); 2] = [
     ("external", Scope::External),
     ("internal", Scope::Internal),
 ];
+
+/// `"main"` or `"test"`, as the app configures it.
+fn parse_network(network: &str) -> Result<Network, String> {
+    match network {
+        "main" => Ok(Network::MainNetwork),
+        "test" => Ok(Network::TestNetwork),
+        _ => Err(format!("unknown network {network}")),
+    }
+}
+
+/// A recipient as a wallet shows it: a bare Sapling address, or the Orchard
+/// receiver wrapped in a unified address. Falls back to raw bytes if the
+/// unified encoding refuses them, so a note is never lost to a display detail.
+fn encode_sapling(network: &Network, addr: &sapling::PaymentAddress) -> String {
+    Address::Sapling(*addr).encode(network)
+}
+
+fn encode_orchard(network: &Network, addr: &orchard::Address) -> String {
+    UnifiedAddress::from_receivers(Some(*addr), None, None)
+        .map(|ua| Address::Unified(ua).encode(network))
+        .unwrap_or_else(|| hex::encode(addr.to_raw_address_bytes()))
+}
 
 fn hex_n<const N: usize>(s: &str) -> Result<[u8; N], String> {
     let v = hex::decode(s).map_err(|e| e.to_string())?;
@@ -189,11 +217,8 @@ fn sapling_ivks(
         .collect()
 }
 
-fn orchard_ivks(fvk: &orchard::keys::FullViewingKey) -> Vec<orchard::keys::PreparedIncomingViewingKey> {
-    SCOPES
-        .iter()
-        .map(|(_, scope)| orchard::keys::PreparedIncomingViewingKey::new(&fvk.to_ivk(*scope)))
-        .collect()
+fn orchard_ivks(fvk: &orchard::keys::FullViewingKey) -> Vec<OrchardIvk> {
+    SCOPES.iter().map(|(_, scope)| OrchardIvk::new(&fvk.to_ivk(*scope))).collect()
 }
 
 /// A `/ciphertexts` chunk body, split open. Postcard lays it out as
@@ -233,7 +258,7 @@ fn chunk_enforcement(network: &Network, min_height: u32, max_height: u32) -> Zip
 }
 
 fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result<Vec<Hit>, String> {
-    let network: Network = network.parse().map_err(|_| "invalid network".to_string())?;
+    let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
     let Some(dfvk) = ufvk.sapling() else {
         return Ok(Vec::new());
@@ -280,8 +305,19 @@ fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result
     Ok(hits)
 }
 
-fn decrypt_orchard(network: &str, ufvk: &str, body: &[u8]) -> Result<Vec<Hit>, String> {
-    let network: Network = network.parse().map_err(|_| "invalid network".to_string())?;
+/// Orchard and Ironwood compact decryption: one protocol, told apart only by
+/// the note plaintext version its domain `V` accepts.
+fn decrypt_orchard<V: DomainVersion>(
+    network: &str,
+    ufvk: &str,
+    pool: &'static str,
+    body: &[u8],
+) -> Result<Vec<Hit>, String>
+where
+    NoteEncryptionDomain<V>: BatchDomain<IncomingViewingKey = OrchardIvk, Note = orchard::Note>,
+    CompactAction: ShieldedOutput<NoteEncryptionDomain<V>, COMPACT_NOTE_SIZE>,
+{
+    let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
     let Some(fvk) = ufvk.orchard() else {
         return Ok(Vec::new());
@@ -303,7 +339,7 @@ fn decrypt_orchard(network: &str, ufvk: &str, body: &[u8]) -> Result<Vec<Hit>, S
                 EphemeralKeyBytes(eph_key.try_into().unwrap()),
                 enc_head.try_into().unwrap(),
             );
-            let domain = OrchardDomain::for_compact_action(&action);
+            let domain = NoteEncryptionDomain::<V>::for_compact_action(&action);
             Ok((domain, action))
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -315,7 +351,7 @@ fn decrypt_orchard(network: &str, ufvk: &str, body: &[u8]) -> Result<Vec<Hit>, S
     {
         if let Some(((note, _addr), scope_idx)) = res {
             hits.push(Hit {
-                pool: "orchard",
+                pool,
                 scope: SCOPES[scope_idx].0,
                 value: note.value().inner(),
                 nf_mine: hex::encode(note.nullifier(fvk).to_bytes()),
@@ -332,7 +368,7 @@ fn decrypt_full(
     pool: &str,
     notes: &[FullNote],
 ) -> Result<FullChunk, String> {
-    let network: Network = network.parse().map_err(|_| "invalid network".to_string())?;
+    let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
 
     let mut hits = Vec::new();
@@ -373,7 +409,7 @@ fn decrypt_full(
                     value: note.value().inner(),
                     nf_mine: hex::encode(note.nf(nk, notes[i].position).0),
                     memo: memo_text(&memo),
-                    recipient: hex::encode(addr.to_bytes()),
+                    recipient: encode_sapling(&network, &addr),
                     height: notes[i].height,
                     tx_index: notes[i].tx_index,
                     position: notes[i].position,
@@ -406,7 +442,7 @@ fn decrypt_full(
                     sent.push(SentOutput {
                         pool: "sapling",
                         value: note.value().inner(),
-                        recipient: hex::encode(addr.to_bytes()),
+                        recipient: encode_sapling(&network, &addr),
                         memo: memo_text(&memo),
                         height: notes[i].height,
                         tx_index: notes[i].tx_index,
@@ -457,7 +493,7 @@ fn decrypt_full(
                     value: note.value().inner(),
                     nf_mine: hex::encode(note.nullifier(fvk).to_bytes()),
                     memo: memo_text(&memo),
-                    recipient: hex::encode(addr.to_raw_address_bytes()),
+                    recipient: encode_orchard(&network, &addr),
                     height: notes[i].height,
                     tx_index: notes[i].tx_index,
                     position: notes[i].position,
@@ -483,7 +519,7 @@ fn decrypt_full(
                     sent.push(SentOutput {
                         pool: "orchard",
                         value: note.value().inner(),
-                        recipient: hex::encode(addr.to_raw_address_bytes()),
+                        recipient: encode_orchard(&network, &addr),
                         memo: memo_text(&memo),
                         height: notes[i].height,
                         tx_index: notes[i].tx_index,
@@ -506,7 +542,8 @@ fn decrypt_full(
 pub fn try_decrypt(network: &str, ufvk: &str, pool: &str, chunk: u32, body: &[u8]) -> Result<JsValue, JsError> {
     let hits = match pool {
         "sapling" => decrypt_sapling(network, ufvk, chunk, body),
-        "orchard" => decrypt_orchard(network, ufvk, body),
+        "orchard" => decrypt_orchard::<OrchardVersion>(network, ufvk, "orchard", body),
+        "ironwood" => decrypt_orchard::<IronwoodVersion>(network, ufvk, "ironwood", body),
         _ => return Err(JsError::new("unknown pool")),
     }
     .map_err(|e| JsError::new(&e))?;
@@ -575,7 +612,7 @@ mod tests {
         )]);
 
         assert_eq!(decrypt_sapling(network, &ufvk, 4511, &sapling).expect("sapling runs").len(), 0);
-        assert_eq!(decrypt_orchard(network, &ufvk, &orchard).expect("orchard runs").len(), 0);
+        assert_eq!(decrypt_orchard::<OrchardVersion>(network, &ufvk, "orchard", &orchard).expect("orchard runs").len(), 0);
     }
 
     /// A `/ciphertexts` body around hex records, all at `height`, as the new
@@ -588,6 +625,42 @@ mod tests {
             body.extend(hex::decode(record).expect("hex"));
         }
         body
+    }
+
+    // A V3 note encrypted to our own Orchard address: Ironwood's domain finds
+    // it, and Orchard's, which accepts only V2 plaintexts, must not.
+    #[test]
+    fn decrypts_our_own_ironwood_note() {
+        use orchard::note::{ExtractedNoteCommitment, RandomSeed, Rho};
+        use orchard::note_encryption::{IronwoodDomain, IronwoodNoteEncryption};
+        use orchard::value::NoteValue;
+        use orchard::NoteVersion;
+        use zcash_note_encryption::Domain;
+
+        let usk = UnifiedSpendingKey::from_seed(&Network::MainNetwork, &[7u8; 32], zip32::AccountId::ZERO)
+            .expect("usk");
+        let ufvk = usk.to_unified_full_viewing_key();
+        let ours = ufvk.orchard().expect("orchard fvk").address_at(0u32, Scope::External);
+
+        let rho_bytes: [u8; 32] = hex_n("08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39").unwrap();
+        let rho = Rho::from_bytes(&rho_bytes).unwrap();
+        let rseed = RandomSeed::from_bytes([3u8; 32], &rho).unwrap();
+        let note =
+            orchard::Note::from_parts(ours, NoteValue::from_raw(123_456), rho, rseed, NoteVersion::V3).unwrap();
+        let encryption = IronwoodNoteEncryption::new(None, note, [0u8; 512]);
+        let enc = encryption.encrypt_note_plaintext();
+
+        let mut record = IronwoodDomain::epk_bytes(encryption.epk()).0.to_vec();
+        record.extend(&enc[..COMPACT_NOTE_SIZE]);
+        record.extend(ExtractedNoteCommitment::from(note.commitment()).to_bytes());
+        record.extend(rho_bytes);
+        let body = ciphertexts(3_430_000, &[&hex::encode(record)]);
+
+        let ufvk = ufvk.encode(&Network::MainNetwork);
+        let hits = decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body).expect("runs");
+        assert_eq!(hits.len(), 1);
+        assert_eq!((hits[0].pool, hits[0].scope, hits[0].value), ("ironwood", "external", 123_456));
+        assert!(decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body).expect("runs").is_empty());
     }
 
     #[test]
@@ -691,7 +764,9 @@ mod tests {
         assert_eq!(chunk.hits.len(), 0);
         assert_eq!(chunk.sent.len(), 1);
         assert_eq!(chunk.sent[0].value, 123_456);
-        assert_eq!(chunk.sent[0].recipient, hex::encode(theirs.to_bytes()));
+        // Encoded as a wallet shows it, not as raw diversified bytes.
+        assert_eq!(chunk.sent[0].recipient, Address::Sapling(theirs).encode(&Network::MainNetwork));
+        assert!(chunk.sent[0].recipient.starts_with("zs1"));
         assert_eq!(chunk.sent[0].memo.as_deref(), Some("paid"));
     }
 

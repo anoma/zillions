@@ -1,0 +1,48 @@
+# Copyright 2026 Heliax AG
+# SPDX-License-Identifier: Apache-2.0, MIT
+
+[package]
+name = "zcore"
+version = "0.1.0"
+authors = ["Heliax"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/heliaxdev/zillions-interface"
+description = "Zillions wallet core: shielded trial decryption and transparent derivation, on NU6.3"
+edition = "2021"
+rust-version = "1.88"
+
+# Standalone: none of the old SDK workspace's pins apply here.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O4"]
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[dependencies]
+wasm-bindgen = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+hex = "0.4"
+# Decodes the new server's binary chunk header; records are sliced by hand.
+postcard = { version = "1", default-features = false }
+
+# Only the note-encryption + key surface: no proving circuits.
+zcash_keys = { version = "0.16", default-features = false, features = ["orchard", "sapling"] }
+zcash_protocol = "0.10"
+zcash_primitives = { version = "0.30", default-features = false }
+zcash_note_encryption = "0.4"
+sapling = { package = "sapling-crypto", version = "0.7", default-features = false, features = ["std"] }
+orchard = { version = "0.15", default-features = false, features = ["std"] }
+zip32 = { version = "0.2", default-features = false }
+
+[dev-dependencies]
+# Only the tests build spending keys and encrypt notes.
+zcash_keys = { version = "0.16", features = ["orchard", "sapling", "transparent-inputs"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+serde_json = "1"

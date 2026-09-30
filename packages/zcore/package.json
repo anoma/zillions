@@ -1,0 +1,15 @@
+{
+  "name": "@zillions/zcore",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Zillions wallet core, compiled to wasm: shielded trial decryption and transparent derivation",
+  "main": "pkg/zcore.js",
+  "types": "pkg/zcore.d.ts",
+  "files": [
+    "pkg"
+  ],
+  "scripts": {
+    "build": "./build.sh"
+  }
+}

@@ -16,6 +16,7 @@
     "@tanstack/react-router": "^1.170.16",
     "@zillions/keychain-types": "workspace:*",
     "@zillions/sdk": "workspace:*",
+    "@zillions/zcore": "workspace:*",
     "dexie": "^4.4.4",
     "dexie-react-hooks": "^4.4.0",
     "idb": "^8.0.3",

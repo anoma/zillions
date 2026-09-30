@@ -3,7 +3,6 @@ resolver = "2"
 
 members = [
     "crates/zillions-sdk-common",
-    "crates/zillions-sdk-zcrawler",
     "crates/zillions-sdk-keys",
     "crates/zillions-sdk-requests",
     "crates/zillions-sdk-wallet",

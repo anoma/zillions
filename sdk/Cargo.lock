@@ -4172,28 +4172,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zillions-sdk-zcrawler"
-version = "0.1.0"
-dependencies = [
- "getrandom 0.2.17",
- "hex",
- "orchard",
- "postcard",
- "rand_core",
- "sapling-crypto",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "wasm-bindgen",
- "zcash_keys",
- "zcash_note_encryption",
- "zcash_primitives",
- "zcash_protocol",
- "zillions-sdk-common",
- "zip32",
-]
-
-[[package]]
 name = "zip32"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

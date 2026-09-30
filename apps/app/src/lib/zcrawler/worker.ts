@@ -4,10 +4,7 @@
  * decryption is stateless, so running many in parallel needs no shared state.
  */
 
-import initZcrawler, {
-  try_decrypt,
-  try_decrypt_full,
-} from "@zillions/sdk/zcrawler";
+import initZcrawler, { try_decrypt, try_decrypt_full } from "@zillions/zcore";
 import {
   CHUNK_SIZE,
   fetchCiphertexts,

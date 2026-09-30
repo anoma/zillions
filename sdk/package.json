@@ -13,7 +13,6 @@
     "test:e2e": "pnpm --filter @zillions-sdk/e2e-tests test",
     "just:build": "just build",
     "just:build-keys": "just build-keys",
-    "just:build-zcrawler": "just build-zcrawler",
     "just:pack": "just pack",
     "just:ship": "just ship",
     "build": "just build"
