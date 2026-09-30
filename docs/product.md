@@ -89,8 +89,7 @@ indexer (ziziphus) to reach the wallet's notes.
   compare notes and link their payments to one wallet. Earlier addresses keep
   working, and everything they receive joins the same balance. Shielded
   addresses carry no transparent part: sharing one never reveals a
-  transparent address. — *Planned* (today the same shielded address is shown
-  every time).
+  transparent address. — *Built*
 - **Transparent**: one stable address, shown separately, for exchanges and
   wallets that can't send to shielded addresses.
 
@@ -138,8 +137,8 @@ Moves shielded funds to one of the account's own transparent addresses.
 - Each unshield goes to a **fresh transparent address** of the account, one
   never shown anywhere, and never the one the account shields from or
   receives on, so observers can't pair the funds going in with the funds
-  coming out. — *Planned* (today it uses the account's main transparent
-  address; see 2.8, address rotation).
+  coming out (see 2.8, address rotation). — *Built*; a second unshield
+  sent before the first is confirmed still reuses its address. — *Planned*
 - Checks: amount set, enough balance.
 - Fee preview, Keychain approval, receipt as in Send.
 
@@ -172,9 +171,10 @@ Moves shielded funds to one of the account's own transparent addresses.
   app explains how to get it (including a download link).
 - Checks that the Keychain version is recent enough.
 - Header shows the active account, with its shielded and transparent addresses
-  (copyable).
+  (copyable). A fresh shielded one each time it's shown. — *Planned* (today
+  fresh each time the app opens or switches account)
 - **Switch account** from the header.
-- **Address rotation.** — *Planned*. An account uses many addresses: a fresh
+- **Address rotation.** — *Built*. An account uses many addresses: a fresh
   shielded one each time it shows one (2.2, 3.2), one stable transparent one
   for receiving, and a fresh transparent one for each unshield (2.5). All of
   them count toward its balance and history, and the Keychain signs for any
@@ -207,8 +207,8 @@ user's behalf.
 - List accounts, select the active one.
 - View an account: its addresses.
 - **Copy an address to share at any time, even without the app open**: a
-  fresh shielded address each time, and the stable transparent one. —
-  *Planned* (fresh shielded addresses; see 2.8).
+  fresh shielded address each time, and the stable transparent one (see
+  2.8). — *Built*
 - Rename, delete.
 - Reveal, after re-entering the password: the **recovery phrase**, the
   **viewing key** (lets someone see, not spend), and the **spending keys**.

@@ -1,7 +1,7 @@
 /**
- * Account detail: the parent's transparent address, public key, and child
- * shielded address, plus actions to view the viewing key / seed phrase /
- * spending key and to rename or delete the account.
+ * Account detail: the parent's transparent address, public key, and a fresh
+ * shielded address each visit, plus actions to view the viewing key / seed
+ * phrase / spending key and to rename or delete the account.
  */
 import {
   ActionButton,
@@ -9,8 +9,10 @@ import {
   Stack,
   ViewKeys,
 } from "@zillions/components";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { freshAddress } from "../../background/crypto/zillions";
 import { useAccounts } from "../context/AccountContext";
 import routes from "../routes";
 import { BackButton } from "../ui/BackButton";
@@ -22,6 +24,28 @@ export const ViewAccount = () => {
   const { getById, accounts } = useAccounts();
 
   const parent = getById(accountId);
+  const shieldedChild = accounts.find(
+    (a) => a.parentId === parent?.id && a.type === "shielded-keys"
+  );
+  // A spending-key import IS the shielded account; otherwise the shielded
+  // receiver lives on the child account derived under this parent.
+  const isShieldedParent = parent?.type === "shielded-keys";
+  // A shielded account's owner is its viewing key.
+  const ufvk = isShieldedParent ? parent.owner : shieldedChild?.owner;
+
+  const [fresh, setFresh] = useState<{ ufvk: string; address: string }>();
+  useEffect(() => {
+    if (!ufvk) return;
+    let live = true;
+    void freshAddress(ufvk).then(
+      (address) => live && setFresh({ ufvk, address })
+    );
+    return () => {
+      live = false;
+    };
+  }, [ufvk]);
+  // Never another account's address while this one's is made.
+  const shieldedAddress = ufvk && fresh?.ufvk === ufvk ? fresh.address : undefined;
 
   if (!parent) {
     // Account not found (e.g. deep link after deletion) — return to the list.
@@ -29,16 +53,7 @@ export const ViewAccount = () => {
     return <></>;
   }
 
-  // A spending-key import IS the shielded account; otherwise the shielded
-  // receiver lives on the child account derived under this parent.
-  const isShieldedParent = parent.type === "shielded-keys";
-  const shieldedChild = accounts.find(
-    (a) => a.parentId === parent.id && a.type === "shielded-keys"
-  );
-
   const transparentAddress = isShieldedParent ? undefined : parent.address;
-  const shieldedAddress =
-    isShieldedParent ? parent.address : shieldedChild?.address;
 
   // The spending key belongs to the shielded account: the parent itself for a
   // spending-key import, otherwise its derived shielded child.

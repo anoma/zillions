@@ -5,6 +5,7 @@
  */
 import initZcore, {
   derive_account,
+  fresh_address,
   pczt_summary,
   seed_fingerprint,
   sign_pczt,
@@ -45,6 +46,15 @@ export const deriveAccount = async (
 ): Promise<DerivedKeys> => {
   await initZillionsSdk();
   return derive_account(getNetwork(), seed, hdIndex);
+};
+
+/**
+ * A new shielded address of the account `ufvk` names, unlinkable to its
+ * others. From the viewing key alone: no password, no network.
+ */
+export const freshAddress = async (ufvk: string): Promise<string> => {
+  await initZillionsSdk();
+  return fresh_address(getNetwork(), ufvk);
 };
 
 /**

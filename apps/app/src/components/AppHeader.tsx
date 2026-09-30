@@ -1,5 +1,6 @@
 import { twMerge } from "tailwind-merge";
 import { useAccount } from "../hooks/useAccount";
+import { useFreshAddress } from "../hooks/useAddresses";
 import { useGetKeychainAccounts } from "../hooks/useGetKeychainAccounts";
 import { ArrowsLeftRight } from "../icons/ArrowsLeftRight";
 import { ExitIcon } from "../icons/ExitIcon";
@@ -11,6 +12,8 @@ import { Tooltip } from "./Tooltip";
 
 function AccountProfile() {
   const account = useAccount();
+  // ponytail: fresh per mount (page load, account switch), not per hover.
+  const shielded = useFreshAddress() ?? "";
   return (
     <div className="relative group/tooltip">
       <div className="h-10 flex items-center gap-2 p-2">
@@ -19,7 +22,7 @@ function AccountProfile() {
       <Tooltip position="bottom">
         <div className="p-4 space-y-3 w-55">
           {[
-            ["Shielded address", account.shielded.address],
+            ["Shielded address", shielded],
             ["Transparent address", account.transparent.address],
           ].map(([label, value]) => (
             <CopyToClipboardControl

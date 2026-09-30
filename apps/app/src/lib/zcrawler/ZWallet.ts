@@ -68,7 +68,12 @@ export class ZWallet {
   #applied: Set<string> = new Set();
   #syncStatus: SyncStatus;
   /** The transparent side; `tip` is absent until a sync lands. */
-  #transparent: { utxos: OwnUtxo[]; txs: TransparentTx[]; tip?: number } = {
+  #transparent: {
+    utxos: OwnUtxo[];
+    txs: TransparentTx[];
+    tip?: number;
+    unshieldTo?: string;
+  } = {
     utxos: [],
     txs: [],
   };
@@ -373,6 +378,9 @@ export class ZWallet {
   };
 
   planSend = (send: SendRequest) => planSend(this.#walletData(), send);
+
+  /** The next unshield's destination, shown nowhere; null until transparent sync lands. */
+  unshieldAddress = () => this.#transparent.unshieldTo ?? null;
 
   maxSend = (send: SendRequest) => maxSend(this.#walletData(), send);
 

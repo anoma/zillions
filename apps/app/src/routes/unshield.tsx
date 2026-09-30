@@ -4,6 +4,7 @@ import { twMerge } from "tailwind-merge";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
+import { useUnshieldAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useSend, useSendPlan } from "../hooks/useSend";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
@@ -14,7 +15,10 @@ export const Route = createFileRoute("/unshield")({
   component: UnshieldRoute,
 });
 
-/** Moves shielded funds to the account's own transparent address. */
+/**
+ * Moves shielded funds to a transparent address of the account that nothing
+ * else shows, so they can't be paired with the ones shielded from its others.
+ */
 function UnshieldRoute() {
   const account = useAccount();
   const balance = useGetBalance();
@@ -23,7 +27,7 @@ function UnshieldRoute() {
   const [isMax, setIsMax] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
 
-  const to = account.transparent.address;
+  const to = useUnshieldAddress().data ?? "";
   const typed = (() => {
     try {
       return zecToZatoshi(amountString);
@@ -41,8 +45,9 @@ function UnshieldRoute() {
 
   const onSubmit = () => {
     setValidationMessage("");
-    const problem =
-      amount <= 0n
+    const problem = !to
+      ? "Wait for the wallet to sync"
+      : amount <= 0n
         ? "Set an amount"
         : amount > availableBalance
           ? "Insufficient balance"
@@ -134,10 +139,7 @@ function UnshieldRoute() {
 
         <div className="mt-4">
           <div className="text-xs font-medium mb-1">To</div>
-          <div
-            title={to}
-            className="h-11 w-full flex items-center justify-center rounded-full border border-gray-300 font-medium"
-          >
+          <div className="h-11 w-full flex items-center justify-center rounded-full border border-gray-300 font-medium">
             Transparent
           </div>
         </div>

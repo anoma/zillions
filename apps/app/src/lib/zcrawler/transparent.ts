@@ -20,8 +20,8 @@ import {
 
 const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 
-/** Unused addresses in a row after which a chain counts as exhausted (BIP-44). */
-const GAP_LIMIT = 20;
+/** Unused addresses in a row that end a chain: upstream's `GapLimits`, so other wallets restore any we hand out. */
+const GAP_LIMITS = { external: 10, internal: 5 };
 
 /** Blocks below the tip a reorg can still replace; zcashd refuses deeper ones. */
 export const REORG_DEPTH = 100;
@@ -94,8 +94,8 @@ async function senderOf(input: ParsedTx["inputs"][number]) {
 }
 
 /**
- * One chain's activity up to `tip`, until `GAP_LIMIT` addresses in a row show
- * none; addresses already checked are asked only about blocks above `final`.
+ * One chain's activity up to `tip`, until its gap limit of addresses in a row
+ * show none; addresses already checked are asked only about blocks above `final`.
  */
 async function discover(
   ufvk: string,
@@ -106,9 +106,10 @@ async function discover(
 ) {
   const txs: RawTransaction[] = [];
   let { lastUsed } = known;
+  const gap = GAP_LIMITS[scope];
   let from = 0;
-  for (; from <= lastUsed + GAP_LIMIT; from += GAP_LIMIT) {
-    const window = derive_transparent(NETWORK, ufvk, scope, from, GAP_LIMIT);
+  for (; from <= lastUsed + gap; from += gap) {
+    const window = derive_transparent(NETWORK, ufvk, scope, from, gap);
     const activity = await Promise.all(
       window.map((address, i) =>
         fetchAddressTransactions(
@@ -130,7 +131,13 @@ async function discover(
 export async function syncTransparent(
   accountId: string,
   ufvk: string,
-): Promise<{ utxos: OwnUtxo[]; txs: TransparentTx[]; tip: number }> {
+): Promise<{
+  utxos: OwnUtxo[];
+  txs: TransparentTx[];
+  tip: number;
+  /** Where the next unshield goes: the internal chain's first unused address. */
+  unshieldTo: string;
+}> {
   await (ready ??= initZcore());
   const cache = (await loadTransparent(accountId)) ?? emptyCache(accountId);
   const tip = await fetchLatestHeight();
@@ -231,5 +238,14 @@ export async function syncTransparent(
     utxos: utxos.map((utxo) => ({ ...utxo, ...mine.get(utxo.address)! })),
     txs,
     tip,
+    // ponytail: unused means unused on chain, so two unshields before the
+    // first is mined share an address; track pending ones if that matters.
+    unshieldTo: derive_transparent(
+      NETWORK,
+      ufvk,
+      "internal",
+      chains.internal.lastUsed + 1,
+      1,
+    )[0],
   };
 }
