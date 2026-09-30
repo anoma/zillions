@@ -1,6 +1,25 @@
 /* @ts-self-types="./zcore.d.ts" */
 
 /**
+ * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
+ * @param {string} network
+ * @param {Uint8Array} seed
+ * @param {number} hd_index
+ * @returns {any}
+ */
+export function derive_account(network, seed, hd_index) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(seed, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.derive_account(ptr0, len0, ptr1, len1, hd_index);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Transparent addresses `from..from + count` on one BIP-44 chain of the
  * viewing key's account: `"external"` (receiving) or `"internal"` (change).
  * Empty when the viewing key has no transparent part.
@@ -42,6 +61,51 @@ export function parse_transaction(network, height, data) {
     const ptr1 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
     const ret = wasm.parse_transaction(ptr0, len0, height, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * The seed's ZIP-32 fingerprint, hex. Names the seed without revealing it.
+ * @param {Uint8Array} seed
+ * @returns {string}
+ */
+export function seed_fingerprint(seed) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passArray8ToWasm0(seed, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.seed_fingerprint(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * The account's spending secret in both encodings: `{ orchard, sapling }`.
+ * @param {string} network
+ * @param {Uint8Array} seed
+ * @param {number} hd_index
+ * @returns {any}
+ */
+export function spending_keys(network, seed, hd_index) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(seed, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.spending_keys(ptr0, len0, ptr1, len1, hd_index);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }

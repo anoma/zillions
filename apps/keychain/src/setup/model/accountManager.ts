@@ -3,12 +3,10 @@
  *
  * Pipeline:
  *   1. set the extension password if required   → background/vault
- *   2. derive addresses via the wallet façade   → src/wallet (offline)
+ *   2. derive addresses from the seed           → @zillions/zcore (offline)
  *   3. persist the parent (+ shielded) account  → background/keyring
  *
- * Address derivation must run here (page context) — the façade uses
- * `@zillions-sdk/keys`. Returns a typed result and reports progress via
- * `onProgress`.
+ * Returns a typed result and reports progress via `onProgress`.
  */
 import type { BackgroundClient } from "../../ipc/client";
 import type {
@@ -18,7 +16,8 @@ import type {
   DerivedAccount,
   Zip32Path,
 } from "../../ipc/contract";
-import { getZcashWallet, type ZcashWallet } from "../../wallet";
+import { mnemonicToSeed } from "../../background/crypto/mnemonic";
+import { deriveAccount } from "../../background/crypto/zillions";
 
 export type CreateAccountInput = {
   accountSecret: AccountSecret;
@@ -81,7 +80,7 @@ export type CreateAccountResult =
   | { ok: true; parentAccount: AccountStore; shieldedAccount?: DerivedAccount }
   | { ok: false; error: string };
 
-/** Key material produced by the offline façade for one account. */
+/** Key material derived offline for one account. */
 type DerivedAddresses = {
   transparentAddress: string;
   shieldedAddress: string;
@@ -116,9 +115,8 @@ export const createAccount = async (
     }
 
     onProgress("Deriving your Zcash addresses.");
-    const wallet = getZcashWallet();
     const { transparentAddress, shieldedAddress, viewingKey } =
-      await deriveAddresses(wallet, accountSecret, bip44Path.account);
+      await deriveAddresses(accountSecret, bip44Path.account);
 
     // Auto-fetch the chain tip when no birthday was provided. For the "create"
     // flow this is always correct (new account, no prior history). For the
@@ -163,28 +161,28 @@ export const createAccount = async (
 /**
  * Derive transparent + shielded receivers for the account secret.
  *
- * Only the MNEMONIC flow is implemented: the seed phrase feeds the façade's
- * seed-based account model. Raw private-key and spending-key imports are NOT
- * implemented yet (the façade has no derivation path for bare keys) and throw
+ * Only the MNEMONIC flow is implemented: keys come from the phrase's seed. Raw private-key and spending-key imports are NOT
+ * implemented yet (there is no derivation path for bare keys) and throw
  * rather than fabricate a bogus address.
  */
 const deriveAddresses = async (
-  wallet: ZcashWallet,
   secret: AccountSecret,
   hdIndex: number
 ): Promise<DerivedAddresses> => {
   switch (secret.t) {
     case "Mnemonic": {
-      const seedPhrase = secret.seedPhrase.join(" ");
-      const account = await wallet.createAccount(seedPhrase, hdIndex);
-      const [transparent, shielded] = await Promise.all([
-        wallet.createTransparent(account),
-        wallet.createShielded(account),
-      ]);
+      const seed = await mnemonicToSeed(
+        secret.seedPhrase.join(" "),
+        secret.passphrase
+      );
+      const account = await deriveAccount(seed, hdIndex);
+      if (!account.transparent) {
+        throw new Error("Account has no transparent receiver");
+      }
       return {
-        transparentAddress: transparent.address,
-        shieldedAddress: shielded.address,
-        viewingKey: wallet.viewingKey(account),
+        transparentAddress: account.transparent,
+        shieldedAddress: account.unified,
+        viewingKey: account.ufvk,
       };
     }
 

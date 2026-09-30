@@ -15,7 +15,7 @@ use zcash_protocol::consensus::{BlockHeight, BranchId, Network};
 
 use crate::parse_network;
 
-fn derive(network: &Network, ufvk: &str, scope: &str, from: u32, count: u32) -> Result<Vec<String>, String> {
+pub(crate) fn derive(network: &Network, ufvk: &str, scope: &str, from: u32, count: u32) -> Result<Vec<String>, String> {
     let ufvk = UnifiedFullViewingKey::decode(network, ufvk)?;
     let Some(account) = ufvk.transparent() else {
         return Ok(Vec::new());

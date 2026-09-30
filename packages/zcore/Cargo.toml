@@ -7,7 +7,7 @@ version = "0.1.0"
 authors = ["Heliax"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/heliaxdev/zillions-interface"
-description = "Zillions wallet core: shielded trial decryption and transparent derivation, on NU6.3"
+description = "Zillions wallet core: keys, shielded trial decryption and transparent derivation, on NU6.3"
 edition = "2021"
 rust-version = "1.88"
 
@@ -33,7 +33,7 @@ hex = "0.4"
 postcard = { version = "1", default-features = false }
 
 # Only the note-encryption + key surface: no proving circuits.
-zcash_keys = { version = "0.16", default-features = false, features = ["orchard", "sapling", "transparent-inputs"] }
+zcash_keys = { version = "0.16", default-features = false, features = ["orchard", "sapling", "transparent-inputs", "unstable"] }
 transparent = { package = "zcash_transparent", version = "0.10", default-features = false, features = ["transparent-inputs"] }
 zcash_protocol = "0.10"
 zcash_primitives = { version = "0.30", default-features = false }

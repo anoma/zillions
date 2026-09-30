@@ -123,9 +123,9 @@ importers:
       '@fontsource-variable/montserrat':
         specifier: ^5.2.8
         version: 5.2.8
-      '@zillions/sdk':
+      '@zillions/zcore':
         specifier: workspace:*
-        version: link:../../sdk/packages/zillions-sdk
+        version: link:../../packages/zcore
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

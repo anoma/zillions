@@ -1,8 +1,11 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const seed_fingerprint: (a: number, b: number) => [number, number, number, number];
+export const spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
 export const try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
 export const rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;

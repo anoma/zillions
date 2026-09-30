@@ -2,6 +2,11 @@
 /* eslint-disable */
 
 /**
+ * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
+ */
+export function derive_account(network: string, seed: Uint8Array, hd_index: number): any;
+
+/**
  * Transparent addresses `from..from + count` on one BIP-44 chain of the
  * viewing key's account: `"external"` (receiving) or `"internal"` (change).
  * Empty when the viewing key has no transparent part.
@@ -14,6 +19,16 @@ export function derive_transparent(network: string, ufvk: string, scope: string,
  * outputs: [{ index, value, address }] }`.
  */
 export function parse_transaction(network: string, height: number, data: Uint8Array): any;
+
+/**
+ * The seed's ZIP-32 fingerprint, hex. Names the seed without revealing it.
+ */
+export function seed_fingerprint(seed: Uint8Array): string;
+
+/**
+ * The account's spending secret in both encodings: `{ orchard, sapling }`.
+ */
+export function spending_keys(network: string, seed: Uint8Array, hd_index: number): any;
 
 /**
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
@@ -43,8 +58,11 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
+    readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;

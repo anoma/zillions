@@ -21,9 +21,6 @@ import {
 import {
   computeSeedFingerprint,
   initZillionsSdk,
-  pcztFromBase64,
-  pcztToBase64,
-  signPczt,
   spendingKeys,
   type SpendingKeys,
 } from "../crypto/zillions";
@@ -109,50 +106,9 @@ export class Keyring {
     };
   }
 
-  /**
-   * Sign a PCZT (base64 postcard bytes in/out).
-   *
-   * The signing account is the `signer` address when given, else the active
-   * account. A derived shielded child carries no secret of its own — the
-   * mnemonic lives on its parent — so the secret is revealed from the parent
-   * record while the hd index comes from the resolved account's path. Only
-   * mnemonic-backed accounts can sign (raw private-key / spending-key imports
-   * are not implemented in the setup flow yet).
-   */
-  public async sign(pczt: string, signer?: string): Promise<string> {
-    await this.vaultService.assertIsUnlocked();
-    await initZillionsSdk();
-
-    let record: KeyStoreType | undefined;
-    if (signer) {
-      record = await this.accounts.findByAddress(signer);
-      if (!record) {
-        throw new Error(`Account for ${signer} not found!`);
-      }
-    } else {
-      const active = await this.accounts.getActiveAccount();
-      record = active ? await this.accounts.findById(active.id) : undefined;
-      if (!record) {
-        throw new Error("No active account to sign with");
-      }
-    }
-
-    const { seed, hdIndex } = await this.resolveSeed(record);
-
-    const parsed = pcztFromBase64(pczt);
-    const signed = await signPczt(parsed, seed, hdIndex);
-    const result = pcztToBase64(signed);
-    
-    // Don't call parsed.free() (null pointer): pczt_sign already destroys `parsed` and zeroes its pointer.
-    signed.free();
-
-    // signPczt fails silently on a key mismatch, it just returns the PCZT unchanged
-    // (output === input means no key matched).
-    if (result === pczt) {
-      throw new Error("Unable to sign this transaction with the selected account");
-    }
-    
-    return result
+  /** Sign a PCZT: returns with zcore's transaction building. */
+  public async sign(_pczt: string, _signer?: string): Promise<string> {
+    throw new Error("Signing is not available yet");
   }
 
   /**
