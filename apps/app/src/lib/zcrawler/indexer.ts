@@ -1,8 +1,7 @@
 import type { Pool, TxLocator } from "./types";
 
-const CRAWLER_URL = import.meta.env.VITE_CRAWLER_URL ?? "http://localhost:8080";
-const WEBSERVER_URL =
-  import.meta.env.VITE_WEBSERVER_URL ?? "http://localhost:1234/api/v1";
+const LOCAL_INDEXER_URL = "http://localhost:8080";
+const INDEXER_URL = import.meta.env.VITE_INDEXER_URL;
 
 /** One pool's notes for a full chunk. Only wasm reads their shape; TS forwards them. */
 export type FullNotesData = unknown[];
@@ -38,39 +37,28 @@ async function get<T>(url: string): Promise<T> {
  * Still binary; only wasm reads it.
  */
 export async function fetchCiphertexts(chunk: number, pool: Pool) {
-  const res = await fetchOk(`${WEBSERVER_URL}/${pool}/ciphertexts/${chunk}`);
+  const res = await fetchOk(`${INDEXER_URL}/${pool}/ciphertexts/${chunk}`);
   return new Uint8Array(await res.arrayBuffer());
 }
 
 /** The same chunk with whole ciphertexts — ~50× the bytes. Hit chunks only. */
 export async function fetchFullNotes(chunk: number, pool: Pool) {
   return get<FullNotesData>(
-    `${CRAWLER_URL}/notes/full?chunk=${chunk}&pool=${pool}`,
+    `${LOCAL_INDEXER_URL}/notes/full?chunk=${chunk}&pool=${pool}`,
   );
 }
 
 /** A pool's note count, from where `/tip` redirects; throws if it names none. */
 async function treeSize(pool: Pool) {
   // HEAD skips the snapshot body; a stale one 404s, but its URL has the size.
-  const res = await fetch(`${WEBSERVER_URL}/${pool}/tip`, { method: "HEAD" });
+  const res = await fetch(`${INDEXER_URL}/${pool}/tip`, { method: "HEAD" });
   const size = Number(new URL(res.url).pathname.split("/").pop());
   if (!Number.isInteger(size)) throw new Error(`No tree size for ${pool}`);
   return size;
 }
 
-/**
- * TODO review: the local server's `/tip` reports 0 and it doesn't index from
- * chunk 0, so its real ranges stand in for `fetchChunks` until it does both.
- */
-const CHUNKS_OVERRIDE: ChunksData | undefined = {
-  ironwood: { first_chunk: 0, last_chunk: 39 },
-  orchard: { first_chunk: 3052, last_chunk: 3080 },
-  sapling: { first_chunk: 4511, last_chunk: 4515 },
-};
-
 /** Each pool's chunk range from chunk 0; an empty pool ends at `last_chunk` -1. */
 export async function fetchChunks(): Promise<ChunksData> {
-  if (CHUNKS_OVERRIDE) return CHUNKS_OVERRIDE;
   const pools = ["ironwood", "orchard", "sapling"] as const;
   const sizes = await Promise.all(pools.map(treeSize));
   return Object.fromEntries(
@@ -88,7 +76,7 @@ export async function fetchChunks(): Promise<ChunksData> {
  */
 export async function fetchTreeTip(pool: Pool) {
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch(`${WEBSERVER_URL}/${pool}/tip`);
+    const res = await fetch(`${INDEXER_URL}/${pool}/tip`);
     if (res.ok) {
       const size = Number(new URL(res.url).pathname.split("/").pop());
       return { size, body: new Uint8Array(await res.arrayBuffer()) };
@@ -101,7 +89,7 @@ export async function fetchTreeTip(pool: Pool) {
 
 /** A frozen chunk of a pool's tree, raw. Immutable, so the HTTP cache keeps it. */
 export async function fetchTreeChunk(pool: Pool, chunk: number) {
-  const res = await fetchOk(`${WEBSERVER_URL}/${pool}/trees/${chunk}`);
+  const res = await fetchOk(`${INDEXER_URL}/${pool}/trees/${chunk}`);
   if (res.status === 202)
     throw new Error(`${pool} tree chunk ${chunk} isn't frozen yet`);
   return new Uint8Array(await res.arrayBuffer());
@@ -114,6 +102,6 @@ export type SpentNullifier = TxLocator & { nf_tag: string };
 export async function fetchNullifiers(nf: string, pool: Pool) {
   const prefix = nf.slice(0, PREFIX_LENGTH);
   return get<SpentNullifier[]>(
-    `${CRAWLER_URL}/nullifiers?pool=${pool}&prefix=${prefix}`,
+    `${LOCAL_INDEXER_URL}/nullifiers?pool=${pool}&prefix=${prefix}`,
   );
 }

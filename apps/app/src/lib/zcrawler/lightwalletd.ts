@@ -4,9 +4,7 @@
  * used; field numbers follow lightwalletd's `service.proto`.
  */
 
-const LIGHTWALLETD_URL =
-  import.meta.env.VITE_GRPC_WEB_GATEWAY_URL ??
-  "https://zcash-mainnet.chainsafe.dev";
+const LIGHTWALLETD_URL = import.meta.env.VITE_GRPC_URL;
 const SERVICE = "cash.z.wallet.sdk.rpc.CompactTxStreamer";
 
 type FieldValue = number | string | Uint8Array;
