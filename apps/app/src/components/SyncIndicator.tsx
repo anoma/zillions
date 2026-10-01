@@ -46,7 +46,27 @@ export function SyncIndicator() {
   }, [wallet]);
 
   return (
-    <div className="group/tooltip relative">
+    <Tooltip
+      position="bottom"
+      className="z-10 w-47 py-3"
+      content={
+        <div className="px-4 space-y-3 w-full text-xs font-medium">
+          {isSyncing ? (
+            <div className="font-normal">
+              <div>Shielded sync: {percent}%</div>
+              <div className="bg-black h-1 rounded-full overflow-clip mt-1">
+                <div
+                  className="bg-gold h-1 transition-all"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <div>Shielded sync completed</div>
+          )}
+        </div>
+      }
+    >
       <button
         className="h-10 p-2 text-left cursor-pointer"
         onClick={async () => {
@@ -65,23 +85,6 @@ export function SyncIndicator() {
           )}
         />
       </button>
-      <Tooltip position="bottom" className="z-10 w-47 py-3">
-        <div className="px-4 space-y-3 w-full text-xs font-medium">
-          {isSyncing ? (
-            <div className="font-normal">
-              <div>Shielded sync: {percent}%</div>
-              <div className="bg-black h-1 rounded-full overflow-clip mt-1">
-                <div
-                  className="bg-gold h-1 transition-all"
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <div>Shielded sync completed</div>
-          )}
-        </div>
-      </Tooltip>
-    </div>
+    </Tooltip>
   );
 }

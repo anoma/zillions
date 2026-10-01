@@ -9,6 +9,43 @@ import { ZillionsIcon } from "../icons/ZillionsIcon";
 import { helpUrl, privacyPolicyUrl, xUrl } from "../lib/urls";
 import { SmartLink } from "./SmartLink";
 
+const navItems = [
+  { label: "Wallet", to: "/", icon: HouseIcon },
+  { label: "Send", to: "/send", icon: ArrowUpIcon },
+  { label: "Receive", to: "/receive", icon: ArrowDownIcon },
+  { label: "Transactions", to: "/transactions", icon: RotateCcwIcon },
+] as const;
+
+export function HelpLinks() {
+  return (
+    <>
+      <ul>
+        {[
+          { label: "Help", href: helpUrl },
+          { label: "Privacy policy", href: privacyPolicyUrl },
+        ].map((item) => (
+          <li key={item.href} className="my-2">
+            <SmartLink
+              href={item.href}
+              className="inline-flex text-sm hover:font-semibold transition-all"
+            >
+              {item.label}
+            </SmartLink>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-8">
+        <SmartLink
+          href={xUrl}
+          className="inline-flex hover:text-gold transition-all"
+        >
+          <XIcon className="size-5" />
+        </SmartLink>
+      </div>
+    </>
+  );
+}
+
 export function MainNav() {
   const { pathname } = useLocation();
 
@@ -21,18 +58,7 @@ export function MainNav() {
           </Link>
         </div>
         <ul className="mt-8">
-          {(
-            [
-              { label: "Wallet", to: "/", icon: HouseIcon },
-              { label: "Send", to: "/send", icon: ArrowUpIcon },
-              { label: "Receive", to: "/receive", icon: ArrowDownIcon },
-              {
-                label: "Transactions",
-                to: "/transactions",
-                icon: RotateCcwIcon,
-              },
-            ] as const
-          ).map((item) => (
+          {navItems.map((item) => (
             <li key={item.to} className="my-4">
               <Link
                 to={item.to}
@@ -57,31 +83,40 @@ export function MainNav() {
           ))}
         </ul>
       </nav>
-      <footer className="mb-5">
-        <ul className="my-8">
-          {[
-            { label: "Help", href: helpUrl },
-            { label: "Privacy policy", href: privacyPolicyUrl },
-          ].map((item) => (
-            <li key={item.href} className="my-2">
-              <SmartLink
-                href={item.href}
-                className="inline-flex text-sm hover:font-semibold transition-all"
-              >
-                {item.label}
-              </SmartLink>
-            </li>
-          ))}
-        </ul>
-        <div>
-          <SmartLink
-            href={xUrl}
-            className="inline-flex hover:text-gold transition-all"
-          >
-            <XIcon className="size-5" />
-          </SmartLink>
-        </div>
+      <footer className="mt-8 mb-5">
+        <HelpLinks />
       </footer>
     </aside>
+  );
+}
+
+export function BottomNav() {
+  const { pathname } = useLocation();
+
+  return (
+    <nav className="fixed bottom-0 inset-x-0 z-10 grid grid-cols-4 border-t border-gray-300 bg-surface">
+      {navItems.map((item) => (
+        <Link
+          key={item.to}
+          to={item.to}
+          className="h-16 flex flex-col items-center justify-center gap-1"
+        >
+          <item.icon
+            className={twMerge(
+              "size-5 transition-all",
+              item.to === pathname && "text-gold",
+            )}
+          />
+          <span
+            className={twMerge(
+              "text-xs",
+              item.to === pathname && "font-semibold",
+            )}
+          >
+            {item.label}
+          </span>
+        </Link>
+      ))}
+    </nav>
   );
 }

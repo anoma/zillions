@@ -1,13 +1,17 @@
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { GoKebabHorizontal } from "react-icons/go";
 import { twMerge } from "tailwind-merge";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useGetKeychainAccounts } from "../hooks/useGetKeychainAccounts";
 import { ArrowsLeftRight } from "../icons/ArrowsLeftRight";
 import { ExitIcon } from "../icons/ExitIcon";
+import { ZillionsIcon } from "../icons/ZillionsIcon";
 import { keychain } from "../lib/keychain/keychain";
 import { shortenAddress } from "../lib/utils";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
+import { HelpLinks } from "./MainNav";
 import { SyncIndicator } from "./SyncIndicator";
 import { Tooltip } from "./Tooltip";
 
@@ -17,14 +21,10 @@ function AccountProfile() {
   const [shown, setShown] = useState(0);
   const shielded = useFreshAddress(shown) ?? "";
   return (
-    <div
-      className="relative group/tooltip"
-      onMouseLeave={() => setShown((n) => n + 1)}
-    >
-      <div className="h-10 flex items-center gap-2 p-2">
-        <span className="text-sm">{account.transparent.alias}</span>
-      </div>
-      <Tooltip position="bottom">
+    <Tooltip
+      position="bottom"
+      onClose={() => setShown((n) => n + 1)}
+      content={
         <div className="p-4 space-y-3 w-55">
           {[
             ["Shielded address", shielded],
@@ -42,8 +42,12 @@ function AccountProfile() {
             </CopyToClipboardControl>
           ))}
         </div>
-      </Tooltip>
-    </div>
+      }
+    >
+      <div className="h-10 flex items-center gap-2 p-2">
+        <span className="text-sm">{account.transparent.alias}</span>
+      </div>
+    </Tooltip>
   );
 }
 
@@ -52,11 +56,9 @@ function SwitchAccountButton() {
   const accounts = useGetKeychainAccounts();
 
   return (
-    <div className="relative group/tooltip">
-      <button className="h-10 p-2 hover:text-gold transition-all">
-        <ArrowsLeftRight className="size-4" />
-      </button>
-      <Tooltip position="bottom">
+    <Tooltip
+      position="bottom"
+      content={
         <div className="py-2 w-30 overflow-clip">
           {accounts.data
             ?.filter((a) => !a.parentId)
@@ -76,8 +78,12 @@ function SwitchAccountButton() {
               );
             })}
         </div>
-      </Tooltip>
-    </div>
+      }
+    >
+      <button className="h-10 p-2 hover:text-gold transition-all">
+        <ArrowsLeftRight className="size-4" />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -92,12 +98,36 @@ function DisconnectButton() {
   );
 }
 
+function MoreMenu() {
+  return (
+    <Tooltip
+      position="bottom"
+      className="left-auto right-0 translate-x-0"
+      content={
+        <div className="px-4 py-2 w-40">
+          <HelpLinks />
+        </div>
+      }
+    >
+      <button className="h-10 p-2 hover:text-gold transition-all cursor-pointer">
+        <GoKebabHorizontal className="size-4" />
+      </button>
+    </Tooltip>
+  );
+}
+
 export function AppHeader() {
   return (
     <header className="h-full flex items-center justify-end border-b border-gray-300 bg-surface px-6">
+      <Link to="/" className="mr-auto lg:hidden">
+        <ZillionsIcon className="h-8" />
+      </Link>
       <SyncIndicator />
       <AccountProfile />
       <SwitchAccountButton />
+      <div className="lg:hidden">
+        <MoreMenu />
+      </div>
       <DisconnectButton />
     </header>
   );
