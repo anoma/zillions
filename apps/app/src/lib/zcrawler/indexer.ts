@@ -3,9 +3,6 @@ import type { Pool, TxLocator } from "./types";
 const LOCAL_INDEXER_URL = "http://localhost:8080";
 const INDEXER_URL = import.meta.env.VITE_INDEXER_URL;
 
-/** One pool's notes for a full chunk. Only wasm reads their shape; TS forwards them. */
-export type FullNotesData = unknown[];
-
 /**
  * Hex chars of a nullifier sent to the indexer, which answers with every
  * nullifier sharing that prefix so it never learns which one we asked about.
@@ -13,9 +10,8 @@ export type FullNotesData = unknown[];
  */
 const PREFIX_LENGTH = 6;
 
-/** Notes per chunk on the new server, and on the old one. */
+/** Notes per chunk. */
 export const CHUNK_SIZE = 2 ** 14;
-export const OLD_CHUNK_SIZE = 4096;
 
 export type ChunksData = Record<
   Pool,
@@ -33,19 +29,17 @@ async function get<T>(url: string): Promise<T> {
 }
 
 /**
- * A chunk's notes, compact: only what trial decryption needs to reject one.
- * Still binary; only wasm reads it.
+ * One chunk of a pool's notes, raw; only wasm reads it. `ciphertexts` is the
+ * compact part trial decryption rejects a note with; `memos` and `outgoing`
+ * hold the rest, ~5× the bytes, so fetch them for hit chunks only.
  */
-export async function fetchCiphertexts(chunk: number, pool: Pool) {
-  const res = await fetchOk(`${INDEXER_URL}/${pool}/ciphertexts/${chunk}`);
+export async function fetchChunk(
+  kind: "ciphertexts" | "memos" | "outgoing",
+  chunk: number,
+  pool: Pool,
+) {
+  const res = await fetchOk(`${INDEXER_URL}/${pool}/${kind}/${chunk}`);
   return new Uint8Array(await res.arrayBuffer());
-}
-
-/** The same chunk with whole ciphertexts — ~50× the bytes. Hit chunks only. */
-export async function fetchFullNotes(chunk: number, pool: Pool) {
-  return get<FullNotesData>(
-    `${LOCAL_INDEXER_URL}/notes/full?chunk=${chunk}&pool=${pool}`,
-  );
 }
 
 /** A pool's note count, from where `/tip` redirects; throws if it names none. */

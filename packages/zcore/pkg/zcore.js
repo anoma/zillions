@@ -362,32 +362,37 @@ export function try_decrypt(network, ufvk, pool, chunk, body) {
 }
 
 /**
- * Trial-decrypt one pool's full notes against `ufvk`.
- *
- * `notes` is the `/notes/full` payload: an array of that pool's notes, whole
- * ciphertexts included. Returns
+ * Trial-decrypt one pool's chunk in full against `ufvk`: the raw
+ * `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
+ * and the `index` of each hit [`try_decrypt`] found in it. Returns
  * `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
  *    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
- *
- * `sent` stays empty unless the payload carries `cv` and `out_ciphertext`:
- * recovering an output we created needs both.
- *
- * Worth fetching only for a chunk a compact pass already found a note in — a
- * full chunk is ~50× a compact one.
  * @param {string} network
  * @param {string} ufvk
  * @param {string} pool
- * @param {any} notes
+ * @param {number} chunk
+ * @param {Uint8Array} ciphertexts
+ * @param {Uint8Array} memos
+ * @param {Uint8Array} outgoing
+ * @param {Uint32Array} hits
  * @returns {any}
  */
-export function try_decrypt_full(network, ufvk, pool, notes) {
+export function try_decrypt_full(network, ufvk, pool, chunk, ciphertexts, memos, outgoing, hits) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
     const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt_full(ptr0, len0, ptr1, len1, ptr2, len2, notes);
+    const ptr3 = passArray8ToWasm0(ciphertexts, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ptr4 = passArray8ToWasm0(memos, wasm.__wbindgen_malloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ptr5 = passArray8ToWasm0(outgoing, wasm.__wbindgen_malloc);
+    const len5 = WASM_VECTOR_LEN;
+    const ptr6 = passArray32ToWasm0(hits, wasm.__wbindgen_malloc);
+    const len6 = WASM_VECTOR_LEN;
+    const ret = wasm.try_decrypt_full(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -773,6 +778,14 @@ function getStringFromWasm0(ptr, len) {
     return decodeText(ptr >>> 0, len);
 }
 
+let cachedUint32ArrayMemory0 = null;
+function getUint32ArrayMemory0() {
+    if (cachedUint32ArrayMemory0 === null || cachedUint32ArrayMemory0.byteLength === 0) {
+        cachedUint32ArrayMemory0 = new Uint32Array(wasm.memory.buffer);
+    }
+    return cachedUint32ArrayMemory0;
+}
+
 let cachedUint8ArrayMemory0 = null;
 function getUint8ArrayMemory0() {
     if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) {
@@ -792,6 +805,13 @@ function handleError(f, args) {
 
 function isLikeNone(x) {
     return x === undefined || x === null;
+}
+
+function passArray32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getUint32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
 }
 
 function passArray8ToWasm0(arg, malloc) {
@@ -879,6 +899,7 @@ function __wbg_finalize_init(instance, module) {
     wasm = instance.exports;
     wasmModule = module;
     cachedDataViewMemory0 = null;
+    cachedUint32ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;
     wasm.__wbindgen_start();
     return wasm;

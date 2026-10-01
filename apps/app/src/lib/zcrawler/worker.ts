@@ -5,12 +5,7 @@
  */
 
 import initZcrawler, { try_decrypt, try_decrypt_full } from "@zillions/zcore";
-import {
-  CHUNK_SIZE,
-  fetchCiphertexts,
-  fetchFullNotes,
-  OLD_CHUNK_SIZE,
-} from "./indexer";
+import { fetchChunk } from "./indexer";
 import type { ChunkRequest, ChunkWorkerResponse } from "./types";
 
 // TODO revisit how config (network, indexer URL) reaches the worker: read from
@@ -27,27 +22,6 @@ const worker = self as unknown as {
   postMessage: (msg: ChunkWorkerResponse) => void;
 };
 
-/**
- * The full notes behind a chunk's compact hits. Full notes still come from the
- * old server, whose chunks are a quarter of the new one's, so only the old
- * chunks holding a hit are fetched.
- */
-async function fetchFull(
-  chunk: number,
-  pool: ChunkRequest["pool"],
-  compactHits: { index: number }[],
-) {
-  const oldChunks = new Set(
-    compactHits.map(({ index }) =>
-      Math.floor((chunk * CHUNK_SIZE + index) / OLD_CHUNK_SIZE),
-    ),
-  );
-  const parts = await Promise.all(
-    [...oldChunks].map((old) => fetchFullNotes(old, pool)),
-  );
-  return parts.flat();
-}
-
 worker.onmessage = async (e) => {
   // TODO can we save JS ↔ WASM boundary time by registering the ufvk?
   // And if we create a sequence on the from/to based on the mod of the total blocks?
@@ -55,7 +29,7 @@ worker.onmessage = async (e) => {
   const { chunk, ufvk, pool } = e.data;
   try {
     await (ready ??= initZcrawler());
-    const body = await fetchCiphertexts(chunk, pool);
+    const body = await fetchChunk("ciphertexts", chunk, pool);
     const {
       count,
       min_height: minHeight,
@@ -67,11 +41,21 @@ worker.onmessage = async (e) => {
       return;
     }
 
-    // The chunk holds something of ours, so it is worth its full ciphertexts:
-    // they carry what the compact prefix cannot — the memo above all, and the
-    // outgoing ciphertexts that make our own sends visible.
-    const fullNotes = await fetchFull(chunk, pool, compactHits);
-    const { hits, sent } = try_decrypt_full(NETWORK, ufvk, pool, fullNotes);
+    // A hit makes the memos and outgoing ciphertexts (our sends) worth fetching.
+    const [memos, outgoing] = await Promise.all([
+      fetchChunk("memos", chunk, pool),
+      fetchChunk("outgoing", chunk, pool),
+    ]);
+    const { hits, sent } = try_decrypt_full(
+      NETWORK,
+      ufvk,
+      pool,
+      chunk,
+      body,
+      memos,
+      outgoing,
+      Uint32Array.from(compactHits, (hit: { index: number }) => hit.index),
+    );
     worker.postMessage({ chunk, count, minHeight, hits, sent });
   } catch (err) {
     worker.postMessage({ chunk, error: String(err) });

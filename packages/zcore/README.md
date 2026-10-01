@@ -48,7 +48,7 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 | Function            | Does                                                                  |
 | ------------------- | --------------------------------------------------------------------- |
 | `try_decrypt`       | Trial-decrypts one chunk of compact ciphertexts (2¹⁴ notes per chunk) |
-| `try_decrypt_full`  | Trial-decrypts full notes: adds memos and the wallet's own sends      |
+| `try_decrypt_full`  | Trial-decrypts a hit chunk in full: adds memos and the wallet's sends |
 | `parse_transaction` | The transparent inputs and outputs of a raw transaction               |
 
 **Sending**, in the order a send runs:
@@ -66,8 +66,9 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 Proving takes seconds; run `prove_pczt` in a Web Worker. The Sapling
 parameters ship in [`@zillions/sapling-params`](../sapling-params/README.md).
 
-Chunk, note and tree inputs are the indexer's raw responses (`/ciphertexts`,
-`/notes/full`, the tree tip and frozen tree chunks), passed through unchanged.
+Chunk and tree inputs are the indexer's raw responses (`/ciphertexts`,
+`/memos`, `/outgoing`, the tree tip and frozen tree chunks), passed through
+unchanged.
 
 ## Build
 

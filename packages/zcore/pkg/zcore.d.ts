@@ -100,20 +100,13 @@ export function spending_keys(network: string, seed: Uint8Array, hd_index: numbe
 export function try_decrypt(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array): any;
 
 /**
- * Trial-decrypt one pool's full notes against `ufvk`.
- *
- * `notes` is the `/notes/full` payload: an array of that pool's notes, whole
- * ciphertexts included. Returns
+ * Trial-decrypt one pool's chunk in full against `ufvk`: the raw
+ * `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
+ * and the `index` of each hit [`try_decrypt`] found in it. Returns
  * `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
  *    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
- *
- * `sent` stays empty unless the payload carries `cv` and `out_ciphertext`:
- * recovering an output we created needs both.
- *
- * Worth fetching only for a chunk a compact pass already found a note in — a
- * full chunk is ~50× a compact one.
  */
-export function try_decrypt_full(network: string, ufvk: string, pool: string, notes: any): any;
+export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array, memos: Uint8Array, outgoing: Uint8Array, hits: Uint32Array): any;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -135,7 +128,7 @@ export interface InitOutput {
     readonly sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
-    readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
+    readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
