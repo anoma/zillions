@@ -7,11 +7,11 @@
   },
   "scripts": {
     "prepare": "husky",
-    "dev:app": "pnpm --filter zillions-app dev",
-    "dev:keychain": "pnpm --filter zillions-keychain dev",
-    "build:app": "pnpm --filter zillions-app build",
-    "build:keychain": "pnpm --filter zillions-keychain build",
-    "build:netlify": "bash scripts/build-netlify.sh",
+    "app:dev": "pnpm --filter zillions-app dev",
+    "keychain:dev": "pnpm --filter zillions-keychain dev",
+    "app:build": "pnpm --filter zillions-app build",
+    "keychain:build": "pnpm --filter zillions-keychain build",
+    "netlify:build": "bash scripts/build-netlify.sh",
     "typecheck": "pnpm --filter zillions-app typecheck && pnpm --filter zillions-keychain compile",
     "lint": "pnpm --filter zillions-app lint && pnpm --filter zillions-keychain lint"
   },

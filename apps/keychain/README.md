@@ -30,9 +30,9 @@ external dependencies. The exception is `@zillions/keychain-types`
 
 Run from this directory (or with `pnpm --filter zillions-keychain` from the root):
 
-- `pnpm dev` — WXT dev server (Chrome); `pnpm dev:firefox` for Firefox
+- `pnpm dev` — WXT dev server (Chrome); `pnpm firefox:dev` for Firefox
 - `pnpm build` — Chrome MV3 + Firefox builds (`.output/<browser>-mv3`)
-- `pnpm build:chrome` — Chrome only
+- `pnpm chrome:build` — Chrome only
 - `pnpm compile` — `tsc --noEmit`
 - `pnpm lint` — ESLint over `src` + `entrypoints`
 
