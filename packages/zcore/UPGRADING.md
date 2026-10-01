@@ -20,15 +20,15 @@ in `Cargo.toml`.
 
 ## 2. Re-compare what zcore ports or mirrors
 
-| zcore | follows upstream | what to check |
-|---|---|---|
-| `send.rs` `propose` | backend `data_api/wallet.rs` `propose_transfer` (0.24.0: lines 778–965) | the ZIP 318 canonical-crossing attempt and its fallback, `check_transaction_size`, anything new it does before or after input selection |
-| `send.rs` `propose_shield` | backend `propose_shielding` | threshold, coinbase filter, size check |
-| `send.rs` `max_amount` | backend `input_selection.rs` `propose_send_max` (crate-private) | switch to it once public; until then the binary search and its dust-gap step |
-| `build.rs` `pczt` | backend `build_proposed_transaction` and `create_pczt_from_proposal` | bundle padding, ZIP 318 expiry, outgoing viewing key policy, change per pool (Orchard's post-NU6.3 change rule), ZIP 32 / BIP 44 paths, user addresses |
-| `wallet.rs` (`InputSource`) | sqlite `lib.rs` `impl InputSource`, `wallet/common.rs`, `wallet/transparent.rs` | new or changed trait methods; dust, ordering and confirmation rules (pinned by `wallet.rs` tests) |
-| `wallet.rs` `anchor_computable` | — | answers `false` until ziziphus serves roots at ZIP 318 bucket heights |
-| `roles.rs` `sign` | `pczt` signer / verifier | Sapling proof generation key per key scope, any new pool |
+| zcore                           | follows upstream                                                                | what to check                                                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `send.rs` `propose`             | backend `data_api/wallet.rs` `propose_transfer` (0.24.0: lines 778–965)         | the ZIP 318 canonical-crossing attempt and its fallback, `check_transaction_size`, anything new it does before or after input selection                |
+| `send.rs` `propose_shield`      | backend `propose_shielding`                                                     | threshold, coinbase filter, size check                                                                                                                 |
+| `send.rs` `max_amount`          | backend `input_selection.rs` `propose_send_max` (crate-private)                 | switch to it once public; until then the binary search and its dust-gap step                                                                           |
+| `build.rs` `pczt`               | backend `build_proposed_transaction` and `create_pczt_from_proposal`            | bundle padding, ZIP 318 expiry, outgoing viewing key policy, change per pool (Orchard's post-NU6.3 change rule), ZIP 32 / BIP 44 paths, user addresses |
+| `wallet.rs` (`InputSource`)     | sqlite `lib.rs` `impl InputSource`, `wallet/common.rs`, `wallet/transparent.rs` | new or changed trait methods; dust, ordering and confirmation rules (pinned by `wallet.rs` tests)                                                      |
+| `wallet.rs` `anchor_computable` | —                                                                               | answers `false` until ziziphus serves roots at ZIP 318 bucket heights                                                                                  |
+| `roles.rs` `sign`               | `pczt` signer / verifier                                                        | Sapling proof generation key per key scope, any new pool                                                                                               |
 
 ## 3. For a network upgrade
 
@@ -44,9 +44,10 @@ in `Cargo.toml`.
 ```sh
 cargo test --release            # includes end-to-end proofs for every pool
 cargo audit                     # CI also runs it daily
-ZIZIPHUS_DIR=… cargo test --release real_ziziphus -- --ignored
+./test-ziziphus.sh              # live ziziphus data against the chain
 ./build.sh                      # then smoke-test /send (plan, Max) and /shield
 ```
 
-The ignored test checks live ziziphus data against the chain; see
-`witness.rs` for the files it reads.
+`test-ziziphus.sh` runs the ignored `real_ziziphus` test (see `witness.rs`)
+on the dev indexer's Sapling tree and lightwalletd's; `INDEXER_URL` and
+`GRPC_URL` point it elsewhere.
