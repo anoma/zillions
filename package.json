@@ -10,6 +10,7 @@
     "app:dev": "pnpm --filter zillions-app dev",
     "keychain:dev": "pnpm --filter zillions-keychain dev",
     "app:build": "pnpm --filter zillions-app build",
+    "app:test": "pnpm --filter zillions-app test",
     "keychain:build": "pnpm --filter zillions-keychain build",
     "netlify:build": "bash scripts/build-netlify.sh",
     "typecheck": "pnpm --filter zillions-app typecheck && pnpm --filter zillions-keychain compile",
