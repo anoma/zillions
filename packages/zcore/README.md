@@ -51,7 +51,7 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 | `try_decrypt_full`  | Reads a chunk in full: memos, the wallet's sends, where it spent      |
 | `find_spends`       | The Orchard or Ironwood actions in a chunk that spend given notes     |
 | `nullifiers_spent`  | Which given nullifiers a `/nullifiers` chunk holds (Sapling's spends) |
-| `parse_transaction` | The transparent inputs and outputs of a raw transaction               |
+| `parse_transaction` | A raw transaction's transparent side and the nullifiers it spends     |
 
 **Sending**, in the order a send runs:
 

@@ -35,6 +35,12 @@ pnpm app:dev
 
 Opens on http://localhost:5173.
 
+## Test
+
+```bash
+pnpm app:test
+```
+
 ## Build
 
 ```bash

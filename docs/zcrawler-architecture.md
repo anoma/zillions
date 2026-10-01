@@ -40,8 +40,21 @@ lightwalletd; nothing from a local crawler.
   is found among our own, whose compact blocks history fetches anyway. A spend
   in a transaction with nothing else of ours stays "spent, transaction unknown"
   (open question in [product.md](product.md)).
+- **Sends across pools.** A payment can sit in a pool where we hold nothing,
+  so the crawl never reads its chunk. After each sync, every transaction of
+  ours that spent something is placed exactly: its compact block's tree sizes
+  (ChainMetadata 1–3) minus the notes it and later transactions add (CompactTx
+  fields 5, 6, 9) give its notes' positions in each pool, and those chunks'
+  `/outgoing` are read once.
 - **Balance.** A note counts once it's checked: Orchard and Ironwood when their
   scan reaches the tip, Sapling after the nullifier check.
+- **Pending sends.** A broadcast's raw transaction names the nullifiers and
+  coins it spends; those are held out of the balance and of new plans until a
+  spend of theirs shows up on chain, or 10 blocks past its expiry (the indexer
+  trails the chain). Its change counts as pending meanwhile.
+- **Retries.** Indexer and lightwalletd calls retry network errors, 403
+  (CloudFront's rate limit), 408, 429 and 5xx for about a minute; a broadcast
+  is never retried. A sync that still fails resumes from its cursor.
 - **Reorgs.** Not handled by the indexer: it stores blocks 2–3 behind the tip
   and never rewrites a height. See ask 8.
 

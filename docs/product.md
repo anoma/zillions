@@ -75,7 +75,10 @@ Spending is *Built*: it awaits a first real transaction.
 - **Total balance** in ZEC, with the **shielded** and **transparent** parts
   shown separately.
 - **Pending** amounts (sent or received but not yet confirmed) are shown and
-  included in the total. — *Disabled*: comes back with sending.
+  included in the total. — *Built* for sends: what a send spends leaves the
+  balance at once and can't be spent again, and its change (or an unshield's
+  amount) shows as pending until it's mined or expires. Amounts received but
+  not yet mined aren't shown yet: the wallet only reads mined blocks.
 - Shortcut buttons: **Send**, **Receive**, **Shield** (shown when there is a
   transparent balance), **Unshield** (shown when there is a shielded balance).
 - Recent transactions (see 2.6).
