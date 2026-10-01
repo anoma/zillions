@@ -44,8 +44,9 @@ export function nullifiers_spent(body: Uint8Array, nullifiers: Uint8Array): any;
 
 /**
  * The transparent side of a raw transaction mined at `height`, which fixes
- * the consensus rules it is read under: `{ txid, inputs: [{ txid, index }],
- * outputs: [{ index, value, address }] }`.
+ * the consensus rules it is read under, and the nullifiers it spends:
+ * `{ txid, inputs: [{ txid, index }], outputs: [{ index, value, address }],
+ * nullifiers }`.
  */
 export function parse_transaction(network: string, height: number, data: Uint8Array): any;
 
@@ -119,7 +120,7 @@ export function try_decrypt(network: string, ufvk: string, pool: string, chunk: 
  * [`spends::find_spends`] found. Returns
  * `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
  *    sent: [{ pool, value, recipient, memo, height, tx_index, position }],
- *    spends: [{ nf, height, tx_index, spans_previous, spans_next }] }`.
+ *    spends: [{ nf, height, tx_index }] }`.
  */
 export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array, memos: Uint8Array, outgoing: Uint8Array, hits: Uint32Array, spends: Uint32Array): any;
 

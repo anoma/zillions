@@ -58,9 +58,19 @@ export interface ChunkRequest {
 export interface SpendPlace extends TxLocator {
   /** The nullifier spent: the spent note's `nf_mine`. */
   nf: string;
-  /** Whether its transaction may run on into the previous or next chunk. */
-  spans_previous: boolean;
-  spans_next: boolean;
+}
+
+/** A transaction we broadcast that isn't seen mined yet. */
+export interface PendingTx {
+  txid: string;
+  /** The last height it can be mined at; 0 for never. */
+  expiryHeight: number;
+  /** The notes it spends, by nullifier. */
+  nullifiers: string[];
+  /** The coins it spends, as `txid:index`. */
+  outpoints: string[];
+  /** Zatoshis it returns to us as change. */
+  change: number;
 }
 
 /** An output this wallet created, recovered with its outgoing viewing key. */
@@ -114,4 +124,7 @@ export interface SyncStatus {
   scanned: Partial<Record<Pool, PoolScan>>;
   /** The first Sapling `/nullifiers` chunk not checked yet. */
   saplingNullifiers: number;
+  /** Our sending transactions (`height:tx_index`) whose sends have all been read. */
+  sendsRead: string[];
+  pending: PendingTx[];
 }

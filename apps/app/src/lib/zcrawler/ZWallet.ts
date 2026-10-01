@@ -1,4 +1,8 @@
-import initZcore, { find_spends, nullifiers_spent } from "@zillions/zcore";
+import initZcore, {
+  find_spends,
+  nullifiers_spent,
+  parse_transaction,
+} from "@zillions/zcore";
 
 import { invariant } from "../invariant";
 import { dedupe, singleton } from "../utils";
@@ -13,12 +17,14 @@ import {
 } from "./db";
 import { buildHistory, historyHeights } from "./history";
 import {
-  fetchLastChunks,
+  CHUNK_SIZE,
   fetchNullifierChunk,
+  fetchTreeSizes,
   firstChunkFrom,
-  type LastChunks,
+  lastChunk,
+  type TreeSizes,
 } from "./indexer";
-import { type Block, fetchBlock } from "./lightwalletd";
+import { type Block, fetchBlock, outputPositions } from "./lightwalletd";
 import {
   maxSend,
   planSend,
@@ -27,6 +33,7 @@ import {
   shieldPczt,
   type WalletData,
 } from "./send";
+import { submitTransaction } from "./submit";
 import {
   nextUnshield,
   type OwnUtxo,
@@ -42,9 +49,21 @@ import type {
   Sent,
   SentOutput,
   SyncStatus,
+  TxLocator,
 } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
+
+const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
+
+/** Each pool's last chunk, possibly still filling; -1 for an empty pool. */
+type LastChunks = Record<Pool, number>;
+
+/**
+ * Blocks past a pending transaction's expiry before it's dropped: the indexer
+ * trails the chain, and one mined at its last height must show up first.
+ */
+const EXPIRY_MARGIN = 10;
 
 /** Newest pool first: that's where recent activity lands. */
 const POOLS = ["ironwood", "orchard", "sapling"] as const satisfies Pool[];
@@ -65,6 +84,8 @@ const emptySyncStatus = (accountId: string): SyncStatus => ({
   percentage: 0,
   scanned: {},
   saplingNullifiers: 0,
+  sendsRead: [],
+  pending: [],
 });
 
 /** Notes' nullifiers as zcore takes them: 32 bytes each, back to back. */
@@ -102,6 +123,8 @@ export class ZWallet {
    * order: the cursor never passes a chunk whose spends aren't placed.
    */
   #locating: Promise<unknown> = Promise.resolve();
+  /** Chunks read in full this sync, as `pool:chunk`: their sends are in. */
+  #readChunks = new Set<string>();
 
   constructor(options: { id: string; ufvk: string; birthday?: number }) {
     this.id = options.id;
@@ -166,11 +189,16 @@ export class ZWallet {
 
     const lookups = workerChannel();
     this.#locating = Promise.resolve();
+    this.#readChunks.clear();
+    let sizes: TreeSizes | undefined;
     // History's blocks are looked up whatever becomes of the crawl: what it
     // did find, and the transparent side, still deserve their txids and times.
     try {
       await initZcore();
-      const last = await fetchLastChunks();
+      sizes = await fetchTreeSizes();
+      const last = Object.fromEntries(
+        POOLS.map((pool) => [pool, lastChunk(sizes![pool])]),
+      ) as LastChunks;
       const { scanned } = this.#syncStatus;
       for (const pool of POOLS) {
         if (scanned[pool]) continue;
@@ -209,10 +237,18 @@ export class ZWallet {
         this.#advance(last);
       }
     } finally {
-      lookups.terminate();
       await transparent;
       await this.#fetchBlocks();
       this.#locateSaplingSpends();
+      if (sizes) {
+        await this.#recoverSends(sizes, lookups).catch((err) =>
+          console.error("[sync] sends lookup failed", err),
+        );
+      }
+      lookups.terminate();
+      this.#prunePending();
+      this.#save();
+      this.#emitProgress();
       await this.#saving;
       console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
     }
@@ -225,6 +261,8 @@ export class ZWallet {
     last: LastChunks,
     lookups: Lookups,
   ) => {
+    // A worker reads a chunk in full exactly when it holds a note of ours.
+    if (hits.length) this.#readChunks.add(`${pool}:${chunk}`);
     this.#applySent(pool, sent);
     for (const hit of hits) {
       const note: Note = {
@@ -241,9 +279,7 @@ export class ZWallet {
     const spends = pool === "sapling" ? [] : this.#findSpends(pool, body);
     const scan = this.#syncStatus.scanned[pool]!;
     this.#locating = this.#locating.then(async () => {
-      if (spends.length) {
-        await this.#placeSpends(pool, chunk, spends, last[pool], lookups);
-      }
+      if (spends.length) await this.#placeSpends(pool, chunk, spends, lookups);
       scan.next = Math.max(scan.next, chunk + 1);
       this.#advance(last);
     });
@@ -268,33 +304,21 @@ export class ZWallet {
       : [];
   };
 
-  /** Places `spends`, records of `chunk`, and takes what their transactions sent. */
+  /** Places `spends`, records of `chunk`, and takes what the chunk shows we sent. */
   #placeSpends = async (
     pool: Pool,
     chunk: number,
     spends: number[],
-    last: number,
     lookups: Lookups,
   ) => {
     const result = await lookups.run({ ufvk: this.#ufvk, chunk, pool, spends });
+    this.#readChunks.add(`${pool}:${chunk}`);
     this.#applySent(pool, result.sent);
-    const neighbours = new Set<number>();
     for (const place of result.spends) {
       const note = this.#notes.find(
         (n) => n.pool === pool && n.nf_mine === place.nf,
       );
       if (note) note.spent = { height: place.height, tx_index: place.tx_index };
-      if (place.spans_previous && chunk > 0) neighbours.add(chunk - 1);
-      if (place.spans_next && chunk < last) neighbours.add(chunk + 1);
-    }
-    for (const near of neighbours) {
-      const { sent } = await lookups.run({
-        ufvk: this.#ufvk,
-        chunk: near,
-        pool,
-        spends: [],
-      });
-      this.#applySent(pool, sent);
     }
   };
 
@@ -330,7 +354,6 @@ export class ZWallet {
    * nothing else of ours stays `true`: spent, transaction unknown.
    */
   #locateSaplingSpends = () => {
-    let placed = false;
     for (const note of this.#notes) {
       if (note.pool !== "sapling" || note.spent !== true) continue;
       for (const [height, block] of this.#blocks) {
@@ -340,15 +363,91 @@ export class ZWallet {
             : undefined;
         if (tx_index !== undefined) {
           note.spent = { height, tx_index };
-          placed = true;
           break;
         }
       }
     }
-    if (placed) {
-      this.#save();
-      this.#emitProgress();
+  };
+
+  /** Our transactions that spent notes or coins of ours, by `height:tx_index`. */
+  #sendingTxs = () => {
+    const txs = new Map<string, TxLocator>();
+    for (const { spent } of this.#notes) {
+      if (typeof spent === "object") {
+        txs.set(`${spent.height}:${spent.tx_index}`, spent);
+      }
     }
+    for (const { txid, height, spent } of this.#transparent.txs) {
+      if (!spent) continue;
+      const txids = this.#blocks.get(height)?.txids ?? [];
+      const tx_index = [...txids].find(([, id]) => id === txid)?.[0];
+      if (tx_index !== undefined) {
+        txs.set(`${height}:${tx_index}`, { height, tx_index });
+      }
+    }
+    return txs;
+  };
+
+  /**
+   * Reads what our own transactions sent, in every pool they pay into: the
+   * crawl only reads chunks holding a note or spend of ours, but a payment
+   * can sit in another pool's chunk. Its block says exactly where.
+   */
+  #recoverSends = async (sizes: TreeSizes, lookups: Lookups) => {
+    const done = new Set(this.#syncStatus.sendsRead);
+    try {
+      for (const [id, { height, tx_index }] of this.#sendingTxs()) {
+        const block = this.#blocks.get(height);
+        if (done.has(id) || !block) continue;
+        const places = outputPositions(block, tx_index).filter((p) => p.count);
+        // Not indexed yet: try again next sync.
+        if (places.some((p) => p.first + p.count > sizes[p.pool])) continue;
+        for (const { pool, first, count } of places) {
+          const from = Math.floor(first / CHUNK_SIZE);
+          const to = Math.floor((first + count - 1) / CHUNK_SIZE);
+          for (let chunk = from; chunk <= to; chunk++) {
+            if (this.#readChunks.has(`${pool}:${chunk}`)) continue;
+            const { sent } = await lookups.run({
+              ufvk: this.#ufvk,
+              chunk,
+              pool,
+              spends: [],
+            });
+            this.#applySent(pool, sent);
+            this.#readChunks.add(`${pool}:${chunk}`);
+          }
+        }
+        done.add(id);
+      }
+    } finally {
+      this.#syncStatus.sendsRead = [...done];
+    }
+  };
+
+  /** Drops pending transactions seen mined (a spend of theirs is on chain) or past expiry. */
+  #prunePending = () => {
+    const { tip, txs } = this.#transparent;
+    const spent = new Set(
+      this.#notes.filter((n) => n.spent).map((n) => n.nf_mine),
+    );
+    const mined = new Set(txs.map((tx) => tx.txid));
+    this.#syncStatus.pending = this.#syncStatus.pending.filter(
+      (p) =>
+        !mined.has(p.txid) &&
+        !p.nullifiers.some((nf) => spent.has(nf)) &&
+        (p.expiryHeight === 0 ||
+          tip === undefined ||
+          tip <= p.expiryHeight + EXPIRY_MARGIN),
+    );
+  };
+
+  /** Nullifiers and `txid:index` outpoints pending transactions spend. */
+  #held = () => {
+    const { pending } = this.#syncStatus;
+    return {
+      notes: new Set(pending.flatMap((p) => p.nullifiers)),
+      coins: new Set(pending.flatMap((p) => p.outpoints)),
+    };
   };
 
   /**
@@ -410,44 +509,80 @@ export class ZWallet {
       .catch((err) => console.error("[sync] save failed", err));
   };
 
-  async getBalance() {
+  /** Unspent notes and UTXOs, less what pending transactions spend. */
+  #spendable = () => {
+    const held = this.#held();
     return {
-      shieldedBalance: this.#notes.reduce(
-        (sum, n) => sum + (n.spent === false ? BigInt(n.value) : 0n),
+      notes: this.#notes.filter(
+        (n) => n.spent === false && !held.notes.has(n.nf_mine),
+      ),
+      utxos: this.#transparent.utxos.filter(
+        (u) => !held.coins.has(`${u.txid}:${u.index}`),
+      ),
+    };
+  };
+
+  async getBalance() {
+    const { notes, utxos } = this.#spendable();
+    return {
+      shieldedBalance: notes.reduce((sum, n) => sum + BigInt(n.value), 0n),
+      pendingChange: this.#syncStatus.pending.reduce(
+        (sum, p) => sum + BigInt(p.change),
         0n,
       ),
       // TODO
-      pendingChange: 0n,
       pendingSpendable: 0n,
-      unshieldedBalance: this.#transparent.utxos.reduce(
-        (sum, utxo) => sum + BigInt(utxo.value),
-        0n,
-      ),
+      unshieldedBalance: utxos.reduce((sum, u) => sum + BigInt(u.value), 0n),
     };
   }
 
-  /** What a send may spend: unspent notes and UTXOs, at the chain tip. */
+  /** What a send may spend, at the chain tip. */
   #walletData = (): WalletData => {
-    const { utxos, tip } = this.#transparent;
+    const { tip } = this.#transparent;
     invariant(tip !== undefined, "The wallet is still syncing");
+    const { notes, utxos } = this.#spendable();
     return {
       tip,
-      notes: this.#notes
-        .filter((n) => n.spent === false)
-        .map((n) => ({
-          pool: n.pool,
-          scope: n.scope,
-          note: n.note,
-          output_index: n.output_index,
-          position: n.position,
-          height: n.height,
-          // Only names the note: a block not fetched yet mustn't hold a send up.
-          txid:
-            this.#blocks.get(n.height)?.txids.get(n.tx_index) ??
-            n.position.toString(16).padStart(64, "0"),
-        })),
+      notes: notes.map((n) => ({
+        pool: n.pool,
+        scope: n.scope,
+        note: n.note,
+        output_index: n.output_index,
+        position: n.position,
+        height: n.height,
+        // Only names the note: a block not fetched yet mustn't hold a send up.
+        txid:
+          this.#blocks.get(n.height)?.txids.get(n.tx_index) ??
+          n.position.toString(16).padStart(64, "0"),
+      })),
       utxos,
     };
+  };
+
+  /**
+   * Proves and broadcasts a signed PCZT, then holds the notes and coins it
+   * spends out of the balance and of new plans until it's mined or expires.
+   * `change` is what it returns to us, shown as pending meanwhile.
+   */
+  submit = async (signed: Uint8Array, change: bigint) => {
+    const { txid, raw, expiryHeight } = await submitTransaction(signed);
+    const { tip } = this.#transparent;
+    invariant(tip !== undefined, "The wallet is still syncing");
+    await initZcore();
+    const tx = parse_transaction(NETWORK, tip, raw) as {
+      inputs: { txid: string; index: number }[];
+      nullifiers: string[];
+    };
+    this.#syncStatus.pending.push({
+      txid,
+      expiryHeight,
+      nullifiers: tx.nullifiers,
+      outpoints: tx.inputs.map((i) => `${i.txid}:${i.index}`),
+      change: Number(change),
+    });
+    this.#save();
+    this.#emitProgress();
+    return { txid, expiryHeight };
   };
 
   planSend = (send: SendRequest) => planSend(this.#walletData(), send);

@@ -4,6 +4,9 @@
  * used; field numbers follow lightwalletd's `service.proto`.
  */
 
+import { fetchWithRetry } from "./http";
+import type { Pool } from "./types";
+
 const LIGHTWALLETD_URL = import.meta.env.VITE_GRPC_URL;
 const SERVICE = "cash.z.wallet.sdk.rpc.CompactTxStreamer";
 
@@ -92,7 +95,10 @@ async function call(method: string, request: Uint8Array) {
   const frame = new Uint8Array(5 + request.length);
   new DataView(frame.buffer).setUint32(1, request.length);
   frame.set(request, 5);
-  const res = await fetch(`${LIGHTWALLETD_URL}/${SERVICE}/${method}`, {
+  // A broadcast is never sent twice: a retry after a lost reply would be
+  // rejected as already known, reading like a failure.
+  const send = method === "SendTransaction" ? fetch : fetchWithRetry;
+  const res = await send(`${LIGHTWALLETD_URL}/${SERVICE}/${method}`, {
     method: "POST",
     headers: {
       "content-type": "application/grpc-web+proto",
@@ -195,8 +201,9 @@ export async function fetchAddressTransactions(
 }
 
 /**
- * What history needs from a block: when it was mined, its txids by index, and
- * which transaction revealed each Sapling nullifier.
+ * What history needs from a block: when it was mined, its txids by index,
+ * which transaction revealed each Sapling nullifier, and where each
+ * transaction's new notes sit.
  */
 export interface Block {
   /** Unix seconds. */
@@ -205,6 +212,29 @@ export interface Block {
   txids: Map<number, string>;
   /** Sapling nullifier (hex) → index of the transaction that spent it. */
   saplingSpends: Map<string, number>;
+  /** Each pool's note commitment tree size with this block applied. */
+  treeSizes: Record<Pool, number>;
+  /** How many notes each transaction, by index, adds to each pool. */
+  outputs: Map<number, Record<Pool, number>>;
+}
+
+/** CompactTx fields listing each pool's new notes, and ChainMetadata's tree sizes. */
+const POOL_FIELDS: [Pool, { tx: number; size: number }][] = [
+  ["sapling", { tx: 5, size: 1 }],
+  ["orchard", { tx: 6, size: 2 }],
+  ["ironwood", { tx: 9, size: 3 }],
+];
+
+/** Where transaction `txIndex`'s new notes start in each pool's tree, and how many there are. */
+export function outputPositions(block: Block, txIndex: number) {
+  return POOL_FIELDS.map(([pool]) => {
+    let fromHere = 0;
+    for (const [index, counts] of block.outputs) {
+      if (index >= txIndex) fromHere += counts[pool];
+    }
+    const count = block.outputs.get(txIndex)?.[pool] ?? 0;
+    return { pool, first: block.treeSizes[pool] - fromHere, count };
+  });
 }
 
 export async function fetchBlock(height: number): Promise<Block> {
@@ -212,14 +242,26 @@ export async function fetchBlock(height: number): Promise<Block> {
   const block = fields(compact);
   const txids = new Map<number, string>();
   const saplingSpends = new Map<string, number>();
+  const outputs = new Map<number, Record<Pool, number>>();
   for (const raw of block.get(7) ?? []) {
     const tx = fields(raw as Uint8Array);
-    txids.set(num(tx, 1), displayTxid(bytes(tx, 2)));
+    const index = num(tx, 1);
+    txids.set(index, displayTxid(bytes(tx, 2)));
     for (const spend of tx.get(4) ?? []) {
-      saplingSpends.set(hex(bytes(fields(spend as Uint8Array), 1)), num(tx, 1));
+      saplingSpends.set(hex(bytes(fields(spend as Uint8Array), 1)), index);
     }
+    outputs.set(
+      index,
+      Object.fromEntries(
+        POOL_FIELDS.map(([pool, f]) => [pool, tx.get(f.tx)?.length ?? 0]),
+      ) as Record<Pool, number>,
+    );
   }
-  return { time: num(block, 5), txids, saplingSpends };
+  const meta = fields(bytes(block, 8));
+  const treeSizes = Object.fromEntries(
+    POOL_FIELDS.map(([pool, f]) => [pool, num(meta, f.size)]),
+  ) as Record<Pool, number>;
+  return { time: num(block, 5), txids, saplingSpends, treeSizes, outputs };
 }
 
 /** A mined transaction by txid, given in explorer byte order. */

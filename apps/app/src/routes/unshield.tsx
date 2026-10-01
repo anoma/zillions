@@ -67,7 +67,7 @@ function UnshieldRoute() {
       return;
     }
     send.mutate(
-      { from: "shielded", to, amount },
+      { from: "shielded", to, amount, toSelf: true },
       {
         onSuccess: async ({ expiryHeight }) => {
           await wallet.unshieldSent(next.index, expiryHeight);

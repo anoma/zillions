@@ -67,7 +67,7 @@ function prove(pczt: Uint8Array, sapling?: SaplingParams) {
   }).finally(() => worker.terminate());
 }
 
-/** Proves and broadcasts a signed PCZT; returns its id and expiry height. */
+/** Proves and broadcasts a signed PCZT; returns it raw, with its id and expiry height. */
 export async function submitTransaction(signed: Uint8Array) {
   await initZcore();
   const sapling = needs_sapling_params(signed)
@@ -75,5 +75,5 @@ export async function submitTransaction(signed: Uint8Array) {
     : undefined;
   const { txid, raw, expiry_height } = await prove(signed, sapling);
   await sendTransaction(raw);
-  return { txid, expiryHeight: expiry_height };
+  return { txid, raw, expiryHeight: expiry_height };
 }

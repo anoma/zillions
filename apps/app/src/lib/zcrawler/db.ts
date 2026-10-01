@@ -77,6 +77,26 @@ db.version(7)
     );
   });
 
+// Blocks are dropped: v8's also place each transaction's new notes.
+db.version(8)
+  .stores({
+    notes: "id",
+    sent: "id",
+    sync: "id",
+    transparent: "id",
+    blocks: "height",
+  })
+  .upgrade(async (tx) => {
+    await tx.table("blocks").clear();
+    await tx
+      .table("sync")
+      .toCollection()
+      .modify((status: SyncStatus) => {
+        status.sendsRead ??= [];
+        status.pending ??= [];
+      });
+  });
+
 export const loadNotes = (accountId: string): Promise<Note[]> =>
   db.notes.where("id").startsWith(accountId).toArray();
 

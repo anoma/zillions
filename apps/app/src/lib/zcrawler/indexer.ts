@@ -1,3 +1,4 @@
+import { fetchWithRetry } from "./http";
 import type { Pool } from "./types";
 
 const INDEXER_URL = import.meta.env.VITE_INDEXER_URL;
@@ -5,11 +6,14 @@ const INDEXER_URL = import.meta.env.VITE_INDEXER_URL;
 /** Notes per chunk. */
 export const CHUNK_SIZE = 2 ** 14;
 
-/** Each pool's last chunk: the tip's, possibly still filling; -1 for an empty pool. */
-export type LastChunks = Record<Pool, number>;
+/** Each pool's note count at the indexer's tip. */
+export type TreeSizes = Record<Pool, number>;
+
+/** The chunk holding a tree's newest note, possibly still filling; -1 for an empty tree. */
+export const lastChunk = (size: number) => Math.ceil(size / CHUNK_SIZE) - 1;
 
 async function fetchOk(url: string, init?: RequestInit) {
-  const res = await fetch(url, init);
+  const res = await fetchWithRetry(url, init);
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
   return res;
 }
@@ -31,18 +35,20 @@ export async function fetchChunk(
 /** A pool's note count, from where `/tip` redirects; throws if it names none. */
 async function treeSize(pool: Pool) {
   // HEAD skips the snapshot body; a stale one 404s, but its URL has the size.
-  const res = await fetch(`${INDEXER_URL}/${pool}/tip`, { method: "HEAD" });
+  const res = await fetchWithRetry(`${INDEXER_URL}/${pool}/tip`, {
+    method: "HEAD",
+  });
   const size = Number(new URL(res.url).pathname.split("/").pop());
   if (!Number.isInteger(size)) throw new Error(`No tree size for ${pool}`);
   return size;
 }
 
-export async function fetchLastChunks(): Promise<LastChunks> {
+export async function fetchTreeSizes(): Promise<TreeSizes> {
   const pools = ["ironwood", "orchard", "sapling"] as const;
   const sizes = await Promise.all(pools.map(treeSize));
   return Object.fromEntries(
-    pools.map((pool, i) => [pool, Math.ceil(sizes[i] / CHUNK_SIZE) - 1]),
-  ) as LastChunks;
+    pools.map((pool, i) => [pool, sizes[i]]),
+  ) as TreeSizes;
 }
 
 /** A chunk's highest block height, read from the head of its body alone. */
@@ -84,7 +90,7 @@ export async function firstChunkFrom(pool: Pool, height: number, last: number) {
  */
 export async function fetchTreeTip(pool: Pool) {
   for (let attempt = 1; ; attempt++) {
-    const res = await fetch(`${INDEXER_URL}/${pool}/tip`);
+    const res = await fetchWithRetry(`${INDEXER_URL}/${pool}/tip`);
     if (res.ok) {
       const size = Number(new URL(res.url).pathname.split("/").pop());
       return { size, body: new Uint8Array(await res.arrayBuffer()) };
@@ -109,7 +115,9 @@ export async function fetchTreeChunk(pool: Pool, chunk: number) {
  * which nullifiers are ours. Absent past the last chunk.
  */
 export async function fetchNullifierChunk(pool: Pool, chunk: number) {
-  const res = await fetch(`${INDEXER_URL}/${pool}/nullifiers/${chunk}`);
+  const res = await fetchWithRetry(
+    `${INDEXER_URL}/${pool}/nullifiers/${chunk}`,
+  );
   if (res.status === 404) return undefined;
   if (!res.ok)
     throw new Error(`HTTP ${res.status} ${pool} nullifiers ${chunk}`);

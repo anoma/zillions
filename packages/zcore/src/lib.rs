@@ -180,10 +180,6 @@ struct Spend {
     nf: String,
     height: u32,
     tx_index: u16,
-    /// Whether the spending transaction's actions may run on into the previous
-    /// or next chunk, where more of what it sent would sit.
-    spans_previous: bool,
-    spans_next: bool,
 }
 
 /// One chunk's decryption: the notes this wallet received, the outputs it
@@ -675,7 +671,7 @@ pub fn try_decrypt(network: &str, ufvk: &str, pool: &str, chunk: u32, body: &[u8
 /// [`spends::find_spends`] found. Returns
 /// `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
 ///    sent: [{ pool, value, recipient, memo, height, tx_index, position }],
-///    spends: [{ nf, height, tx_index, spans_previous, spans_next }] }`.
+///    spends: [{ nf, height, tx_index }] }`.
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)]
 pub fn try_decrypt_full(
@@ -707,16 +703,9 @@ pub fn try_decrypt_full(
 
 /// Each spend's nullifier and transaction, from the records at `spends`.
 fn spend_places(notes: &[FullNote], spends: &[usize]) -> Vec<Spend> {
-    let same_tx = |a: &FullNote, b: &FullNote| (a.height, a.tx_index) == (b.height, b.tx_index);
     spends
         .iter()
-        .map(|&i| Spend {
-            nf: hex::encode(notes[i].rho),
-            height: notes[i].height,
-            tx_index: notes[i].tx_index,
-            spans_previous: same_tx(&notes[0], &notes[i]),
-            spans_next: same_tx(&notes[notes.len() - 1], &notes[i]),
-        })
+        .map(|&i| Spend { nf: hex::encode(notes[i].rho), height: notes[i].height, tx_index: notes[i].tx_index })
         .collect()
 }
 
@@ -811,15 +800,12 @@ mod tests {
     }
 
     #[test]
-    fn places_a_spend_and_its_transaction_span() {
+    fn places_a_spend() {
         let mut notes: Vec<FullNote> = (0..3).map(|_| fixture(ORCHARD_FULL)).collect();
         notes[1].rho = [5; 32];
-        notes[2].tx_index += 1;
         let spends = spend_places(&notes, &[1]);
         assert_eq!(spends[0].nf, hex::encode([5u8; 32]));
         assert_eq!((spends[0].height, spends[0].tx_index), (notes[1].height, notes[1].tx_index));
-        // Record 0 shares its transaction; the last record doesn't.
-        assert!(spends[0].spans_previous && !spends[0].spans_next);
     }
 
     #[test]

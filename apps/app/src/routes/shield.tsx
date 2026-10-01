@@ -9,7 +9,6 @@ import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
-import { submitTransaction } from "../lib/zcrawler/submit";
 import { TransferSuccess } from "./TransferSuccess";
 
 /** Least a shielding may move: zcore's rule, as the fee would eat the rest. */
@@ -49,7 +48,8 @@ function ShieldRoute() {
         signer: account.transparent.address,
         pczt: bytesToBase64(pczt),
       });
-      const { txid } = await submitTransaction(base64ToBytes(signed));
+      // Everything shielded comes back to us, in Ironwood.
+      const { txid } = await wallet.submit(base64ToBytes(signed), value);
       return { txid, value, fee, timestamp: Date.now() };
     },
   });

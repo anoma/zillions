@@ -62,13 +62,15 @@ struct Output {
     address: Option<String>,
 }
 
-/// A transaction's transparent side. Txids are in the byte order explorers
-/// show them in.
+/// A transaction's transparent side, and the shielded nullifiers it reveals.
+/// Txids are in the byte order explorers show them in.
 #[derive(Serialize)]
 struct TransparentTx {
     txid: String,
     inputs: Vec<Input>,
     outputs: Vec<Output>,
+    /// Every Sapling, Orchard and Ironwood nullifier it spends (hex).
+    nullifiers: Vec<String>,
 }
 
 fn parse(network: &Network, height: u32, data: &[u8]) -> Result<TransparentTx, String> {
@@ -99,16 +101,21 @@ fn parse(network: &Network, height: u32, data: &[u8]) -> Result<TransparentTx, S
                 .collect(),
         ),
     };
+    let sapling = tx.sapling_bundle().into_iter().flat_map(|b| b.shielded_spends()).map(|s| s.nullifier().0);
+    let orchard_family = [tx.orchard_bundle(), tx.ironwood_bundle()];
+    let orchard = orchard_family.into_iter().flatten().flat_map(|b| b.actions()).map(|a| a.nullifier().to_bytes());
     Ok(TransparentTx {
         txid: tx.txid().to_string(),
         inputs,
         outputs,
+        nullifiers: sapling.chain(orchard).map(hex::encode).collect(),
     })
 }
 
 /// The transparent side of a raw transaction mined at `height`, which fixes
-/// the consensus rules it is read under: `{ txid, inputs: [{ txid, index }],
-/// outputs: [{ index, value, address }] }`.
+/// the consensus rules it is read under, and the nullifiers it spends:
+/// `{ txid, inputs: [{ txid, index }], outputs: [{ index, value, address }],
+/// nullifiers }`.
 #[wasm_bindgen]
 pub fn parse_transaction(network: &str, height: u32, data: &[u8]) -> Result<JsValue, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
@@ -120,6 +127,16 @@ pub fn parse_transaction(network: &str, height: u32, data: &[u8]) -> Result<JsVa
 mod tests {
     use super::*;
     use zcash_keys::keys::UnifiedSpendingKey;
+
+    // Mainnet tx a633a20c…1f5b at 3,503,058: its compact block names this
+    // Ironwood action's nullifier.
+    #[test]
+    fn reads_the_nullifiers_a_transaction_spends() {
+        let raw = hex::decode(include_str!("testdata/ironwood_tx.hex").trim()).expect("hex");
+        let tx = parse(&Network::MainNetwork, 3_503_058, &raw).expect("parses");
+        assert_eq!(tx.txid, "a633a20c18cbd7e44ef86749fa71b89ad140154ff412b57d3a027c214e151f5b");
+        assert_eq!(tx.nullifiers, ["ec9483d9491c7294eca79c4b302d892946d23e38a40697513c93008438daa825"]);
+    }
 
     #[test]
     fn derives_both_chains_from_the_viewing_key() {
