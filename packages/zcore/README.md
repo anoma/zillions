@@ -48,7 +48,9 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 | Function            | Does                                                                  |
 | ------------------- | --------------------------------------------------------------------- |
 | `try_decrypt`       | Trial-decrypts one chunk of compact ciphertexts (2¹⁴ notes per chunk) |
-| `try_decrypt_full`  | Trial-decrypts a hit chunk in full: adds memos and the wallet's sends |
+| `try_decrypt_full`  | Reads a chunk in full: memos, the wallet's sends, where it spent      |
+| `find_spends`       | The Orchard or Ironwood actions in a chunk that spend given notes     |
+| `nullifiers_spent`  | Which given nullifiers a `/nullifiers` chunk holds (Sapling's spends) |
 | `parse_transaction` | The transparent inputs and outputs of a raw transaction               |
 
 **Sending**, in the order a send runs:
@@ -67,8 +69,13 @@ Proving takes seconds; run `prove_pczt` in a Web Worker. The Sapling
 parameters ship in [`@zillions/sapling-params`](../sapling-params/README.md).
 
 Chunk and tree inputs are the indexer's raw responses (`/ciphertexts`,
-`/memos`, `/outgoing`, the tree tip and frozen tree chunks), passed through
-unchanged.
+`/memos`, `/outgoing`, `/nullifiers`, the tree tip and frozen tree chunks),
+passed through unchanged.
+
+An Orchard or Ironwood action's rho is the nullifier it spends, so scanning
+chunks oldest-first with `find_spends` finds every spend of an earlier note,
+exactly. Sapling spends carry no rho; `nullifiers_spent` checks them against
+the indexer's nullifier chunks instead.
 
 ## Build
 

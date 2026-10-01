@@ -55,8 +55,7 @@ fully: holding, seeing, receiving and spending.
 | Orchard | Working | Working | Working | Built |
 | Ironwood | Working | Working | Working | Built |
 
-Spending is *Built*: it awaits a first real transaction, which needs the tree
-indexer (ziziphus) to reach the wallet's notes.
+Spending is *Built*: it awaits a first real transaction.
 
 - Every kind of spend is required: from any pool the wallet holds funds in, to
   any kind of Zcash address.
@@ -164,6 +163,9 @@ Moves shielded funds to one of the account's own transparent addresses.
 - Shows progress ("Shielded sync: N%", then "completed").
 - The transparent balance appears within seconds; shielded history fills in
   as the sync progresses.
+- Shielded funds count toward the balance only once the wallet has checked
+  they are still unspent, so the balance never shows money that is already
+  gone. Each pool's funds appear when its scan reaches the present.
 - Balance and history update as the sync finds things; no reload needed.
 
 ### 2.8 Accounts and Keychain connection — Working
@@ -270,6 +272,13 @@ Challenges to check, one by one:
 - Recovery-phrase passphrase on import (3.1)?
 - Keep or drop the optional creation block height on import (3.1)?
 - Offline Keychain challenges (3.5): each to be checked.
+- **Sapling spends the wallet can't place (2.6).** When Sapling funds are
+  spent in a transaction that leaves nothing else the wallet can see (no
+  change, no payment it can read back, no transparent side of its own), the
+  wallet knows the funds are spent but not in which transaction. The balance
+  is right; the history has no entry for it. Typical case: sending a whole
+  Sapling note to someone else's transparent address. How should history
+  show it, and is a slower lookup to find the transaction worth it?
 
 ## References
 

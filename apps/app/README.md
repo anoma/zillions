@@ -35,9 +35,6 @@ pnpm app:dev
 
 Opens on http://localhost:5173.
 
-Full notes and spent-note lookups still come from a local indexer on
-http://localhost:8080; without it, sync stops once it reaches the wallet's notes.
-
 ## Build
 
 ```bash

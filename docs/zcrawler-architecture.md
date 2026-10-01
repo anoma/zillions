@@ -1,7 +1,7 @@
 # Birthday-free sync architecture
 
-Status: draft for discussion. Built so far: the detection crawl on
-`feat/zcrawler-last-to-first`. Everything else is proposal.
+Status: July 2026 design notes, partly built. **Sync as built** below is
+the current state; where an older section disagrees, it wins.
 
 Companion services live in [heliaxdev/zcrawler](https://github.com/heliaxdev/zcrawler):
 `zcrawler` (note/nullifier index) and `ziziphus` (Merkle trees).
@@ -10,7 +10,40 @@ Companion services live in [heliaxdev/zcrawler](https://github.com/heliaxdev/zcr
 
 Any UFVK syncs with **no required birthday**. If the user supplies one it is a
 pure accelerator; without it we scan from activation. Either way the crawl runs
-newest-first so recent notes are visible and spendable early.
+oldest-first, so every chunk's spends are found in the same pass.
+
+## Sync as built (October 2026)
+
+All of it comes from the remote indexer's `/api/v1` (binary, postcard) and
+lightwalletd; nothing from a local crawler.
+
+- **Grid.** Ciphertext, memo, outgoing and tree chunks are 2¹⁴ notes;
+  nullifier chunks are 2¹⁸. Full chunks are `immutable` for a year; the tail
+  chunk is `max-age=3`.
+- **Start.** Chunk 0, or with a birthday the first chunk whose `max_height`
+  reaches it: a binary search over chunk headers, each a 16-byte Range request.
+- **Order.** Each pool oldest-first to the tip. Workers decrypt in parallel;
+  results are applied strictly in chunk order. A later sync resumes at the
+  last chunk read, which may have been the filling tip.
+- **Notes.** `/ciphertexts` for every chunk; `/memos` and `/outgoing` only for a
+  chunk holding a hit or a spend of ours. Outgoing recovery covers the whole
+  chunk, so it also finds what our spending transactions paid out.
+- **Orchard and Ironwood spends.** Every action's rho is the nullifier it
+  spends, and it rides in the `/ciphertexts` record. Applying chunk *c* checks
+  its rho against every note found before it: an exact, 32-byte match whose
+  position gives the height and transaction index (from `/memos`). No
+  nullifier download at all. Checked against the chain for both pools.
+- **Sapling spends.** A Sapling spend has no output of its own, so Sapling
+  notes are checked against `/sapling/nullifiers` (all 2.1M Sapling nullifiers
+  ever, ~20 MB, first 10 bytes each) once the Sapling scan reaches the tip, then
+  only new chunks on later syncs. That proves spent or unspent; the transaction
+  is found among our own, whose compact blocks history fetches anyway. A spend
+  in a transaction with nothing else of ours stays "spent, transaction unknown"
+  (open question in [product.md](product.md)).
+- **Balance.** A note counts once it's checked: Orchard and Ironwood when their
+  scan reaches the tip, Sapling after the nullifier check.
+- **Reorgs.** Not handled by the indexer: it stores blocks 2–3 behind the tip
+  and never rewrites a height. See ask 8.
 
 ## Measured baseline
 
@@ -71,8 +104,8 @@ unknown, and rests on the unmeasured rate below.
    silently under-reporting a balance.
 
 Change notes are internal-scope and land near the tip for an active wallet, so
-scanning both scopes is also what makes the newest-first crawl surface a correct
-balance early rather than late.
+scanning both scopes is also what makes a change note count wherever the
+crawl finds it.
 
 ## Division of labour
 
@@ -105,7 +138,7 @@ Three consequences for us:
   design is gone. We never maintain a commitment tree.
 - **No positional leak.** There are deliberately no per-note endpoints; every
   client fetches the same global artifacts. This is strictly better than the
-  nullifier prefix buckets, which *do* leak — see Threat model below.
+  nullifier prefix buckets this design first had, which *did* leak.
 - **Cost per spend is bounded:** ~1 MiB per chunk holding an unspent note, plus
   one tip state.
 
@@ -185,14 +218,13 @@ This makes the balance *monotonically increasing* through the initial sync — i
 only ever grows as history is discovered, never corrects downward. That is the
 whole point: a shrinking balance mid-sync reads as lost funds.
 
-It works because the nullifier bucket lookup is **chain-complete**: the bucket
-contains every nullifier ever revealed, regardless of position, so a check is
-final the moment it runs. Nullifiers harvested from scanned chunks would only be
-complete once the entire chain had been scanned — which is precisely why the
-bucket design is right, beyond the memory argument.
+It holds because a note is only marked unspent once nothing after it can
+spend it: Orchard and Ironwood when the oldest-first scan, which checks each
+chunk's spends against every older note, reaches the tip; Sapling when its
+nullifier chunks have all been checked.
 
-Mechanically: notes carry a validation flag; `getBalance` and input selection
-both filter on it. Unvalidated notes are invisible, not "pending".
+Mechanically: `Note.spent` is absent until checked; `getBalance` and input
+selection count only `spent === false`.
 
 Monotonicity holds except for reorgs at the tip and the user's own spends. Both
 are real events rather than corrections, and reorgs are bounded by only counting
@@ -200,21 +232,16 @@ notes below the sealed line.
 
 ## Optional birthday
 
-A supplied birthday sets the crawl floor instead of activation; everything else
-is unchanged, and the crawl still runs newest-first. The height → position
-mapping this needs — chunks are indexed in position space, a birthday is a
-block height — is a filter on the note tables, which already carry `height`:
-`/chunks?birthday=H` returns `first_chunk` as the chunk holding the pool's
-first note at that height or above. Exact downward, since that chunk straddles
-the boundary and is scanned whole.
+A supplied birthday sets the crawl's start chunk instead of chunk 0. Chunks are
+indexed by position and a birthday is a height, so the start is found by
+binary search over chunk headers, which carry each chunk's min, median and max
+height: about a dozen 16-byte Range requests per pool, done once.
 
-`ZWallet`'s `birthday` is optional and unset by default: full history stays the
-baseline. It is deliberately not wired to the keychain account, whose birthday
-still falls back to the chain tip — passing that through would hide every note
-an imported account already had.
+`ZWallet`'s `birthday` comes from the Keychain account; without one the whole
+history is scanned.
 
-The floor is the one thing the birthday tells the indexer. That leaks the
-account's approximate age, which the rest of the design does not.
+Which chunks the search reads tells the indexer roughly how old the account
+is, which the rest of the design does not.
 
 ## Replacing `zcash_client_memory`
 
@@ -273,8 +300,8 @@ key. Without it, your own sends are invisible except as vanished notes.
 ### Do not fetch by txid
 
 The obvious implementation — resolve each hit to a txid, then `GetTransaction`
-— would be **the largest privacy regression in the system**, worse than the
-nullifier buckets: it tells the server exactly which transactions are yours.
+— would be **the largest privacy regression in the system**: it tells the
+server exactly which transactions are yours.
 ziziphus went to real lengths for a zero-leak design; undoing that at the last
 step would be a poor trade.
 
@@ -293,45 +320,15 @@ N" — an anonymity set of 4,096 outputs, the same shape as ziziphus's blobs. A
 wallet with notes in 50 distinct chunks pays ~150 MB once, against ~14 GB for
 the detection pass it already did.
 
-### Spend side — open question for zcrawler
+### Spend side — resolved
 
-A nullifier match tells you a note was spent but not *where*. Rather than
-inflating the membership artifact, publish a second artifact at the same prefix,
-fetched **only on a match**, so it adds no leak beyond the bucket already
-queried. Unspent notes are the common case and never fetch it.
+A spend's place is a height and transaction index, which sorts history and
+names the transaction through its block's txids.
 
-What that artifact should carry is undecided, and it drives its download size.
-
-**Is `txid` actually needed?** Three candidate locators:
-
-| locator | bytes | covers | notes |
-|---|---|---|---|
-| `txid` | 32 | everything | what users and explorers expect — but **derivable** by hashing the raw tx once we have it |
-| `height` + `txIndex` | 6 | everything | canonical chain ordering, so history sorts correctly with no extra data |
-| output `position` | 8 | shielded outputs only | points straight into our position-indexed chunks; fails for unshielding txs with no shielded output |
-
-Our architecture is position-indexed end to end, so a position is the most
-directly useful — but it cannot describe a spend whose outputs are all
-transparent. `height` + `txIndex` is universal, sorts history natively, and is
-4× smaller than a txid. Since the enhance phase fetches transaction data anyway,
-the txid can be computed locally rather than shipped.
-
-**Size, and a way to make it small.** A 3-hex bucket holds ~24,000 entries. At
-nullifier + txid that is ~1.5 MB; at nullifier + height + txIndex, ~912 KB. But
-if `/spends/{prefix}/{seal}` is built in the **same sorted order** as the
-membership artifact and sealed with it, it needs no nullifiers at all — just a
-parallel array of fixed-size locators indexed by position in the membership
-list. That is ~150–190 KB, an 8–10× reduction, and costs the server only a
-guarantee that both artifacts share an ordering.
-
-**Do not serve it via HTTP Range requests.** Fixed-size records make byte-offset
-fetches tempting, but requesting record *i* reveals your nullifier's exact rank
-in the bucket, collapsing k from ~24,000 to 1. Download the whole locator array;
-at ~150 KB it is cheap enough that the shortcut buys nothing.
-
-Questions for zcrawler: which locator, can the two artifacts share an ordering,
-and does `GetTransaction` in the deployed lightwalletd accept block + index as
-well as hash (it affects whether height + txIndex is self-sufficient)?
+- **Orchard and Ironwood:** exact, from the spending action's own
+  `/ciphertexts` record (rho) and its `/memos` record. No artifact needed.
+- **Sapling:** a nullifier match proves the spend; the transaction is found
+  among our own, through the Sapling nullifiers in their compact blocks.
 
 ### Transparent history
 
@@ -341,10 +338,8 @@ range, then parse inputs and outputs from the returned transactions. Cheap
 (tens of addresses), immediate, and it leaks nothing beyond the address linkage
 transparent balances already accept.
 
-### Two properties that come free
+### A property that comes free
 
-- **Newest-first crawl yields newest-first history** — the display order is the
-  discovery order, no re-sorting as sync progresses.
 - **History grows monotonically** during sync, matching the balance invariant.
   Sort by height and nothing ever reorders.
 
@@ -354,70 +349,32 @@ Pending outgoing txs are local state, not a sync concern.
 
 ## Nullifier distribution
 
-The requirement is three-way: immutable (so CDN-cacheable), prefix-queryable (so
-a client fetches little), and complete (so a check is final).
+As built: `/{pool}/nullifiers/{chunk}`, 2¹⁸ nullifiers per chunk in chain
+order, the first 10 of each nullifier's 32 bytes. A full chunk is sorted and
+Elias-Fano compressed (~2.4 MB) and never changes; the tail is raw, in chain
+order. Clients download whole chunks, so the server learns nothing about which
+nullifiers they hold.
 
-**A chunk × prefix cross-product fails the third.** `/{chunk}/{prefix}` objects
-are immutable, but a nullifier can appear in *any* chunk, so checking one note
-means fetching every chunk at that prefix — ~3,000 requests per note. Cacheable
-and unusable.
+80 bits is plenty for a lookup: the chance another nullifier shares a note's
+prefix is ~52M / 2⁸⁰. Consensus needs all 32 bytes because it must resist an
+attacker grinding collisions; a wallet only checks its own, random values.
 
-**Make the base cumulative instead.** `/{prefix}/{sealed_upto}` holds every
-nullifier with that prefix from genesis through `sealed_upto`: still immutable,
-still cacheable forever, but one request covers all history.
-
-That unlocks the property that matters most: **sealed history is immutable, so a
-note's spentness against it never changes — checked once, ever, not once per
-sync.** The client's query set then grows with note count, not with time, which
-is what removes the accumulating-fingerprint leak.
-
-### Tiering
-
-Seal by **block height**, not note position — nullifiers are not positional, and
-"settled" is naturally a height concept. Prefix-split **by object size**: over
-~1 MB, split; under, serve whole. Only the cumulative base is ever big enough.
-
-| tier | cadence | shape | client cost |
+| pool | nullifiers | chunks | total |
 |---|---|---|---|
-| base | monthly | prefixed, immutable | 1 request/note, once ever |
-| mid | daily | prefixed if over ~1 MB | 1 request/note/month |
-| tail | per block | whole, unprefixed | 1 download/sync, shared by all notes |
+| Sapling | 2.14M | 8 full + tail | ~20 MB |
+| Orchard | ~50.5M (one per action) | 192 full + tail | ~461 MB |
+| Ironwood | 0.66M (one per action) | 2 full + tail | ~6 MB |
 
-Prefix width on the base is a real choice. 4 hex = 65,536 buckets, ~1,500
-nullifiers each, ~49 KB. 3 hex = 4,096 buckets, ~24,000 each, ~780 KB. Since the
-base is fetched once per note *ever*, 3 hex is the better trade — 780 KB
-one-time is nothing and k≈24,000 is a far stronger anonymity set.
-
-### Tail sizing
-
-Measured: sapling currently runs at **0.4 outputs/block** — chunk 18049's 4,096
-consecutive mainnet outputs span heights 3,401,974–3,413,665. Real data, but one
-~10-day window and sapling only.
-
-Orchard is **unmeasured**: entries carry no `height` (ask 3), so ~29
-actions/block is `50.2M ÷ blocks since NU5`, a lifetime average that likely
-includes the same spam period. It is the weakest number here and the tail
-cadence rests on it — measure before fixing the cadence.
-
-At ~30 nullifiers/block combined, 32 B each:
-
-| tail window | nullifiers | bytes |
-|---|---|---|
-| 1 hour | ~1,440 | ~46 KiB |
-| 24 hours | ~34,600 | ~1.1 MiB |
-
-So the tail is comfortably downloadable whole. It is also the *most* private
-tier — everyone fetches identical bytes — which inverts the usual assumption
-that the tip is the hard part.
+Only Sapling uses them: Orchard and Ironwood spends come with the ciphertexts
+(see Sync as built).
 
 ### Threat model
 
 - **ziziphus: no leak.** Global artifacts only.
-- **Nullifier tail: no leak.** Downloaded whole.
-- **Nullifier base/mid: bounded leak.** One prefix query per note, one time.
-  With 3-hex buckets that is k≈24,000, and the query set does not grow with
-  time. This is the only remaining leak in the system, and it is a fixed,
-  bounded one.
+- **Nullifiers: no leak.** Whole chunks, the same for every client.
+- **Memos and outgoing: bounded leak.** Fetched only for chunks holding a note
+  or spend of ours: "this wallet has something in chunk N", k = 16,384.
+- **Birthday: bounded leak.** The start-chunk search hints at the account's age.
 
 ## Asks for zcrawler / ziziphus
 
@@ -428,15 +385,19 @@ that the tip is the hard part.
 3b. **A full-ciphertext chunk tier** (`enc_ciphertext` + `out_ciphertext` +
    txid + height, same grid, ~3 MB/chunk). Required for memos and for showing
    your own sends; fetched only for hit chunks. See Transaction history.
-3c. **A `/spends/{prefix}/{seal}` detail artifact** alongside the membership
-   artifact, fetched only on a match. Locator format is open — see Spend side.
+3c. ~~A `/spends/{prefix}/{seal}` detail artifact~~ — not needed; see Spend side.
 4. **Block height in the ziziphus tip state.** The struct carries `tree_size`
    but no height, so the client cannot confirm the anchor sits inside the
    100-block window or set tx expiry. Small addition, blocks the spend path.
 5. **Keep the 4:1 chunk-grid alignment** between the two services explicit.
 6. **Confirm the upper-domain sizing** against real mainnet counts (above).
-7. **Cumulative-base + tiered-tail nullifiers**, sealed by height, replacing the
-   per-note prefix bucket endpoint (see Nullifier distribution).
+7. ~~Cumulative-base + tiered-tail nullifiers~~ — served instead as whole
+   2¹⁸ chunks (see Nullifier distribution).
+8. **Reorgs.** Store only confirmed blocks (~10 deep) or rewrite reorged
+   heights: today a reorg in the last 2–3 blocks leaves stale notes,
+   nullifiers and tree roots, some in year-long `immutable` chunks.
+9. **The Orchard nullifier tail times out** (504 after 90 s; the chunk after
+   it 404s with a DB error). Unused by this client, but broken.
 
 ## Open questions
 
@@ -451,9 +412,7 @@ that the tip is the hard part.
 5. **Real wallet size** — note count and serialized bytes after a full-history
    scan. Decides whether whole-wallet writes stay acceptable or per-note
    persistence is needed. Falls out of the same live-UFVK run as Q1.
-6. **Spend locator format** — txid vs height + txIndex vs position, and whether
-   the spend and membership artifacts can share an ordering. Sets the download
-   size of every spend lookup. See Spend side.
+6. ~~Spend locator format~~ — height + transaction index; see Spend side.
 
 ## Phases
 
