@@ -14,6 +14,12 @@ export function derive_account(network: string, seed: Uint8Array, hd_index: numb
 export function derive_transparent(network: string, ufvk: string, scope: string, from: number, count: number): string[];
 
 /**
+ * The records of an Orchard or Ironwood `/ciphertexts` chunk that spend one
+ * of `nullifiers` (each 32 bytes, concatenated), by index in the chunk.
+ */
+export function find_spends(pool: string, ciphertexts: Uint8Array, nullifiers: Uint8Array): Uint32Array;
+
+/**
  * A new shielded address of the account `ufvk` names, unlinkable to its
  * others; nothing needs to remember it, the viewing key finds what it receives.
  */
@@ -28,6 +34,13 @@ export function max_send(network: string, wallet: any, send: any): bigint;
  * Whether proving `pczt` needs the Sapling parameters (~51 MB to fetch).
  */
 export function needs_sapling_params(pczt: Uint8Array): boolean;
+
+/**
+ * Which of `nullifiers` (each 32 bytes, concatenated) a `/nullifiers` chunk
+ * holds, matched on the 10 bytes it serves. Returns `{ spent, frozen }`:
+ * `spent` indexes into `nullifiers`; a chunk that isn't `frozen` is the tail.
+ */
+export function nullifiers_spent(body: Uint8Array, nullifiers: Uint8Array): any;
 
 /**
  * The transparent side of a raw transaction mined at `height`, which fixes
@@ -102,11 +115,13 @@ export function try_decrypt(network: string, ufvk: string, pool: string, chunk: 
 /**
  * Trial-decrypt one pool's chunk in full against `ufvk`: the raw
  * `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
- * and the `index` of each hit [`try_decrypt`] found in it. Returns
+ * the `index` of each hit [`try_decrypt`] found in it, and of each spend
+ * [`spends::find_spends`] found. Returns
  * `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
- *    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
+ *    sent: [{ pool, value, recipient, memo, height, tx_index, position }],
+ *    spends: [{ nf, height, tx_index, spans_previous, spans_next }] }`.
  */
-export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array, memos: Uint8Array, outgoing: Uint8Array, hits: Uint32Array): any;
+export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array, memos: Uint8Array, outgoing: Uint8Array, hits: Uint32Array, spends: Uint32Array): any;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -114,9 +129,11 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly find_spends: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
     readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
+    readonly nullifiers_spent: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
@@ -128,7 +145,7 @@ export interface InitOutput {
     readonly sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
-    readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
+    readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number) => [number, number, number];
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;

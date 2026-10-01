@@ -1,31 +1,17 @@
-import type { Pool, TxLocator } from "./types";
+import type { Pool } from "./types";
 
-const LOCAL_INDEXER_URL = "http://localhost:8080";
 const INDEXER_URL = import.meta.env.VITE_INDEXER_URL;
-
-/**
- * Hex chars of a nullifier sent to the indexer, which answers with every
- * nullifier sharing that prefix so it never learns which one we asked about.
- * The server rejects any other length, so this has to track its bucket size.
- */
-const PREFIX_LENGTH = 6;
 
 /** Notes per chunk. */
 export const CHUNK_SIZE = 2 ** 14;
 
-export type ChunksData = Record<
-  Pool,
-  { first_chunk: number; last_chunk: number }
->;
+/** Each pool's last chunk: the tip's, possibly still filling; -1 for an empty pool. */
+export type LastChunks = Record<Pool, number>;
 
-async function fetchOk(url: string) {
-  const res = await fetch(url);
+async function fetchOk(url: string, init?: RequestInit) {
+  const res = await fetch(url, init);
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
   return res;
-}
-
-async function get<T>(url: string): Promise<T> {
-  return (await fetchOk(url)).json();
 }
 
 /**
@@ -51,16 +37,44 @@ async function treeSize(pool: Pool) {
   return size;
 }
 
-/** Each pool's chunk range from chunk 0; an empty pool ends at `last_chunk` -1. */
-export async function fetchChunks(): Promise<ChunksData> {
+export async function fetchLastChunks(): Promise<LastChunks> {
   const pools = ["ironwood", "orchard", "sapling"] as const;
   const sizes = await Promise.all(pools.map(treeSize));
   return Object.fromEntries(
-    pools.map((pool, i) => [
-      pool,
-      { first_chunk: 0, last_chunk: Math.ceil(sizes[i] / CHUNK_SIZE) - 1 },
-    ]),
-  ) as ChunksData;
+    pools.map((pool, i) => [pool, Math.ceil(sizes[i] / CHUNK_SIZE) - 1]),
+  ) as LastChunks;
+}
+
+/** A chunk's highest block height, read from the head of its body alone. */
+async function maxHeight(pool: Pool, chunk: number) {
+  const res = await fetchOk(`${INDEXER_URL}/${pool}/ciphertexts/${chunk}`, {
+    headers: { Range: "bytes=0-15" },
+  });
+  // Postcard varints: min_height, median_height, max_height, then the count.
+  const head = new Uint8Array(await res.arrayBuffer());
+  let i = 0;
+  const varint = () => {
+    let n = 0;
+    for (let shift = 0; ; shift += 7) {
+      const byte = head[i++];
+      n += (byte & 0x7f) * 2 ** shift;
+      if (byte < 0x80) return n;
+    }
+  };
+  varint();
+  varint();
+  return varint();
+}
+
+/** The first chunk holding a note at `height` or later; `last` if none does sooner. */
+export async function firstChunkFrom(pool: Pool, height: number, last: number) {
+  let [low, high] = [0, Math.max(last, 0)];
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    if ((await maxHeight(pool, mid)) >= height) high = mid;
+    else low = mid + 1;
+  }
+  return low;
 }
 
 /**
@@ -89,13 +103,15 @@ export async function fetchTreeChunk(pool: Pool, chunk: number) {
   return new Uint8Array(await res.arrayBuffer());
 }
 
-/** A revealed nullifier's leading bytes, with the transaction that revealed it. */
-export type SpentNullifier = TxLocator & { nf_tag: string };
-
-/** Every revealed nullifier sharing `nf`'s prefix — the bucket it hides in. */
-export async function fetchNullifiers(nf: string, pool: Pool) {
-  const prefix = nf.slice(0, PREFIX_LENGTH);
-  return get<SpentNullifier[]>(
-    `${LOCAL_INDEXER_URL}/nullifiers?pool=${pool}&prefix=${prefix}`,
-  );
+/**
+ * One chunk of a pool's revealed nullifiers, raw, in chain order; only wasm
+ * reads it. Every client fetches the same chunks, so the server never learns
+ * which nullifiers are ours. Absent past the last chunk.
+ */
+export async function fetchNullifierChunk(pool: Pool, chunk: number) {
+  const res = await fetch(`${INDEXER_URL}/${pool}/nullifiers/${chunk}`);
+  if (res.status === 404) return undefined;
+  if (!res.ok)
+    throw new Error(`HTTP ${res.status} ${pool} nullifiers ${chunk}`);
+  return new Uint8Array(await res.arrayBuffer());
 }

@@ -61,6 +61,22 @@ db.version(6).stores({
   blocks: "height",
 });
 
+// Synced state is dropped: v7 scans oldest-first from a start chunk, finds
+// spends itself, and its blocks carry their Sapling spends.
+db.version(7)
+  .stores({
+    notes: "id",
+    sent: "id",
+    sync: "id",
+    transparent: "id",
+    blocks: "height",
+  })
+  .upgrade(async (tx) => {
+    await Promise.all(
+      ["notes", "sent", "sync", "blocks"].map((t) => tx.table(t).clear()),
+    );
+  });
+
 export const loadNotes = (accountId: string): Promise<Note[]> =>
   db.notes.where("id").startsWith(accountId).toArray();
 

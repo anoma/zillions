@@ -19,34 +19,34 @@ let ready: Promise<unknown> | undefined;
 // `self` typed as Window in a DOM-lib project; cast to the message surface we use.
 const worker = self as unknown as {
   onmessage: ((e: MessageEvent<ChunkRequest>) => void) | null;
-  postMessage: (msg: ChunkWorkerResponse) => void;
+  postMessage: (msg: ChunkWorkerResponse, transfer?: Transferable[]) => void;
 };
 
 worker.onmessage = async (e) => {
   // TODO can we save JS ↔ WASM boundary time by registering the ufvk?
   // And if we create a sequence on the from/to based on the mod of the total blocks?
   // Does it really worth the complexity?
-  const { chunk, ufvk, pool } = e.data;
+  const { chunk, ufvk, pool, spends } = e.data;
   try {
     await (ready ??= initZcrawler());
     const body = await fetchChunk("ciphertexts", chunk, pool);
-    const {
-      count,
-      min_height: minHeight,
-      hits: compactHits,
-    } = try_decrypt(NETWORK, ufvk, pool, chunk, body);
+    // A spend lookup revisits a chunk whose own notes were already read.
+    const hits: { index: number }[] = spends
+      ? []
+      : try_decrypt(NETWORK, ufvk, pool, chunk, body).hits;
 
-    if (!compactHits.length) {
-      worker.postMessage({ chunk, count, minHeight, hits: [], sent: [] });
+    if (!hits.length && !spends) {
+      const empty = { chunk, hits: [], sent: [], spends: [], body };
+      worker.postMessage(empty, [body.buffer]);
       return;
     }
 
-    // A hit makes the memos and outgoing ciphertexts (our sends) worth fetching.
+    // A hit or a spend makes the memos and outgoing ciphertexts (our sends) worth fetching.
     const [memos, outgoing] = await Promise.all([
       fetchChunk("memos", chunk, pool),
       fetchChunk("outgoing", chunk, pool),
     ]);
-    const { hits, sent } = try_decrypt_full(
+    const full = try_decrypt_full(
       NETWORK,
       ufvk,
       pool,
@@ -54,9 +54,10 @@ worker.onmessage = async (e) => {
       body,
       memos,
       outgoing,
-      Uint32Array.from(compactHits, (hit: { index: number }) => hit.index),
+      Uint32Array.from(hits, (hit) => hit.index),
+      Uint32Array.from(spends ?? []),
     );
-    worker.postMessage({ chunk, count, minHeight, hits, sent });
+    worker.postMessage({ chunk, ...full, body }, [body.buffer]);
   } catch (err) {
     worker.postMessage({ chunk, error: String(err) });
   }

@@ -78,12 +78,11 @@ const bytes = (m: Map<number, unknown[]>, field: number) =>
 const text = (m: Map<number, unknown[]>, field: number) =>
   new TextDecoder().decode(bytes(m, field));
 
+const hex = (b: Uint8Array) =>
+  Array.from(b, (byte) => byte.toString(16).padStart(2, "0")).join("");
+
 /** Txids travel in internal byte order; explorers show them reversed. */
-const displayTxid = (internal: Uint8Array) =>
-  [...internal]
-    .reverse()
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+const displayTxid = (internal: Uint8Array) => hex(internal.slice().reverse());
 
 /**
  * One grpc-web call. The whole response is read before returning, so a
@@ -195,22 +194,32 @@ export async function fetchAddressTransactions(
   });
 }
 
-/** What history needs from a block: when it was mined, and its txids by index. */
+/**
+ * What history needs from a block: when it was mined, its txids by index, and
+ * which transaction revealed each Sapling nullifier.
+ */
 export interface Block {
   /** Unix seconds. */
   time: number;
   /** Transactions with a shielded part only: a compact block omits the rest. */
   txids: Map<number, string>;
+  /** Sapling nullifier (hex) → index of the transaction that spent it. */
+  saplingSpends: Map<string, number>;
 }
 
 export async function fetchBlock(height: number): Promise<Block> {
   const [compact] = await call("GetBlock", message([[1, height]]));
   const block = fields(compact);
-  const txids = (block.get(7) ?? []).map((raw): [number, string] => {
+  const txids = new Map<number, string>();
+  const saplingSpends = new Map<string, number>();
+  for (const raw of block.get(7) ?? []) {
     const tx = fields(raw as Uint8Array);
-    return [num(tx, 1), displayTxid(bytes(tx, 2))];
-  });
-  return { time: num(block, 5), txids: new Map(txids) };
+    txids.set(num(tx, 1), displayTxid(bytes(tx, 2)));
+    for (const spend of tx.get(4) ?? []) {
+      saplingSpends.set(hex(bytes(fields(spend as Uint8Array), 1)), num(tx, 1));
+    }
+  }
+  return { time: num(block, 5), txids, saplingSpends };
 }
 
 /** A mined transaction by txid, given in explorer byte order. */

@@ -35,8 +35,11 @@ export interface TxLocator {
 export type Note = DecryptedNote & {
   /** `accountId_pool_position` — positions are unique within a pool. */
   id: string;
-  /** Where it was spent, `false` once checked and unspent, absent until checked. */
-  spent?: false | TxLocator;
+  /**
+   * Where it was spent; `true` when spent in a transaction not found yet;
+   * `false` once checked as far as the sync reached; absent until checked.
+   */
+  spent?: boolean | TxLocator;
 };
 
 /** Main → worker: decrypt one chunk of one pool. */
@@ -44,6 +47,20 @@ export interface ChunkRequest {
   ufvk: string;
   chunk: number;
   pool: Pool;
+  /**
+   * Revisits a chunk already read, in full: where these records (indices from
+   * `find_spends`) spent our notes, and what the chunk shows we sent.
+   */
+  spends?: number[];
+}
+
+/** Where one of our notes was spent, from the action that spent it. */
+export interface SpendPlace extends TxLocator {
+  /** The nullifier spent: the spent note's `nf_mine`. */
+  nf: string;
+  /** Whether its transaction may run on into the previous or next chunk. */
+  spans_previous: boolean;
+  spans_next: boolean;
 }
 
 /** An output this wallet created, recovered with its outgoing viewing key. */
@@ -64,15 +81,14 @@ export type Sent = SentOutput & {
   id: string;
 };
 
-/** A worker's decrypted output for one chunk: what this UFVK received and sent. */
+/** A worker's decrypted output for one chunk: what this UFVK received, sent and spent. */
 export type ChunkWorkerSuccess = {
   chunk: number;
-  /** Notes the chunk held; fewer than a full chunk's while it is the tip. */
-  count: number;
-  /** The lowest block height among the chunk's notes. */
-  minHeight: number;
   hits: DecryptedNote[];
   sent: SentOutput[];
+  spends: SpendPlace[];
+  /** The raw `/ciphertexts` body, for the spend check that must run in chunk order. */
+  body: Uint8Array;
 };
 
 export type ChunkWorkerError = {
@@ -83,14 +99,19 @@ export type ChunkWorkerError = {
 /** Worker → main: a chunk's result, or the error that chunk hit. */
 export type ChunkWorkerResponse = ChunkWorkerSuccess | ChunkWorkerError;
 
-/** The contiguous chunk range already scanned for a pool; `to < from` is empty. */
-export interface ChunkRange {
-  from: number;
-  to: number;
+/** How far a pool's oldest-first scan has come. */
+export interface PoolScan {
+  /** The first chunk that can hold the wallet's notes: the birthday's, or 0. */
+  start: number;
+  /** The first chunk not read yet. */
+  next: number;
 }
 
 export interface SyncStatus {
   id: string;
   percentage: number;
-  scanned: Record<Pool, ChunkRange>;
+  /** Absent for a pool not scanned yet. */
+  scanned: Partial<Record<Pool, PoolScan>>;
+  /** The first Sapling `/nullifiers` chunk not checked yet. */
+  saplingNullifiers: number;
 }

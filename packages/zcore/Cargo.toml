@@ -56,9 +56,13 @@ incrementalmerkletree = "0.8"
 nonempty = { version = "0.11", default-features = false }
 # ziziphus bodies cross from JS as byte arrays.
 serde_bytes = "0.11"
+# Decodes the indexer's compressed nullifier chunks; the same crate encodes them.
+vers-vecs = { version = "1.10", features = ["serde"] }
 
 [dev-dependencies]
 incrementalmerkletree = { version = "0.8", features = ["legacy-api"] }
 # Only the tests build spending keys and encrypt notes.
 zcash_keys = { version = "0.16", features = ["orchard", "sapling", "transparent-inputs"] }
 serde_json = "1"
+# Only the tests encode nullifier chunks, as the indexer does.
+postcard = { version = "1", features = ["alloc"] }

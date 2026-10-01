@@ -18,6 +18,7 @@ mod keys;
 mod notes;
 mod roles;
 mod send;
+mod spends;
 mod wallet;
 mod witness;
 mod transparent_tx;
@@ -52,7 +53,7 @@ const SAPLING_RECORD_LEN: usize = 32 + COMPACT_NOTE_SIZE + 32;
 
 /// One `/ciphertexts` Orchard or Ironwood record: `eph_key ‖ enc_head ‖ cmx ‖
 /// rho`, where rho is the action's nullifier, reused as this note's rho.
-const ORCHARD_RECORD_LEN: usize = 32 + COMPACT_NOTE_SIZE + 32 + 32;
+pub(crate) const ORCHARD_RECORD_LEN: usize = 32 + COMPACT_NOTE_SIZE + 32 + 32;
 
 /// One `/memos` record's tail: the note ciphertext past its compact head.
 const MEMO_TAIL_LEN: usize = ENC_CIPHERTEXT_SIZE - COMPACT_NOTE_SIZE;
@@ -171,11 +172,27 @@ struct SentOutput {
     position: u64,
 }
 
-/// One chunk's decryption: the notes this wallet received, and the outputs it sent.
+/// Where one of the wallet's notes was spent: an Orchard or Ironwood action
+/// whose rho is that note's nullifier.
+#[derive(Serialize)]
+struct Spend {
+    /// The nullifier spent (hex), which is the spent note's `nf_mine`.
+    nf: String,
+    height: u32,
+    tx_index: u16,
+    /// Whether the spending transaction's actions may run on into the previous
+    /// or next chunk, where more of what it sent would sit.
+    spans_previous: bool,
+    spans_next: bool,
+}
+
+/// One chunk's decryption: the notes this wallet received, the outputs it
+/// sent, and where it spent notes.
 #[derive(Serialize)]
 struct FullChunk {
     hits: Vec<FullHit>,
     sent: Vec<SentOutput>,
+    spends: Vec<Spend>,
 }
 
 /// External + internal (change) scopes — a note may be addressed to either.
@@ -240,13 +257,13 @@ fn orchard_ivks(fvk: &orchard::keys::FullViewingKey) -> Vec<OrchardIvk> {
 /// A `/ciphertexts` chunk body, split open. Postcard lays it out as
 /// `varint(min_height) ‖ varint(median_height) ‖ varint(max_height) ‖
 /// varint(count)`, then `count` records of `record_len` bytes each.
-struct ChunkBody<'a> {
+pub(crate) struct ChunkBody<'a> {
     min_height: u32,
     max_height: u32,
-    records: std::slice::ChunksExact<'a, u8>,
+    pub(crate) records: std::slice::ChunksExact<'a, u8>,
 }
 
-fn chunk_body(body: &[u8], record_len: usize) -> Result<ChunkBody<'_>, String> {
+pub(crate) fn chunk_body(body: &[u8], record_len: usize) -> Result<ChunkBody<'_>, String> {
     let ((min_height, _median, max_height, count), records) =
         postcard::take_from_bytes::<(u32, u32, u32, usize)>(body).map_err(|e| e.to_string())?;
     if count.checked_mul(record_len) != Some(records.len()) {
@@ -534,7 +551,7 @@ where
         }
     }
 
-    Ok(FullChunk { hits, sent })
+    Ok(FullChunk { hits, sent, spends: Vec::new() })
 }
 
 fn decrypt_full(
@@ -633,7 +650,7 @@ fn decrypt_full(
         }
     }
 
-    Ok(FullChunk { hits, sent })
+    Ok(FullChunk { hits, sent, spends: Vec::new() })
 }
 
 /// Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
@@ -654,10 +671,13 @@ pub fn try_decrypt(network: &str, ufvk: &str, pool: &str, chunk: u32, body: &[u8
 
 /// Trial-decrypt one pool's chunk in full against `ufvk`: the raw
 /// `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
-/// and the `index` of each hit [`try_decrypt`] found in it. Returns
+/// the `index` of each hit [`try_decrypt`] found in it, and of each spend
+/// [`spends::find_spends`] found. Returns
 /// `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
-///    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
+///    sent: [{ pool, value, recipient, memo, height, tx_index, position }],
+///    spends: [{ nf, height, tx_index, spans_previous, spans_next }] }`.
 #[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
 pub fn try_decrypt_full(
     network: &str,
     ufvk: &str,
@@ -667,17 +687,37 @@ pub fn try_decrypt_full(
     memos: &[u8],
     outgoing: &[u8],
     hits: &[u32],
+    spends: &[u32],
 ) -> Result<JsValue, JsError> {
     if !["sapling", "orchard", "ironwood"].contains(&pool) {
         return Err(JsError::new("unknown pool"));
     }
     let notes = full_notes(pool, chunk, ciphertexts, memos, outgoing).map_err(|e| JsError::new(&e))?;
-    let wanted: Vec<usize> = hits.iter().map(|&i| i as usize).collect();
-    if wanted.iter().any(|&i| i >= notes.len()) {
-        return Err(JsError::new("hit index past the chunk's notes"));
-    }
-    let hits = decrypt_full(network, ufvk, pool, &notes, &wanted).map_err(|e| JsError::new(&e))?;
-    serde_wasm_bindgen::to_value(&hits).map_err(|e| JsError::new(&e.to_string()))
+    let indices = |list: &[u32]| -> Result<Vec<usize>, JsError> {
+        let out: Vec<usize> = list.iter().map(|&i| i as usize).collect();
+        if out.iter().any(|&i| i >= notes.len()) {
+            return Err(JsError::new("index past the chunk's notes"));
+        }
+        Ok(out)
+    };
+    let mut full = decrypt_full(network, ufvk, pool, &notes, &indices(hits)?).map_err(|e| JsError::new(&e))?;
+    full.spends = spend_places(&notes, &indices(spends)?);
+    serde_wasm_bindgen::to_value(&full).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Each spend's nullifier and transaction, from the records at `spends`.
+fn spend_places(notes: &[FullNote], spends: &[usize]) -> Vec<Spend> {
+    let same_tx = |a: &FullNote, b: &FullNote| (a.height, a.tx_index) == (b.height, b.tx_index);
+    spends
+        .iter()
+        .map(|&i| Spend {
+            nf: hex::encode(notes[i].rho),
+            height: notes[i].height,
+            tx_index: notes[i].tx_index,
+            spans_previous: same_tx(&notes[0], &notes[i]),
+            spans_next: same_tx(&notes[notes.len() - 1], &notes[i]),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -768,6 +808,18 @@ mod tests {
             memos.extend(&n.enc_ciphertext[COMPACT_NOTE_SIZE..]);
         }
         (ciphertexts(height, &records), memos, ciphertexts(height, &outgoing))
+    }
+
+    #[test]
+    fn places_a_spend_and_its_transaction_span() {
+        let mut notes: Vec<FullNote> = (0..3).map(|_| fixture(ORCHARD_FULL)).collect();
+        notes[1].rho = [5; 32];
+        notes[2].tx_index += 1;
+        let spends = spend_places(&notes, &[1]);
+        assert_eq!(spends[0].nf, hex::encode([5u8; 32]));
+        assert_eq!((spends[0].height, spends[0].tx_index), (notes[1].height, notes[1].tx_index));
+        // Record 0 shares its transaction; the last record doesn't.
+        assert!(spends[0].spans_previous && !spends[0].spans_next);
     }
 
     #[test]

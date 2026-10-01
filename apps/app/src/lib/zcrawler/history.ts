@@ -150,7 +150,7 @@ export function buildHistory(
   };
   for (const note of notes) {
     at(note).received.push(note);
-    if (note.spent) at(note.spent).spent.push(note);
+    if (typeof note.spent === "object") at(note.spent).spent.push(note);
   }
   for (const out of sent) at(out).sent.push(out);
 
@@ -181,7 +181,7 @@ export function historyHeights(
 ) {
   return new Set([
     ...notes.flatMap((n) =>
-      n.spent ? [n.height, n.spent.height] : [n.height],
+      typeof n.spent === "object" ? [n.height, n.spent.height] : [n.height],
     ),
     ...sent.map((s) => s.height),
     ...transparent.map((t) => t.height),
