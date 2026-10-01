@@ -25,7 +25,7 @@ export function useFreshAddress(round = 0) {
   }, [ufvk, round]);
 
   // Never the previous account's address while the new one is made.
-  return fresh?.ufvk === ufvk ? fresh.address : undefined;
+  return fresh?.ufvk === ufvk ? fresh?.address : undefined;
 }
 
 export function unshieldAddress(wallet: ZWallet) {

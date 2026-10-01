@@ -50,9 +50,14 @@ function UnshieldRoute() {
 
   const onSubmit = () => {
     setValidationMessage("");
-    const problem = !next
-      ? "Wait for the wallet to sync, or for earlier unshields to confirm"
-      : amount <= 0n
+    if (!next) {
+      setValidationMessage(
+        "Wait for the wallet to sync, or for earlier unshields to confirm",
+      );
+      return;
+    }
+    const problem =
+      amount <= 0n
         ? "Set an amount"
         : amount > availableBalance
           ? "Insufficient balance"
