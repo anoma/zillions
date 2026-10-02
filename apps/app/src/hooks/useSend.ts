@@ -126,7 +126,7 @@ export function useSend() {
         txid,
         expiryHeight,
         fee: BigInt(plan.fee),
-        timestamp: Date.now(),
+        timestamp: Math.floor(Date.now() / 1000),
       };
     },
   });

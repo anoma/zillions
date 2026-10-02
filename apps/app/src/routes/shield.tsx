@@ -50,7 +50,7 @@ function ShieldRoute() {
       });
       // Everything shielded comes back to us, in Ironwood.
       const { txid } = await wallet.submit(base64ToBytes(signed), value);
-      return { txid, value, fee, timestamp: Date.now() };
+      return { txid, value, fee, timestamp: Math.floor(Date.now() / 1000) };
     },
   });
 

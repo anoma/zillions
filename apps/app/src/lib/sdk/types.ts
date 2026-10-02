@@ -22,6 +22,7 @@ export type TransactionReceipt = {
   confirmations: number;
   status: "Confirmed" | "Pending" | "Expired";
   memo: string | undefined;
+  /** Unix seconds. */
   timestamp?: number;
   pool: "ironwood" | "orchard" | "sapling" | "transparent" | "mixed";
   from: Party;
