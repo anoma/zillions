@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.7.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.6.0...zillions-app-v1.7.0) (2026-10-02)
+
+
+### Features
+
+* a move between our own shielded pools shows as Migrated ([8ebdd5f](https://github.com/heliaxdev/zillions-interface/commit/8ebdd5f80c3d02a77be9861a9b65d3c5d46c263f))
+* migrate Orchard to Ironwood immediately ([ec2c5b1](https://github.com/heliaxdev/zillions-interface/commit/ec2c5b14551e9f598c8b41dcaf6b5c45e669fdbc))
+* Move to Ironwood section and migration page (work in progress) ([95a800c](https://github.com/heliaxdev/zillions-interface/commit/95a800c6056b2efe5a51370c3f39b8bb9c214ed4))
+* pending transactions show in history with a Status column ([0104e03](https://github.com/heliaxdev/zillions-interface/commit/0104e035b90e3bf7324a0af54ff1b514f86414f5))
+* plan the private Orchard to Ironwood migration (ZIP 318) ([f763204](https://github.com/heliaxdev/zillions-interface/commit/f76320472e9cd0aa033d55390ed472543d336bd7))
+* show the app version; mobile header ends with the menu ([98d5fd7](https://github.com/heliaxdev/zillions-interface/commit/98d5fd7ca7377ebb20afd8355f4fd3b4b4c82f84))
+
+
+### Bug Fixes
+
+* migration recommends a VPN, not Tor Browser ([730f857](https://github.com/heliaxdev/zillions-interface/commit/730f857f8b37cb363f422a9dc2c18def997f64b1))
+* pending receipts showed a date thousands of years ahead ([2996fe0](https://github.com/heliaxdev/zillions-interface/commit/2996fe0f5f008c5a2950c32f7b9456bea002bf3b))
+
 ## [1.6.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.5.0...zillions-app-v1.6.0) (2026-10-02)
 
 
