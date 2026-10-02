@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.2.1...zillions-keychain-v0.3.0) (2026-10-02)
+
+
+### Features
+
+* integrate with UI ([aaddfc5](https://github.com/heliaxdev/zillions-interface/commit/aaddfc5e6b5e738daef0f94eeb6fcd3479cf006e))
+* keychain keys from zcore ([57e7b4b](https://github.com/heliaxdev/zillions-interface/commit/57e7b4bf2a3cf6cc276f4b74527a90635d699369))
+* keychain signs PCZTs with zcore ([bc520a7](https://github.com/heliaxdev/zillions-interface/commit/bc520a7bf2c278783e3495b26ad4cf2fabcbfd16))
+* keychain signs shielded spends ([3e416c0](https://github.com/heliaxdev/zillions-interface/commit/3e416c06b08ab00b4c98e9024520c1598ad62614))
+* rotate addresses in the app and keychain ([f44ba73](https://github.com/heliaxdev/zillions-interface/commit/f44ba7371913d53ad7a32c2c0ae89ec63764af46))
+
 ## [0.2.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.2.0...zillions-keychain-v0.2.1) (2026-07-10)
 
 
