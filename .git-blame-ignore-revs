@@ -1,0 +1,5 @@
+# Formatting-only commits, skipped by `git blame` (GitHub reads this file;
+# locally: git config blame.ignoreRevsFile .git-blame-ignore-revs).
+
+# style: format zcore with rustfmt defaults
+6cc37ca3ca9d6f8e509a98e07954b39e68e16ae9
