@@ -71,3 +71,26 @@ test("our own transparent addresses show as the pool, others' as the address", (
     to: { pool: "transparent" },
   });
 });
+
+test("a transaction moving our own funds between pools is a migration", () => {
+  const at = { height: 3_503_939, tx_index: 2 };
+  const [migration] = buildHistory(
+    // An Ironwood note spent; 30,000 lands in our Sapling, the rest is
+    // Ironwood change after a 20,000 fee.
+    [
+      { ...note(1, 100_000), pool: "ironwood", spent: at },
+      { ...note(2, 50_000), pool: "ironwood", ...at },
+      { ...note(3, 30_000), pool: "sapling", scope: "external", ...at },
+    ],
+    [],
+    [],
+    new Map(),
+  );
+  expect(migration).toMatchObject({
+    tx_type: "Migrated",
+    value: 30_000n,
+    fee: 20_000n,
+    from: { pool: "ironwood" },
+    to: { pool: "sapling" },
+  });
+});

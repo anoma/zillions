@@ -1,7 +1,7 @@
 import type { Party, TransactionReceipt } from "../sdk/types";
 import type { Block } from "./lightwalletd";
 import type { TransparentTx } from "./transparent";
-import type { Note, Sent, TxLocator } from "./types";
+import type { Note, Pool, Sent, TxLocator } from "./types";
 
 /** A shielded transaction's identity until its block names it. */
 export const locatorId = ({ height, tx_index }: TxLocator) =>
@@ -56,7 +56,29 @@ function shieldedSide({ received, spent, sent, paid }: TxGroup) {
   // its memo is whichever one has it.
   const memo = (sent.length ? sent : received).find((p) => p.memo)?.memo;
   const [payee] = out;
+  // Paying nobody else, what lands in a pool nothing was spent from moved
+  // there: change stays in the pool it came from.
+  const from = new Set(spent.map((n) => n.pool));
+  const arrived = received.filter((n) => !from.has(n.pool));
+  const moved = spent.length && !out.length ? sum(arrived) : 0n;
+  if (moved > 0n) {
+    const to = new Set(arrived.map((n) => n.pool));
+    // Named only when it's one pool each side.
+    const one = (pools: Set<Pool>): Party =>
+      pools.size === 1 ? { pool: [...pools][0] } : SHIELDED;
+    return {
+      migrated: true,
+      from: one(from),
+      value: moved,
+      fee: max0(sum(spent) - sum(received)),
+      pool: "mixed" as const,
+      memo,
+      to: one(to),
+    };
+  }
   return {
+    migrated: false,
+    from: SHIELDED,
     value: outgoing ? -outflow : sum(received),
     // With every output accounted for, what our inputs held beyond them is
     // the fee; every shielded input is ours, since only we can spend them.
@@ -95,12 +117,12 @@ function receipt(
     address && !ours.has(address) ? { address } : TRANSPARENT;
   // An entry holds at least one side.
   const s = shielded && shieldedSide(shielded);
-  const side = s && { memo: s.memo, pool: s.pool, to: s.to };
+  const side = s && { memo: s.memo, pool: s.pool, from: s.from, to: s.to };
   if (!transparent) {
     return {
       ...base,
       ...side!,
-      tx_type: s!.value < 0n ? "Sent" : "Received",
+      tx_type: s!.migrated ? "Migrated" : s!.value < 0n ? "Sent" : "Received",
       value: s!.value,
       fee: s!.fee,
     };

@@ -18,13 +18,13 @@ export function AddressBadge({
   const pool = "pool" in party ? party.pool : kind;
   const classes = twMerge(
     "h-5 w-35 flex items-center justify-center text-xs font-medium rounded-full",
-    pool === "shielded" ? "bg-gold " : "outline outline-gray-300",
+    pool === "transparent" ? "outline outline-gray-300" : "bg-gold",
     className,
   );
   if (!address) {
     return (
       <div className={classes}>
-        {pool === "shielded" ? "Shielded" : "Transparent"}
+        {pool && pool[0].toUpperCase() + pool.slice(1)}
       </div>
     );
   }

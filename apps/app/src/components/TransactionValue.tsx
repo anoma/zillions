@@ -11,8 +11,8 @@ export function TransactionValue({
   if (tx.tx_type === "Sent") {
     value *= -1n;
   }
-  // Shielded/migrated values exclude the fee; add it back for the total amount.
-  if (tx.tx_type === "Shielded" || tx.tx_type === "Migrated") {
+  // Shielded values exclude the fee; add it back for the total amount.
+  if (tx.tx_type === "Shielded") {
     value += tx.fee;
   }
 

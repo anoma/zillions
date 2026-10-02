@@ -31,6 +31,9 @@ export type TransactionReceipt = {
 
 /**
  * One side of a transaction: someone else's address, or just the pool when
- * the address isn't shown — our own, or a shielded sender, never revealed.
+ * the address isn't shown — our own, or a shielded sender, never revealed. A
+ * migration names the shielded pools it moved between.
  */
-export type Party = { address: string } | { pool: "shielded" | "transparent" };
+export type Party =
+  | { address: string }
+  | { pool: "shielded" | "transparent" | "sapling" | "orchard" | "ironwood" };

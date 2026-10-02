@@ -159,8 +159,11 @@ Moves shielded funds to one of the account's own transparent addresses.
 - One entry per transaction, newest first. A transaction that touches both
   shielded and transparent funds appears **once**.
 - Each entry shows:
-  - **Type**: Sent, Received, Shielded (transparent → shielded) or
-    Unshielded (shielded → transparent);
+  - **Type**: Sent, Received, Shielded (transparent → shielded),
+    Unshielded (shielded → transparent) or Migrated (the account's own
+    shielded funds moved to another shielded pool, paying no one else; its
+    From and To name the pools, e.g. "Ironwood" → "Sapling", and its amount
+    is what moved, the fee apart);
   - **Amount**;
   - **From** and **To**: someone else's address when it's known; the
     account's own addresses only as "Shielded" or "Transparent" (each unshield

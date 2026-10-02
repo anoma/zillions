@@ -66,7 +66,11 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
                 ["Total spent", -tx.value + tx.fee],
               ],
               Received: [],
-              Migrated: [],
+              Migrated: [
+                ["Moved", tx.value],
+                ["Transaction fee", tx.fee],
+                ["Total spent", tx.value + tx.fee],
+              ],
             } as const
           )[tx.tx_type].map(([label, value]) => (
             <div
