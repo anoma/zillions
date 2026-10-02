@@ -41,6 +41,7 @@ import {
 } from "./send";
 import { submitTransaction } from "./submit";
 import {
+  cachedTransparent,
   nextUnshield,
   type OwnUtxo,
   REORG_DEPTH,
@@ -152,19 +153,24 @@ export class ZWallet {
 
   #seed = singleton(async () => {
     // TODO review if we should have a unified method to load the whole wallet
-    const [notes, sent, syncStatus] = await Promise.all([
+    const [notes, sent, syncStatus, transparent] = await Promise.all([
       loadNotes(this.id),
       loadSent(this.id),
       loadSyncStatus(this.id),
+      cachedTransparent(this.id, this.#ufvk),
     ]);
     this.#notes = notes;
     this.#sent = sent;
     if (syncStatus) {
       this.#syncStatus = syncStatus;
     }
+    // No tip: nothing is planned on coins the chain may have moved since.
+    if (transparent) this.#transparent = transparent;
     for (const note of notes) this.#applied.add(note.id);
     for (const out of sent) this.#applied.add(out.id);
-    await this.#restoreBlocks([...historyHeights(notes, sent, [])]);
+    await this.#restoreBlocks([
+      ...historyHeights(notes, sent, this.#transparent.txs),
+    ]);
   });
 
   subscribeSyncProgress = (listener: SyncEventListener) => {

@@ -131,16 +131,7 @@ async function discover(
   return { txs, chain: { lastUsed, checked: from } };
 }
 
-export async function syncTransparent(
-  accountId: string,
-  ufvk: string,
-): Promise<{
-  utxos: OwnUtxo[];
-  txs: TransparentTx[];
-  tip: number;
-  /** Every address of ours checked. */
-  addresses: Set<string>;
-}> {
+export async function syncTransparent(accountId: string, ufvk: string) {
   await (ready ??= initZcore());
   const cache = (await loadTransparent(accountId)) ?? emptyCache(accountId);
   const tip = await fetchLatestHeight();
@@ -166,8 +157,56 @@ export async function syncTransparent(
     chains = { external: found[0].chain, internal: found[1].chain };
   }
 
-  // Every address checked is ours, used or not.
-  const mine = new Map(
+  const mine = ownAddresses(ufvk, chains);
+  if (moved) utxos = await fetchUtxos([...mine.keys()]);
+  const { senders } = cache;
+  const state = await transparentState(
+    mine,
+    [...parsed.values()],
+    utxos,
+    senders,
+    true,
+  );
+
+  await updateTransparent(accountId, (latest) => ({
+    id: accountId,
+    tip,
+    final: tip - REORG_DEPTH,
+    chains,
+    txs: [...parsed.values()],
+    senders,
+    utxos,
+    // Read inside the write: an unshield may have been sent during this sync.
+    // Expiry 0 means the transaction never expires.
+    reserved: latest?.reserved?.filter(
+      (r) =>
+        r.index > chains.internal.lastUsed &&
+        (r.expiryHeight === 0 || r.expiryHeight > tip),
+    ),
+  }));
+  return { ...state, tip };
+}
+
+/**
+ * The transparent state as the last sync left it, from storage alone, so it
+ * shows before the next sync answers. Undefined before the first sync.
+ */
+export async function cachedTransparent(accountId: string, ufvk: string) {
+  const cache = await loadTransparent(accountId);
+  if (!cache) return undefined;
+  await (ready ??= initZcore());
+  return transparentState(
+    ownAddresses(ufvk, cache.chains),
+    cache.txs,
+    cache.utxos,
+    cache.senders,
+    false,
+  );
+}
+
+/** Every address of ours checked, used or not. */
+const ownAddresses = (ufvk: string, chains: TransparentCache["chains"]) =>
+  new Map(
     SCOPES.flatMap((scope) =>
       derive_transparent(NETWORK, ufvk, scope, 0, chains[scope].checked).map(
         (address, address_index) =>
@@ -175,12 +214,26 @@ export async function syncTransparent(
       ),
     ),
   );
-  if (moved) utxos = await fetchUtxos([...mine.keys()]);
 
-  const { senders } = cache;
+/**
+ * Our coins, each transaction's effect on our transparent funds, and our
+ * addresses. A sender not in `senders` is fetched and added to it when
+ * `lookup`, and left unknown otherwise.
+ */
+async function transparentState(
+  mine: ReturnType<typeof ownAddresses>,
+  parsed: TransparentCache["txs"],
+  utxos: Utxo[],
+  senders: TransparentCache["senders"],
+  lookup: boolean,
+): Promise<{
+  utxos: OwnUtxo[];
+  txs: TransparentTx[];
+  addresses: Set<string>;
+}> {
   const sender = async (input: ParsedTx["inputs"][number]) => {
     const key = `${input.txid}:${input.index}`;
-    if (!(key in senders)) {
+    if (lookup && !(key in senders)) {
       const address = await senderOf(input).catch(() => undefined);
       if (address) senders[key] = address;
     }
@@ -190,7 +243,7 @@ export async function syncTransparent(
   // Each of our outputs, so the input that later spends it can be priced
   // and placed: an input names only the output it consumes.
   const ours = new Map<string, { value: bigint; address: string }>();
-  for (const tx of parsed.values()) {
+  for (const tx of parsed) {
     for (const out of tx.outputs) {
       if (out.address && mine.has(out.address)) {
         ours.set(`${tx.txid}:${out.index}`, {
@@ -202,7 +255,7 @@ export async function syncTransparent(
   }
 
   const txs = await Promise.all(
-    [...parsed.values()].map(async ({ txid, height, inputs, outputs }) => {
+    parsed.map(async ({ txid, height, inputs, outputs }) => {
       const received = outputs.flatMap((out) => {
         const own = ours.get(`${txid}:${out.index}`);
         return own ? [own] : [];
@@ -227,27 +280,9 @@ export async function syncTransparent(
       };
     }),
   );
-
-  await updateTransparent(accountId, (latest) => ({
-    id: accountId,
-    tip,
-    final: tip - REORG_DEPTH,
-    chains,
-    txs: [...parsed.values()],
-    senders,
-    utxos,
-    // Read inside the write: an unshield may have been sent during this sync.
-    // Expiry 0 means the transaction never expires.
-    reserved: latest?.reserved?.filter(
-      (r) =>
-        r.index > chains.internal.lastUsed &&
-        (r.expiryHeight === 0 || r.expiryHeight > tip),
-    ),
-  }));
   return {
     utxos: utxos.map((utxo) => ({ ...utxo, ...mine.get(utxo.address)! })),
     txs,
-    tip,
     addresses: new Set(mine.keys()),
   };
 }

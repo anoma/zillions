@@ -123,6 +123,7 @@ vi.mock("./lightwalletd", async (actual) => ({
 
 vi.mock("./transparent", () => ({
   REORG_DEPTH: 100,
+  cachedTransparent: vi.fn(async () => undefined),
   syncTransparent: vi.fn(async () => ({
     utxos: [],
     txs: [],
@@ -150,6 +151,7 @@ vi.mock("./db", () => ({
 const { ZWallet } = await import("./ZWallet");
 const zcore = await import("@zillions/zcore");
 const { submitTransaction } = await import("./submit");
+const { cachedTransparent } = await import("./transparent");
 
 function block(overrides: Partial<Block> = {}): Block {
   return {
@@ -340,5 +342,34 @@ test("counts what a send paid to someone else's transparent address, not to ours
   });
   expect(history.find((tx) => tx.txid === "tx4")?.to).not.toHaveProperty(
     "address",
+  );
+});
+
+test("shows the transparent side as last synced before any sync answers", async () => {
+  vi.mocked(cachedTransparent).mockResolvedValueOnce({
+    utxos: [],
+    txs: [
+      {
+        txid: "t",
+        height: 3_000,
+        received: 5_000n,
+        spent: 0n,
+        from: "t1someone",
+        to: "t1ours",
+      },
+    ],
+    addresses: new Set(["t1ours"]),
+  });
+
+  const wallet = new ZWallet({ id: "f", ufvk: "uview" });
+
+  await vi.waitFor(async () =>
+    expect(await wallet.getTransactionHistory()).toEqual([
+      expect.objectContaining({
+        tx_type: "Received",
+        from: { address: "t1someone" },
+        to: { pool: "transparent" },
+      }),
+    ]),
   );
 });

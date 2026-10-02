@@ -171,7 +171,8 @@ Moves shielded funds to one of the account's own transparent addresses.
 
 - Starts by itself when the wallet opens and resumes where it left off.
 - Shows progress ("Shielded sync: N%", then "completed").
-- The transparent balance appears within seconds; shielded history fills in
+- What the last sync found shows at once, transparent and shielded. The
+  transparent side is refreshed within seconds; new shielded history fills in
   as the sync progresses.
 - Shielded funds count toward the balance only once the wallet has checked
   they are still unspent, so the balance never shows money that is already
