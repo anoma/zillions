@@ -235,9 +235,11 @@ offering Sapling as a destination, and Sapling funds stay where they are.
      else's; or *Immediately*: one transfer, faster, its full amount public
      at once. Each shows the number of transfers, the time it takes and the
      fees.
-  3. **Network privacy**: a recommendation to use Tor Browser or NymVPN,
-     with a warning that the IP address can link the transfers; the user
-     may continue without.
+  3. **Network privacy**: a recommendation to turn on a trusted VPN such as
+     NymVPN (free for the migration), with a warning that the IP address can
+     link the transfers; the user may continue without. A web page can't
+     route itself through Tor or Nym as ZIP 318 asks, and the Keychain isn't yet
+     available in Tor Browser, so Tor Browser isn't suggested.
   4. **Review**: the whole schedule (each transfer's amount and expected
      time) and the total fees, confirmed once. Nothing leaves Orchard before
      this confirmation; afterwards transfers go out without asking again.
@@ -253,6 +255,8 @@ offering Sapling as a destination, and Sapling funds stay where they are.
   transfer of every Orchard note to the account's own Ironwood, and confirming
   sends it. *With privacy* stops at its review, whose button says it is a
   work in progress; nothing is sent.
+- *To confirm*: recommending Tor Browser too, once the Keychain installs and
+  is tested there (signed add-on, WebAssembly at its security levels).
 - *To confirm*: whether a running migration can be paused or cancelled, and
   whether the leftover under 0.01 ZEC can be locked so nothing spends it by
   accident (Zodl offers this).

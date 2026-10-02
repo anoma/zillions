@@ -19,7 +19,6 @@ type Mode = "private" | "immediate";
 type Step = "choose" | "how" | "network" | "review";
 
 const ZIP_318 = "https://zips.z.cash/zip-0318";
-const TOR_BROWSER = "https://www.torproject.org/download/";
 const NYM_VPN = "https://nym.com/blog/nymvpn-free-for-zcash-ironwood";
 
 /**
@@ -145,16 +144,7 @@ function MigrateRoute() {
         <p>
           The network can link each transfer to the IP address it comes from,
           and through it the transfers to each other. We strongly recommend
-          opening Zillions in{" "}
-          <a
-            href={TOR_BROWSER}
-            target="_blank"
-            rel="noreferrer"
-            className="underline"
-          >
-            Tor Browser
-          </a>
-          , or using a trusted VPN such as{" "}
+          turning on a trusted VPN such as{" "}
           <a
             href={NYM_VPN}
             target="_blank"
@@ -165,7 +155,7 @@ function MigrateRoute() {
           </a>{" "}
           (free for the Ironwood migration), before you start.
         </p>
-        <Note>You can continue without either; the choice is yours.</Note>
+        <Note>You can continue without one; the choice is yours.</Note>
         <Primary onClick={next}>Continue</Primary>
       </Page>
     );
