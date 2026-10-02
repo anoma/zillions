@@ -43,6 +43,7 @@ use zcash_note_encryption::{
 };
 use zcash_primitives::transaction::components::sapling::zip212_enforcement;
 use zcash_protocol::consensus::{BlockHeight, Network};
+use zcash_protocol::memo::{Memo, MemoBytes};
 
 /// Notes per `/ciphertexts` chunk: record `i` of chunk `c` sits at tree
 /// position `c × CHUNK_SIZE + i`.
@@ -224,16 +225,15 @@ pub(crate) fn hex_n<const N: usize>(s: &str) -> Result<[u8; N], String> {
     v.try_into().map_err(|_| format!("expected {N} bytes"))
 }
 
-/// ZIP-302: `0xF6` then zeros is "no memo", `0xF5` and above are reserved
-/// non-text forms, and anything below is UTF-8 padded with zeros.
+/// A memo's text, upstream's ZIP 302 reading; non-text memos as hex. Empty
+/// text is no memo, as upstream encodes it, which drops the all-zero memo
+/// Orchard's padding notes carry.
 fn memo_text(memo: &[u8]) -> Option<String> {
-    match *memo.first()? {
-        0xF6 => None,
-        b if b >= 0xF5 => Some(hex::encode(memo)),
-        _ => {
-            let end = memo.iter().rposition(|&b| b != 0).map_or(0, |i| i + 1);
-            String::from_utf8(memo[..end].to_vec()).ok()
-        }
+    let bytes = MemoBytes::from_bytes(memo).ok()?;
+    match Memo::try_from(&bytes).ok()? {
+        Memo::Empty => None,
+        Memo::Text(text) => Some(String::from(text)).filter(|t| !t.is_empty()),
+        Memo::Future(_) | Memo::Arbitrary(_) => Some(hex::encode(memo)),
     }
 }
 
@@ -1002,7 +1002,7 @@ mod tests {
         reserved[0] = 0xF5;
         assert!(memo_text(&reserved).expect("hex").starts_with("f5"));
 
-        // An empty text memo is a memo, not the absence of one.
-        assert_eq!(memo_text(&[0u8; 512]).as_deref(), Some(""));
+        // Orchard's padding notes: all zeros, empty text, so no memo.
+        assert_eq!(memo_text(&[0u8; 512]), None);
     }
 }

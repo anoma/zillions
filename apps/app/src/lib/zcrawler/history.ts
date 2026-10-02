@@ -34,7 +34,9 @@ function shieldedSide({ received, spent, sent }: TxGroup) {
   const outgoing = sent.length > 0 || spent.length > 0;
   const outflow = sent.length ? sum(sent) : sum(spent) - sum(received);
   const pools = new Set([...received, ...spent, ...sent].map((p) => p.pool));
-  const [details] = sent.length ? sent : received;
+  // A transaction can pay us several notes (padding, change, a payment):
+  // its memo is whichever one has it.
+  const memo = (sent.length ? sent : received).find((p) => p.memo)?.memo;
   return {
     value: outgoing ? -outflow : sum(received),
     // With every output accounted for, what our inputs held beyond them is
@@ -42,10 +44,10 @@ function shieldedSide({ received, spent, sent }: TxGroup) {
     // Below zero means an input was never found, so the fee is unknown.
     fee: sent.length ? max0(sum(spent) - sum(received) - sum(sent)) : 0n,
     pool: pools.size === 1 ? [...pools][0] : ("mixed" as const),
-    memo: details?.memo,
+    memo,
     // Only a send knows its counterparty: on the receiving side the
     // recipient is our own address, and the sender is never revealed.
-    to_address: sent.length ? details.recipient : undefined,
+    to_address: sent[0]?.recipient,
   };
 }
 
