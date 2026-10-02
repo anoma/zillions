@@ -5,12 +5,14 @@ import { twMerge } from "tailwind-merge";
 type CopyToClipboardControlIcon = {
   value: string;
   className?: string;
+  iconClassName?: string;
   children?: React.ReactNode;
 };
 
 export function CopyToClipboardControl({
   value,
   className,
+  iconClassName,
   children,
 }: CopyToClipboardControlIcon) {
   const [copied, setCopied] = useState(false);
@@ -42,9 +44,11 @@ export function CopyToClipboardControl({
     >
       {children}
       {copied ? (
-        <GoCheckCircle className="shrink-0 size-5 animate-pop-in" />
+        <GoCheckCircle
+          className={twMerge("shrink-0 size-5 animate-pop-in", iconClassName)}
+        />
       ) : (
-        <GoCopy className="shrink-0 size-5" />
+        <GoCopy className={twMerge("shrink-0 size-5", iconClassName)} />
       )}
     </div>
   );

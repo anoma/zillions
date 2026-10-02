@@ -43,8 +43,8 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
         </div>
 
         <div className="mt-15 flex items-center justify-center gap-2">
-          <AddressBadge party={tx.from} className="h-8 w-50 text-sm" /> →{" "}
-          <AddressBadge party={tx.to} className="h-8 w-50 text-sm" />
+          <AddressBadge party={tx.from} copyable className="h-8 w-50 text-sm" />{" "}
+          → <AddressBadge party={tx.to} copyable className="h-8 w-50 text-sm" />
         </div>
 
         <div className="mt-20">
