@@ -39,6 +39,14 @@ function SendRoute() {
   // No memo from the UI; `SendRequest.memo` stays for ones the app sets.
   const planned = useSendPlan({ from, to, amount: typed }, isMax);
   const { maxAmount, ceiling } = planned;
+  // From transparent to a shielded recipient, upstream shields the change too:
+  // the shielded side then holds payment and change together, hiding the amount.
+  const shieldedChange = isTransparentFrom
+    ? (planned.plan.data?.steps ?? [])
+        .flatMap((step) => step.change)
+        .filter((c) => c.pool !== "transparent")
+        .reduce((sum, c) => sum + BigInt(c.value), 0n)
+    : 0n;
   const amount = isMax ? (maxAmount.data ?? 0n) : typed;
   const send = useSend();
 
@@ -190,6 +198,13 @@ function SendRoute() {
               ? "This transfer is partly shielded"
               : "This transfer is shielded"}
         </div>
+
+        {shieldedChange > 0n && (
+          <div className="mt-1 text-xs text-center">
+            <ZecValue zat={shieldedChange} /> also moves from your transparent
+            to your shielded balance, so the amount you send stays private.
+          </div>
+        )}
 
         {send.isPending && (
           <div className="mt-2 text-sm text-center font-medium">
