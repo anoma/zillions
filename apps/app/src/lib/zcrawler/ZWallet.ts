@@ -42,10 +42,10 @@ import {
 import { submitTransaction } from "./submit";
 import {
   cachedTransparent,
-  nextUnshield,
+  nextInternalAddress,
   type OwnUtxo,
   REORG_DEPTH,
-  reserveUnshield,
+  reserveInternalAddress,
   syncTransparent,
   type TransparentTx,
 } from "./transparent";
@@ -622,20 +622,41 @@ export class ZWallet {
 
   planSend = (send: SendRequest) => planSend(this.#walletData(), send);
 
-  /** The next unshield's destination, shown nowhere; see `nextUnshield` for when it's null. */
-  unshieldAddress = () => nextUnshield(this.id, this.#ufvk);
+  /** The next internal address, shown nowhere; see `nextInternalAddress` for when it's null. */
+  internalAddress = () => nextInternalAddress(this.id, this.#ufvk);
 
-  /** Records an unshield sent to `unshieldAddress()`'s `index`, so the next one goes elsewhere. */
-  unshieldSent = (index: number, expiryHeight: number) =>
-    reserveUnshield(this.id, index, expiryHeight);
+  /** Records a transaction paying `internalAddress()`'s `index`, so the next one goes elsewhere. */
+  internalAddressUsed = (index: number, expiryHeight: number) =>
+    reserveInternalAddress(this.id, index, expiryHeight);
 
   maxSend = (send: SendRequest) => maxSend(this.#walletData(), send);
 
   /** The unsigned PCZT for `send`, for the keychain account that signs it. */
-  sendPczt = (
+  /**
+   * The unsigned PCZT for `send`, and `changeTo`: the internal address index
+   * its transparent change goes to, to record once it's sent.
+   */
+  sendPczt = async (
     send: SendRequest,
     account: { seedFingerprint: string; hdIndex: number },
-  ) => sendPczt(this.#walletData(), send, this.#ufvk, account);
+  ) => {
+    const internal =
+      send.from === "transparent" ? await this.internalAddress() : null;
+    const built = await sendPczt(
+      this.#walletData(),
+      send,
+      this.#ufvk,
+      account,
+      internal?.index,
+    );
+    const transparentChange = built.plan.steps.some((step) =>
+      step.change.some((c) => c.pool === "transparent"),
+    );
+    return {
+      ...built,
+      changeTo: transparentChange ? internal?.index : undefined,
+    };
+  };
 
   /**
    * The unsigned PCZT shielding every transparent coin into Ironwood, what it

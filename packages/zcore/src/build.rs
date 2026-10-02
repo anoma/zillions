@@ -147,7 +147,9 @@ fn zip32_path(network: &Network, hd_index: u32) -> Vec<u32> {
 }
 
 /// The PCZT for a single-step plan. `fingerprint` and `hd_index` name the
-/// seed account, so the keychain can find its keys.
+/// seed account, so the keychain can find its keys. `change_index` is the
+/// unused internal address transparent change goes to; a plan with such
+/// change fails without it.
 pub(crate) fn pczt<N>(
     wallet: &Wallet,
     ufvk: &UnifiedFullViewingKey,
@@ -155,6 +157,7 @@ pub(crate) fn pczt<N>(
     hd_index: u32,
     proposal: &Proposal<StandardFeeRule, N>,
     trees: &Trees,
+    change_index: Option<u32>,
 ) -> Result<Pczt, String> {
     let network = wallet.network;
     let [step] = &proposal.steps().iter().collect::<Vec<_>>()[..] else {
@@ -398,9 +401,21 @@ pub(crate) fn pczt<N>(
                     .map_err(|e| format!("{e:?}"))?;
                 ironwood_outputs.push(String::new());
             }
-            // ponytail: transparent change only arises in multi-step (TEX)
-            // plans, which aren't built yet; it needs an unused change address.
-            PoolType::Transparent => return Err("transparent change is not supported yet".into()),
+            PoolType::Transparent => {
+                let index = change_index
+                    .and_then(transparent::keys::NonHardenedChildIndex::from_index)
+                    .ok_or("transparent change needs an unused internal address")?;
+                let pubkey = account
+                    .ok_or("viewing key has no transparent part")?
+                    .derive_address_pubkey(transparent::keys::TransparentKeyScope::INTERNAL, index)
+                    .map_err(|e| e.to_string())?;
+                builder
+                    .add_transparent_output(
+                        &transparent::address::TransparentAddress::from_pubkey(&pubkey),
+                        value,
+                    )
+                    .map_err(|e| format!("{e:?}"))?;
+            }
         }
     }
 
@@ -642,7 +657,7 @@ mod tests {
             .unwrap()
             .remove(0);
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
-        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
 
         let signed = crate::roles::sign(&network, unsigned, &SEED, 0).unwrap();
         assert!(
@@ -677,7 +692,7 @@ mod tests {
                 .unwrap()
                 .remove(0);
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
-        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
         let signed = crate::roles::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
         let (_, raw) = crate::roles::prove(signed, None).unwrap();
         let tx = zcash_primitives::transaction::Transaction::read(
@@ -706,6 +721,68 @@ mod tests {
 
     /// Upstream's shielding plan → PCZT anchored to ziziphus's Ironwood root →
     /// transparent signature → proof → a verified transaction.
+    /// A transparent send's change goes back to the internal address it's
+    /// given, with no shielded part to prove.
+    #[test]
+    fn sends_transparent_change_end_to_end() {
+        let network = Network::MainNetwork;
+        let ufvk_str = wallet_ufvk();
+        let derive = |scope, index| {
+            crate::transparent_tx::derive(&network, &ufvk_str, scope, index, 1)
+                .unwrap()
+                .remove(0)
+        };
+        let utxo = crate::wallet::UtxoData::for_tests(&derive("external", 0), 200_000, 1, TIP - 50);
+        let wallet = Wallet::new(
+            network,
+            &WalletData {
+                tip: TIP,
+                notes: vec![],
+                utxos: vec![utxo],
+            },
+        )
+        .unwrap();
+        let ufvk = UnifiedFullViewingKey::decode(&network, &ufvk_str).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+        let proposal =
+            crate::send::tests::plan_from_transparent(&wallet, &derive("external", 9), 50_000);
+
+        let pczt_with = |index| {
+            pczt(
+                &wallet,
+                &ufvk,
+                fingerprint,
+                0,
+                &proposal,
+                &Trees::new(),
+                index,
+            )
+        };
+        assert!(pczt_with(None).is_err(), "needs a change address");
+        let unsigned = pczt_with(Some(3)).unwrap();
+        let summary = serde_json::to_value(crate::roles::summarize(&network, &unsigned)).unwrap();
+        let change = derive("internal", 3);
+        assert_eq!(
+            summary["transparentOutputs"],
+            serde_json::json!([
+                { "address": derive("external", 9), "value": "50000" },
+                { "address": change, "value": "140000" },
+            ])
+        );
+
+        let signed = crate::roles::sign(&network, unsigned, &SEED, 0).unwrap();
+        let (_, raw) = crate::roles::prove(signed, None).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(
+            &raw[..],
+            zcash_protocol::consensus::BranchId::Nu6_3,
+        )
+        .unwrap();
+        assert!(tx.orchard_bundle().is_none() && tx.ironwood_bundle().is_none());
+        assert_eq!(tx.transparent_bundle().unwrap().vout.len(), 2);
+    }
+
     #[test]
     fn shields_end_to_end() {
         let network = Network::MainNetwork;
@@ -740,10 +817,19 @@ mod tests {
 
         let proposal = crate::send::tests::plan_shield(&wallet);
         assert!(
-            pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &Trees::new()).is_err(),
+            pczt(
+                &wallet,
+                &ufvk,
+                fingerprint,
+                0,
+                &proposal,
+                &Trees::new(),
+                None
+            )
+            .is_err(),
             "needs Ironwood's tree"
         );
-        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
         assert_eq!(unsigned.ironwood().anchor(), &Some(anchor.to_bytes()));
 
         // One coin into two padded Ironwood actions: 3 × 5,000.
@@ -784,7 +870,7 @@ mod tests {
                 .remove(0);
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
 
-        let pczt = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
+        let pczt = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
         // Anchored at ziziphus's root; the payment is the one transparent output.
         assert_eq!(pczt.ironwood().anchor(), &Some(anchor.to_bytes()));
         let outputs = pczt.transparent().outputs();
@@ -806,7 +892,7 @@ mod tests {
                 .unwrap()
                 .remove(0);
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
-        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
 
         assert!(
             crate::roles::sign(&Network::MainNetwork, unsigned.clone(), &[8u8; 32], 0).is_err()

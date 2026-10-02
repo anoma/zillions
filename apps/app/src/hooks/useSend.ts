@@ -1,9 +1,15 @@
-import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
 import type { SendRequest } from "../lib/zcrawler/send";
 import { useAccount } from "./useAccount";
+import { internalAddress } from "./useAddresses";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { useWallet } from "./useWallet";
 
@@ -81,18 +87,23 @@ export function planProblem({
 /**
  * Builds the PCZT, has the keychain sign it, then proves and broadcasts it.
  * `toSelf` marks a payment to one of our own addresses (an unshield), shown
- * as pending with the change until it's mined.
+ * as pending with the change until it's mined. Transparent change holds the
+ * internal address it went to, so the next one goes elsewhere.
  */
 export function useSend() {
   const wallet = useWallet();
   const account = useAccount();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
       toSelf,
       ...send
     }: SendRequest & { toSelf?: boolean }) => {
-      const { pczt, plan } = await wallet.sendPczt(send, account.shielded);
+      const { pczt, plan, changeTo } = await wallet.sendPczt(
+        send,
+        account.shielded,
+      );
       const signed = await keychain().sign({
         signer:
           send.from === "transparent"
@@ -107,6 +118,10 @@ export function useSend() {
         base64ToBytes(signed),
         change + (toSelf ? send.amount : 0n),
       );
+      if (changeTo !== undefined) {
+        await wallet.internalAddressUsed(changeTo, expiryHeight);
+        await queryClient.invalidateQueries(internalAddress(wallet));
+      }
       return {
         txid,
         expiryHeight,

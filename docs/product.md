@@ -66,7 +66,10 @@ Spending is *Built*: it awaits a first real transaction.
 - **Change stays in the pool it was spent from**: spending an Orchard note
   returns its change to Orchard, not Ironwood. Moving value between pools
   makes the amount public, so change only goes to Ironwood when it has no
-  shielded pool to return to (e.g. a send from transparent funds).
+  shielded pool to return to. A send from transparent funds to a transparent
+  address keeps its change transparent, on a new address of the account: the
+  user chose transparent, and shielding the change would need a proof and a
+  higher fee.
 - **Sending chooses the best option** among the funds the wallet holds (which
   funds to use and how), without asking the user about pools.
 - Funds received before the wallet was created or imported are found too: the

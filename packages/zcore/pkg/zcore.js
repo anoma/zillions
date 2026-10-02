@@ -346,6 +346,8 @@ export function seed_fingerprint(seed) {
  * seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`. `trees` maps
  * each pool spent from to `{ tip, chunks: { [chunk]: body } }`: ziziphus's
  * raw tip snapshot and the frozen chunks holding the notes `plan_send` named.
+ * A plan with transparent change sends it to internal address `change_index`,
+ * which the caller keeps unused.
  * @param {string} network
  * @param {string} ufvk
  * @param {string} seed_fingerprint
@@ -353,16 +355,17 @@ export function seed_fingerprint(seed) {
  * @param {any} wallet
  * @param {any} send
  * @param {any} trees
+ * @param {number | null} [change_index]
  * @returns {Uint8Array}
  */
-export function send_pczt(network, ufvk, seed_fingerprint, hd_index, wallet, send, trees) {
+export function send_pczt(network, ufvk, seed_fingerprint, hd_index, wallet, send, trees, change_index) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len1 = WASM_VECTOR_LEN;
     const ptr2 = passStringToWasm0(seed_fingerprint, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.send_pczt(ptr0, len0, ptr1, len1, ptr2, len2, hd_index, wallet, send, trees);
+    const ret = wasm.send_pczt(ptr0, len0, ptr1, len1, ptr2, len2, hd_index, wallet, send, trees, isLikeNone(change_index) ? Number.MAX_SAFE_INTEGER : (change_index) >>> 0);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }

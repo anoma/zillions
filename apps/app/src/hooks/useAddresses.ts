@@ -51,16 +51,16 @@ function addressKind(address: string | undefined) {
 export const useAddressKind = (address: string | undefined) =>
   useQuery(addressKind(address)).data;
 
-export function unshieldAddress(wallet: ZWallet) {
+export function internalAddress(wallet: ZWallet) {
   return queryOptions({
-    queryKey: ["unshieldAddress", wallet.id],
-    queryFn: () => wallet.unshieldAddress(),
+    queryKey: ["internalAddress", wallet.id],
+    queryFn: () => wallet.internalAddress(),
   });
 }
 
-/** `{ index, address }` of the next unshield; see `nextUnshield` for when it's null. */
-export function useUnshieldAddress() {
-  const options = unshieldAddress(useWallet());
+/** `{ index, address }` of the next internal address; see `nextInternalAddress` for when it's null. */
+export function useInternalAddress() {
+  const options = internalAddress(useWallet());
   useInvalidateOnSync(options);
   return useQuery(options);
 }

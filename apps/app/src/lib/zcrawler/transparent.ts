@@ -54,7 +54,7 @@ export interface TransparentCache {
   /** The address an input spent from, by the `txid:index` it names. */
   senders: Record<string, string>;
   utxos: Utxo[];
-  /** Internal addresses sent unshields not yet seen mined, until they expire. */
+  /** Internal addresses paid by transactions not yet seen mined, until they expire. */
   reserved?: { index: number; expiryHeight: number }[];
 }
 
@@ -288,12 +288,12 @@ async function transparentState(
 }
 
 /**
- * Where the next unshield goes: the first internal address neither used nor
- * held by a pending unshield. Null before the first sync, or while pending
- * unshields fill the gap limit: going past it would hide funds from other
- * wallets restoring the phrase.
+ * The next internal address, for an unshield or transparent change: the first
+ * neither used nor held by a pending transaction. Null before the first sync,
+ * or while pending ones fill the gap limit: going past it would hide funds
+ * from other wallets restoring the phrase.
  */
-export async function nextUnshield(accountId: string, ufvk: string) {
+export async function nextInternalAddress(accountId: string, ufvk: string) {
   const cache = await loadTransparent(accountId);
   if (!cache) return null;
   const { lastUsed } = cache.chains.internal;
@@ -311,8 +311,8 @@ export async function nextUnshield(accountId: string, ufvk: string) {
   return null;
 }
 
-/** Holds internal address `index` for an unshield sent to it, until it's mined or expires. */
-export const reserveUnshield = (
+/** Holds internal address `index` for a transaction paying it, until it's mined or expires. */
+export const reserveInternalAddress = (
   accountId: string,
   index: number,
   expiryHeight: number,

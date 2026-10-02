@@ -118,6 +118,7 @@ export async function sendPczt(
   send: SendRequest,
   ufvk: string,
   account: { seedFingerprint: string; hdIndex: number },
+  changeIndex?: number,
 ) {
   const plan = await planSend(wallet, send);
   const trees = await fetchTrees(plan);
@@ -129,6 +130,7 @@ export async function sendPczt(
     wallet,
     request(send),
     trees,
+    changeIndex,
   );
   return { pczt, plan };
 }

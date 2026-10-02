@@ -106,8 +106,10 @@ export function seed_fingerprint(seed: Uint8Array): string;
  * seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`. `trees` maps
  * each pool spent from to `{ tip, chunks: { [chunk]: body } }`: ziziphus's
  * raw tip snapshot and the frozen chunks holding the notes `plan_send` named.
+ * A plan with transparent change sends it to internal address `change_index`,
+ * which the caller keeps unused.
  */
-export function send_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, wallet: any, send: any, trees: any): Uint8Array;
+export function send_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, wallet: any, send: any, trees: any, change_index?: number | null): Uint8Array;
 
 /**
  * The unsigned PCZT shielding every transparent coin, planned as
@@ -164,7 +166,7 @@ export interface InitOutput {
     readonly prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly script_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
-    readonly send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any) => [number, number, number, number];
+    readonly send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any, k: number) => [number, number, number, number];
     readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any) => [number, number, number, number];
     readonly sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];

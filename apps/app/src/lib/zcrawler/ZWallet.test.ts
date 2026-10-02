@@ -130,8 +130,8 @@ vi.mock("./transparent", () => ({
     tip: chain.tip,
     addresses: new Set(["t1ours"]),
   })),
-  nextUnshield: vi.fn(),
-  reserveUnshield: vi.fn(),
+  nextInternalAddress: vi.fn(),
+  reserveInternalAddress: vi.fn(),
 }));
 
 vi.mock("./submit", () => ({ submitTransaction: vi.fn() }));

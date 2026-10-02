@@ -14,7 +14,7 @@ use zcash_client_backend::data_api::wallet::input_selection::{
 };
 use zcash_client_backend::data_api::wallet::{ConfirmationsPolicy, TargetHeight};
 use zcash_client_backend::fees::zip317::SingleOutputChangeStrategy;
-use zcash_client_backend::fees::{DustOutputPolicy, StandardFeeRule};
+use zcash_client_backend::fees::{DustOutputPolicy, StandardFeeRule, TransparentChangePolicy};
 use zcash_client_backend::proposal::Proposal;
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
 use zcash_primitives::transaction::fees::zip317::MARGINAL_FEE;
@@ -96,12 +96,16 @@ fn propose(
     let anchor_height = policy.anchor_height(target_height);
     let zip318 = PoolMigrationParams::new(AnchorRetentionInterval::ZIP_318);
     let selector = GreedyInputSelector::<Wallet>::new();
+    // A fully transparent send keeps its change transparent, on an internal
+    // address: shielding it would need a proof and an anchor, cost more, and
+    // move funds the user chose to send transparently (product.md 1).
     let change = SingleOutputChangeStrategy::<StandardFeeRule, Wallet>::new(
         StandardFeeRule::Zip317,
         None,
         ShieldedPool::Ironwood,
         DustOutputPolicy::default(),
-    );
+    )
+    .with_transparent_change_policy(TransparentChangePolicy::TransparentChangeAllowed);
 
     // The canonical-crossing attempt (upstream's `canonical_crossing_candidate`).
     let nu6_3 = params.activation_height(NetworkUpgrade::Nu6_3);
@@ -395,6 +399,8 @@ pub fn plan_send(network: &str, wallet: JsValue, send: JsValue) -> Result<JsValu
 /// seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`. `trees` maps
 /// each pool spent from to `{ tip, chunks: { [chunk]: body } }`: ziziphus's
 /// raw tip snapshot and the frozen chunks holding the notes `plan_send` named.
+/// A plan with transparent change sends it to internal address `change_index`,
+/// which the caller keeps unused.
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)]
 pub fn send_pczt(
@@ -405,6 +411,7 @@ pub fn send_pczt(
     wallet: JsValue,
     send: JsValue,
     trees: JsValue,
+    change_index: Option<u32>,
 ) -> Result<Vec<u8>, JsError> {
     let (wallet, send) = inputs(network, wallet, send).map_err(|e| JsError::new(&e))?;
     let trees: crate::build::Trees =
@@ -415,8 +422,16 @@ pub fn send_pczt(
     let amount =
         Zatoshis::from_u64(send.amount).map_err(|_| JsError::new("amount out of range"))?;
     let proposal = propose(&wallet, &send, amount).map_err(|e| JsError::new(&e))?;
-    let pczt = crate::build::pczt(&wallet, &ufvk, fingerprint, hd_index, &proposal, &trees)
-        .map_err(|e| JsError::new(&e))?;
+    let pczt = crate::build::pczt(
+        &wallet,
+        &ufvk,
+        fingerprint,
+        hd_index,
+        &proposal,
+        &trees,
+        change_index,
+    )
+    .map_err(|e| JsError::new(&e))?;
     pczt.serialize()
         .map_err(|e| JsError::new(&format!("{e:?}")))
 }
@@ -448,8 +463,16 @@ pub fn shield_pczt(
         .map_err(|e| JsError::new(&e))?;
     let fingerprint = crate::hex_n::<32>(seed_fingerprint).map_err(|e| JsError::new(&e))?;
     let proposal = propose_shield(&wallet).map_err(|e| JsError::new(&e))?;
-    let pczt = crate::build::pczt(&wallet, &ufvk, fingerprint, hd_index, &proposal, &trees)
-        .map_err(|e| JsError::new(&e))?;
+    let pczt = crate::build::pczt(
+        &wallet,
+        &ufvk,
+        fingerprint,
+        hd_index,
+        &proposal,
+        &trees,
+        None,
+    )
+    .map_err(|e| JsError::new(&e))?;
     pczt.serialize()
         .map_err(|e| JsError::new(&format!("{e:?}")))
 }
@@ -703,6 +726,24 @@ pub(crate) mod tests {
         );
         let change: u64 = step.change.iter().map(|c| c.value).sum();
         assert_eq!(50_000 + change + step.fee, 200_000);
+        // All transparent: the change stays transparent, and with no shielded
+        // part the fee is ZIP 317's floor.
+        assert_eq!(
+            step.change.iter().map(|c| c.pool).collect::<Vec<_>>(),
+            ["transparent"]
+        );
+        assert_eq!(step.fee, 10_000);
+    }
+
+    /// Plans `amount` from the transparent balance to `to`.
+    pub(crate) fn plan_from_transparent(wallet: &Wallet, to: &str, amount: u64) -> WalletProposal {
+        let request = SendRequest {
+            to: to.into(),
+            amount,
+            memo: None,
+            from: "transparent".into(),
+        };
+        propose(wallet, &request, Zatoshis::from_u64(amount).unwrap()).unwrap()
     }
 
     pub(crate) fn wallet_ufvk() -> String {

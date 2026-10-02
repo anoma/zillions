@@ -5,7 +5,7 @@ import { twMerge } from "tailwind-merge";
 import { PlannedFee } from "../components/PlannedFee";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
-import { unshieldAddress, useUnshieldAddress } from "../hooks/useAddresses";
+import { internalAddress, useInternalAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
@@ -29,7 +29,7 @@ function UnshieldRoute() {
 
   const wallet = useWallet();
   const queryClient = useQueryClient();
-  const next = useUnshieldAddress().data;
+  const next = useInternalAddress().data;
   const to = next?.address ?? "";
   const typed = (() => {
     try {
@@ -68,8 +68,8 @@ function UnshieldRoute() {
       { from: "shielded", to, amount, toSelf: true },
       {
         onSuccess: async ({ expiryHeight }) => {
-          await wallet.unshieldSent(next.index, expiryHeight);
-          await queryClient.invalidateQueries(unshieldAddress(wallet));
+          await wallet.internalAddressUsed(next.index, expiryHeight);
+          await queryClient.invalidateQueries(internalAddress(wallet));
         },
       },
     );
