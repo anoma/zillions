@@ -1,10 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const find_spends: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
 export const fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+export const gap_limits: () => [number, number, number];
 export const max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
 export const needs_sapling_params: (a: number, b: number) => [number, number, number];
 export const nullifiers_spent: (a: number, b: number, c: number, d: number) => [number, number, number];
@@ -30,6 +32,6 @@ export const __wbindgen_exn_store: (a: number) => void;
 export const __externref_table_alloc: () => number;
 export const __wbindgen_externrefs: WebAssembly.Table;
 export const __externref_table_dealloc: (a: number) => void;
-export const __externref_drop_slice: (a: number, b: number) => void;
 export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __externref_drop_slice: (a: number, b: number) => void;
 export const __wbindgen_start: () => void;

@@ -755,6 +755,10 @@ mod tests {
             ),
             (Some("15000"), Some("85000"))
         );
+        assert_eq!(
+            summary["transparentInputs"][0]["address"].as_str(),
+            Some(ours.as_str())
+        );
 
         let signed = crate::roles::sign(&network, unsigned, &SEED, 0).unwrap();
         let (_, raw) = crate::roles::prove(signed, None).unwrap();

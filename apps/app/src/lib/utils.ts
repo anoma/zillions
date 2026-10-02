@@ -69,9 +69,3 @@ export const shortenAddress = (
   );
   return [prefix, delimiter, suffix].join("");
 };
-
-export const isTransparentAddress = (s: string): boolean => s.startsWith("t");
-
-/** Unified (`u1…`) or Sapling (`zs1…`) addresses, on either network. */
-export const isShieldedAddress = (s: string): boolean =>
-  s.startsWith("u") || s.startsWith("zs") || s.startsWith("ztestsapling");

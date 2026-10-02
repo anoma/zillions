@@ -42,6 +42,8 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 | `spending_keys`      | An account's Orchard and Sapling spending keys                     |
 | `fresh_address`      | A new shielded address, unlinkable to the account's others         |
 | `derive_transparent` | A range of transparent addresses on the external or internal chain |
+| `gap_limits`         | Unused addresses in a row that end each chain (upstream's)         |
+| `address_kind`       | Whether a payment to an address lands shielded or transparent      |
 
 **Finding notes**
 

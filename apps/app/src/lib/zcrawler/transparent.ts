@@ -6,6 +6,7 @@
 
 import initZcore, {
   derive_transparent,
+  gap_limits,
   parse_transaction,
 } from "@zillions/zcore";
 import { loadTransparent, updateTransparent } from "./db";
@@ -20,8 +21,8 @@ import {
 
 const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 
-/** Unused addresses in a row that end a chain: upstream's `GapLimits`, so other wallets restore any we hand out. */
-const GAP_LIMITS = { external: 10, internal: 5 };
+/** Unused addresses in a row that end a chain, from zcore once it's loaded. */
+const gapLimits = () => gap_limits() as Record<Scope, number>;
 
 /** Blocks below the tip a reorg can still replace; zcashd refuses deeper ones. */
 export const REORG_DEPTH = 100;
@@ -108,7 +109,7 @@ async function discover(
 ) {
   const txs: RawTransaction[] = [];
   let { lastUsed } = known;
-  const gap = GAP_LIMITS[scope];
+  const gap = gapLimits()[scope];
   let from = 0;
   for (; from <= lastUsed + gap; from += gap) {
     const window = derive_transparent(NETWORK, ufvk, scope, from, gap);
@@ -255,13 +256,13 @@ export async function nextUnshield(accountId: string, ufvk: string) {
   if (!cache) return null;
   const { lastUsed } = cache.chains.internal;
   const held = new Set(cache.reserved?.map((r) => r.index));
+  await (ready ??= initZcore());
   for (
     let index = lastUsed + 1;
-    index <= lastUsed + GAP_LIMITS.internal;
+    index <= lastUsed + gapLimits().internal;
     index++
   ) {
     if (held.has(index)) continue;
-    await (ready ??= initZcore());
     const [address] = derive_transparent(NETWORK, ufvk, "internal", index, 1);
     return { index, address };
   }

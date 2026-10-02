@@ -1,5 +1,6 @@
 import { twMerge } from "tailwind-merge";
-import { isShieldedAddress, shortenAddress } from "../lib/utils";
+import { useAddressKind } from "../hooks/useAddresses";
+import { shortenAddress } from "../lib/utils";
 
 export function AddressBadge({
   address,
@@ -8,7 +9,8 @@ export function AddressBadge({
   address?: string;
   className?: string;
 }) {
-  const hasGoldBadge = !address || isShieldedAddress(address);
+  const kind = useAddressKind(address);
+  const hasGoldBadge = !address || kind === "shielded";
   return (
     <div
       title={address}

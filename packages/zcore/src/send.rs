@@ -78,6 +78,10 @@ fn request(send: &SendRequest, amount: Zatoshis) -> Result<TransactionRequest, S
 /// denomination into Ironwood is first tried as a canonical crossing (one
 /// Orchard note, bucketed anchor) so it looks like a migration transfer, and
 /// only otherwise planned normally. Re-port on every librustzcash bump.
+///
+/// TODO: call upstream's `propose_transfer` instead once it takes only an
+/// `InputSource` (our `Wallet`); on every bump, check its bounds, or ask
+/// upstream for that variant.
 fn propose(
     wallet: &Wallet,
     send: &SendRequest,
@@ -219,8 +223,9 @@ fn propose_shield(
 }
 
 /// The largest amount upstream will plan: its own fees decide, so this only
-/// searches. ponytail: ~40 plans per call; switch to upstream's
-/// `propose_send_max` once it is public.
+/// searches. ponytail: ~40 plans per call. TODO: switch to upstream's
+/// `propose_send_max_transfer` once it takes only an `InputSource` (0.24's
+/// needs `WalletWrite`; the `propose_send_max` it wraps is crate-private).
 fn max_amount(wallet: &Wallet, send: &SendRequest) -> Result<u64, String> {
     let plans = |amount: u64| -> Result<Option<WalletProposal>, String> {
         let amount = Zatoshis::from_u64(amount).map_err(|_| "amount out of range")?;

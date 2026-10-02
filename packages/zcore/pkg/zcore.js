@@ -1,6 +1,31 @@
 /* @ts-self-types="./zcore.d.ts" */
 
 /**
+ * Where a payment to `address` lands: `"shielded"` when it has a shielded
+ * receiver, else `"transparent"` (TEX addresses too). `undefined` when it
+ * isn't a valid address on `network`.
+ * @param {string} network
+ * @param {string} address
+ * @returns {string | undefined}
+ */
+export function address_kind(network, address) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(address, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.address_kind(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    let v3;
+    if (ret[0] !== 0) {
+        v3 = getStringFromWasm0(ret[0], ret[1]);
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    }
+    return v3;
+}
+
+/**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  * @param {string} network
  * @param {Uint8Array} seed
@@ -98,6 +123,20 @@ export function fresh_address(network, ufvk) {
     } finally {
         wasm.__wbindgen_free(deferred4_0, deferred4_1, 1);
     }
+}
+
+/**
+ * Unused addresses in a row that end each chain when scanning:
+ * `{ external, internal }`, upstream's defaults, so other wallets restoring
+ * the phrase find every address this one hands out.
+ * @returns {any}
+ */
+export function gap_limits() {
+    const ret = wasm.gap_limits();
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
 }
 
 /**

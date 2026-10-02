@@ -5,15 +5,11 @@ import { ShieldedTransparentToggle } from "../components/ShieldedTransparentTogg
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
+import { useAddressKind } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useSend, useSendPlan } from "../hooks/useSend";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
-import {
-  isShieldedAddress,
-  isTransparentAddress,
-  zatoshiToZec,
-  zecToZatoshi,
-} from "../lib/utils";
+import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
 import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/send")({
@@ -38,8 +34,9 @@ function SendRoute() {
       return 0n;
     }
   })();
-  const isTransparentTo = isTransparentAddress(to);
-  const isShieldedTo = isShieldedAddress(to);
+  const toKind = useAddressKind(to);
+  const isTransparentTo = toKind === "transparent";
+  const isShieldedTo = toKind === "shielded";
 
   // No memo from the UI; `SendRequest.memo` stays for ones the app sets.
   const { plan, maxAmount } = useSendPlan({ from, to, amount: typed }, isMax);
@@ -56,11 +53,13 @@ function SendRoute() {
     setValidationMessage("");
     const problem = !to
       ? "Set a recipient"
-      : amount <= 0n
-        ? "Set an amount"
-        : amount > availableBalance
-          ? "Insufficient balance"
-          : undefined;
+      : toKind === null
+        ? "Not a valid Zcash address"
+        : amount <= 0n
+          ? "Set an amount"
+          : amount > availableBalance
+            ? "Insufficient balance"
+            : undefined;
     if (problem) {
       setValidationMessage(problem);
       return;

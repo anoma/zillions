@@ -186,15 +186,11 @@ struct Flow {
 }
 
 pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
-    // The two standard scripts, which are all this wallet builds or holds.
     let address = |script: &[u8]| {
-        use transparent::address::TransparentAddress::{PublicKeyHash, ScriptHash};
-        let hash = |bytes: &[u8]| <[u8; 20]>::try_from(bytes).expect("20 bytes");
-        let address = match script {
-            [0x76, 0xa9, 0x14, h @ .., 0x88, 0xac] if h.len() == 20 => PublicKeyHash(hash(h)),
-            [0xa9, 0x14, h @ .., 0x87] if h.len() == 20 => ScriptHash(hash(h)),
-            _ => return None,
-        };
+        let script =
+            zcash_script::script::FromChain::parse(&zcash_script::script::Code(script.to_vec()))
+                .ok()?;
+        let address = transparent::address::TransparentAddress::from_script_from_chain(&script)?;
         Some(Address::Transparent(address).encode(network))
     };
     let transparent_inputs: Vec<_> = pczt

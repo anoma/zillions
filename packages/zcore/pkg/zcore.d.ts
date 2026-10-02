@@ -2,6 +2,13 @@
 /* eslint-disable */
 
 /**
+ * Where a payment to `address` lands: `"shielded"` when it has a shielded
+ * receiver, else `"transparent"` (TEX addresses too). `undefined` when it
+ * isn't a valid address on `network`.
+ */
+export function address_kind(network: string, address: string): string | undefined;
+
+/**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  */
 export function derive_account(network: string, seed: Uint8Array, hd_index: number): any;
@@ -24,6 +31,13 @@ export function find_spends(pool: string, ciphertexts: Uint8Array, nullifiers: U
  * others; nothing needs to remember it, the viewing key finds what it receives.
  */
 export function fresh_address(network: string, ufvk: string): string;
+
+/**
+ * Unused addresses in a row that end each chain when scanning:
+ * `{ external, internal }`, upstream's defaults, so other wallets restoring
+ * the phrase find every address this one hands out.
+ */
+export function gap_limits(): any;
 
 /**
  * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
@@ -128,10 +142,12 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly find_spends: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly gap_limits: () => [number, number, number];
     readonly max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
     readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
     readonly nullifiers_spent: (a: number, b: number, c: number, d: number) => [number, number, number];
@@ -157,8 +173,8 @@ export interface InitOutput {
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __externref_table_dealloc: (a: number) => void;
-    readonly __externref_drop_slice: (a: number, b: number) => void;
     readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __externref_drop_slice: (a: number, b: number) => void;
     readonly __wbindgen_start: () => void;
 }
 

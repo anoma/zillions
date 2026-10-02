@@ -59,6 +59,25 @@ pub fn derive_transparent(
     derive(&network, ufvk, scope, from, count).map_err(|e| JsError::new(&e))
 }
 
+#[derive(Serialize)]
+struct GapLimits {
+    external: u32,
+    internal: u32,
+}
+
+/// Unused addresses in a row that end each chain when scanning:
+/// `{ external, internal }`, upstream's defaults, so other wallets restoring
+/// the phrase find every address this one hands out.
+#[wasm_bindgen]
+pub fn gap_limits() -> Result<JsValue, JsError> {
+    let limits = zcash_keys::keys::transparent::gap_limits::GapLimits::default();
+    let limits = GapLimits {
+        external: limits.external(),
+        internal: limits.internal(),
+    };
+    serde_wasm_bindgen::to_value(&limits).map_err(|e| JsError::new(&e.to_string()))
+}
+
 /// An output a transaction spends: the transaction that created it, and which
 /// of its outputs it was.
 #[derive(Serialize)]

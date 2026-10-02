@@ -1,16 +1,19 @@
 //! An account's keys from its BIP-39 seed, for the keychain: the viewing key
 //! and default addresses it hands the app, the fingerprint that names the
 //! seed, and the spending keys its reveal screen shows. Plus fresh shielded
-//! addresses from the viewing key, for both. Offline key math.
+//! addresses from the viewing key, for both, and what kind an address is.
+//! Offline key math.
 
 use rand_core::{OsRng, RngCore};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
+use zcash_keys::address::Address;
 use zcash_keys::encoding::{encode_extended_spending_key, AddressCodec};
 use zcash_keys::keys::{
     Era, ReceiverRequirement, UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey,
 };
 use zcash_protocol::consensus::{Network, NetworkConstants};
+use zcash_protocol::{PoolType, ShieldedPool};
 use zip32::{fingerprint::SeedFingerprint, AccountId, DiversifierIndex};
 
 use crate::parse_network;
@@ -94,6 +97,23 @@ pub fn fresh_address(network: &str, ufvk: &str) -> Result<String, JsError> {
     fresh(&network, ufvk).map_err(|e| JsError::new(&e))
 }
 
+fn kind(network: &Network, address: &str) -> Option<&'static str> {
+    let address = Address::decode(network, address)?;
+    let shielded = [ShieldedPool::Sapling, ShieldedPool::Orchard]
+        .into_iter()
+        .any(|pool| address.can_receive_as(PoolType::Shielded(pool)));
+    Some(if shielded { "shielded" } else { "transparent" })
+}
+
+/// Where a payment to `address` lands: `"shielded"` when it has a shielded
+/// receiver, else `"transparent"` (TEX addresses too). `undefined` when it
+/// isn't a valid address on `network`.
+#[wasm_bindgen]
+pub fn address_kind(network: &str, address: &str) -> Result<Option<String>, JsError> {
+    let network = parse_network(network).map_err(|e| JsError::new(&e))?;
+    Ok(kind(&network, address).map(String::from))
+}
+
 #[derive(Serialize)]
 struct SpendingKeys {
     /// The whole unified spending key in librustzcash's storage encoding, hex:
@@ -121,6 +141,19 @@ pub fn spending_keys(network: &str, seed: &[u8], hd_index: u32) -> Result<JsValu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tells_where_a_payment_lands() {
+        let network = Network::MainNetwork;
+        let account = account(&network, &[7u8; 32], 0).unwrap();
+        let transparent = account.transparent.unwrap();
+        assert_eq!(kind(&network, &account.unified), Some("shielded"));
+        assert_eq!(kind(&network, &transparent), Some("transparent"));
+        let tex = Address::Tex([1u8; 20]).encode(&network);
+        assert_eq!(kind(&network, &tex), Some("transparent"));
+        assert_eq!(kind(&Network::TestNetwork, &account.unified), None);
+        assert_eq!(kind(&network, "t1notanaddress"), None);
+    }
 
     #[test]
     fn derives_the_account_the_viewing_key_names() {

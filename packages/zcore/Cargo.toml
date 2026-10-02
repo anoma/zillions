@@ -32,6 +32,8 @@ postcard = { version = "1", default-features = false }
 # Only the note-encryption + key surface: no proving circuits.
 zcash_keys = { version = "0.16", default-features = false, features = ["orchard", "sapling", "transparent-inputs", "unstable"] }
 transparent = { package = "zcash_transparent", version = "0.10", default-features = false, features = ["transparent-inputs"] }
+# Script bytes → address, as `zcash_transparent` reads them.
+zcash_script = { version = "0.4", default-features = false }
 zcash_protocol = "0.10"
 zcash_primitives = { version = "0.30", default-features = false, features = ["transparent-inputs"] }
 # Shielding's PCZT roles: the app creates and proves, the keychain signs.
