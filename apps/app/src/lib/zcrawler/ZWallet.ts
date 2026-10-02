@@ -563,6 +563,10 @@ export class ZWallet {
     const { notes, utxos } = this.#spendable();
     return {
       shieldedBalance: notes.reduce((sum, n) => sum + BigInt(n.value), 0n),
+      /** The part of `shieldedBalance` still in Orchard, closed since NU6.3. */
+      orchardBalance: notes
+        .filter((n) => n.pool === "orchard")
+        .reduce((sum, n) => sum + BigInt(n.value), 0n),
       pendingChange: this.#syncStatus.pending.reduce(
         (sum, p) => sum + BigInt(p.change),
         0n,

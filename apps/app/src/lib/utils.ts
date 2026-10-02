@@ -1,6 +1,12 @@
 const ZATOSHI_PER_ZEC = 100_000_000n;
 const DECIMALS = 8;
 
+/**
+ * ZIP 318's `MAX_RESIDUAL_VALUE` (0.01 ZEC): less than this stays in Orchard,
+ * since moving a distinctive dust amount would single the wallet out.
+ */
+export const MIGRATION_MINIMUM = ZATOSHI_PER_ZEC / 100n;
+
 /** Convert zatoshi (bigint) → ZEC decimal string. */
 export function zatoshiToZec(zatoshi: bigint): string {
   const negative = zatoshi < 0n;

@@ -249,6 +249,9 @@ offering Sapling as a destination, and Sapling funds stay where they are.
 - In history (2.6), transfers show as Migrated, Orchard → Ironwood; the
   preparation steps that split the funds into standard amounts show as such,
   not as payments.
+- Today the home section and the migration page are in place up to the
+  review; its final button says the migration is a work in progress, and
+  nothing is sent.
 - *To confirm*: whether a running migration can be paused or cancelled, and
   whether the leftover under 0.01 ZEC can be locked so nothing spends it by
   accident (Zodl offers this).
