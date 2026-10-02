@@ -46,6 +46,10 @@ lightwalletd; nothing from a local crawler.
   (ChainMetadata 1–3) minus the notes it and later transactions add (CompactTx
   fields 5, 6, 9) give its notes' positions in each pool, and those chunks'
   `/outgoing` are read once.
+- **Sends to transparent addresses.** `/outgoing` only recovers shielded
+  outputs. A sending transaction's transparent outputs come from the same
+  compact block (CompactTx field 8: value and script); those not paying one of
+  our addresses are its payments. No extra request, so nothing new is revealed.
 - **Balance.** A note counts once it's checked: Orchard and Ironwood when their
   scan reaches the tip, Sapling after the nullifier check.
 - **Pending sends.** A broadcast's raw transaction names the nullifiers and

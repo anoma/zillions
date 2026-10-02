@@ -2,6 +2,7 @@ import initZcore, {
   find_spends,
   nullifiers_spent,
   parse_transaction,
+  script_address,
 } from "@zillions/zcore";
 
 import { invariant } from "../invariant";
@@ -15,7 +16,12 @@ import {
   saveBlocks,
   saveSyncState,
 } from "./db";
-import { buildHistory, historyHeights } from "./history";
+import {
+  buildHistory,
+  historyHeights,
+  locatorId,
+  type Payment,
+} from "./history";
 import {
   CHUNK_SIZE,
   fetchNullifierChunk,
@@ -108,7 +114,12 @@ export class ZWallet {
   #applied: Set<string> = new Set();
   #syncStatus: SyncStatus;
   /** The transparent side; `tip` is absent until a sync lands. */
-  #transparent: { utxos: OwnUtxo[]; txs: TransparentTx[]; tip?: number } = {
+  #transparent: {
+    utxos: OwnUtxo[];
+    txs: TransparentTx[];
+    tip?: number;
+    addresses?: Set<string>;
+  } = {
     utxos: [],
     txs: [],
   };
@@ -624,12 +635,36 @@ export class ZWallet {
     return { pczt, value: shielded, fee: BigInt(plan.fee) };
   };
 
+  /**
+   * What our sending transactions paid to transparent addresses not ours, by
+   * `locatorId`, from their blocks. Empty until the transparent sync names
+   * our addresses: an unshield to one of them isn't a payment.
+   */
+  #payments = async () => {
+    const paid = new Map<string, Payment[]>();
+    const { addresses } = this.#transparent;
+    if (!addresses) return paid;
+    await initZcore();
+    for (const locator of this.#sendingTxs().values()) {
+      const vout = this.#blocks.get(locator.height)?.vout.get(locator.tx_index);
+      const theirs = (vout ?? []).flatMap(({ value, script }) => {
+        const recipient = script_address(NETWORK, script);
+        return recipient && addresses.has(recipient)
+          ? []
+          : [{ value, recipient }];
+      });
+      if (theirs.length) paid.set(locatorId(locator), theirs);
+    }
+    return paid;
+  };
+
   async getTransactionHistory() {
     return buildHistory(
       this.#notes,
       this.#sent,
       this.#transparent.txs,
       this.#blocks,
+      await this.#payments(),
     );
   }
 }

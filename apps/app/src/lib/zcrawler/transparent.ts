@@ -134,7 +134,13 @@ async function discover(
 export async function syncTransparent(
   accountId: string,
   ufvk: string,
-): Promise<{ utxos: OwnUtxo[]; txs: TransparentTx[]; tip: number }> {
+): Promise<{
+  utxos: OwnUtxo[];
+  txs: TransparentTx[];
+  tip: number;
+  /** Every address of ours checked. */
+  addresses: Set<string>;
+}> {
   await (ready ??= initZcore());
   const cache = (await loadTransparent(accountId)) ?? emptyCache(accountId);
   const tip = await fetchLatestHeight();
@@ -242,6 +248,7 @@ export async function syncTransparent(
     utxos: utxos.map((utxo) => ({ ...utxo, ...mine.get(utxo.address)! })),
     txs,
     tip,
+    addresses: new Set(mine.keys()),
   };
 }
 

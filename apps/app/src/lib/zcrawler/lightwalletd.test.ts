@@ -17,6 +17,7 @@ const block: Block = {
       { ...none, ironwood: [3, 1, 0, 2, 2, 2, 2, 0][i] },
     ]),
   ),
+  vout: new Map(),
 };
 
 test("places a transaction's notes from the block's tree sizes", () => {

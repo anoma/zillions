@@ -4,7 +4,8 @@ import type { TransparentTx } from "./transparent";
 import type { Note, Sent, TxLocator } from "./types";
 
 /** A shielded transaction's identity until its block names it. */
-const locatorId = ({ height, tx_index }: TxLocator) => `${height}_${tx_index}`;
+export const locatorId = ({ height, tx_index }: TxLocator) =>
+  `${height}_${tx_index}`;
 
 /** Everything one transaction did to this wallet's shielded notes. */
 type TxGroup = {
@@ -13,6 +14,15 @@ type TxGroup = {
   /** Notes this transaction spent — they were received in an earlier one. */
   spent: Note[];
   sent: Sent[];
+  /** What it paid to transparent addresses not ours. */
+  paid: Payment[];
+};
+
+/** A transparent output a transaction of ours paid to someone else. */
+export type Payment = {
+  value: number;
+  /** Absent for a script that pays no single address. */
+  recipient?: string;
 };
 
 /** One transaction, from either side or both. */
@@ -28,12 +38,17 @@ const sum = (of: { value: number }[]) =>
   of.reduce((total, { value }) => total + BigInt(value), 0n);
 
 /** A shielded group's net effect, and what it shows as on its own. */
-function shieldedSide({ received, spent, sent }: TxGroup) {
-  // Spending without a recovered output still means it left the wallet:
-  // fall back to what the inputs were worth net of change, fee included.
-  const outgoing = sent.length > 0 || spent.length > 0;
-  const outflow = sent.length ? sum(sent) : sum(spent) - sum(received);
-  const pools = new Set([...received, ...spent, ...sent].map((p) => p.pool));
+function shieldedSide({ received, spent, sent, paid }: TxGroup) {
+  // What we know left the wallet: shielded outputs recovered, transparent
+  // ones read from the block. Without either, fall back to what the inputs
+  // were worth net of change, fee included.
+  const out = [...sent, ...paid];
+  const outgoing = out.length > 0 || spent.length > 0;
+  const outflow = out.length ? sum(out) : sum(spent) - sum(received);
+  const pools = new Set([
+    ...[...received, ...spent, ...sent].map((p) => p.pool),
+    ...(paid.length ? (["transparent"] as const) : []),
+  ]);
   // A transaction can pay us several notes (padding, change, a payment):
   // its memo is whichever one has it.
   const memo = (sent.length ? sent : received).find((p) => p.memo)?.memo;
@@ -42,12 +57,12 @@ function shieldedSide({ received, spent, sent }: TxGroup) {
     // With every output accounted for, what our inputs held beyond them is
     // the fee; every shielded input is ours, since only we can spend them.
     // Below zero means an input was never found, so the fee is unknown.
-    fee: sent.length ? max0(sum(spent) - sum(received) - sum(sent)) : 0n,
+    fee: out.length ? max0(sum(spent) - sum(received) - sum(out)) : 0n,
     pool: pools.size === 1 ? [...pools][0] : ("mixed" as const),
     memo,
     // Only a send knows its counterparty: on the receiving side the
     // recipient is our own address, and the sender is never revealed.
-    to_address: sent[0]?.recipient,
+    to_address: (sent[0] ?? paid[0])?.recipient,
   };
 }
 
@@ -128,7 +143,8 @@ function receipt(
 /**
  * One entry per transaction, newest first, across both sides: a transaction
  * that moved funds between transparent and shielded shows once, as Shielded
- * or Unshielded, with its fee.
+ * or Unshielded, with its fee. `paid` holds what our sending transactions
+ * paid to others' transparent addresses, by `locatorId`.
  *
  * Shielded transactions are named through `blocks`; one whose block isn't
  * there yet keeps a placeholder id and can't be matched with its
@@ -139,13 +155,20 @@ export function buildHistory(
   sent: Sent[],
   transparent: TransparentTx[],
   blocks: Map<number, Block>,
+  paid = new Map<string, Payment[]>(),
 ): TransactionReceipt[] {
   const groups = new Map<string, TxGroup>();
   const at = (locator: TxLocator) => {
     const id = locatorId(locator);
     let group = groups.get(id);
     if (!group) {
-      group = { locator, received: [], spent: [], sent: [] };
+      group = {
+        locator,
+        received: [],
+        spent: [],
+        sent: [],
+        paid: paid.get(id) ?? [],
+      };
       groups.set(id, group);
     }
     return group;

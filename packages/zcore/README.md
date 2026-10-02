@@ -54,6 +54,7 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 | `find_spends`       | The Orchard or Ironwood actions in a chunk that spend given notes     |
 | `nullifiers_spent`  | Which given nullifiers a `/nullifiers` chunk holds (Sapling's spends) |
 | `parse_transaction` | A raw transaction's transparent side and the nullifiers it spends     |
+| `script_address`    | The address a transparent output's script pays                        |
 
 **Sending**, in the order a send runs:
 

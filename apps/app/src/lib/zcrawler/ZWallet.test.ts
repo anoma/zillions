@@ -56,6 +56,10 @@ vi.mock("@zillions/zcore", () => ({
     };
   }),
   parse_transaction: vi.fn(),
+  // Test scripts are their address, as text.
+  script_address: vi.fn((_network: string, script: Uint8Array) =>
+    new TextDecoder().decode(script),
+  ),
   max_send: vi.fn(() => 0),
   plan_send: vi.fn(),
   send_pczt: vi.fn(),
@@ -119,7 +123,12 @@ vi.mock("./lightwalletd", async (actual) => ({
 
 vi.mock("./transparent", () => ({
   REORG_DEPTH: 100,
-  syncTransparent: vi.fn(async () => ({ utxos: [], txs: [], tip: chain.tip })),
+  syncTransparent: vi.fn(async () => ({
+    utxos: [],
+    txs: [],
+    tip: chain.tip,
+    addresses: new Set(["t1ours"]),
+  })),
   nextUnshield: vi.fn(),
   reserveUnshield: vi.fn(),
 }));
@@ -149,6 +158,7 @@ function block(overrides: Partial<Block> = {}): Block {
     saplingSpends: new Map(),
     treeSizes: { ...chain.sizes },
     outputs: new Map(),
+    vout: new Map(),
     ...overrides,
   };
 }
@@ -279,4 +289,54 @@ test("places a Sapling spend through our own transaction's block", async () => {
   const sapling = saved.notes.find((n) => n.pool === "sapling");
   expect(sapling?.spent).toEqual({ height: 3_050, tx_index: 4 });
   expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
+});
+
+test("counts what a send paid to someone else's transparent address, not to ours", async () => {
+  chain.sizes = { sapling: 0, orchard: 2 * 16_384, ironwood: 0 };
+  const spentIn = (tx_index: number) => ({ height: 3_150, tx_index });
+  chain.hits.set("orchard:1", [
+    { ...note("orchard", 16_387, nf("ee")), value: 150_000 },
+    { ...note("orchard", 16_388, nf("ff")), value: 40_000 },
+    // tx 3's change.
+    { ...note("orchard", 16_390, nf("aa")), ...spentIn(3), value: 30_000 },
+  ]);
+  chain.rho.set(
+    "orchard:1",
+    new Map([
+      [9, nf("ee")],
+      [10, nf("ff")],
+    ]),
+  );
+  chain.spentAt.set(nf("ee"), spentIn(3));
+  chain.spentAt.set(nf("ff"), spentIn(4));
+  const out = (value: number, address: string) => ({
+    value,
+    script: new TextEncoder().encode(address),
+  });
+  chain.blocks.set(
+    3_150,
+    block({
+      txids: new Map([
+        [3, "tx3"],
+        [4, "tx4"],
+      ]),
+      vout: new Map([
+        [3, [out(100_000, "t1theirs")]],
+        // An unshield: its output is our own.
+        [4, [out(25_000, "t1ours")]],
+      ]),
+    }),
+  );
+
+  const wallet = new ZWallet({ id: "e", ufvk: "uview" });
+  await wallet.sync();
+
+  const history = await wallet.getTransactionHistory();
+  expect(history.find((tx) => tx.txid === "tx3")).toMatchObject({
+    tx_type: "Sent",
+    value: -100_000n,
+    to_address: "t1theirs",
+    fee: 20_000n,
+  });
+  expect(history.find((tx) => tx.txid === "tx4")?.to_address).toBeUndefined();
 });

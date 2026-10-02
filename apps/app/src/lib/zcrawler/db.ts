@@ -97,6 +97,17 @@ db.version(8)
       });
   });
 
+// Blocks are dropped: v9's also carry each transaction's transparent outputs.
+db.version(9)
+  .stores({
+    notes: "id",
+    sent: "id",
+    sync: "id",
+    transparent: "id",
+    blocks: "height",
+  })
+  .upgrade((tx) => tx.table("blocks").clear());
+
 export const loadNotes = (accountId: string): Promise<Note[]> =>
   db.notes.where("id").startsWith(accountId).toArray();
 

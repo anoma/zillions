@@ -78,6 +78,24 @@ pub fn gap_limits() -> Result<JsValue, JsError> {
     serde_wasm_bindgen::to_value(&limits).map_err(|e| JsError::new(&e.to_string()))
 }
 
+/// The address a transparent output's script pays: P2PKH or P2SH, as
+/// `zcash_transparent` reads it. `None` for any other script.
+pub(crate) fn script_address(network: &Network, script: &[u8]) -> Option<String> {
+    let script =
+        zcash_script::script::FromChain::parse(&zcash_script::script::Code(script.to_vec()))
+            .ok()?;
+    let address = transparent::address::TransparentAddress::from_script_from_chain(&script)?;
+    Some(Address::Transparent(address).encode(network))
+}
+
+/// The address a transparent output's `script` pays; `undefined` unless it's
+/// P2PKH or P2SH.
+#[wasm_bindgen(js_name = script_address)]
+pub fn script_address_js(network: &str, script: &[u8]) -> Result<Option<String>, JsError> {
+    let network = parse_network(network).map_err(|e| JsError::new(&e))?;
+    Ok(script_address(&network, script))
+}
+
 /// An output a transaction spends: the transaction that created it, and which
 /// of its outputs it was.
 #[derive(Serialize)]
@@ -181,6 +199,21 @@ mod tests {
         assert_eq!(
             tx.nullifiers,
             ["ec9483d9491c7294eca79c4b302d892946d23e38a40697513c93008438daa825"]
+        );
+    }
+
+    #[test]
+    fn reads_the_address_a_script_pays() {
+        // The payment of mainnet tx 9eec076b…205a.
+        let p2pkh = hex::decode("76a9142a64271e6d2bac79ca4e9183130f32a73e2bb16688ac").unwrap();
+        assert_eq!(
+            script_address(&Network::MainNetwork, &p2pkh).as_deref(),
+            Some("t1MjkN8ao1cs7LdT1gNAybAiZHBCfgXZzth")
+        );
+        // OP_RETURN pays no one.
+        assert_eq!(
+            script_address(&Network::MainNetwork, &[0x6a, 0x01, 0x00]),
+            None
         );
     }
 

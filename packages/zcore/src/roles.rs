@@ -12,7 +12,6 @@ use pczt::roles::{
 use pczt::Pczt;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
-use zcash_keys::address::Address;
 use zcash_keys::keys::UnifiedSpendingKey;
 use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 use zip32::fingerprint::SeedFingerprint;
@@ -186,13 +185,7 @@ struct Flow {
 }
 
 pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
-    let address = |script: &[u8]| {
-        let script =
-            zcash_script::script::FromChain::parse(&zcash_script::script::Code(script.to_vec()))
-                .ok()?;
-        let address = transparent::address::TransparentAddress::from_script_from_chain(&script)?;
-        Some(Address::Transparent(address).encode(network))
-    };
+    let address = |script: &[u8]| crate::transparent_tx::script_address(network, script);
     let transparent_inputs: Vec<_> = pczt
         .transparent()
         .inputs()

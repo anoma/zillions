@@ -91,6 +91,12 @@ export function plan_shield(network: string, wallet: any): any;
 export function prove_pczt(pczt: Uint8Array, sapling_spend?: Uint8Array | null, sapling_output?: Uint8Array | null): any;
 
 /**
+ * The address a transparent output's `script` pays; `undefined` unless it's
+ * P2PKH or P2SH.
+ */
+export function script_address(network: string, script: Uint8Array): string | undefined;
+
+/**
  * The seed's ZIP-32 fingerprint, hex. Names the seed without revealing it.
  */
 export function seed_fingerprint(seed: Uint8Array): string;
@@ -156,6 +162,7 @@ export interface InitOutput {
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly plan_shield: (a: number, b: number, c: any) => [number, number, number];
     readonly prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly script_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
     readonly send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any) => [number, number, number, number];
     readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any) => [number, number, number, number];

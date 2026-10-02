@@ -216,6 +216,8 @@ export interface Block {
   treeSizes: Record<Pool, number>;
   /** How many notes each transaction, by index, adds to each pool. */
   outputs: Map<number, Record<Pool, number>>;
+  /** Each transaction's transparent outputs, by index. */
+  vout: Map<number, { value: number; script: Uint8Array }[]>;
 }
 
 /** CompactTx fields listing each pool's new notes, and ChainMetadata's tree sizes. */
@@ -243,12 +245,23 @@ export async function fetchBlock(height: number): Promise<Block> {
   const txids = new Map<number, string>();
   const saplingSpends = new Map<string, number>();
   const outputs = new Map<number, Record<Pool, number>>();
+  const vout = new Map<number, { value: number; script: Uint8Array }[]>();
   for (const raw of block.get(7) ?? []) {
     const tx = fields(raw as Uint8Array);
     const index = num(tx, 1);
     txids.set(index, displayTxid(bytes(tx, 2)));
     for (const spend of tx.get(4) ?? []) {
       saplingSpends.set(hex(bytes(fields(spend as Uint8Array), 1)), index);
+    }
+    const transparent = tx.get(8) ?? [];
+    if (transparent.length) {
+      vout.set(
+        index,
+        transparent.map((out) => {
+          const txOut = fields(out as Uint8Array);
+          return { value: num(txOut, 1), script: bytes(txOut, 2) };
+        }),
+      );
     }
     outputs.set(
       index,
@@ -261,7 +274,14 @@ export async function fetchBlock(height: number): Promise<Block> {
   const treeSizes = Object.fromEntries(
     POOL_FIELDS.map(([pool, f]) => [pool, num(meta, f.size)]),
   ) as Record<Pool, number>;
-  return { time: num(block, 5), txids, saplingSpends, treeSizes, outputs };
+  return {
+    time: num(block, 5),
+    txids,
+    saplingSpends,
+    treeSizes,
+    outputs,
+    vout,
+  };
 }
 
 /** A mined transaction by txid, given in explorer byte order. */
