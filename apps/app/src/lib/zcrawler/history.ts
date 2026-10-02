@@ -1,4 +1,4 @@
-import type { TransactionReceipt } from "../sdk/types";
+import type { Party, TransactionReceipt } from "../sdk/types";
 import type { Block } from "./lightwalletd";
 import type { TransparentTx } from "./transparent";
 import type { Note, Sent, TxLocator } from "./types";
@@ -37,6 +37,9 @@ const max0 = (n: bigint) => (n > 0n ? n : 0n);
 const sum = (of: { value: number }[]) =>
   of.reduce((total, { value }) => total + BigInt(value), 0n);
 
+const SHIELDED: Party = { pool: "shielded" };
+const TRANSPARENT: Party = { pool: "transparent" };
+
 /** A shielded group's net effect, and what it shows as on its own. */
 function shieldedSide({ received, spent, sent, paid }: TxGroup) {
   // What we know left the wallet: shielded outputs recovered, transparent
@@ -52,6 +55,7 @@ function shieldedSide({ received, spent, sent, paid }: TxGroup) {
   // A transaction can pay us several notes (padding, change, a payment):
   // its memo is whichever one has it.
   const memo = (sent.length ? sent : received).find((p) => p.memo)?.memo;
+  const [payee] = out;
   return {
     value: outgoing ? -outflow : sum(received),
     // With every output accounted for, what our inputs held beyond them is
@@ -62,13 +66,18 @@ function shieldedSide({ received, spent, sent, paid }: TxGroup) {
     memo,
     // Only a send knows its counterparty: on the receiving side the
     // recipient is our own address, and the sender is never revealed.
-    to_address: (sent[0] ?? paid[0])?.recipient,
+    to: payee?.recipient
+      ? { address: payee.recipient }
+      : paid.length
+        ? TRANSPARENT
+        : SHIELDED,
   };
 }
 
 function receipt(
   txid: string,
   { height, shielded, transparent }: Entry,
+  ours: Set<string>,
   time?: number,
 ): TransactionReceipt {
   const base = {
@@ -78,11 +87,15 @@ function receipt(
     confirmations: 0,
     status: "Confirmed" as const,
     timestamp: time,
-    from_address: undefined,
+    from: SHIELDED,
   };
+  // Our own transparent addresses show as the pool: unshields each get a new
+  // internal one, which nothing else shows.
+  const party = (address: string | undefined): Party =>
+    address && !ours.has(address) ? { address } : TRANSPARENT;
   // An entry holds at least one side.
   const s = shielded && shieldedSide(shielded);
-  const side = s && { memo: s.memo, pool: s.pool, to_address: s.to_address };
+  const side = s && { memo: s.memo, pool: s.pool, to: s.to };
   if (!transparent) {
     return {
       ...base,
@@ -101,13 +114,12 @@ function receipt(
       value: t,
       memo: undefined,
       pool: "transparent",
-      from_address: transparent.from,
-      to_address: transparent.to,
+      from: party(transparent.from),
+      to: party(transparent.to),
     };
   }
   // Both sides: whatever the two don't account for between them is the fee.
   const fee = max0(-(s.value + t));
-  // Addresses are only ever transparent ones: a shielded side shows as such.
   if (t > 0n && s.value < 0n) {
     return {
       ...base,
@@ -115,7 +127,7 @@ function receipt(
       tx_type: "Unshielded",
       value: t,
       fee,
-      to_address: transparent.to,
+      to: party(transparent.to),
     };
   }
   if (t < 0n && s.value > 0n) {
@@ -125,15 +137,16 @@ function receipt(
       tx_type: "Shielded",
       value: s.value,
       fee,
-      from_address: transparent.from,
+      from: party(transparent.from),
+      to: SHIELDED,
     };
   }
   const value = s.value + t;
   return {
     ...base,
     ...side,
-    from_address: transparent.from,
-    to_address: side.to_address ?? transparent.to,
+    from: party(transparent.from),
+    to: "address" in side.to ? side.to : party(transparent.to),
     pool: "mixed",
     tx_type: value < 0n ? "Sent" : "Received",
     value,
@@ -156,6 +169,7 @@ export function buildHistory(
   transparent: TransparentTx[],
   blocks: Map<number, Block>,
   paid = new Map<string, Payment[]>(),
+  ours = new Set<string>(),
 ): TransactionReceipt[] {
   const groups = new Map<string, TxGroup>();
   const at = (locator: TxLocator) => {
@@ -193,7 +207,7 @@ export function buildHistory(
 
   return [...entries]
     .map(([txid, entry]) =>
-      receipt(txid, entry, blocks.get(entry.height)?.time),
+      receipt(txid, entry, ours, blocks.get(entry.height)?.time),
     )
     .sort((a, b) => b.block_height - a.block_height);
 }

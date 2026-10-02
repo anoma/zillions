@@ -665,6 +665,7 @@ export class ZWallet {
       this.#transparent.txs,
       this.#blocks,
       await this.#payments(),
+      this.#transparent.addresses,
     );
   }
 }

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
-import { useAccount } from "../hooks/useAccount";
 import { unshieldAddress, useUnshieldAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useSend, useSendPlan } from "../hooks/useSend";
@@ -22,7 +21,6 @@ export const Route = createFileRoute("/unshield")({
  * else shows, so they can't be paired with the ones shielded from its others.
  */
 function UnshieldRoute() {
-  const account = useAccount();
   const balance = useGetBalance();
 
   const [amountString, setAmountString] = useState("");
@@ -87,8 +85,9 @@ function UnshieldRoute() {
           fee: send.data.fee,
           status: "Pending",
           timestamp: send.data.timestamp,
-          from_address: account.shielded.address,
-          to_address: to,
+          from: { pool: "shielded" },
+          // Ours, and never shown: a new internal address each time.
+          to: { pool: "transparent" },
         }}
       />
     );

@@ -18,8 +18,8 @@ export type TransactionReceiptCardProps = {
     | "fee"
     | "status"
     | "timestamp"
-    | "from_address"
-    | "to_address"
+    | "from"
+    | "to"
   >;
 };
 
@@ -43,12 +43,8 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
         </div>
 
         <div className="mt-15 flex items-center justify-center gap-2">
-          <AddressBadge
-            address={tx.from_address}
-            className="h-8 w-50 text-sm"
-          />{" "}
-          →{" "}
-          <AddressBadge address={tx.to_address} className="h-8 w-50 text-sm" />
+          <AddressBadge party={tx.from} className="h-8 w-50 text-sm" /> →{" "}
+          <AddressBadge party={tx.to} className="h-8 w-50 text-sm" />
         </div>
 
         <div className="mt-20">

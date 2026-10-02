@@ -24,6 +24,12 @@ export type TransactionReceipt = {
   memo: string | undefined;
   timestamp?: number;
   pool: "ironwood" | "orchard" | "sapling" | "transparent" | "mixed";
-  to_address: string | undefined;
-  from_address: string | undefined;
+  from: Party;
+  to: Party;
 };
+
+/**
+ * One side of a transaction: someone else's address, or just the pool when
+ * the address isn't shown — our own, or a shielded sender, never revealed.
+ */
+export type Party = { address: string } | { pool: "shielded" | "transparent" };

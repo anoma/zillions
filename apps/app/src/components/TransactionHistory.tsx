@@ -45,8 +45,8 @@ export function TransactionHistory() {
             >
               <TransactionTypeAndStatus tx={tx} />
               <TransactionValue tx={tx} />
-              <AddressBadge address={tx.from_address} />
-              <AddressBadge address={tx.to_address} />
+              <AddressBadge party={tx.from} />
+              <AddressBadge party={tx.to} />
               <time>
                 {tx.timestamp &&
                   new Date(Number(tx.timestamp) * 1000).toLocaleString(

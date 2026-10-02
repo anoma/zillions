@@ -61,8 +61,8 @@ function ShieldRoute() {
           ...shield.data,
           tx_type: "Shielded",
           status: "Pending",
-          from_address: account.transparent.address,
-          to_address: account.shielded.address,
+          from: { pool: "transparent" },
+          to: { pool: "shielded" },
         }}
       />
     );

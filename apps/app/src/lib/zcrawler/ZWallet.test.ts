@@ -335,8 +335,10 @@ test("counts what a send paid to someone else's transparent address, not to ours
   expect(history.find((tx) => tx.txid === "tx3")).toMatchObject({
     tx_type: "Sent",
     value: -100_000n,
-    to_address: "t1theirs",
+    to: { address: "t1theirs" },
     fee: 20_000n,
   });
-  expect(history.find((tx) => tx.txid === "tx4")?.to_address).toBeUndefined();
+  expect(history.find((tx) => tx.txid === "tx4")?.to).not.toHaveProperty(
+    "address",
+  );
 });

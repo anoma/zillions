@@ -4,7 +4,6 @@ import { twMerge } from "tailwind-merge";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
-import { useAccount } from "../hooks/useAccount";
 import { useAddressKind } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useSend, useSendPlan } from "../hooks/useSend";
@@ -17,7 +16,6 @@ export const Route = createFileRoute("/send")({
 });
 
 function SendRoute() {
-  const account = useAccount();
   const balance = useGetBalance();
 
   const [isTransparentFrom, setIsTransparentFrom] = useState(false);
@@ -68,9 +66,6 @@ function SendRoute() {
   };
 
   if (send.data) {
-    const sender = isTransparentFrom
-      ? account.transparent.address
-      : account.shielded.address;
     return (
       <TransferSuccess
         tx={{
@@ -80,8 +75,8 @@ function SendRoute() {
           fee: send.data.fee,
           status: "Pending",
           timestamp: send.data.timestamp,
-          from_address: sender,
-          to_address: to,
+          from: { pool: from },
+          to: { address: to },
         }}
       />
     );

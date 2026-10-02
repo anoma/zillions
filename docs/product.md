@@ -112,7 +112,8 @@ Spending is *Built*: it awaits a first real transaction.
 - **Memo**: not offered to the user. The wallet can still attach one to a
   shielded payment itself (kept for app-set memos later).
 - **Fee preview** before confirming, updating as the form changes.
-- Checks before sending: amount set, recipient set, enough balance.
+- Checks before sending: amount set, recipient a valid address on this
+  network, enough balance.
 - **Privacy notice** under the button: "This transfer is shielded",
   "partly shielded" or "transparent", depending on source and recipient.
 - Approval happens in the Keychain, which shows what is being signed.
@@ -157,8 +158,10 @@ Moves shielded funds to one of the account's own transparent addresses.
   - **Type**: Sent, Received, Shielded (transparent → shielded) or
     Unshielded (shielded → transparent);
   - **Amount**;
-  - **From** and **To**: transparent addresses in full, shielded ones as
-    "Shielded" (a received shielded payment never reveals its sender);
+  - **From** and **To**: someone else's address when it's known; the
+    account's own addresses only as "Shielded" or "Transparent" (each unshield
+    goes to a new address of its own, which nothing else shows), and a
+    shielded sender as "Shielded", since it's never revealed;
   - **Time**.
 - A **detail page** per transaction: type, status, amounts broken down (e.g.
   "Sent from Transparent" / "Received in Shielded"), fee, from, to, time,
