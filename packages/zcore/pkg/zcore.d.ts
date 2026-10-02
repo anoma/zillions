@@ -71,6 +71,12 @@ export function parse_transaction(network: string, height: number, data: Uint8Ar
 export function pczt_summary(network: string, pczt: Uint8Array): any;
 
 /**
+ * The plan for moving every spendable Orchard note to Ironwood with
+ * privacy, as of `wallet`'s tip; each call draws a new order and timing.
+ */
+export function plan_migration(network: string, wallet: any): any;
+
+/**
  * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
  * is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
  * change, fee }], fee }`, values in zatoshis.
@@ -161,6 +167,7 @@ export interface InitOutput {
     readonly nullifiers_spent: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly plan_migration: (a: number, b: number, c: any) => [number, number, number];
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly plan_shield: (a: number, b: number, c: any) => [number, number, number];
     readonly prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];

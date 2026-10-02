@@ -253,8 +253,9 @@ offering Sapling as a destination, and Sapling funds stay where they are.
   not as payments.
 - *Immediately* is built: its review shows the amount and fee of one
   transfer of every Orchard note to the account's own Ironwood, and confirming
-  sends it. *With privacy* stops at its review, whose button says it is a
-  work in progress; nothing is sent.
+  sends it. *With privacy* shows its real plan (the preparation steps, each
+  transfer's amount and expected time, the fees and what stays in Orchard),
+  but its button says it is a work in progress; nothing is sent.
 - *To confirm*: recommending Tor Browser too, once the Keychain installs and
   is tested there (signed add-on, WebAssembly at its security levels).
 - *To confirm*: whether a running migration can be paused or cancelled, and

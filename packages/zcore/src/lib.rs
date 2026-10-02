@@ -15,6 +15,7 @@
 
 mod build;
 mod keys;
+mod migration;
 mod notes;
 mod roles;
 mod send;

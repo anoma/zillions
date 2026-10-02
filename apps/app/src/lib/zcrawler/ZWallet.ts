@@ -34,6 +34,7 @@ import {
 import { type Block, fetchBlock, outputPositions } from "./lightwalletd";
 import {
   maxSend,
+  planMigration,
   planSend,
   sendPczt,
   type SendRequest,
@@ -642,6 +643,8 @@ export class ZWallet {
     reserveInternalAddress(this.id, index, expiryHeight);
 
   maxSend = (send: SendRequest) => maxSend(this.#walletData(), send);
+
+  planMigration = () => planMigration(this.#walletData());
 
   /** The unsigned PCZT for `send`, for the keychain account that signs it. */
   /**

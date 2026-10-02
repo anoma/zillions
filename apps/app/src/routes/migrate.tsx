@@ -1,3 +1,4 @@
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { twMerge } from "tailwind-merge";
@@ -7,6 +8,7 @@ import { ZecValue } from "../components/ZecValue";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
+import { useWallet } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { MIGRATION_MINIMUM } from "../lib/utils";
 import { TransferSuccess } from "./TransferSuccess";
@@ -41,6 +43,20 @@ function MigrateRoute() {
     true,
   );
   const send = useSend();
+  const wallet = useWallet();
+  const plan = useQuery(
+    queryOptions({
+      queryKey: [
+        "migrationPlan",
+        wallet.id,
+        balance.data?.orchardBalance.toString(),
+      ],
+      queryFn: () => wallet.planMigration(),
+      enabled: mode === "private" && step === "review",
+      // Each run draws a new order and timing: keep the one on screen.
+      staleTime: Infinity,
+    }),
+  );
 
   if (send.data) {
     return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
@@ -162,26 +178,79 @@ function MigrateRoute() {
   }
 
   if (mode === "private") {
+    const p = plan.data;
+    const fees =
+      p &&
+      BigInt(
+        p.transfers.length * p.transferFee +
+          p.preparations.length * p.preparationFee,
+      );
+    const last = p?.transfers.at(-1)?.height;
     return (
       <Page title="Confirm transfer plan" onBack={back}>
-        <p>
-          Your Orchard balance will move to Ironwood as several transfers spread
-          over hours. Approve once; the wallet sends each transfer while it's
-          open.
-        </p>
-        <div className="mt-8 rounded-2xl border border-gray-300 divide-y divide-gray-300 text-sm">
-          <Row label="In Orchard">
-            <ZecValue zat={orchard} />
-          </Row>
-          <Row label="Transfers">Planned when you start</Row>
-        </div>
+        {!p ? (
+          plan.error ? (
+            <div className="text-red-500">{plan.error.message}</div>
+          ) : (
+            <Waiting />
+          )
+        ) : p.transfers.length === 0 ? (
+          <p>
+            Too little to migrate with privacy: after fees, less than{" "}
+            <ZecValue zat={MIGRATION_MINIMUM} /> would be left to move. Migrate
+            immediately instead.
+          </p>
+        ) : (
+          <>
+            <p>
+              Your balance moves as {p.transfers.length}{" "}
+              {p.transfers.length === 1 ? "transfer" : "transfers"} over{" "}
+              {fromNow(p.tip, last!)}. Their order and timing are random, for
+              privacy. Approve once; the wallet sends each transfer while it's
+              open.
+            </p>
+            <div className="mt-8 rounded-2xl border border-gray-300 divide-y divide-gray-300 text-sm">
+              {p.preparations.map((height, i) => (
+                <Row
+                  key={`p${i}`}
+                  label={
+                    p.preparations.length > 1
+                      ? `Prepare the amounts ${i + 1}`
+                      : "Prepare the amounts"
+                  }
+                >
+                  {fromNow(p.tip, height)}
+                </Row>
+              ))}
+              {p.transfers.map(({ value, height }, i) => (
+                <Row
+                  key={`t${i}`}
+                  label={`Transfer ${i + 1} · ${fromNow(p.tip, height)}`}
+                >
+                  <ZecValue zat={BigInt(value)} />
+                </Row>
+              ))}
+              <Row label="Fees">
+                <ZecValue zat={fees!} />
+              </Row>
+              <Row label="Stays in Orchard">
+                <ZecValue zat={BigInt(p.left)} />
+              </Row>
+            </div>
+          </>
+        )}
         {started && (
           <Note>
             Migrating with privacy is a work in progress and can't start yet.
             Nothing was sent.
           </Note>
         )}
-        <Primary onClick={() => setStarted(true)}>Start migration</Primary>
+        <Primary
+          onClick={() => setStarted(true)}
+          disabled={!p?.transfers.length}
+        >
+          Start migration
+        </Primary>
       </Page>
     );
   }
@@ -229,6 +298,15 @@ function MigrateRoute() {
       )}
     </Page>
   );
+}
+
+/** About when `height` comes, at 75 seconds a block. */
+function fromNow(tip: number, height: number) {
+  const minutes = ((height - tip) * 75) / 60;
+  if (minutes < 5) return "now";
+  if (minutes < 90) return `~${Math.round(minutes)} min`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `~${hours} hours` : `~${Math.round(hours / 24)} days`;
 }
 
 function Waiting() {

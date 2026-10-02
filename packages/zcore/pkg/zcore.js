@@ -233,6 +233,23 @@ export function pczt_summary(network, pczt) {
 }
 
 /**
+ * The plan for moving every spendable Orchard note to Ironwood with
+ * privacy, as of `wallet`'s tip; each call draws a new order and timing.
+ * @param {string} network
+ * @param {any} wallet
+ * @returns {any}
+ */
+export function plan_migration(network, wallet) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.plan_migration(ptr0, len0, wallet);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
  * is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
  * change, fee }], fee }`, values in zatoshis.

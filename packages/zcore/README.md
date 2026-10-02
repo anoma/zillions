@@ -62,6 +62,7 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 | -------------------------- | ---------------------------------------------------------------------- |
 | `plan_send`, `plan_shield` | Picks the notes and coins, change and fee                              |
 | `max_send`                 | The most a send can pay after fees                                     |
+| `plan_migration`           | ZIP 318's plan for moving Orchard to Ironwood with privacy             |
 | `send_pczt`, `shield_pczt` | Builds the unsigned PCZT; needs each spent pool's note commitment tree |
 | `pczt_summary`             | What a PCZT moves, to show before signing                              |
 | `sign_pczt`                | Signs with the seed: run it wherever the seed lives                    |

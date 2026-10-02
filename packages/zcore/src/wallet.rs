@@ -508,7 +508,23 @@ impl InputSource for Wallet {
 }
 
 impl Wallet {
-    /// Everything `from` (`"shielded"` or `"transparent"`) holds, spendable or not.
+    /// The values of the Orchard notes a transaction could spend now.
+    pub(crate) fn spendable_orchard(&self) -> Vec<u64> {
+        select(
+            &self.orchard,
+            orchard_value,
+            ShieldedPool::Orchard,
+            TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable),
+            TargetHeight::from(self.tip + 1),
+            ConfirmationsPolicy::default(),
+            &[],
+        )
+        .iter()
+        .map(|n| orchard_value(n.note()))
+        .collect()
+    }
+
+    /// Everything `from` (`"shielded"`, `"transparent"` or `"orchard"`) holds, spendable or not.
     pub(crate) fn total(&self, from: &str) -> u64 {
         if from == "transparent" {
             return self

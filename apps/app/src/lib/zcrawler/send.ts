@@ -6,6 +6,7 @@
 
 import initZcore, {
   max_send,
+  plan_migration,
   plan_send,
   plan_shield,
   send_pczt,
@@ -66,6 +67,26 @@ export async function planSend(wallet: WalletData, send: SendRequest) {
 export async function maxSend(wallet: WalletData, send: SendRequest) {
   await initZcore();
   return BigInt(max_send(NETWORK, wallet, request(send)));
+}
+
+/** ZIP 318's plan for moving Orchard to Ironwood with privacy; heights are estimates. */
+export type MigrationPlan = {
+  tip: number;
+  orchard: number;
+  /** When each preparation transaction is broadcast. */
+  preparations: number[];
+  /** What each crossing delivers to Ironwood, in broadcast order. */
+  transfers: { value: number; height: number }[];
+  transferFee: number;
+  preparationFee: number;
+  /** What stays in Orchard. */
+  left: number;
+};
+
+/** A fresh draw of the plan: each call shuffles the amounts and timing anew. */
+export async function planMigration(wallet: WalletData) {
+  await initZcore();
+  return plan_migration(NETWORK, wallet) as MigrationPlan;
 }
 
 const SHIELDED: Pool[] = ["sapling", "orchard", "ironwood"];
