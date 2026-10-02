@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.6.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.5.0...zillions-app-v1.6.0) (2026-10-02)
+
+
+### Features
+
+* copy the receipt's addresses ([d4e6f7f](https://github.com/heliaxdev/zillions-interface/commit/d4e6f7f2bd85bf9c6b91a0f0f9d65d593f22741f))
+* keep a transparent send's change transparent ([31ab51a](https://github.com/heliaxdev/zillions-interface/commit/31ab51af399c6a584610b9cdf89b304ac7e8e022))
+* say when a transparent send moves funds to shielded ([854b484](https://github.com/heliaxdev/zillions-interface/commit/854b484b4a7cb5979c56dc13b863c56e614db8e2))
+* show own transparent addresses as "Transparent" in history ([a2cce43](https://github.com/heliaxdev/zillions-interface/commit/a2cce437f3fb5efd8fbd42483c459c9595a7f4b1))
+
+
+### Bug Fixes
+
+* Max finds the no-change amount; the send form explains amounts it can't cover ([2d0a3e6](https://github.com/heliaxdev/zillions-interface/commit/2d0a3e6589c55e7d264d6fe7ee544aaede5551a3))
+* name recent transactions in history soon after a reload ([6967a89](https://github.com/heliaxdev/zillions-interface/commit/6967a89312c96c6e9ba51322fa2042795019ad8e))
+* no history flash on load ([a534372](https://github.com/heliaxdev/zillions-interface/commit/a534372847a9f082aa294ac034331b8830b7971e))
+* read memos with upstream's ZIP 302 parser ([e918256](https://github.com/heliaxdev/zillions-interface/commit/e9182562ddb255b9382c149e7894d05d8da0a534))
+* show sends to transparent addresses in history ([49dce47](https://github.com/heliaxdev/zillions-interface/commit/49dce4734d168b67cc5038904b1f33c5c8a6654e))
+* show the last synced transparent state on load ([7ece6ec](https://github.com/heliaxdev/zillions-interface/commit/7ece6ecc9c7fcbf0e2324d41d230ecb0da0970aa))
+
 ## [1.5.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.4.0...zillions-app-v1.5.0) (2026-10-02)
 
 
