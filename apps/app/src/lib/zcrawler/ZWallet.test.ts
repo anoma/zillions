@@ -25,28 +25,31 @@ const chain = vi.hoisted(() => ({
   tip: 3_200,
 }));
 
+/** The 32-byte nullifiers packed in `nfs`, as hex. */
+const nullifiers = vi.hoisted(
+  () => (nfs: Uint8Array) =>
+    Array.from({ length: nfs.length / 32 }, (_, i) =>
+      Array.from(nfs.subarray(i * 32, i * 32 + 32), (b) =>
+        b.toString(16).padStart(2, "0"),
+      ).join(""),
+    ),
+);
+
 const saved = vi.hoisted(() => ({ notes: [] as Note[], sent: [] as Sent[] }));
 
 vi.mock("@zillions/zcore", () => ({
   default: vi.fn(async () => {}),
   // The chunk number rides in the body's first byte.
   find_spends: vi.fn((pool: Pool, body: Uint8Array, nfs: Uint8Array) => {
-    const ours = new Set(
-      Array.from({ length: nfs.length / 32 }, (_, i) =>
-        Buffer.from(nfs.subarray(i * 32, i * 32 + 32)).toString("hex"),
-      ),
-    );
+    const ours = new Set(nullifiers(nfs));
     const records = chain.rho.get(`${pool}:${body[0]}`) ?? new Map();
     return Uint32Array.from(
       [...records].filter(([, nf]) => ours.has(nf)).map(([i]) => i),
     );
   }),
   nullifiers_spent: vi.fn((_body: Uint8Array, nfs: Uint8Array) => {
-    const asked = Array.from({ length: nfs.length / 32 }, (_, i) =>
-      Buffer.from(nfs.subarray(i * 32, i * 32 + 32)).toString("hex"),
-    );
     return {
-      spent: asked.flatMap((nf, i) =>
+      spent: nullifiers(nfs).flatMap((nf, i) =>
         chain.saplingNullifiers.includes(nf) ? [i] : [],
       ),
       frozen: false,
