@@ -60,9 +60,13 @@ Spending is *Built*: it awaits a first real transaction.
 - Every kind of spend is required: from any pool the wallet holds funds in, to
   any kind of Zcash address.
 - **The user never picks a pool.** Ironwood, the newest pool (from the NU6.3
-  network upgrade), is where the wallet puts shielded funds: shielding,
-  change, and anything it moves on the user's behalf. Other wallets may still
-  pay into Sapling or Orchard, and those funds are fully supported.
+  network upgrade), is where the wallet puts shielded funds: shielding, and
+  anything it moves on the user's behalf. Other wallets may still pay into
+  Sapling or Orchard, and those funds are fully supported.
+- **Change stays in the pool it was spent from**: spending an Orchard note
+  returns its change to Orchard, not Ironwood. Moving value between pools
+  makes the amount public, so change only goes to Ironwood when it has no
+  shielded pool to return to (e.g. a send from transparent funds).
 - **Sending chooses the best option** among the funds the wallet holds (which
   funds to use and how), without asking the user about pools.
 - Funds received before the wallet was created or imported are found too: the
