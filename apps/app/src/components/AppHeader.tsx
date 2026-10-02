@@ -90,7 +90,7 @@ function SwitchAccountButton() {
 function DisconnectButton() {
   return (
     <button
-      className="h-10 -mr-2 p-2 hover:text-gold transition-all cursor-pointer"
+      className="h-10 lg:-mr-2 p-2 hover:text-gold transition-all cursor-pointer"
       onClick={() => keychain().disconnect()}
     >
       <ExitIcon className="size-4" />
@@ -104,12 +104,12 @@ function MoreMenu() {
       position="bottom"
       className="left-auto right-0 translate-x-0"
       content={
-        <div className="px-4 py-2 w-40">
+        <div className="px-4 py-1 pb-4 w-40">
           <HelpLinks />
         </div>
       }
     >
-      <button className="h-10 p-2 hover:text-gold transition-all cursor-pointer">
+      <button className="h-10 -mr-2 p-2 hover:text-gold transition-all cursor-pointer">
         <GoKebabHorizontal className="size-4" />
       </button>
     </Tooltip>
@@ -125,10 +125,10 @@ export function AppHeader() {
       <SyncIndicator />
       <AccountProfile />
       <SwitchAccountButton />
+      <DisconnectButton />
       <div className="lg:hidden">
         <MoreMenu />
       </div>
-      <DisconnectButton />
     </header>
   );
 }

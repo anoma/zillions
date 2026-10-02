@@ -34,13 +34,14 @@ export function HelpLinks() {
           </li>
         ))}
       </ul>
-      <div className="mt-8">
+      <div className="mt-8 flex items-end justify-between">
         <SmartLink
           href={xUrl}
           className="inline-flex hover:text-gold transition-all"
         >
           <XIcon className="size-5" />
         </SmartLink>
+        <div className="text-xs text-neutral-500">v{__APP_VERSION__}</div>
       </div>
     </>
   );
