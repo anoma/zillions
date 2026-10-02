@@ -34,11 +34,6 @@ export function TotalBalance() {
         <Label>Total Balance in Zillions</Label>
         <div className="my-5 lg:my-10">
           <ZecValue zat={totalBalance} className="text-5xl xl:text-7xl" />
-          {pendingBalance > 0n && (
-            <div className="text-xs font-normal mt-1">
-              <ZecValue zat={pendingBalance} /> pending (included)
-            </div>
-          )}
         </div>
         <div className="flex max-sm:flex-col gap-2">
           <Link to="/send">

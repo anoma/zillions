@@ -73,24 +73,21 @@ function SendRoute() {
       setValidationMessage(problem);
       return;
     }
-    send.mutate({ from, to, amount });
+    send.mutate({
+      from,
+      to,
+      amount,
+      shown: {
+        tx_type: "Sent",
+        value: -amount,
+        from: { pool: from },
+        to: { address: to },
+      },
+    });
   };
 
   if (send.data) {
-    return (
-      <TransferSuccess
-        tx={{
-          txid: send.data.txid,
-          tx_type: "Sent",
-          value: -amount,
-          fee: send.data.fee,
-          status: "Pending",
-          timestamp: send.data.timestamp,
-          from: { pool: from },
-          to: { address: to },
-        }}
-      />
-    );
+    return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
   }
 
   const error = send.error?.message ?? planProblem(planned);

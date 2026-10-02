@@ -8,7 +8,8 @@ import type { TransactionReceipt } from "../lib/sdk/types";
 export function TransactionTypeAndStatus({
   tx,
 }: {
-  tx: Pick<TransactionReceipt, "tx_type" | "status">;
+  tx: Pick<TransactionReceipt, "tx_type"> &
+    Partial<Pick<TransactionReceipt, "status">>;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -24,7 +25,7 @@ export function TransactionTypeAndStatus({
         <DatabaseArrowIcon className="size-4" />
       ) : null}
       {tx.tx_type}
-      {tx.status !== "Confirmed" && ` (${tx.status})`}
+      {tx.status && tx.status !== "Confirmed" && ` (${tx.status})`}
     </div>
   );
 }

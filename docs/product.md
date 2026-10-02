@@ -81,11 +81,12 @@ Spending is *Built*: it awaits a first real transaction.
 
 - **Total balance** in ZEC, with the **shielded** and **transparent** parts
   shown separately.
-- **Pending** amounts (sent or received but not yet confirmed) are shown and
-  included in the total. — *Built* for sends: what a send spends leaves the
-  balance at once and can't be spent again, and its change (or an unshield's
-  amount) shows as pending until it's mined or expires. Amounts received but
-  not yet mined aren't shown yet: the wallet only reads mined blocks.
+- **Pending** amounts (sent or received but not yet confirmed) are included in
+  the total, and their transactions show as pending in the list (2.6). —
+  *Built* for sends: what a send spends leaves the balance at once and can't
+  be spent again, and its change (or an unshield's amount) counts until it's
+  mined or expires. Amounts received but not yet mined aren't shown yet: the
+  wallet only reads mined blocks.
 - Shortcut buttons: **Send**, **Receive**, **Shield** (shown when there is a
   transparent balance), **Unshield** (shown when there is a shielded balance).
 - Recent transactions (see 2.6).
@@ -165,6 +166,9 @@ Moves shielded funds to one of the account's own transparent addresses.
     account's own addresses only as "Shielded" or "Transparent" (each unshield
     goes to a new address of its own, which nothing else shows), and a
     shielded sender as "Shielded", since it's never revealed;
+  - **Status**: "Processing" from the moment a send, shield or unshield is
+    broadcast until it's mined, then "Completed"; one that expires unmined
+    drops off the list;
   - **Time**.
 - A **detail page** per transaction: type, status, amounts broken down (e.g.
   "Sent from Transparent" / "Received in Shielded"), fee, from, to, time,

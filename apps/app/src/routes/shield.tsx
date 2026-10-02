@@ -48,24 +48,26 @@ function ShieldRoute() {
         signer: account.transparent.address,
         pczt: bytesToBase64(pczt),
       });
+      const receipt = {
+        tx_type: "Shielded" as const,
+        value,
+        fee,
+        timestamp: Math.floor(Date.now() / 1000),
+        from: { pool: "transparent" as const },
+        to: { pool: "shielded" as const },
+      };
       // Everything shielded comes back to us, in Ironwood.
-      const { txid } = await wallet.submit(base64ToBytes(signed), value);
-      return { txid, value, fee, timestamp: Math.floor(Date.now() / 1000) };
+      const { txid } = await wallet.submit(
+        base64ToBytes(signed),
+        value,
+        receipt,
+      );
+      return { ...receipt, txid };
     },
   });
 
   if (shield.data) {
-    return (
-      <TransferSuccess
-        tx={{
-          ...shield.data,
-          tx_type: "Shielded",
-          status: "Pending",
-          from: { pool: "transparent" },
-          to: { pool: "shielded" },
-        }}
-      />
-    );
+    return <TransferSuccess tx={{ ...shield.data, status: "Pending" }} />;
   }
 
   const error = shield.error ?? proposal.error;

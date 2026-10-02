@@ -8,6 +8,7 @@ import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
 import type { SendRequest } from "../lib/zcrawler/send";
+import type { PendingReceipt } from "../lib/zcrawler/types";
 import { useAccount } from "./useAccount";
 import { internalAddress } from "./useAddresses";
 import { useDebouncedValue } from "./useDebouncedValue";
@@ -87,8 +88,9 @@ export function planProblem({
 /**
  * Builds the PCZT, has the keychain sign it, then proves and broadcasts it.
  * `toSelf` marks a payment to one of our own addresses (an unshield), shown
- * as pending with the change until it's mined. Transparent change holds the
- * internal address it went to, so the next one goes elsewhere.
+ * as pending with the change until it's mined; `shown` is how history lists
+ * it meanwhile. Transparent change holds the internal address it went to, so
+ * the next one goes elsewhere.
  */
 export function useSend() {
   const wallet = useWallet();
@@ -98,8 +100,12 @@ export function useSend() {
   return useMutation({
     mutationFn: async ({
       toSelf,
+      shown,
       ...send
-    }: SendRequest & { toSelf?: boolean }) => {
+    }: SendRequest & {
+      toSelf?: boolean;
+      shown: Omit<PendingReceipt, "fee" | "timestamp">;
+    }) => {
       const { pczt, plan, changeTo } = await wallet.sendPczt(
         send,
         account.shielded,
@@ -114,20 +120,21 @@ export function useSend() {
       const change = plan.steps
         .flatMap((step) => step.change)
         .reduce((sum, flow) => sum + BigInt(flow.value), 0n);
+      const receipt = {
+        ...shown,
+        fee: BigInt(plan.fee),
+        timestamp: Math.floor(Date.now() / 1000),
+      };
       const { txid, expiryHeight } = await wallet.submit(
         base64ToBytes(signed),
         change + (toSelf ? send.amount : 0n),
+        receipt,
       );
       if (changeTo !== undefined) {
         await wallet.internalAddressUsed(changeTo, expiryHeight);
         await queryClient.invalidateQueries(internalAddress(wallet));
       }
-      return {
-        txid,
-        expiryHeight,
-        fee: BigInt(plan.fee),
-        timestamp: Math.floor(Date.now() / 1000),
-      };
+      return { ...receipt, txid, expiryHeight };
     },
   });
 }

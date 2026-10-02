@@ -257,7 +257,19 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
     inputs: [],
     nullifiers: [nf("bb")],
   });
-  await wallet.submit(new Uint8Array(), 1_000n);
+  await wallet.submit(new Uint8Array(), 1_000n, {
+    tx_type: "Sent",
+    value: -3_000n,
+    fee: 1_000n,
+    timestamp: 1,
+    from: { pool: "shielded" },
+    to: { address: "zs1" },
+  });
+  expect((await wallet.getTransactionHistory())[0]).toMatchObject({
+    txid: "t1",
+    status: "Pending",
+    value: -3_000n,
+  });
 
   const pending = await wallet.getBalance();
   expect([pending.shieldedBalance, pending.pendingChange]).toEqual([
@@ -275,6 +287,9 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
     5_000n,
     0n,
   ]);
+  expect(
+    (await wallet.getTransactionHistory()).some((tx) => tx.txid === "t1"),
+  ).toBe(false);
 });
 
 test("places a Sapling spend through our own transaction's block", async () => {

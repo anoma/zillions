@@ -65,7 +65,19 @@ function UnshieldRoute() {
       return;
     }
     send.mutate(
-      { from: "shielded", to, amount, toSelf: true },
+      {
+        from: "shielded",
+        to,
+        amount,
+        toSelf: true,
+        shown: {
+          tx_type: "Unshielded",
+          value: amount,
+          from: { pool: "shielded" },
+          // Ours, and never shown: a new internal address each time.
+          to: { pool: "transparent" },
+        },
+      },
       {
         onSuccess: async ({ expiryHeight }) => {
           await wallet.internalAddressUsed(next.index, expiryHeight);
@@ -76,21 +88,7 @@ function UnshieldRoute() {
   };
 
   if (send.data) {
-    return (
-      <TransferSuccess
-        tx={{
-          txid: send.data.txid,
-          tx_type: "Unshielded",
-          value: amount,
-          fee: send.data.fee,
-          status: "Pending",
-          timestamp: send.data.timestamp,
-          from: { pool: "shielded" },
-          // Ours, and never shown: a new internal address each time.
-          to: { pool: "transparent" },
-        }}
-      />
-    );
+    return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
   }
 
   const error = send.error?.message ?? planProblem(planned);

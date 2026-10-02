@@ -1,5 +1,7 @@
 /** Shared message and result types across the zcrawler main ↔ worker boundary. */
 
+import type { TransactionReceipt } from "../sdk/types";
+
 export type Pool = "sapling" | "orchard" | "ironwood";
 
 /** A note this wallet owns, as `try_decrypt_full` reads it out of a chunk. */
@@ -71,7 +73,14 @@ export interface PendingTx {
   outpoints: string[];
   /** Zatoshis it returns to us as change. */
   change: number;
+  /** What history lists for it until it's mined; older records have none. */
+  receipt?: PendingReceipt;
 }
+
+export type PendingReceipt = Pick<
+  TransactionReceipt,
+  "tx_type" | "value" | "fee" | "timestamp" | "from" | "to"
+>;
 
 /** An output this wallet created, recovered with its outgoing viewing key. */
 export interface SentOutput {

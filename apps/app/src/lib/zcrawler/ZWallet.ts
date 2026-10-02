@@ -6,6 +6,7 @@ import initZcore, {
 } from "@zillions/zcore";
 
 import { invariant } from "../invariant";
+import type { TransactionReceipt } from "../sdk/types";
 import { dedupe, singleton } from "../utils";
 import { crawlChunks, workerChannel } from "./crawl";
 import {
@@ -52,6 +53,7 @@ import {
 import type {
   ChunkWorkerSuccess,
   Note,
+  PendingReceipt,
   Pool,
   Sent,
   SentOutput,
@@ -597,9 +599,14 @@ export class ZWallet {
   /**
    * Proves and broadcasts a signed PCZT, then holds the notes and coins it
    * spends out of the balance and of new plans until it's mined or expires.
-   * `change` is what it returns to us, shown as pending meanwhile.
+   * `change` is what it returns to us, shown as pending meanwhile, and
+   * `receipt` what history lists for it.
    */
-  submit = async (signed: Uint8Array, change: bigint) => {
+  submit = async (
+    signed: Uint8Array,
+    change: bigint,
+    receipt: PendingReceipt,
+  ) => {
     const { txid, raw, expiryHeight } = await submitTransaction(signed);
     const { tip } = this.#transparent;
     invariant(tip !== undefined, "The wallet is still syncing");
@@ -614,6 +621,7 @@ export class ZWallet {
       nullifiers: tx.nullifiers,
       outpoints: tx.inputs.map((i) => `${i.txid}:${i.index}`),
       change: Number(change),
+      receipt,
     });
     this.#save();
     this.#emitProgress();
@@ -700,9 +708,10 @@ export class ZWallet {
     return paid;
   };
 
-  async getTransactionHistory() {
+  /** Newest first, pending transactions on top until sync finds them mined. */
+  async getTransactionHistory(): Promise<TransactionReceipt[]> {
     await this.#seed();
-    return buildHistory(
+    const history = buildHistory(
       this.#notes,
       this.#sent,
       this.#transparent.txs,
@@ -710,5 +719,19 @@ export class ZWallet {
       await this.#payments(),
       this.#transparent.addresses,
     );
+    const mined = new Set(history.map((tx) => tx.txid));
+    const pending = this.#syncStatus.pending
+      .filter((p) => p.receipt && !mined.has(p.txid))
+      .reverse()
+      .map(({ txid, receipt }) => ({
+        ...receipt!,
+        txid,
+        status: "Pending" as const,
+        block_height: 0,
+        confirmations: 0,
+        memo: undefined,
+        pool: "mixed" as const,
+      }));
+    return [...pending, ...history];
   }
 }
