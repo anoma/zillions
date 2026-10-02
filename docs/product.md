@@ -209,7 +209,7 @@ Moves shielded funds to one of the account's own transparent addresses.
   wallets.
 - Links: Help, Privacy policy, X (Twitter).
 
-### 2.9 Move to Ironwood — Planned
+### 2.9 Move to Ironwood — Built (immediately), Planned (with privacy)
 
 Orchard is closed to new funds since NU6.3; its funds can only leave. The
 wallet moves them to Ironwood following [ZIP 318], the standard other
@@ -249,9 +249,10 @@ offering Sapling as a destination, and Sapling funds stay where they are.
 - In history (2.6), transfers show as Migrated, Orchard → Ironwood; the
   preparation steps that split the funds into standard amounts show as such,
   not as payments.
-- Today the home section and the migration page are in place up to the
-  review; its final button says the migration is a work in progress, and
-  nothing is sent.
+- *Immediately* is built: its review shows the amount and fee of one
+  transfer of every Orchard note to the account's own Ironwood, and confirming
+  sends it. *With privacy* stops at its review, whose button says it is a
+  work in progress; nothing is sent.
 - *To confirm*: whether a running migration can be paused or cancelled, and
   whether the leftover under 0.01 ZEC can be locked so nothing spends it by
   accident (Zodl offers this).

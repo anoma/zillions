@@ -21,8 +21,11 @@ export type SendRequest = {
   to: string;
   amount: bigint;
   memo?: string;
-  /** Which balance pays; within the shielded one, the plan picks pools. */
-  from: "shielded" | "transparent";
+  /**
+   * Which balance pays; within the shielded one, the plan picks pools.
+   * `orchard` spends Orchard notes alone: moving them to Ironwood.
+   */
+  from: "shielded" | "transparent" | "orchard";
 };
 
 type Flow = { pool: Pool | "transparent"; value: number };

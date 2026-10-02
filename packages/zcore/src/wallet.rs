@@ -517,14 +517,13 @@ impl Wallet {
                 .map(|(o, _, _)| u64::from(o.value()))
                 .sum();
         }
+        let orchard: u64 = self.orchard.iter().map(|n| orchard_value(n.note())).sum();
+        if from == "orchard" {
+            return orchard;
+        }
         let sapling: u64 = self.sapling.iter().map(|n| sapling_value(n.note())).sum();
-        let orchard: u64 = self
-            .orchard
-            .iter()
-            .chain(&self.ironwood)
-            .map(|n| orchard_value(n.note()))
-            .sum();
-        sapling + orchard
+        let ironwood: u64 = self.ironwood.iter().map(|n| orchard_value(n.note())).sum();
+        sapling + orchard + ironwood
     }
 
     /// UTXOs confirmed enough to spend: sqlite treats every UTXO as untrusted,

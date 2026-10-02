@@ -50,6 +50,9 @@ fn spend_policy(from: &str) -> Result<SpendPolicy, String> {
         ])),
         "transparent" => Ok(SpendPolicy::shielded_pools([])
             .with_transparent(TransparentSpendPolicy::any_account_addr())),
+        // Moving Orchard funds to Ironwood (product.md 2.9): upstream's pool
+        // preference would otherwise spend Ironwood notes first.
+        "orchard" => Ok(SpendPolicy::shielded_pools([ShieldedPool::Orchard])),
         _ => Err(format!("unknown source {from}")),
     }
 }
@@ -680,6 +683,32 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn migrating_moves_every_orchard_note_into_ironwood_and_nothing_else() {
+        // Upstream would spend the Ironwood note first; the Orchard source
+        // leaves it alone.
+        let wallet = wallet(vec![
+            ironwood_note(200_000, TIP - 100, 1),
+            orchard_family_note("orchard", Scope::External, 100_000, TIP - 90, 2),
+            orchard_family_note("orchard", Scope::Internal, 50_000, TIP - 80, 3),
+        ]);
+        let request = SendRequest {
+            to: crate::keys::fresh(&Network::MainNetwork, &wallet_ufvk()).unwrap(),
+            amount: 0,
+            memo: None,
+            from: "orchard".into(),
+        };
+        let max = max_amount(&wallet, &request).unwrap();
+        let plan =
+            summarize(&propose(&wallet, &request, Zatoshis::from_u64(max).unwrap()).unwrap());
+        let step = &plan.steps[0];
+        assert!(step.inputs.iter().all(|i| i.pool == "orchard"));
+        assert_eq!(step.inputs.len(), 2);
+        assert_eq!(step.payments[0].pool, "ironwood");
+        assert!(step.change.iter().all(|c| c.value == 0));
+        assert_eq!(max + plan.fee, 150_000);
+    }
+
+    #[test]
     fn a_memo_to_a_transparent_address_is_refused() {
         let wallet = wallet(vec![ironwood_note(200_000, TIP - 100, 1)]);
         let to =
@@ -733,6 +762,18 @@ pub(crate) mod tests {
             ["transparent"]
         );
         assert_eq!(step.fee, 10_000);
+    }
+
+    /// Plans moving every Orchard note to one of our own addresses: a migration.
+    pub(crate) fn plan_migration(wallet: &Wallet) -> WalletProposal {
+        let request = SendRequest {
+            to: crate::keys::fresh(&wallet.network, &wallet_ufvk()).unwrap(),
+            amount: 0,
+            memo: None,
+            from: "orchard".into(),
+        };
+        let max = max_amount(wallet, &request).unwrap();
+        propose(wallet, &request, Zatoshis::from_u64(max).unwrap()).unwrap()
     }
 
     /// Plans `amount` from the transparent balance to `to`.

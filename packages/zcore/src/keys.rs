@@ -77,7 +77,7 @@ const ORCHARD_SAPLING: UnifiedAddressRequest = UnifiedAddressRequest::unsafe_cus
     ReceiverRequirement::Omit,
 );
 
-fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
+pub(crate) fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
     let ufvk = UnifiedFullViewingKey::decode(network, ufvk)?;
     // Random, not a counter: the keychain and the app hand out addresses with no shared state.
     let mut j = [0u8; 11];

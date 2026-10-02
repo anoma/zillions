@@ -4,8 +4,12 @@ import { twMerge } from "tailwind-merge";
 import { PageLoader } from "../components/PageLoader";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
+import { useFreshAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
+import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
+import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { MIGRATION_MINIMUM } from "../lib/utils";
+import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/migrate")({
   component: MigrateRoute,
@@ -19,15 +23,29 @@ const TOR_BROWSER = "https://www.torproject.org/download/";
 const NYM_VPN = "https://nym.com/blog/nymvpn-free-for-zcash-ironwood";
 
 /**
- * Moves Orchard funds to Ironwood following ZIP 318 (product.md 2.9). The
- * steps are in place; starting the migration isn't built yet.
+ * Moves Orchard funds to Ironwood following ZIP 318 (product.md 2.9).
+ * Immediately sends every Orchard note to one of our own addresses, which
+ * NU6.3 delivers into Ironwood; with privacy isn't built yet.
  */
 function MigrateRoute() {
   const balance = useGetBalance();
   const [mode, setMode] = useState<Mode>("private");
   const [step, setStep] = useState<Step>("choose");
   const [started, setStarted] = useState(false);
+  const self = useFreshAddress() ?? "";
+  const planned = useSendPlan(
+    {
+      from: "orchard",
+      to: mode === "immediate" && step === "review" ? self : "",
+      amount: 0n,
+    },
+    true,
+  );
+  const send = useSend();
 
+  if (send.data) {
+    return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
+  }
   if (balance.isPending) return <PageLoader />;
   const orchard = balance.data?.orchardBalance ?? 0n;
 
@@ -153,34 +171,78 @@ function MigrateRoute() {
     );
   }
 
+  if (mode === "private") {
+    return (
+      <Page title="Confirm transfer plan" onBack={back}>
+        <p>
+          Your Orchard balance will move to Ironwood as several transfers spread
+          over hours. Approve once; the wallet sends each transfer while it's
+          open.
+        </p>
+        <div className="mt-8 rounded-2xl border border-gray-300 divide-y divide-gray-300 text-sm">
+          <Row label="In Orchard">
+            <ZecValue zat={orchard} />
+          </Row>
+          <Row label="Transfers">Planned when you start</Row>
+        </div>
+        {started && (
+          <Note>
+            Migrating with privacy is a work in progress and can't start yet.
+            Nothing was sent.
+          </Note>
+        )}
+        <Primary onClick={() => setStarted(true)}>Start migration</Primary>
+      </Page>
+    );
+  }
+
+  const amount = planned.maxAmount.data;
+  const fee = planned.plan.data?.fee;
+  const error = send.error?.message ?? planProblem(planned);
+  const confirm = () =>
+    amount &&
+    send.mutate({
+      from: "orchard",
+      to: self,
+      amount,
+      toSelf: true,
+      shown: {
+        tx_type: "Migrated",
+        value: amount,
+        from: { pool: "orchard" },
+        to: { pool: "ironwood" },
+      },
+    });
+
   return (
-    <Page
-      title={mode === "private" ? "Confirm transfer plan" : "Review transfer"}
-      onBack={back}
-    >
+    <Page title="Review transfer" onBack={back}>
       <p>
-        {mode === "private"
-          ? "Your Orchard balance will move to Ironwood as several transfers spread over hours. Approve once; the wallet sends each transfer while it's open."
-          : "Your full Orchard balance will move to Ironwood in a single transfer. Once sent, it can't be cancelled."}
+        Your full Orchard balance will move to Ironwood in a single transfer.
+        Once sent, it can't be cancelled.
       </p>
       <div className="mt-8 rounded-2xl border border-gray-300 divide-y divide-gray-300 text-sm">
-        <Row label="In Orchard">
-          <ZecValue zat={orchard} />
+        <Row label="Amount">
+          {amount !== undefined ? <ZecValue zat={amount} /> : <Waiting />}
         </Row>
-        <Row label={mode === "private" ? "Transfers" : "Transfer"}>
-          {mode === "private" ? "Planned when you start" : "1"}
+        <Row label="Fee">
+          {fee !== undefined ? <ZecValue zat={BigInt(fee)} /> : <Waiting />}
         </Row>
       </div>
-      {started && (
-        <Note>
-          Migration is a work in progress and can't start yet. Nothing was sent.
-        </Note>
-      )}
-      <Primary onClick={() => setStarted(true)}>
-        {mode === "private" ? "Start migration" : "Confirm"}
+      {error && <div className="mt-4 text-red-500 text-center">{error}</div>}
+      <Primary onClick={confirm} disabled={!amount || send.isPending}>
+        {send.isPending ? "Sending..." : "Confirm"}
       </Primary>
+      {send.isPending && (
+        <div className="mt-2 text-center font-medium">
+          Proving takes up to a minute after you approve in the keychain.
+        </div>
+      )}
     </Page>
   );
+}
+
+function Waiting() {
+  return <SpinnerIcon className="size-3" />;
 }
 
 function Page({
@@ -268,9 +330,11 @@ function Note({ children }: { children: ReactNode }) {
 
 function Primary({
   onClick,
+  disabled,
   children,
 }: {
   onClick: () => void;
+  disabled?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -280,6 +344,7 @@ function Primary({
       backgroundColor="black"
       textColor="white"
       onClick={onClick}
+      disabled={disabled}
     >
       {children}
     </ActionButton>

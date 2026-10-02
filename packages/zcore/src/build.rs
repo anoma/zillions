@@ -878,6 +878,32 @@ mod tests {
         assert_eq!(outputs[0].user_address().as_deref(), None);
     }
 
+    /// A migration: every Orchard note into our own Ironwood, the fee apart,
+    /// in a transaction that proves and verifies.
+    #[test]
+    fn migrates_orchard_to_ironwood_end_to_end() {
+        let (wallet, trees, _) = wallet_and_trees("orchard", 200_000);
+        let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+        let proposal = crate::send::tests::plan_migration(&wallet);
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
+        let signed = crate::roles::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
+        let (_, raw) = crate::roles::prove(signed, None).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(
+            &raw[..],
+            zcash_protocol::consensus::BranchId::Nu6_3,
+        )
+        .unwrap();
+        let left = i64::from(*tx.orchard_bundle().unwrap().value_balance());
+        let arrived = -i64::from(*tx.ironwood_bundle().unwrap().value_balance());
+        assert_eq!(left, 200_000);
+        let fee = proposal.steps().first().balance().fee_required();
+        assert_eq!(arrived + i64::try_from(u64::from(fee)).unwrap(), 200_000);
+        assert!(tx.transparent_bundle().is_none() && tx.sapling_bundle().is_none());
+    }
+
     /// Plan → PCZT → keychain signature → proof → a transaction whose
     /// Ironwood proof and signatures the extractor verifies.
     #[test]
