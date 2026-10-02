@@ -40,7 +40,7 @@ export function TotalBalance() {
             </div>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex max-sm:flex-col gap-2">
           <Link to="/send">
             <ActionButton size="sm" className="w-50">
               Send
