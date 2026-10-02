@@ -62,7 +62,8 @@ Spending is *Built*: it awaits a first real transaction.
 - **The user never picks a pool.** Ironwood, the newest pool (from the NU6.3
   network upgrade), is where the wallet puts shielded funds: shielding, and
   anything it moves on the user's behalf. Other wallets may still pay into
-  Sapling or Orchard, and those funds are fully supported.
+  Sapling or Orchard, and those funds are fully supported. The one exception
+  is moving Orchard funds to Ironwood (2.9), which the user starts.
 - **Change stays in the pool it was spent from**: spending an Orchard note
   returns its change to Orchard, not Ironwood. Moving value between pools
   makes the amount public, so change only goes to Ironwood when it has no
@@ -90,6 +91,8 @@ Spending is *Built*: it awaits a first real transaction.
 - Shortcut buttons: **Send**, **Receive**, **Shield** (shown when there is a
   transparent balance), **Unshield** (shown when there is a shielded balance).
 - Recent transactions (see 2.6).
+- A **Move to Ironwood** section between the balance and the transactions,
+  while Orchard holds funds worth moving (2.9).
 
 ### 2.2 Receive — Working
 
@@ -206,6 +209,52 @@ Moves shielded funds to one of the account's own transparent addresses.
   wallets.
 - Links: Help, Privacy policy, X (Twitter).
 
+### 2.9 Move to Ironwood — Planned
+
+Orchard is closed to new funds since NU6.3; its funds can only leave. The
+wallet moves them to Ironwood following [ZIP 318], the standard other
+wallets (e.g. Zodl) follow too. Only Orchard is moved: ZIP 318 forbids
+offering Sapling as a destination, and Sapling funds stay where they are.
+
+- **On the home screen**, a section between the balance and the
+  transactions, shown while Orchard holds at least 0.01 ZEC:
+  - before it starts: the Orchard amount, one line on why it should move,
+    and a **Migrate** button opening the migration page;
+  - while it runs: progress ("Transfer 3 of 8 complete"), when the next
+    transfer is due, and that the wallet must stay open for transfers to be
+    sent;
+  - when a transfer is due but wasn't sent (the wallet was closed): a notice,
+    never an error, with **Send now** and **Keep waiting**, saying that
+    sending now ties the transfer to this visit.
+- **The migration page** walks through, in order:
+  1. **What happens**: Orchard is closed, the funds go to Ironwood, the
+     amounts moved become public while who holds them stays private, and
+     less than 0.01 ZEC stays behind in Orchard.
+  2. **How**: *With added privacy* (recommended): the funds move as several
+     standard amounts, spread over hours, so they look like everyone
+     else's; or *Immediately*: one transfer, faster, its full amount public
+     at once. Each shows the number of transfers, the time it takes and the
+     fees.
+  3. **Network privacy**: a recommendation to use Tor Browser or NymVPN,
+     with a warning that the IP address can link the transfers; the user
+     may continue without.
+  4. **Review**: the whole schedule (each transfer's amount and expected
+     time) and the total fees, confirmed once. Nothing leaves Orchard before
+     this confirmation; afterwards transfers go out without asking again.
+     The Keychain signs the whole schedule in one approval (3.4), in
+     batches if it is large.
+  5. **Progress**: as on the home screen, with each transfer listed.
+- Wording never calls the migration "automatic" or "guaranteed": transfers
+  are sent while the wallet is open, and late ones when it next opens.
+- In history (2.6), transfers show as Migrated, Orchard → Ironwood; the
+  preparation steps that split the funds into standard amounts show as such,
+  not as payments.
+- *To confirm*: whether a running migration can be paused or cancelled, and
+  whether the leftover under 0.01 ZEC can be locked so nothing spends it by
+  accident (Zodl offers this).
+
+[ZIP 318]: https://zips.z.cash/zip-0318
+
 ## 3. Keychain (browser extension)
 
 Holds the user's secrets. Secrets never leave it; it approves and signs on the
@@ -249,6 +298,8 @@ user's behalf.
 - The approval window shows: network, where funds come from, where they go,
   amounts, and the fee, plus the full details on demand.
 - The user approves or rejects; nothing is signed without approval.
+- A migration schedule (2.9) is approved as a whole: one window lists every
+  transfer and the total fees, and one approval signs them all. — *Planned*
 
 ### 3.5 Works offline — Planned
 
