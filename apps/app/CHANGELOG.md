@@ -1,5 +1,74 @@
 # Changelog
 
+## [1.5.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.4.0...zillions-app-v1.5.0) (2026-10-02)
+
+
+### Features
+
+* a separate address per pending unshield ([7ceaffb](https://github.com/heliaxdev/zillions-interface/commit/7ceaffbdf1bb52a56d755db7b1366368904bfe41))
+* add nullifiers check ([c861c47](https://github.com/heliaxdev/zillions-interface/commit/c861c47b583c24ec7d2cbf528e41a3ebba632dc8))
+* add placeholder component ([e3762df](https://github.com/heliaxdev/zillions-interface/commit/e3762df9c300c42c39166c231201f70ac62103bb))
+* cache transparent sync and blocks ([9db4713](https://github.com/heliaxdev/zillions-interface/commit/9db47132bce8724801639691db712ea6b462ed58))
+* chain-tip bound, per-height zip212, pool warning ([2f8fbee](https://github.com/heliaxdev/zillions-interface/commit/2f8fbeef243f30fda0f0191b41723a5518c0e2b8))
+* chunk ranges from the server's tip ([ec81048](https://github.com/heliaxdev/zillions-interface/commit/ec81048d4d362518a1725a0f85d8411bbb5fb936))
+* clean code ([332dc79](https://github.com/heliaxdev/zillions-interface/commit/332dc795d42bcc2c94b68c770072f270bfee9469))
+* drop sends until zcore builds transactions ([4c3c025](https://github.com/heliaxdev/zillions-interface/commit/4c3c025720da3bc0b4f29a07cca4ac616355d2ee))
+* drop the memo field from send ([e74e80c](https://github.com/heliaxdev/zillions-interface/commit/e74e80ca46e22ec568288d8529beaad28b343f25))
+* filter undefined spent notes ([6cae166](https://github.com/heliaxdev/zillions-interface/commit/6cae166b05c2798a4677011a15637921b733fccd))
+* fresh header address on every view ([203ff1d](https://github.com/heliaxdev/zillions-interface/commit/203ff1d81ac4590c8134e4d156838a5f74d202bf))
+* full note decryption ([99db2ab](https://github.com/heliaxdev/zillions-interface/commit/99db2abdae01d7a618e0af3853a5f77bdf1ed7fb))
+* full notes from the indexer's memos and outgoing ([903813d](https://github.com/heliaxdev/zillions-interface/commit/903813dbc9ce0b247ff10be2e91f9b0f98bd53a8))
+* hardcode the orchard chunk range ([3dca7f2](https://github.com/heliaxdev/zillions-interface/commit/3dca7f22764224174b17f2ebb419e07e52796754))
+* integrate with UI ([aaddfc5](https://github.com/heliaxdev/zillions-interface/commit/aaddfc5e6b5e738daef0f94eeb6fcd3479cf006e))
+* ironwood in the app ([6bfb78c](https://github.com/heliaxdev/zillions-interface/commit/6bfb78c41c4dcd8add29b6ee1d3f75f7bc0c45d7))
+* isolate db layer ([a5263b0](https://github.com/heliaxdev/zillions-interface/commit/a5263b0775a24e36a80a35de5dd48fe3b7566976))
+* keep what spending a note needs ([ee79d70](https://github.com/heliaxdev/zillions-interface/commit/ee79d7025568f43b1df33bc0631c3606e58f5b57))
+* mobile bottom nav and tappable tooltips ([4c8a2e3](https://github.com/heliaxdev/zillions-interface/commit/4c8a2e3400a46f03db47edd3dba075d9f9e6bfb5))
+* note crawler ([c70bfa8](https://github.com/heliaxdev/zillions-interface/commit/c70bfa81d37dc5fc70aabec35026e2ebff33a2e6))
+* one history entry per transaction ([87b1059](https://github.com/heliaxdev/zillions-interface/commit/87b10598aa83bea6586bd5c27681d41ebce81838))
+* optional birthday ([3e8dcff](https://github.com/heliaxdev/zillions-interface/commit/3e8dcffa11565d5db2275f00981d8e4b2c1e71f5))
+* orchard chunks on the 2^14 grid ([a0f795b](https://github.com/heliaxdev/zillions-interface/commit/a0f795b1e308a5636cee068967190d0a028d6a77))
+* orchard compact notes from /ciphertexts ([a14e2b3](https://github.com/heliaxdev/zillions-interface/commit/a14e2b34f6f1325d34523e6884fe7626e33d09b4))
+* orchard spend tracking ([8537d0f](https://github.com/heliaxdev/zillions-interface/commit/8537d0fabdb2c7b440d96d94c96908483164ef9c))
+* parallel zcrawler ([e220bef](https://github.com/heliaxdev/zillions-interface/commit/e220bef381c5e8037c3106ece7285fdeb9d6b869))
+* pending sends, sends across pools, and retries ([5eb9aec](https://github.com/heliaxdev/zillions-interface/commit/5eb9aecf83b71bde309e0ec3dd0cfb65383f7396))
+* pool-filtered crawl ([8224823](https://github.com/heliaxdev/zillions-interface/commit/8224823360cd659dc0236dacd6d142c88f82c201))
+* prove Sapling spends and outputs ([e608514](https://github.com/heliaxdev/zillions-interface/commit/e608514df0705299491bcf5803a49d9f0c13a623))
+* render received notes ([0d5b219](https://github.com/heliaxdev/zillions-interface/commit/0d5b2196803b26af901e4dbc7649059604d4dfa0))
+* render spent notes ([6134f1e](https://github.com/heliaxdev/zillions-interface/commit/6134f1e6c925d8696d2c48292d10d6039dbbb1bf))
+* rescan the tip chunk, stop at the birthday ([81fcdc2](https://github.com/heliaxdev/zillions-interface/commit/81fcdc2da6b6afdb55977225123541cccd8b7c65))
+* rotate addresses in the app and keychain ([f44ba73](https://github.com/heliaxdev/zillions-interface/commit/f44ba7371913d53ad7a32c2c0ae89ec63764af46))
+* sapling compact notes from /ciphertexts ([f909feb](https://github.com/heliaxdev/zillions-interface/commit/f909feb9d989114137e475f4befa7b9d81e87b13))
+* sapling spend tracking via /sync ([efdc5da](https://github.com/heliaxdev/zillions-interface/commit/efdc5daaf0eeefd9361ff83dd218ca73ae423b43))
+* scan from last to first ([57803ec](https://github.com/heliaxdev/zillions-interface/commit/57803ecc4c0aa0a0fab5ee043107a8783118f669))
+* send and unshield again, on zcore ([a2d3a13](https://github.com/heliaxdev/zillions-interface/commit/a2d3a137ae73c9715726e25c3f259e3b497f3bf0))
+* shield through upstream's shielding planner ([877163d](https://github.com/heliaxdev/zillions-interface/commit/877163dc6c0a83c967323620ec638305e31557e4))
+* shield transparent funds from the app ([892b9e3](https://github.com/heliaxdev/zillions-interface/commit/892b9e3c3624f0328242221bfb1e2839c6b131fa))
+* show the recipient of shielded sends ([010558b](https://github.com/heliaxdev/zillions-interface/commit/010558b9fb3444a3876fc6978888cb701167dc5b))
+* sync from the remote indexer's full history ([9c2bf68](https://github.com/heliaxdev/zillions-interface/commit/9c2bf68f58b09c7d6db467948db89b9c92255e36))
+* sync oldest-first and find spends without the local crawler ([cc6892f](https://github.com/heliaxdev/zillions-interface/commit/cc6892fca2f5e756a7da468de9fb18aa9d7fd548))
+* transparent balance and history ([0667781](https://github.com/heliaxdev/zillions-interface/commit/06677810ab62392cf3f64bfe5236c3f917697546))
+* transparent derivation, tx parsing, lightwalletd client ([8061599](https://github.com/heliaxdev/zillions-interface/commit/80615992a930567ab457aaa1517525c32ae36094))
+* update balance on progress ([8b0a12a](https://github.com/heliaxdev/zillions-interface/commit/8b0a12a4283324b7b205b5a59599c53cc3d3c9ed))
+* update chunks endpoint ([5cd7f93](https://github.com/heliaxdev/zillions-interface/commit/5cd7f93a516a00515bc32e7178ac5c5ba8489ade))
+* zcore crate on NU6.3 releases ([4a234bd](https://github.com/heliaxdev/zillions-interface/commit/4a234bd28b9bb216f6ed049377caff75afc42709))
+
+
+### Bug Fixes
+
+* build the app without Node's Buffer in tests ([da497ab](https://github.com/heliaxdev/zillions-interface/commit/da497ab52918124a39b56d916f495b89f56bb488))
+* decrypt internal-scope change notes ([1dc311a](https://github.com/heliaxdev/zillions-interface/commit/1dc311aa16288c9976d581792e50e047b5d1bc61))
+* home buttons responsive layout ([b0d7473](https://github.com/heliaxdev/zillions-interface/commit/b0d7473b51acde5f9707a91b1ddb5d12c37954e3))
+* look up history blocks even when the crawl fails ([0b77b8b](https://github.com/heliaxdev/zillions-interface/commit/0b77b8bbb6b9973f9d01dc297578a4e82fdac745))
+* match spends by nf_tag ([2c795af](https://github.com/heliaxdev/zillions-interface/commit/2c795af256d3119362257427442e8c9ba139ae29))
+* transparent addresses in history ([72e6769](https://github.com/heliaxdev/zillions-interface/commit/72e67696aacfb37ad12c8909f91841c83a0d6005))
+* typecheck errors in fresh and unshield addresses ([55762d9](https://github.com/heliaxdev/zillions-interface/commit/55762d962000b95d901ff1f0f39b488369b52540))
+
+
+### Performance Improvements
+
+* stream-fold orchard nullifiers ([7983b0f](https://github.com/heliaxdev/zillions-interface/commit/7983b0f33935a13f47073120254012f1e3447dba))
+
 ## [1.4.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.3.0...zillions-app-v1.4.0) (2026-07-11)
 
 
