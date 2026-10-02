@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
+import { PlannedFee } from "../components/PlannedFee";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useAddressKind } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
-import { useSend, useSendPlan } from "../hooks/useSend";
-import { SpinnerIcon } from "../icons/SpinnerIcon";
+import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
 import { TransferSuccess } from "./TransferSuccess";
 
@@ -37,7 +37,8 @@ function SendRoute() {
   const isShieldedTo = toKind === "shielded";
 
   // No memo from the UI; `SendRequest.memo` stays for ones the app sets.
-  const { plan, maxAmount } = useSendPlan({ from, to, amount: typed }, isMax);
+  const planned = useSendPlan({ from, to, amount: typed }, isMax);
+  const { maxAmount, ceiling } = planned;
   const amount = isMax ? (maxAmount.data ?? 0n) : typed;
   const send = useSend();
 
@@ -57,7 +58,9 @@ function SendRoute() {
           ? "Set an amount"
           : amount > availableBalance
             ? "Insufficient balance"
-            : undefined;
+            : ceiling
+              ? planProblem(planned)
+              : undefined;
     if (problem) {
       setValidationMessage(problem);
       return;
@@ -82,7 +85,7 @@ function SendRoute() {
     );
   }
 
-  const error = send.error ?? plan.error ?? maxAmount.error;
+  const error = send.error?.message ?? planProblem(planned);
 
   return (
     <div className="p-10">
@@ -166,18 +169,7 @@ function SendRoute() {
           />
         </label>
 
-        <div className="mt-4 flex items-center justify-between text-xs font-medium">
-          <div>Transaction fee</div>
-          <div>
-            {plan.data ? (
-              <ZecValue zat={BigInt(plan.data.fee)} />
-            ) : plan.isLoading || maxAmount.isLoading ? (
-              <SpinnerIcon className="size-3" />
-            ) : (
-              "-"
-            )}
-          </div>
-        </div>
+        <PlannedFee {...planned} />
 
         <ActionButton
           size="lg"
@@ -207,7 +199,7 @@ function SendRoute() {
 
         {(validationMessage || error) && (
           <div className="mt-4 text-red-500 text-center">
-            {validationMessage || error?.message}
+            {validationMessage || error}
           </div>
         )}
       </form>

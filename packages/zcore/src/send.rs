@@ -17,6 +17,7 @@ use zcash_client_backend::fees::zip317::SingleOutputChangeStrategy;
 use zcash_client_backend::fees::{DustOutputPolicy, StandardFeeRule};
 use zcash_client_backend::proposal::Proposal;
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
+use zcash_primitives::transaction::fees::zip317::MARGINAL_FEE;
 use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 use zcash_protocol::memo::{Memo, MemoBytes};
 use zcash_protocol::value::Zatoshis;
@@ -240,23 +241,33 @@ fn max_amount(wallet: &Wallet, send: &SendRequest) -> Result<u64, String> {
             high = mid;
         }
     }
-    // Change below the dust threshold is refused, so amounts just above `low`
-    // fail while paying the change out too may not: the search can stop one
-    // change output short of the real maximum.
-    let change: u64 = plans(low)?
-        .map(|p| {
-            p.steps()
-                .iter()
-                .flat_map(|s| s.balance().proposed_change())
-                .map(|c| u64::from(c.value()))
-                .sum()
-        })
-        .unwrap_or(0);
-    Ok(if change > 0 && plans(low + change)?.is_some() {
-        low + change
-    } else {
-        low
-    })
+    // The search assumes that whatever is below a plannable amount plans too.
+    // Spending everything with nothing left over breaks that: no change output
+    // means fewer actions and a lower fee, so that amount can sit above ones
+    // that fail. Try it for each fee `low`'s plan could come down to, largest
+    // amount first.
+    let Some(plan) = plans(low)? else {
+        return Ok(low);
+    };
+    let summary = summarize(&plan);
+    let inputs: u64 = summary
+        .steps
+        .iter()
+        .flat_map(|s| &s.inputs)
+        .map(|f| f.value)
+        .sum();
+    let marginal = u64::from(MARGINAL_FEE);
+    for fee in (2..=summary.fee / marginal).map(|k| k * marginal) {
+        match inputs.checked_sub(fee) {
+            Some(amount) if amount > low => {
+                if plans(amount)?.is_some() {
+                    return Ok(amount);
+                }
+            }
+            _ => break,
+        }
+    }
+    Ok(low)
 }
 
 fn pool_name(pool: PoolType) -> &'static str {
@@ -614,6 +625,35 @@ pub(crate) mod tests {
             Zatoshis::from_u64(max + 1).unwrap()
         )
         .is_err());
+    }
+
+    #[test]
+    fn max_send_spends_everything_when_that_needs_no_change() {
+        let ufvk = wallet_ufvk();
+        let derive = |index| {
+            crate::transparent_tx::derive(&Network::MainNetwork, &ufvk, "external", index, 1)
+                .unwrap()
+                .remove(0)
+        };
+        let data = WalletData {
+            tip: TIP,
+            notes: vec![],
+            utxos: vec![UtxoData::for_tests(&derive(0), 200_000, 0, TIP - 50)],
+        };
+        let wallet = Wallet::new(Network::MainNetwork, &data).unwrap();
+        let request = SendRequest {
+            to: derive(5),
+            amount: 0,
+            memo: None,
+            from: "transparent".into(),
+        };
+        // 190,000 + the 10,000 fee is the whole coin: no change, no shielded
+        // part. Amounts just below it leave change too small to carry.
+        let max = max_amount(&wallet, &request).unwrap();
+        assert_eq!(max, 190_000);
+        let plan =
+            summarize(&propose(&wallet, &request, Zatoshis::from_u64(max).unwrap()).unwrap());
+        assert!(plan.steps[0].change.is_empty());
     }
 
     #[test]

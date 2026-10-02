@@ -1,6 +1,7 @@
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
+import { zatoshiToZec } from "../lib/utils";
 import type { SendRequest } from "../lib/zcrawler/send";
 import { useAccount } from "./useAccount";
 import { useDebouncedValue } from "./useDebouncedValue";
@@ -9,7 +10,9 @@ import { useWallet } from "./useWallet";
 /**
  * The plan for `send` as the form changes: its fee is the one that will be
  * paid. With `max`, the amount is left to the plan: the most the source can
- * pay to this recipient after fees.
+ * pay to this recipient after fees. `ceiling` is set when the typed amount
+ * and its fee are more than the source holds: the most it can send instead,
+ * and that plan's fee once known.
  */
 export function useSendPlan(
   { from, to, amount, memo }: SendRequest,
@@ -20,6 +23,25 @@ export function useSendPlan(
   const debouncedAmount = useDebouncedValue(amount);
   const debouncedMemo = useDebouncedValue(memo);
 
+  const planOf = (amount: bigint, enabled: boolean) =>
+    queryOptions({
+      queryKey: [
+        "sendPlan",
+        wallet.id,
+        from,
+        debouncedTo,
+        amount.toString(),
+        debouncedMemo,
+      ],
+      queryFn: () =>
+        wallet.planSend({ from, to: debouncedTo, amount, memo: debouncedMemo }),
+      enabled: enabled && Boolean(debouncedTo) && amount > 0n,
+      retry: false,
+    });
+
+  const typed = useQuery(planOf(debouncedAmount, !max));
+  // A typed amount that fails may be more than the source can cover.
+  const short = !max && typed.isError;
   const maxAmount = useQuery(
     queryOptions({
       queryKey: ["maxSend", wallet.id, from, debouncedTo, debouncedMemo],
@@ -30,33 +52,30 @@ export function useSendPlan(
           amount: 0n,
           memo: debouncedMemo,
         }),
-      enabled: max && Boolean(debouncedTo),
+      enabled: (max || short) && Boolean(debouncedTo),
       retry: false,
     }),
   );
-  const planned = max ? (maxAmount.data ?? 0n) : debouncedAmount;
-  const plan = useQuery(
-    queryOptions({
-      queryKey: [
-        "sendPlan",
-        wallet.id,
-        from,
-        debouncedTo,
-        planned.toString(),
-        debouncedMemo,
-      ],
-      queryFn: () =>
-        wallet.planSend({
-          from,
-          to: debouncedTo,
-          amount: planned,
-          memo: debouncedMemo,
-        }),
-      enabled: Boolean(debouncedTo) && planned > 0n,
-      retry: false,
-    }),
-  );
-  return { plan, maxAmount };
+  const atMax = useQuery(planOf(maxAmount.data ?? 0n, max || short));
+  const ceiling =
+    short && maxAmount.data !== undefined && debouncedAmount > maxAmount.data
+      ? { amount: maxAmount.data, fee: atMax.data?.fee }
+      : undefined;
+  return { plan: max ? atMax : typed, maxAmount, ceiling };
+}
+
+/** Why a send form's plan fails, for the user: an amount the source can't cover, or the error itself. */
+export function planProblem({
+  plan,
+  maxAmount,
+  ceiling,
+}: ReturnType<typeof useSendPlan>) {
+  if (ceiling) {
+    return ceiling.amount > 0n
+      ? `Not enough to also pay the fee: you can send up to ${zatoshiToZec(ceiling.amount)} ZEC`
+      : "Not enough to pay the fee";
+  }
+  return (plan.error ?? maxAmount.error)?.message;
 }
 
 /**

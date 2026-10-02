@@ -2,13 +2,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
+import { PlannedFee } from "../components/PlannedFee";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { unshieldAddress, useUnshieldAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
-import { useSend, useSendPlan } from "../hooks/useSend";
+import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
-import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
 import { TransferSuccess } from "./TransferSuccess";
 
@@ -38,10 +38,8 @@ function UnshieldRoute() {
       return 0n;
     }
   })();
-  const { plan, maxAmount } = useSendPlan(
-    { from: "shielded", to, amount: typed },
-    isMax,
-  );
+  const planned = useSendPlan({ from: "shielded", to, amount: typed }, isMax);
+  const { maxAmount, ceiling } = planned;
   const amount = isMax ? (maxAmount.data ?? 0n) : typed;
   const send = useSend();
   const availableBalance = balance.data?.shieldedBalance ?? 0n;
@@ -59,7 +57,9 @@ function UnshieldRoute() {
         ? "Set an amount"
         : amount > availableBalance
           ? "Insufficient balance"
-          : undefined;
+          : ceiling
+            ? planProblem(planned)
+            : undefined;
     if (problem) {
       setValidationMessage(problem);
       return;
@@ -93,7 +93,7 @@ function UnshieldRoute() {
     );
   }
 
-  const error = send.error ?? plan.error ?? maxAmount.error;
+  const error = send.error?.message ?? planProblem(planned);
 
   return (
     <div className="p-10">
@@ -161,18 +161,7 @@ function UnshieldRoute() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between text-xs font-medium">
-          <div>Transaction fee</div>
-          <div>
-            {plan.data ? (
-              <ZecValue zat={BigInt(plan.data.fee)} />
-            ) : plan.isLoading || maxAmount.isLoading ? (
-              <SpinnerIcon className="size-3" />
-            ) : (
-              "-"
-            )}
-          </div>
-        </div>
+        <PlannedFee {...planned} />
 
         <ActionButton
           size="lg"
@@ -192,7 +181,7 @@ function UnshieldRoute() {
 
         {(validationMessage || error) && (
           <div className="mt-4 text-red-500 text-center">
-            {validationMessage || error?.message}
+            {validationMessage || error}
           </div>
         )}
       </form>
