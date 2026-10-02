@@ -179,11 +179,14 @@ export class ZWallet {
     this.#emitProgress();
 
     // Transparent takes seconds, so it lands long before the shielded crawl;
-    // announcing it on arrival shows that balance straight away.
+    // announcing it on arrival shows that balance straight away. Recent blocks
+    // aren't stored, so they're fetched now too, or history would wait for
+    // the whole crawl to match a recent transaction's two sides.
     const transparent = syncTransparent(this.id, this.#ufvk)
       .then((result) => {
         this.#transparent = result;
         this.#emitProgress();
+        return this.#fetchBlocks();
       })
       .catch((err) => console.error("[sync] transparent failed", err));
 
