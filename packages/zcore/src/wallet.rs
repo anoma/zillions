@@ -13,7 +13,9 @@ use transparent::bundle::{OutPoint, TxOut};
 use transparent::keys::TransparentKeyScope;
 use zcash_client_backend::data_api::wallet::input_selection::LockFilter;
 use zcash_client_backend::data_api::wallet::{ConfirmationsPolicy, TargetHeight};
-use zcash_client_backend::data_api::{AccountMeta, InputSource, NoteFilter, ReceivedNotes, TargetValue};
+use zcash_client_backend::data_api::{
+    AccountMeta, InputSource, NoteFilter, ReceivedNotes, TargetValue,
+};
 use zcash_client_backend::fees::StandardFeeRule;
 use zcash_client_backend::wallet::{Note, ReceivedNote, WalletTransparentOutput};
 use zcash_keys::address::Address;
@@ -154,13 +156,19 @@ impl Wallet {
         for (i, n) in data.notes.iter().enumerate() {
             let i = i as u32;
             match n.pool.as_str() {
-                "sapling" => wallet.sapling.push(received(i, n, notes::decode_sapling(&n.note)?)?),
-                "orchard" => wallet
-                    .orchard
-                    .push(received(i, n, notes::decode_orchard(&n.note, orchard::NoteVersion::V2)?)?),
-                "ironwood" => wallet
-                    .ironwood
-                    .push(received(i, n, notes::decode_orchard(&n.note, orchard::NoteVersion::V3)?)?),
+                "sapling" => wallet
+                    .sapling
+                    .push(received(i, n, notes::decode_sapling(&n.note)?)?),
+                "orchard" => wallet.orchard.push(received(
+                    i,
+                    n,
+                    notes::decode_orchard(&n.note, orchard::NoteVersion::V2)?,
+                )?),
+                "ironwood" => wallet.ironwood.push(received(
+                    i,
+                    n,
+                    notes::decode_orchard(&n.note, orchard::NoteVersion::V3)?,
+                )?),
                 pool => return Err(format!("unknown pool {pool}")),
             }
         }
@@ -190,16 +198,30 @@ impl Wallet {
 
     fn pool(&self, pool: ShieldedPool) -> Vec<ReceivedNote<u32, Note>> {
         match pool {
-            ShieldedPool::Sapling => self.sapling.iter().map(|n| n.clone().map_note(Note::Sapling)).collect(),
+            ShieldedPool::Sapling => self
+                .sapling
+                .iter()
+                .map(|n| n.clone().map_note(Note::Sapling))
+                .collect(),
             ShieldedPool::Orchard => self
                 .orchard
                 .iter()
-                .map(|n| n.clone().map_note(|note| Note::Orchard { note, pool: orchard::ValuePool::Orchard }))
+                .map(|n| {
+                    n.clone().map_note(|note| Note::Orchard {
+                        note,
+                        pool: orchard::ValuePool::Orchard,
+                    })
+                })
                 .collect(),
             ShieldedPool::Ironwood => self
                 .ironwood
                 .iter()
-                .map(|n| n.clone().map_note(|note| Note::Orchard { note, pool: orchard::ValuePool::Ironwood }))
+                .map(|n| {
+                    n.clone().map_note(|note| Note::Orchard {
+                        note,
+                        pool: orchard::ValuePool::Ironwood,
+                    })
+                })
                 .collect(),
         }
     }
@@ -212,7 +234,12 @@ fn above_dust(value: u64) -> bool {
 
 /// Spendable in a transaction mined at `target`: mined at or below the anchor,
 /// and confirmed enough by upstream's rule.
-fn eligible<N>(note: &ReceivedNote<u32, N>, pool: ShieldedPool, target: TargetHeight, policy: ConfirmationsPolicy) -> bool {
+fn eligible<N>(
+    note: &ReceivedNote<u32, N>,
+    pool: ShieldedPool,
+    target: TargetHeight,
+    policy: ConfirmationsPolicy,
+) -> bool {
     let anchor = BlockHeight::from(target).saturating_sub(u32::from(policy.trusted()));
     note.mined_height().is_some_and(|h| h <= anchor)
         && policy.confirmations_until_spendable(
@@ -304,17 +331,41 @@ impl InputSource for Wallet {
         let from = |pool| sources.contains(&pool);
         Ok(ReceivedNotes::new(
             if from(ShieldedPool::Sapling) {
-                select(&self.sapling, sapling_value, ShieldedPool::Sapling, target_value, target_height, policy, exclude)
+                select(
+                    &self.sapling,
+                    sapling_value,
+                    ShieldedPool::Sapling,
+                    target_value,
+                    target_height,
+                    policy,
+                    exclude,
+                )
             } else {
                 vec![]
             },
             if from(ShieldedPool::Orchard) {
-                select(&self.orchard, orchard_value, ShieldedPool::Orchard, target_value, target_height, policy, exclude)
+                select(
+                    &self.orchard,
+                    orchard_value,
+                    ShieldedPool::Orchard,
+                    target_value,
+                    target_height,
+                    policy,
+                    exclude,
+                )
             } else {
                 vec![]
             },
             if from(ShieldedPool::Ironwood) {
-                select(&self.ironwood, orchard_value, ShieldedPool::Ironwood, target_value, target_height, policy, exclude)
+                select(
+                    &self.ironwood,
+                    orchard_value,
+                    ShieldedPool::Ironwood,
+                    target_value,
+                    target_height,
+                    policy,
+                    exclude,
+                )
             } else {
                 vec![]
             },
@@ -329,7 +380,11 @@ impl InputSource for Wallet {
         exclude: &[u32],
         _: LockFilter<'_>,
     ) -> Result<ReceivedNotes<u32>, String> {
-        fn unspent<N: Clone>(notes: &[ReceivedNote<u32, N>], value: impl Fn(&N) -> u64, exclude: &[u32]) -> Vec<ReceivedNote<u32, N>> {
+        fn unspent<N: Clone>(
+            notes: &[ReceivedNote<u32, N>],
+            value: impl Fn(&N) -> u64,
+            exclude: &[u32],
+        ) -> Vec<ReceivedNote<u32, N>> {
             notes
                 .iter()
                 .filter(|n| !exclude.contains(n.internal_note_id()) && above_dust(value(n.note())))
@@ -338,9 +393,21 @@ impl InputSource for Wallet {
         }
         let from = |pool| sources.contains(&pool);
         Ok(ReceivedNotes::new(
-            if from(ShieldedPool::Sapling) { unspent(&self.sapling, sapling_value, exclude) } else { vec![] },
-            if from(ShieldedPool::Orchard) { unspent(&self.orchard, orchard_value, exclude) } else { vec![] },
-            if from(ShieldedPool::Ironwood) { unspent(&self.ironwood, orchard_value, exclude) } else { vec![] },
+            if from(ShieldedPool::Sapling) {
+                unspent(&self.sapling, sapling_value, exclude)
+            } else {
+                vec![]
+            },
+            if from(ShieldedPool::Orchard) {
+                unspent(&self.orchard, orchard_value, exclude)
+            } else {
+                vec![]
+            },
+            if from(ShieldedPool::Ironwood) {
+                unspent(&self.ironwood, orchard_value, exclude)
+            } else {
+                vec![]
+            },
         ))
     }
 
@@ -362,7 +429,12 @@ impl InputSource for Wallet {
         outpoint: &OutPoint,
         _: TargetHeight,
     ) -> Result<Option<WalletTransparentOutput<u32>>, String> {
-        Ok(self.utxos.iter().map(|(o, _, _)| o).find(|o| o.outpoint() == outpoint).cloned())
+        Ok(self
+            .utxos
+            .iter()
+            .map(|(o, _, _)| o)
+            .find(|o| o.outpoint() == outpoint)
+            .cloned())
     }
 
     fn get_spendable_transparent_outputs(
@@ -439,10 +511,19 @@ impl Wallet {
     /// Everything `from` (`"shielded"` or `"transparent"`) holds, spendable or not.
     pub(crate) fn total(&self, from: &str) -> u64 {
         if from == "transparent" {
-            return self.utxos.iter().map(|(o, _, _)| u64::from(o.value())).sum();
+            return self
+                .utxos
+                .iter()
+                .map(|(o, _, _)| u64::from(o.value()))
+                .sum();
         }
         let sapling: u64 = self.sapling.iter().map(|n| sapling_value(n.note())).sum();
-        let orchard: u64 = self.orchard.iter().chain(&self.ironwood).map(|n| orchard_value(n.note())).sum();
+        let orchard: u64 = self
+            .orchard
+            .iter()
+            .chain(&self.ironwood)
+            .map(|n| orchard_value(n.note()))
+            .sum();
         sapling + orchard
     }
 
@@ -453,10 +534,15 @@ impl Wallet {
         target_height: TargetHeight,
         policy: ConfirmationsPolicy,
     ) -> impl Iterator<Item = &WalletTransparentOutput<u32>> {
-        let needed = if policy.allow_zero_conf_shielding() { 0 } else { u32::from(policy.untrusted()) };
+        let needed = if policy.allow_zero_conf_shielding() {
+            0
+        } else {
+            u32::from(policy.untrusted())
+        };
         let target = u32::from(BlockHeight::from(target_height));
         self.utxos.iter().map(|(o, _, _)| o).filter(move |o| {
-            o.mined_height().is_some_and(|h| target.saturating_sub(u32::from(h)) >= needed)
+            o.mined_height()
+                .is_some_and(|h| target.saturating_sub(u32::from(h)) >= needed)
         })
     }
 }
@@ -469,7 +555,15 @@ mod tests {
     use crate::send::tests::{orchard_family_note, wallet_ufvk, TIP};
 
     fn wallet(notes: Vec<NoteData>, utxos: Vec<UtxoData>) -> Wallet {
-        Wallet::new(Network::MainNetwork, &WalletData { tip: TIP, notes, utxos }).unwrap()
+        Wallet::new(
+            Network::MainNetwork,
+            &WalletData {
+                tip: TIP,
+                notes,
+                utxos,
+            },
+        )
+        .unwrap()
     }
 
     fn target() -> TargetHeight {
@@ -478,9 +572,26 @@ mod tests {
 
     fn picked(wallet: &Wallet, value: TargetValue) -> Vec<(u64, u64)> {
         let notes = wallet
-            .select_spendable_notes(ACCOUNT, value, &[ShieldedPool::Ironwood], target(), ConfirmationsPolicy::default(), &[], LockFilter::Unfiltered)
+            .select_spendable_notes(
+                ACCOUNT,
+                value,
+                &[ShieldedPool::Ironwood],
+                target(),
+                ConfirmationsPolicy::default(),
+                &[],
+                LockFilter::Unfiltered,
+            )
             .unwrap();
-        notes.ironwood().iter().map(|n| (u64::from(n.note_commitment_tree_position()), n.note().value().inner())).collect()
+        notes
+            .ironwood()
+            .iter()
+            .map(|n| {
+                (
+                    u64::from(n.note_commitment_tree_position()),
+                    n.note().value().inner(),
+                )
+            })
+            .collect()
     }
 
     fn at_least(z: u64) -> TargetValue {
@@ -489,19 +600,32 @@ mod tests {
 
     #[test]
     fn dust_is_never_selected() {
-        let note = |value, position| orchard_family_note("ironwood", Scope::External, value, TIP - 100, position);
+        let note = |value, position| {
+            orchard_family_note("ironwood", Scope::External, value, TIP - 100, position)
+        };
         // Exactly the marginal fee is still dust: sqlite keeps `value > MARGINAL_FEE`.
-        let wallet = wallet(vec![note(5_000, 1), note(5_001, 2), note(200_000, 3)], vec![]);
-        let all = picked(&wallet, TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable));
+        let wallet = wallet(
+            vec![note(5_000, 1), note(5_001, 2), note(200_000, 3)],
+            vec![],
+        );
+        let all = picked(
+            &wallet,
+            TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable),
+        );
         assert_eq!(all, [(2, 5_001), (3, 200_000)]);
     }
 
     #[test]
     fn oldest_notes_first_until_covered() {
-        let note = |position| orchard_family_note("ironwood", Scope::External, 50_000, TIP - 100, position);
+        let note = |position| {
+            orchard_family_note("ironwood", Scope::External, 50_000, TIP - 100, position)
+        };
         let wallet = wallet(vec![note(7), note(3), note(5)], vec![]);
         // 60,000 needs two notes: the two oldest, not the first listed.
-        assert_eq!(picked(&wallet, at_least(60_000)), [(3, 50_000), (5, 50_000)]);
+        assert_eq!(
+            picked(&wallet, at_least(60_000)),
+            [(3, 50_000), (5, 50_000)]
+        );
     }
 
     #[test]
@@ -516,7 +640,10 @@ mod tests {
 
     #[test]
     fn largest_coins_first_until_covered_after_fee() {
-        let ours = crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 0, 1).unwrap().remove(0);
+        let ours =
+            crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 0, 1)
+                .unwrap()
+                .remove(0);
         let utxos = vec![
             UtxoData::for_tests(&ours, 30_000, 0, TIP - 50),
             UtxoData::for_tests(&ours, 200_000, 1, TIP - 50),
@@ -545,6 +672,11 @@ mod tests {
         };
         assert_eq!(pick(at_least(50_000)), [200_000]);
         assert_eq!(pick(at_least(250_000)), [200_000, 80_000]);
-        assert_eq!(pick(TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable)), [200_000, 80_000, 30_000]);
+        assert_eq!(
+            pick(TargetValue::AllFunds(
+                zcash_client_backend::data_api::MaxSpendMode::MaxSpendable
+            )),
+            [200_000, 80_000, 30_000]
+        );
     }
 }

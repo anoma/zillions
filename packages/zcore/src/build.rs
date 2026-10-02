@@ -24,7 +24,9 @@ use zcash_client_backend::wallet::Note;
 use zcash_keys::address::Address;
 use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_primitives::transaction::builder::{BuildConfig, Builder, BundlePadding};
-use zcash_protocol::consensus::{BlockHeight, Network, NetworkConstants, NetworkUpgrade, Parameters};
+use zcash_protocol::consensus::{
+    BlockHeight, Network, NetworkConstants, NetworkUpgrade, Parameters,
+};
 use zcash_protocol::memo::MemoBytes;
 use zcash_protocol::{PoolType, ShieldedPool};
 use zip32::Scope;
@@ -58,7 +60,12 @@ impl PoolTree {
         let chunks = data
             .chunks
             .iter()
-            .map(|(id, body)| Ok((*id, postcard::from_bytes(body).map_err(|e| format!("chunk {id}: {e}"))?)))
+            .map(|(id, body)| {
+                Ok((
+                    *id,
+                    postcard::from_bytes(body).map_err(|e| format!("chunk {id}: {e}"))?,
+                ))
+            })
             .collect::<Result<_, String>>()?;
         Ok(PoolTree { tip, chunks })
     }
@@ -68,12 +75,18 @@ impl PoolTree {
     }
 
     fn path<H: Node>(&self, position: u64) -> Result<Vec<H>, String> {
-        self.tip::<H>()?.path(position, self.chunks.get(&(position >> 14)))
+        self.tip::<H>()?
+            .path(position, self.chunks.get(&(position >> 14)))
     }
 }
 
-fn pool_tree<'a>(trees: &'a HashMap<&'static str, PoolTree>, pool: &'static str) -> Result<&'a PoolTree, String> {
-    trees.get(pool).ok_or_else(|| format!("no {pool} tree data to spend from"))
+fn pool_tree<'a>(
+    trees: &'a HashMap<&'static str, PoolTree>,
+    pool: &'static str,
+) -> Result<&'a PoolTree, String> {
+    trees
+        .get(pool)
+        .ok_or_else(|| format!("no {pool} tree data to spend from"))
 }
 
 /// Which pools a step spends from, for choosing the outgoing viewing key.
@@ -93,7 +106,9 @@ fn input_sources(step_has: [bool; 3]) -> Option<NonEmpty<PoolType>> {
 }
 
 /// The shielded pools a step spends from, pays into or keeps change in.
-pub(crate) fn touched_pools<N>(step: &zcash_client_backend::proposal::Step<N>) -> Vec<&'static str> {
+pub(crate) fn touched_pools<N>(
+    step: &zcash_client_backend::proposal::Step<N>,
+) -> Vec<&'static str> {
     let name = |pool: ShieldedPool| match pool {
         ShieldedPool::Sapling => "sapling",
         ShieldedPool::Orchard => "orchard",
@@ -107,7 +122,12 @@ pub(crate) fn touched_pools<N>(step: &zcash_client_backend::proposal::Step<N>) -
         .payment_pools()
         .values()
         .copied()
-        .chain(step.balance().proposed_change().iter().map(|c| c.output_pool()))
+        .chain(
+            step.balance()
+                .proposed_change()
+                .iter()
+                .map(|c| c.output_pool()),
+        )
         .filter_map(|p| match p {
             PoolType::Shielded(pool) => Some(pool),
             PoolType::Transparent => None,
@@ -119,7 +139,11 @@ pub(crate) fn touched_pools<N>(step: &zcash_client_backend::proposal::Step<N>) -
 }
 
 fn zip32_path(network: &Network, hd_index: u32) -> Vec<u32> {
-    vec![32 | HARDENED, network.network_type().coin_type() | HARDENED, hd_index | HARDENED]
+    vec![
+        32 | HARDENED,
+        network.network_type().coin_type() | HARDENED,
+        hd_index | HARDENED,
+    ]
 }
 
 /// The PCZT for a single-step plan. `fingerprint` and `hd_index` name the
@@ -179,7 +203,8 @@ pub(crate) fn pczt<N>(
     );
     // A canonical ZIP 318 crossing takes the rolling expiry every migration
     // in its period shares (upstream refuses to override it).
-    let canonical_fee = zcash_client_backend::fees::canonical_crossing_fee(&network, target_height).ok();
+    let canonical_fee =
+        zcash_client_backend::fees::canonical_crossing_fee(&network, target_height).ok();
     let zip318 = zcash_client_backend::data_api::anchor_retention::PoolMigrationParams::new(
         zcash_client_backend::data_api::anchor_retention::AnchorRetentionInterval::ZIP_318,
     );
@@ -191,7 +216,11 @@ pub(crate) fn pczt<N>(
     let orchard_fvk = ufvk.orchard();
     let mut spends_sapling = false;
     let mut spends_orchard = false;
-    for note in step.shielded_inputs().map(|s| s.notes().iter().collect::<Vec<_>>()).unwrap_or_default() {
+    for note in step
+        .shielded_inputs()
+        .map(|s| s.notes().iter().collect::<Vec<_>>())
+        .unwrap_or_default()
+    {
         let position = u64::from(note.note_commitment_tree_position());
         match note.note() {
             Note::Sapling(sapling_note) => {
@@ -201,14 +230,20 @@ pub(crate) fn pczt<N>(
                     Scope::Internal => dfvk.to_internal_fvk(),
                 };
                 let path = pool_tree(&trees, "sapling")?.path::<sapling::Node>(position)?;
-                let path = sapling::MerklePath::from_parts(path, position.into()).map_err(|_| "bad sapling path")?;
+                let path = sapling::MerklePath::from_parts(path, position.into())
+                    .map_err(|_| "bad sapling path")?;
                 builder
                     .add_sapling_spend::<Infallible>(fvk, sapling_note.clone(), path)
                     .map_err(|e| format!("{e:?}"))?;
                 spends_sapling = true;
             }
-            Note::Orchard { note: orchard_note, pool } => {
-                let fvk = orchard_fvk.ok_or("viewing key has no Orchard part")?.clone();
+            Note::Orchard {
+                note: orchard_note,
+                pool,
+            } => {
+                let fvk = orchard_fvk
+                    .ok_or("viewing key has no Orchard part")?
+                    .clone();
                 let name = match pool {
                     orchard::ValuePool::Orchard => "orchard",
                     orchard::ValuePool::Ironwood => "ironwood",
@@ -219,8 +254,12 @@ pub(crate) fn pczt<N>(
                     .map_err(|_| "orchard path is not 32 long")?;
                 let path = orchard::tree::MerklePath::from_parts(position as u32, path);
                 match pool {
-                    orchard::ValuePool::Orchard => builder.add_orchard_spend::<Infallible>(fvk, *orchard_note, path),
-                    orchard::ValuePool::Ironwood => builder.add_ironwood_spend::<Infallible>(fvk, *orchard_note, path),
+                    orchard::ValuePool::Orchard => {
+                        builder.add_orchard_spend::<Infallible>(fvk, *orchard_note, path)
+                    }
+                    orchard::ValuePool::Ironwood => {
+                        builder.add_ironwood_spend::<Infallible>(fvk, *orchard_note, path)
+                    }
                 }
                 .map_err(|e| format!("{e:?}"))?;
                 spends_orchard = true;
@@ -236,7 +275,8 @@ pub(crate) fn pczt<N>(
             .iter()
             .find(|(o, _, _)| o.outpoint() == input.outpoint())
             .ok_or("planned a coin the wallet doesn't hold")?;
-        let index = transparent::keys::NonHardenedChildIndex::from_index(*index).ok_or("address index out of range")?;
+        let index = transparent::keys::NonHardenedChildIndex::from_index(*index)
+            .ok_or("address index out of range")?;
         let pubkey = account
             .ok_or("viewing key has no transparent part")?
             .derive_address_pubkey(*scope, index)
@@ -248,46 +288,67 @@ pub(crate) fn pczt<N>(
     }
 
     // Payments, each to the receiver of the pool upstream chose.
-    let sources = input_sources([spends_sapling, spends_orchard, !transparent_inputs.is_empty()])
-        .ok_or("a send must spend something")?;
+    let sources = input_sources([
+        spends_sapling,
+        spends_orchard,
+        !transparent_inputs.is_empty(),
+    ])
+    .ok_or("a send must spend something")?;
     let ovk = ufvk.select_ovk(Scope::External, &sources);
     let mut sapling_outputs = Vec::new();
     let mut orchard_outputs = Vec::new();
     let mut ironwood_outputs = Vec::new();
     for (index, pool) in step.payment_pools() {
-        let payment = step.transaction_request().payments().get(index).ok_or("plan lost a payment")?;
+        let payment = step
+            .transaction_request()
+            .payments()
+            .get(index)
+            .ok_or("plan lost a payment")?;
         let amount = payment.amount().ok_or("payment has no amount")?;
         let memo = payment.memo().cloned().unwrap_or_else(MemoBytes::empty);
         let to = payment.recipient_address();
-        let address = Address::try_from_zcash_address(&network, to.clone()).map_err(|e| e.to_string())?;
+        let address =
+            Address::try_from_zcash_address(&network, to.clone()).map_err(|e| e.to_string())?;
         let encoded = to.encode();
         let receiver = |ua: &zcash_keys::address::UnifiedAddress| ua.orchard().copied();
         match (address, pool) {
             (Address::Unified(ua), PoolType::Shielded(ShieldedPool::Ironwood)) => {
                 let to = receiver(&ua).ok_or("no Orchard receiver")?;
-                builder.add_ironwood_output::<Infallible>(ovk.map(Into::into), to, amount, memo).map_err(|e| format!("{e:?}"))?;
+                builder
+                    .add_ironwood_output::<Infallible>(ovk.map(Into::into), to, amount, memo)
+                    .map_err(|e| format!("{e:?}"))?;
                 ironwood_outputs.push(encoded);
             }
             (Address::Unified(ua), PoolType::Shielded(ShieldedPool::Orchard)) => {
                 let to = receiver(&ua).ok_or("no Orchard receiver")?;
-                builder.add_orchard_output::<Infallible>(ovk.map(Into::into), to, amount, memo).map_err(|e| format!("{e:?}"))?;
+                builder
+                    .add_orchard_output::<Infallible>(ovk.map(Into::into), to, amount, memo)
+                    .map_err(|e| format!("{e:?}"))?;
                 orchard_outputs.push(encoded);
             }
             (Address::Unified(ua), PoolType::Shielded(ShieldedPool::Sapling)) => {
                 let to = *ua.sapling().ok_or("no Sapling receiver")?;
-                builder.add_sapling_output::<Infallible>(ovk.map(Into::into), to, amount, memo).map_err(|e| format!("{e:?}"))?;
+                builder
+                    .add_sapling_output::<Infallible>(ovk.map(Into::into), to, amount, memo)
+                    .map_err(|e| format!("{e:?}"))?;
                 sapling_outputs.push(encoded);
             }
             (Address::Unified(ua), PoolType::Transparent) => {
                 let to = *ua.transparent().ok_or("no transparent receiver")?;
-                builder.add_transparent_output(&to, amount).map_err(|e| format!("{e:?}"))?;
+                builder
+                    .add_transparent_output(&to, amount)
+                    .map_err(|e| format!("{e:?}"))?;
             }
             (Address::Sapling(to), _) => {
-                builder.add_sapling_output::<Infallible>(ovk.map(Into::into), to, amount, memo).map_err(|e| format!("{e:?}"))?;
+                builder
+                    .add_sapling_output::<Infallible>(ovk.map(Into::into), to, amount, memo)
+                    .map_err(|e| format!("{e:?}"))?;
                 sapling_outputs.push(encoded);
             }
             (Address::Transparent(to), _) => {
-                builder.add_transparent_output(&to, amount).map_err(|e| format!("{e:?}"))?;
+                builder
+                    .add_transparent_output(&to, amount)
+                    .map_err(|e| format!("{e:?}"))?;
             }
             (Address::Tex(_), _) => return Err("TEX addresses need a multi-step send".into()),
         }
@@ -300,8 +361,13 @@ pub(crate) fn pczt<N>(
         let value = change.value();
         match change.output_pool() {
             PoolType::Shielded(ShieldedPool::Sapling) => {
-                let (_, to) = ufvk.sapling().ok_or("viewing key has no Sapling part")?.change_address();
-                builder.add_sapling_output::<Infallible>(None, to, value, memo).map_err(|e| format!("{e:?}"))?;
+                let (_, to) = ufvk
+                    .sapling()
+                    .ok_or("viewing key has no Sapling part")?
+                    .change_address();
+                builder
+                    .add_sapling_output::<Infallible>(None, to, value, memo)
+                    .map_err(|e| format!("{e:?}"))?;
                 sapling_outputs.push(String::new());
             }
             PoolType::Shielded(ShieldedPool::Orchard) => {
@@ -310,7 +376,13 @@ pub(crate) fn pczt<N>(
                 if network.is_nu_active(NetworkUpgrade::Nu6_3, target_height) {
                     // Orchard change after NU6.3 must go back to a spent note's
                     // own receiver; the builder matches it.
-                    builder.add_orchard_change_output::<Infallible>(fvk.clone(), None, to, value, memo)
+                    builder.add_orchard_change_output::<Infallible>(
+                        fvk.clone(),
+                        None,
+                        to,
+                        value,
+                        memo,
+                    )
                 } else {
                     builder.add_orchard_output::<Infallible>(None, to, value, memo)
                 }
@@ -318,8 +390,12 @@ pub(crate) fn pczt<N>(
                 orchard_outputs.push(String::new());
             }
             PoolType::Shielded(ShieldedPool::Ironwood) => {
-                let to = orchard_fvk.ok_or("viewing key has no Orchard part")?.address_at(0u32, Scope::Internal);
-                builder.add_ironwood_output::<Infallible>(None, to, value, memo).map_err(|e| format!("{e:?}"))?;
+                let to = orchard_fvk
+                    .ok_or("viewing key has no Orchard part")?
+                    .address_at(0u32, Scope::Internal);
+                builder
+                    .add_ironwood_output::<Infallible>(None, to, value, memo)
+                    .map_err(|e| format!("{e:?}"))?;
                 ironwood_outputs.push(String::new());
             }
             // ponytail: transparent change only arises in multi-step (TEX)
@@ -328,21 +404,32 @@ pub(crate) fn pczt<N>(
         }
     }
 
-    let built = builder.build_for_pczt(OsRng, &StandardFeeRule::Zip317).map_err(|e| format!("{e:?}"))?;
-    let user_addresses = |outputs: &[String], index: &dyn Fn(usize) -> Option<usize>| -> HashMap<usize, String> {
-        outputs
-            .iter()
-            .enumerate()
-            .filter(|(_, a)| !a.is_empty())
-            .filter_map(|(i, a)| index(i).map(|at| (at, a.clone())))
-            .collect()
-    };
-    let orchard_addresses = user_addresses(&orchard_outputs, &|i| built.orchard_meta.output_action_index(i));
-    let ironwood_addresses = user_addresses(&ironwood_outputs, &|i| built.ironwood_meta.output_action_index(i));
-    let sapling_addresses = user_addresses(&sapling_outputs, &|i| built.sapling_meta.output_index(i));
+    let built = builder
+        .build_for_pczt(OsRng, &StandardFeeRule::Zip317)
+        .map_err(|e| format!("{e:?}"))?;
+    let user_addresses =
+        |outputs: &[String], index: &dyn Fn(usize) -> Option<usize>| -> HashMap<usize, String> {
+            outputs
+                .iter()
+                .enumerate()
+                .filter(|(_, a)| !a.is_empty())
+                .filter_map(|(i, a)| index(i).map(|at| (at, a.clone())))
+                .collect()
+        };
+    let orchard_addresses = user_addresses(&orchard_outputs, &|i| {
+        built.orchard_meta.output_action_index(i)
+    });
+    let ironwood_addresses = user_addresses(&ironwood_outputs, &|i| {
+        built.ironwood_meta.output_action_index(i)
+    });
+    let sapling_addresses =
+        user_addresses(&sapling_outputs, &|i| built.sapling_meta.output_index(i));
 
-    let pczt = Creator::build_from_parts(built.pczt_parts).ok_or("transaction version has no PCZT form")?;
-    let pczt = IoFinalizer::new(pczt).finalize_io().map_err(|e| format!("{e:?}"))?;
+    let pczt = Creator::build_from_parts(built.pczt_parts)
+        .ok_or("transaction version has no PCZT form")?;
+    let pczt = IoFinalizer::new(pczt)
+        .finalize_io()
+        .map_err(|e| format!("{e:?}"))?;
 
     // Where each spend's key sits, so the keychain can find it, and where
     // each payment goes, so it can show it.
@@ -350,13 +437,18 @@ pub(crate) fn pczt<N>(
     let orchard_family = |addresses: HashMap<usize, String>| {
         let path = path.clone();
         move |mut updater: orchard::pczt::Updater<'_>| {
-            let real_spends: Vec<bool> =
-                updater.bundle().actions().iter().map(|a| a.spend().spend_auth_sig().is_none()).collect();
+            let real_spends: Vec<bool> = updater
+                .bundle()
+                .actions()
+                .iter()
+                .map(|a| a.spend().spend_auth_sig().is_none())
+                .collect();
             for (index, real) in real_spends.into_iter().enumerate() {
                 updater.update_action_with(index, |mut action| {
                     if real {
                         action.set_spend_zip32_derivation(
-                            orchard::pczt::Zip32Derivation::parse(fingerprint, path.clone()).expect("a ZIP 32 path parses"),
+                            orchard::pczt::Zip32Derivation::parse(fingerprint, path.clone())
+                                .expect("a ZIP 32 path parses"),
                         );
                     }
                     if let Some(address) = addresses.get(&index) {
@@ -385,7 +477,8 @@ pub(crate) fn pczt<N>(
             for index in real_spends {
                 updater.update_spend_with(index, |mut spend| {
                     spend.set_zip32_derivation(
-                        sapling::pczt::Zip32Derivation::parse(fingerprint, path.clone()).expect("a ZIP 32 path parses"),
+                        sapling::pczt::Zip32Derivation::parse(fingerprint, path.clone())
+                            .expect("a ZIP 32 path parses"),
                     );
                     Ok(())
                 })?;
@@ -408,7 +501,8 @@ pub(crate) fn pczt<N>(
                     bip32::ChildNumber::from(*scope).into(),
                     index.index(),
                 ];
-                let derivation = Bip32Derivation::parse(fingerprint, path).expect("a BIP-44 path parses");
+                let derivation =
+                    Bip32Derivation::parse(fingerprint, path).expect("a BIP-44 path parses");
                 updater.update_input_with(i, |mut input| {
                     input.set_bip32_derivation(pubkey.serialize(), derivation);
                     Ok(())
@@ -431,11 +525,21 @@ mod tests {
     /// `position` 3 of a five-leaf tree, and that tree as ziziphus serves it.
     pub(crate) fn wallet_and_trees(pool: &str, value: u64) -> (Wallet, Trees, orchard::Anchor) {
         let data = orchard_family_note(pool, zip32::Scope::External, value, TIP - 100, 3);
-        let version = if pool == "orchard" { orchard::NoteVersion::V2 } else { orchard::NoteVersion::V3 };
+        let version = if pool == "orchard" {
+            orchard::NoteVersion::V2
+        } else {
+            orchard::NoteVersion::V3
+        };
         let note = crate::notes::decode_orchard(&data.note_hex(), version).unwrap();
         let ours = MerkleHashOrchard::from_cmx(&ExtractedNoteCommitment::from(note.commitment()));
         let leaves: Vec<_> = (0..5u64)
-            .map(|i| if i == 3 { ours } else { crate::witness::tests::leaf(i) })
+            .map(|i| {
+                if i == 3 {
+                    ours
+                } else {
+                    crate::witness::tests::leaf(i)
+                }
+            })
             .collect();
         let tip = crate::witness::tests::snapshot(&leaves);
         let anchor = orchard::Anchor::from(Tip::<MerkleHashOrchard>::new(&tip).unwrap().root());
@@ -443,10 +547,27 @@ mod tests {
         let empty = crate::witness::tests::snapshot::<MerkleHashOrchard>(&[]);
         let mut trees = Trees::from([(
             "ironwood".to_string(),
-            TreeData { tip: postcard::to_allocvec(&empty).unwrap(), chunks: HashMap::new() },
+            TreeData {
+                tip: postcard::to_allocvec(&empty).unwrap(),
+                chunks: HashMap::new(),
+            },
         )]);
-        trees.insert(pool.to_string(), TreeData { tip: postcard::to_allocvec(&tip).unwrap(), chunks: HashMap::new() });
-        let wallet = Wallet::new(Network::MainNetwork, &WalletData { tip: TIP, notes: vec![data], utxos: vec![] }).unwrap();
+        trees.insert(
+            pool.to_string(),
+            TreeData {
+                tip: postcard::to_allocvec(&tip).unwrap(),
+                chunks: HashMap::new(),
+            },
+        );
+        let wallet = Wallet::new(
+            Network::MainNetwork,
+            &WalletData {
+                tip: TIP,
+                notes: vec![data],
+                utxos: vec![],
+            },
+        )
+        .unwrap();
         (wallet, trees, anchor)
     }
 
@@ -465,38 +586,80 @@ mod tests {
         use zcash_keys::keys::UnifiedSpendingKey;
         let network = Network::MainNetwork;
         let usk = UnifiedSpendingKey::from_seed(&network, &SEED, zip32::AccountId::ZERO).unwrap();
-        let key = if internal { usk.sapling().derive_internal() } else { usk.sapling().clone() };
+        let key = if internal {
+            usk.sapling().derive_internal()
+        } else {
+            usk.sapling().clone()
+        };
         let (_, ours) = key.default_address();
-        let note = sapling::Note::from_parts(ours, sapling::value::NoteValue::from_raw(200_000), sapling::Rseed::AfterZip212([5u8; 32]));
+        let note = sapling::Note::from_parts(
+            ours,
+            sapling::value::NoteValue::from_raw(200_000),
+            sapling::Rseed::AfterZip212([5u8; 32]),
+        );
         let leaves: Vec<sapling::Node> = (0..5u8)
             .map(|i| {
-                let other = sapling::Note::from_parts(ours, sapling::value::NoteValue::from_raw(u64::from(i)), sapling::Rseed::AfterZip212([i; 32]));
+                let other = sapling::Note::from_parts(
+                    ours,
+                    sapling::value::NoteValue::from_raw(u64::from(i)),
+                    sapling::Rseed::AfterZip212([i; 32]),
+                );
                 sapling::Node::from_cmu(&if i == 2 { note.cmu() } else { other.cmu() })
             })
             .collect();
         let tip = crate::witness::tests::snapshot(&leaves);
         let trees = Trees::from([(
             "sapling".to_string(),
-            TreeData { tip: postcard::to_allocvec(&tip).unwrap(), chunks: HashMap::new() },
+            TreeData {
+                tip: postcard::to_allocvec(&tip).unwrap(),
+                chunks: HashMap::new(),
+            },
         )]);
-        let mut data = crate::wallet::NoteData::for_tests("sapling", crate::notes::encode_sapling(&note), 2, TIP - 100);
+        let mut data = crate::wallet::NoteData::for_tests(
+            "sapling",
+            crate::notes::encode_sapling(&note),
+            2,
+            TIP - 100,
+        );
         if internal {
             data.set_internal();
         }
-        let wallet = Wallet::new(network, &WalletData { tip: TIP, notes: vec![data], utxos: vec![] }).unwrap();
+        let wallet = Wallet::new(
+            network,
+            &WalletData {
+                tip: TIP,
+                notes: vec![data],
+                utxos: vec![],
+            },
+        )
+        .unwrap();
 
         let ufvk = UnifiedFullViewingKey::decode(&network, &wallet_ufvk()).unwrap();
-        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
-        let to = crate::transparent_tx::derive(&network, &wallet_ufvk(), "external", 5, 1).unwrap().remove(0);
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+        let to = crate::transparent_tx::derive(&network, &wallet_ufvk(), "external", 5, 1)
+            .unwrap()
+            .remove(0);
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
         let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
 
         let signed = crate::roles::sign(&network, unsigned, &SEED, 0).unwrap();
-        assert!(crate::roles::prove(signed.clone(), None).is_err(), "Sapling proofs need the parameters");
+        assert!(
+            crate::roles::prove(signed.clone(), None).is_err(),
+            "Sapling proofs need the parameters"
+        );
         let (_, raw) = crate::roles::prove(signed, Some(&sapling_params())).unwrap();
-        let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(
+            &raw[..],
+            zcash_protocol::consensus::BranchId::Nu6_3,
+        )
+        .unwrap();
         assert_eq!(tx.sapling_bundle().unwrap().shielded_spends().len(), 1);
-        assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);
+        assert_eq!(
+            u64::from(tx.transparent_bundle().unwrap().vout[0].value()),
+            50_000
+        );
     }
 
     /// An Orchard note after NU6.3: its bundle may only return value to the
@@ -506,17 +669,29 @@ mod tests {
     fn sends_from_orchard_after_nu6_3_end_to_end() {
         let (wallet, trees, _) = wallet_and_trees("orchard", 200_000);
         let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
-        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
-        let to = crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1).unwrap().remove(0);
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+        let to =
+            crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1)
+                .unwrap()
+                .remove(0);
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
         let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
         let signed = crate::roles::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
         let (_, raw) = crate::roles::prove(signed, None).unwrap();
-        let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(
+            &raw[..],
+            zcash_protocol::consensus::BranchId::Nu6_3,
+        )
+        .unwrap();
         let orchard = tx.orchard_bundle().expect("the note is spent from Orchard");
         // Post-NU6.3 Orchard bundles carry the cross-address restriction.
         assert!(!orchard.flags().cross_address_enabled());
-        assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);
+        assert_eq!(
+            u64::from(tx.transparent_bundle().unwrap().vout[0].value()),
+            50_000
+        );
     }
 
     #[test]
@@ -534,32 +709,60 @@ mod tests {
     #[test]
     fn shields_end_to_end() {
         let network = Network::MainNetwork;
-        let ours = crate::transparent_tx::derive(&network, &wallet_ufvk(), "external", 0, 1).unwrap().remove(0);
+        let ours = crate::transparent_tx::derive(&network, &wallet_ufvk(), "external", 0, 1)
+            .unwrap()
+            .remove(0);
         let utxo = crate::wallet::UtxoData::for_tests(&ours, 100_000, 1, TIP - 50);
-        let wallet = Wallet::new(network, &WalletData { tip: TIP, notes: vec![], utxos: vec![utxo] }).unwrap();
+        let wallet = Wallet::new(
+            network,
+            &WalletData {
+                tip: TIP,
+                notes: vec![],
+                utxos: vec![utxo],
+            },
+        )
+        .unwrap();
         // Ironwood already holds five notes, none of them ours.
         let leaves: Vec<_> = (0..5u64).map(crate::witness::tests::leaf).collect();
         let tip = crate::witness::tests::snapshot(&leaves);
         let anchor = orchard::Anchor::from(Tip::<MerkleHashOrchard>::new(&tip).unwrap().root());
         let trees = Trees::from([(
             "ironwood".to_string(),
-            TreeData { tip: postcard::to_allocvec(&tip).unwrap(), chunks: HashMap::new() },
+            TreeData {
+                tip: postcard::to_allocvec(&tip).unwrap(),
+                chunks: HashMap::new(),
+            },
         )]);
         let ufvk = UnifiedFullViewingKey::decode(&network, &wallet_ufvk()).unwrap();
-        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
 
         let proposal = crate::send::tests::plan_shield(&wallet);
-        assert!(pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &Trees::new()).is_err(), "needs Ironwood's tree");
+        assert!(
+            pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &Trees::new()).is_err(),
+            "needs Ironwood's tree"
+        );
         let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
         assert_eq!(unsigned.ironwood().anchor(), &Some(anchor.to_bytes()));
 
         // One coin into two padded Ironwood actions: 3 × 5,000.
         let summary = serde_json::to_value(crate::roles::summarize(&network, &unsigned)).unwrap();
-        assert_eq!((summary["fee"].as_str(), summary["orchardOutputs"][0]["value"].as_str()), (Some("15000"), Some("85000")));
+        assert_eq!(
+            (
+                summary["fee"].as_str(),
+                summary["orchardOutputs"][0]["value"].as_str()
+            ),
+            (Some("15000"), Some("85000"))
+        );
 
         let signed = crate::roles::sign(&network, unsigned, &SEED, 0).unwrap();
         let (_, raw) = crate::roles::prove(signed, None).unwrap();
-        let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(
+            &raw[..],
+            zcash_protocol::consensus::BranchId::Nu6_3,
+        )
+        .unwrap();
         assert!(tx.ironwood_bundle().is_some());
         assert_eq!(tx.transparent_bundle().unwrap().vin.len(), 1);
     }
@@ -568,8 +771,13 @@ mod tests {
     fn builds_a_pczt_spending_an_ironwood_note() {
         let (wallet, trees, anchor) = wallet_and_trees("ironwood", 200_000);
         let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
-        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
-        let to = crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1).unwrap().remove(0);
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+        let to =
+            crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1)
+                .unwrap()
+                .remove(0);
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
 
         let pczt = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
@@ -586,24 +794,45 @@ mod tests {
     fn sends_from_ironwood_end_to_end() {
         let (wallet, trees, _) = wallet_and_trees("ironwood", 200_000);
         let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
-        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED).unwrap().to_bytes();
-        let to = crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1).unwrap().remove(0);
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+        let to =
+            crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1)
+                .unwrap()
+                .remove(0);
         let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
         let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees).unwrap();
 
-        assert!(crate::roles::sign(&Network::MainNetwork, unsigned.clone(), &[8u8; 32], 0).is_err());
+        assert!(
+            crate::roles::sign(&Network::MainNetwork, unsigned.clone(), &[8u8; 32], 0).is_err()
+        );
         // What the keychain shows: 200,000 in from Ironwood, 50,000 out, the
         // rest as change, and a fee that balances it.
-        let summary = serde_json::to_value(crate::roles::summarize(&Network::MainNetwork, &unsigned)).unwrap();
+        let summary =
+            serde_json::to_value(crate::roles::summarize(&Network::MainNetwork, &unsigned))
+                .unwrap();
         assert_eq!(summary["orchardInputs"][0]["value"], "200000");
         let fee: u64 = summary["fee"].as_str().unwrap().parse().unwrap();
-        let change: u64 = summary["orchardOutputs"].as_array().unwrap().iter().map(|o| o["value"].as_str().unwrap().parse::<u64>().unwrap()).sum();
+        let change: u64 = summary["orchardOutputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|o| o["value"].as_str().unwrap().parse::<u64>().unwrap())
+            .sum();
         assert_eq!(50_000 + change + fee, 200_000);
 
         let signed = crate::roles::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
         let (_, raw) = crate::roles::prove(signed, None).unwrap();
-        let tx = zcash_primitives::transaction::Transaction::read(&raw[..], zcash_protocol::consensus::BranchId::Nu6_3).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(
+            &raw[..],
+            zcash_protocol::consensus::BranchId::Nu6_3,
+        )
+        .unwrap();
         assert!(tx.ironwood_bundle().is_some());
-        assert_eq!(u64::from(tx.transparent_bundle().unwrap().vout[0].value()), 50_000);
+        assert_eq!(
+            u64::from(tx.transparent_bundle().unwrap().vout[0].value()),
+            50_000
+        );
     }
 }

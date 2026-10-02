@@ -27,9 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/zcore
+      - run: cargo fmt --check
       # Release: the end-to-end tests build Halo2 keys and Groth16 proofs.
       - run: cargo test --release --locked
 

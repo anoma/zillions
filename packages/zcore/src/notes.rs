@@ -34,7 +34,10 @@ pub(crate) fn decode_orchard(hex: &str, version: NoteVersion) -> Result<orchard:
     let value = orchard::value::NoteValue::from_raw(u64::from_le_bytes(split(&mut rest)?));
     let rho = Option::<Rho>::from(Rho::from_bytes(&split(&mut rest)?)).ok_or("bad rho")?;
     let rseed = Option::from(RandomSeed::from_bytes(split(&mut rest)?, &rho)).ok_or("bad rseed")?;
-    Option::from(orchard::Note::from_parts(recipient, value, rho, rseed, version)).ok_or_else(|| "bad orchard note".into())
+    Option::from(orchard::Note::from_parts(
+        recipient, value, rho, rseed, version,
+    ))
+    .ok_or_else(|| "bad orchard note".into())
 }
 
 pub(crate) fn encode_sapling(note: &sapling::Note) -> String {
@@ -57,7 +60,8 @@ pub(crate) fn encode_sapling(note: &sapling::Note) -> String {
 pub(crate) fn decode_sapling(hex: &str) -> Result<sapling::Note, String> {
     let bytes = hex::decode(hex).map_err(|e| e.to_string())?;
     let mut rest = &bytes[..];
-    let recipient = sapling::PaymentAddress::from_bytes(&split(&mut rest)?).ok_or("bad sapling recipient")?;
+    let recipient =
+        sapling::PaymentAddress::from_bytes(&split(&mut rest)?).ok_or("bad sapling recipient")?;
     let value = sapling::value::NoteValue::from_raw(u64::from_le_bytes(split(&mut rest)?));
     let [kind] = split::<1>(&mut rest)?;
     let seed = split::<32>(&mut rest)?;
@@ -95,15 +99,26 @@ mod tests {
     #[test]
     fn counts_outputs_within_each_transaction() {
         // Tx (10, 0) has three outputs; (10, 1) two; a gap restarts the count.
-        let notes = [(5, 10, 0), (6, 10, 0), (7, 10, 0), (8, 10, 1), (9, 10, 1), (20, 11, 0)];
+        let notes = [
+            (5, 10, 0),
+            (6, 10, 0),
+            (7, 10, 0),
+            (8, 10, 1),
+            (9, 10, 1),
+            (20, 11, 0),
+        ];
         assert_eq!(output_indices(&notes), [0, 1, 2, 0, 1, 0]);
     }
 
     #[test]
     fn sapling_notes_round_trip_both_seed_kinds() {
-        let (_, recipient) = sapling::zip32::ExtendedSpendingKey::master(&[7u8; 32]).default_address();
+        let (_, recipient) =
+            sapling::zip32::ExtendedSpendingKey::master(&[7u8; 32]).default_address();
         let value = sapling::value::NoteValue::from_raw(42);
-        for rseed in [Rseed::AfterZip212([9u8; 32]), Rseed::BeforeZip212(jubjub::Fr::from(12345u64))] {
+        for rseed in [
+            Rseed::AfterZip212([9u8; 32]),
+            Rseed::BeforeZip212(jubjub::Fr::from(12345u64)),
+        ] {
             let note = sapling::Note::from_parts(recipient, value, rseed);
             let back = decode_sapling(&encode_sapling(&note)).expect("decodes");
             assert_eq!(back.cmu(), note.cmu());

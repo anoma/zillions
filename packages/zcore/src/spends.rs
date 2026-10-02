@@ -72,7 +72,9 @@ fn check(body: &[u8], nullifiers: &[u8]) -> Result<NullifierCheck, String> {
             let key = u64::from_be_bytes(nf[..NF_KEY_LEN].try_into().unwrap());
             // Keys repeat when only the suffix differs, so `key`'s run is
             // bounded by ranks. Not by `get`: vers-vecs 1.10's misreads on wasm32.
-            let end = key.checked_add(1).map_or(p.ef.len(), |next| p.ef.rank(next) as usize);
+            let end = key
+                .checked_add(1)
+                .map_or(p.ef.len(), |next| p.ef.rank(next) as usize);
             (p.ef.rank(key) as usize..end).any(|i| p.suffixes[i] == nf[NF_KEY_LEN..NF_PREFIX_LEN])
         }
         NfChunkBody::Raw(prefixes) => prefixes.iter().any(|p| p[..] == nf[..NF_PREFIX_LEN]),
@@ -82,7 +84,10 @@ fn check(body: &[u8], nullifiers: &[u8]) -> Result<NullifierCheck, String> {
         .filter(|(_, nf)| holds(nf))
         .map(|(i, _)| i as u32)
         .collect();
-    Ok(NullifierCheck { spent, frozen: matches!(body, NfChunkBody::Compressed(_)) })
+    Ok(NullifierCheck {
+        spent,
+        frozen: matches!(body, NfChunkBody::Compressed(_)),
+    })
 }
 
 /// Which of `nullifiers` (each 32 bytes, concatenated) a `/nullifiers` chunk
@@ -107,9 +112,15 @@ mod tests {
     /// Encoded as the indexer encodes them; the variant index leads.
     fn compressed(mut prefixes: Vec<[u8; NF_PREFIX_LEN]>) -> Vec<u8> {
         prefixes.sort_unstable();
-        let keys: Vec<u64> = prefixes.iter().map(|p| u64::from_be_bytes(p[..8].try_into().unwrap())).collect();
+        let keys: Vec<u64> = prefixes
+            .iter()
+            .map(|p| u64::from_be_bytes(p[..8].try_into().unwrap()))
+            .collect();
         let suffixes = prefixes.iter().map(|p| [p[8], p[9]]).collect();
-        let payload = EncodedPayload { ef: EliasFanoVec::from_slice(&keys), suffixes };
+        let payload = EncodedPayload {
+            ef: EliasFanoVec::from_slice(&keys),
+            suffixes,
+        };
         [vec![0], postcard::to_allocvec(&payload).unwrap()].concat()
     }
 
@@ -129,13 +140,25 @@ mod tests {
         let asked = [nf(missing, 0), nf(a, 1), nf(c, 2)].concat();
 
         let full = check(&compressed(vec![c, a, b]), &asked).expect("compressed");
-        assert_eq!(full, NullifierCheck { spent: vec![1, 2], frozen: true });
+        assert_eq!(
+            full,
+            NullifierCheck {
+                spent: vec![1, 2],
+                frozen: true
+            }
+        );
 
         let mut raw = vec![1, 2];
         raw.extend(a);
         raw.extend(b);
         let tail = check(&raw, &asked).expect("raw");
-        assert_eq!(tail, NullifierCheck { spent: vec![1], frozen: false });
+        assert_eq!(
+            tail,
+            NullifierCheck {
+                spent: vec![1],
+                frozen: false
+            }
+        );
 
         assert!(check(&raw, &asked[..31]).is_err());
     }

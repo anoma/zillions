@@ -157,12 +157,23 @@ impl<'a, H: Node> Tip<'a, H> {
         if body.roots.len() as u64 != frozen {
             return Err("tip's roots don't match its tree size".into());
         }
-        let active = Chunk { heap: &body.active_chunk, filled: body.tree_size % CHUNK_LEAVES };
-        let mut leaves = body.roots.iter().map(|r| H::read(r)).collect::<Result<Vec<_>, _>>()?;
+        let active = Chunk {
+            heap: &body.active_chunk,
+            filled: body.tree_size % CHUNK_LEAVES,
+        };
+        let mut leaves = body
+            .roots
+            .iter()
+            .map(|r| H::read(r))
+            .collect::<Result<Vec<_>, _>>()?;
         if active.filled > 0 {
             leaves.push(active.node(0, CHUNK_DEPTH)?);
         }
-        Ok(Tip { tree_size: body.tree_size, active, upper: Upper { leaves } })
+        Ok(Tip {
+            tree_size: body.tree_size,
+            active,
+            upper: Upper { leaves },
+        })
     }
 
     /// The tree's root at this tip: the anchor a spend proves against.
@@ -173,20 +184,31 @@ impl<'a, H: Node> Tip<'a, H> {
     /// The 32 siblings of the note at `position`, bottom up. A note in a
     /// frozen chunk needs that chunk's heap (`frozen`); one in the filling
     /// chunk is served from the tip.
-    pub(crate) fn path(&self, position: u64, frozen: Option<&TreeChunkBody>) -> Result<Vec<H>, String> {
+    pub(crate) fn path(
+        &self,
+        position: u64,
+        frozen: Option<&TreeChunkBody>,
+    ) -> Result<Vec<H>, String> {
         if position >= self.tree_size {
             return Err("note is past this tip".into());
         }
         let chunk = position / CHUNK_LEAVES;
         let leaf = position % CHUNK_LEAVES;
-        let mut path = if chunk < self.upper.leaves.len() as u64 && self.active.filled > 0 && chunk == self.tree_size / CHUNK_LEAVES {
+        let mut path = if chunk < self.upper.leaves.len() as u64
+            && self.active.filled > 0
+            && chunk == self.tree_size / CHUNK_LEAVES
+        {
             self.active.path(leaf)?
         } else {
             let body = frozen.ok_or("a frozen note needs its chunk's heap")?;
             if body.data.len() != CHUNK_NODES * 32 {
                 return Err("chunk heap has the wrong size".into());
             }
-            Chunk { heap: &body.data, filled: CHUNK_LEAVES }.path(leaf)?
+            Chunk {
+                heap: &body.data,
+                filled: CHUNK_LEAVES,
+            }
+            .path(leaf)?
         };
         path.extend(self.upper.path(chunk));
         Ok(path)
@@ -201,7 +223,12 @@ pub(crate) mod tests {
 
     /// A tip snapshot of `leaves`, all in the filling chunk.
     pub(crate) fn snapshot<N: Node>(leaves: &[N]) -> TipBody {
-        TipBody { tree_size: leaves.len() as u64, ommers: vec![], roots: vec![], active_chunk: heap(leaves) }
+        TipBody {
+            tree_size: leaves.len() as u64,
+            ommers: vec![],
+            roots: vec![],
+            active_chunk: heap(leaves),
+        }
     }
 
     pub(crate) fn leaf(i: u64) -> H {
@@ -226,7 +253,8 @@ pub(crate) mod tests {
             for j in 0..(1usize << (CHUNK_DEPTH - level)) {
                 if ((j as u64 + 1) << level) <= leaves.len() as u64 {
                     let i = row + j;
-                    nodes[i] = N::combine(Level::from(level - 1), &nodes[2 * i + 1], &nodes[2 * i + 2]);
+                    nodes[i] =
+                        N::combine(Level::from(level - 1), &nodes[2 * i + 1], &nodes[2 * i + 2]);
                 }
             }
         }
@@ -242,19 +270,34 @@ pub(crate) mod tests {
     #[ignore]
     fn real_ziziphus_data_is_consistent() {
         let dir = std::env::var("ZIZIPHUS_DIR").expect("ZIZIPHUS_DIR");
-        let tip: TipBody = postcard::from_bytes(&std::fs::read(format!("{dir}/sapling_tip.bin")).unwrap()).unwrap();
-        let chunk0: TreeChunkBody = postcard::from_bytes(&std::fs::read(format!("{dir}/sapling_tree0.bin")).unwrap()).unwrap();
+        let tip: TipBody =
+            postcard::from_bytes(&std::fs::read(format!("{dir}/sapling_tip.bin")).unwrap())
+                .unwrap();
+        let chunk0: TreeChunkBody =
+            postcard::from_bytes(&std::fs::read(format!("{dir}/sapling_tree0.bin")).unwrap())
+                .unwrap();
         let parsed = Tip::<sapling::Node>::new(&tip).unwrap();
         println!("tree size {}, {} roots", tip.tree_size, tip.roots.len());
 
-        let own_root = Chunk { heap: &chunk0.data, filled: CHUNK_LEAVES }.node::<sapling::Node>(0, CHUNK_DEPTH).unwrap();
+        let own_root = Chunk {
+            heap: &chunk0.data,
+            filled: CHUNK_LEAVES,
+        }
+        .node::<sapling::Node>(0, CHUNK_DEPTH)
+        .unwrap();
         assert_eq!(own_root.to_bytes(), tip.roots[0]);
         // Recomputed from the leaves, not read: the heap's root is honest.
         let recomputed = {
-            let leaves: Vec<sapling::Node> =
-                (0..CHUNK_LEAVES as usize).map(|i| sapling::Node::read(&chunk0.data[(CHUNK_LEAVES as usize - 1 + i) * 32..][..32]).unwrap()).collect();
+            let leaves: Vec<sapling::Node> = (0..CHUNK_LEAVES as usize)
+                .map(|i| {
+                    sapling::Node::read(&chunk0.data[(CHUNK_LEAVES as usize - 1 + i) * 32..][..32])
+                        .unwrap()
+                })
+                .collect();
             let mut f = Frontier::<sapling::Node, 14>::empty();
-            leaves.into_iter().for_each(|l| { f.append(l); });
+            leaves.into_iter().for_each(|l| {
+                f.append(l);
+            });
             f.root()
         };
         assert_eq!(recomputed.to_bytes(), tip.roots[0]);
@@ -268,7 +311,11 @@ pub(crate) mod tests {
             )
             .unwrap();
             assert_eq!(tree.size() as u64, tip.tree_size);
-            assert_eq!(tree.root(), parsed.root(), "our root differs from the chain's");
+            assert_eq!(
+                tree.root(),
+                parsed.root(),
+                "our root differs from the chain's"
+            );
             println!("matches the chain's Sapling root");
         }
     }
@@ -283,7 +330,9 @@ pub(crate) mod tests {
             frontier.append(*l);
         }
 
-        let frozen = TreeChunkBody { data: heap(&leaves[..CHUNK_LEAVES as usize]) };
+        let frozen = TreeChunkBody {
+            data: heap(&leaves[..CHUNK_LEAVES as usize]),
+        };
         let body = TipBody {
             tree_size: count,
             ommers: vec![],
@@ -297,8 +346,15 @@ pub(crate) mod tests {
             let path = tip.path(position, Some(&frozen)).unwrap();
             let path: [H; 32] = path.try_into().unwrap();
             let merkle = orchard::tree::MerklePath::from_parts(position as u32, path);
-            let cmx = orchard::note::ExtractedNoteCommitment::from_bytes(&leaves[position as usize].to_bytes()).unwrap();
-            assert_eq!(merkle.root(cmx), orchard::Anchor::from(frontier.root()), "position {position}");
+            let cmx = orchard::note::ExtractedNoteCommitment::from_bytes(
+                &leaves[position as usize].to_bytes(),
+            )
+            .unwrap();
+            assert_eq!(
+                merkle.root(cmx),
+                orchard::Anchor::from(frontier.root()),
+                "position {position}"
+            );
         }
         assert!(tip.path(count, None).is_err());
     }

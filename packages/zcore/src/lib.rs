@@ -19,17 +19,17 @@ mod notes;
 mod roles;
 mod send;
 mod spends;
+mod transparent_tx;
 mod wallet;
 mod witness;
-mod transparent_tx;
 
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use zip32::Scope;
 
+use orchard::keys::PreparedIncomingViewingKey as OrchardIvk;
 use orchard::note::ExtractedNoteCommitment as OrchardCmx;
 use orchard::note::Nullifier;
-use orchard::keys::PreparedIncomingViewingKey as OrchardIvk;
 use orchard::note_encryption::{
     CompactAction, DomainVersion, IronwoodVersion, NoteEncryptionDomain, OrchardVersion,
 };
@@ -98,7 +98,8 @@ impl ShieldedOutput<SaplingDomain, ENC_CIPHERTEXT_SIZE> for FullOutput<SaplingCm
     }
 }
 
-impl<V: DomainVersion> ShieldedOutput<NoteEncryptionDomain<V>, ENC_CIPHERTEXT_SIZE> for FullOutput<OrchardCmx>
+impl<V: DomainVersion> ShieldedOutput<NoteEncryptionDomain<V>, ENC_CIPHERTEXT_SIZE>
+    for FullOutput<OrchardCmx>
 where
     NoteEncryptionDomain<V>: Domain<ExtractedCommitmentBytes = [u8; 32]>,
 {
@@ -193,10 +194,7 @@ struct FullChunk {
 }
 
 /// External + internal (change) scopes — a note may be addressed to either.
-const SCOPES: [(&str, Scope); 2] = [
-    ("external", Scope::External),
-    ("internal", Scope::Internal),
-];
+const SCOPES: [(&str, Scope); 2] = [("external", Scope::External), ("internal", Scope::Internal)];
 
 /// `"main"` or `"test"`, as the app configures it.
 pub(crate) fn parse_network(network: &str) -> Result<Network, String> {
@@ -247,7 +245,10 @@ fn sapling_ivks(
 }
 
 fn orchard_ivks(fvk: &orchard::keys::FullViewingKey) -> Vec<OrchardIvk> {
-    SCOPES.iter().map(|(_, scope)| OrchardIvk::new(&fvk.to_ivk(*scope))).collect()
+    SCOPES
+        .iter()
+        .map(|(_, scope)| OrchardIvk::new(&fvk.to_ivk(*scope)))
+        .collect()
 }
 
 /// A `/ciphertexts` chunk body, split open. Postcard lays it out as
@@ -263,7 +264,10 @@ pub(crate) fn chunk_body(body: &[u8], record_len: usize) -> Result<ChunkBody<'_>
     let ((min_height, _median, max_height, count), records) =
         postcard::take_from_bytes::<(u32, u32, u32, usize)>(body).map_err(|e| e.to_string())?;
     if count.checked_mul(record_len) != Some(records.len()) {
-        return Err(format!("chunk holds {} bytes for {count} records", records.len()));
+        return Err(format!(
+            "chunk holds {} bytes for {count} records",
+            records.len()
+        ));
     }
     Ok(ChunkBody {
         min_height,
@@ -282,7 +286,11 @@ fn full_notes(
     memos: &[u8],
     outgoing: &[u8],
 ) -> Result<Vec<FullNote>, String> {
-    let record_len = if pool == "sapling" { SAPLING_RECORD_LEN } else { ORCHARD_RECORD_LEN };
+    let record_len = if pool == "sapling" {
+        SAPLING_RECORD_LEN
+    } else {
+        ORCHARD_RECORD_LEN
+    };
     let notes = chunk_body(ciphertexts, record_len)?.records;
     let mut outgoing = chunk_body(outgoing, OUTGOING_RECORD_LEN)?.records;
     // Memo records are `varint(height) ‖ varint(tx_index) ‖ tail`: not fixed-width.
@@ -298,7 +306,9 @@ fn full_notes(
         }
         let (tail, rest) = rest.split_at(MEMO_TAIL_LEN);
         memos = rest;
-        let og = outgoing.next().ok_or(format!("outgoing ends before note {i}"))?;
+        let og = outgoing
+            .next()
+            .ok_or(format!("outgoing ends before note {i}"))?;
 
         let (eph_key, r) = r.split_at(32);
         let (head, r) = r.split_at(COMPACT_NOTE_SIZE);
@@ -342,7 +352,11 @@ fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result
     let body = chunk_body(body, SAPLING_RECORD_LEN)?;
     let (count, min_height) = (body.records.len(), body.min_height);
     let Some(dfvk) = ufvk.sapling() else {
-        return Ok(Compact { count, min_height, hits: Vec::new() });
+        return Ok(Compact {
+            count,
+            min_height,
+            hits: Vec::new(),
+        });
     };
 
     let enforcement = chunk_enforcement(&network, body.min_height, body.max_height);
@@ -382,7 +396,11 @@ fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result
             });
         }
     }
-    Ok(Compact { count, min_height, hits })
+    Ok(Compact {
+        count,
+        min_height,
+        hits,
+    })
 }
 
 /// Orchard and Ironwood compact decryption: one protocol, told apart only by
@@ -402,7 +420,11 @@ where
     let body = chunk_body(body, ORCHARD_RECORD_LEN)?;
     let (count, min_height) = (body.records.len(), body.min_height);
     let Some(fvk) = ufvk.orchard() else {
-        return Ok(Compact { count, min_height, hits: Vec::new() });
+        return Ok(Compact {
+            count,
+            min_height,
+            hits: Vec::new(),
+        });
     };
 
     // Each action carries its own rho, so the domain is per-output.
@@ -441,11 +463,18 @@ where
             });
         }
     }
-    Ok(Compact { count, min_height, hits })
+    Ok(Compact {
+        count,
+        min_height,
+        hits,
+    })
 }
 
 fn output_indices(notes: &[FullNote]) -> Vec<u16> {
-    let places: Vec<_> = notes.iter().map(|n| (n.position, n.height, n.tx_index)).collect();
+    let places: Vec<_> = notes
+        .iter()
+        .map(|n| (n.position, n.height, n.tx_index))
+        .collect();
     notes::output_indices(&places)
 }
 
@@ -478,30 +507,36 @@ where
     let ivks = orchard_ivks(fvk);
     let indices = output_indices(notes);
     let output = |n: &FullNote| -> Result<_, String> {
-            let cm = Option::<OrchardCmx>::from(OrchardCmx::from_bytes(&n.cm))
-                .ok_or("bad orchard commitment")?;
-            let enc = n.enc_ciphertext;
-            let eph_key = EphemeralKeyBytes(n.eph_key);
-            // The domain is only constructible from an action, so the
-            // compact prefix of this ciphertext stands in for one.
-            let head = enc[..52].try_into().map_err(|_| "short ciphertext")?;
-            let action = CompactAction::from_parts(
-                Option::<Nullifier>::from(Nullifier::from_bytes(&n.rho))
-                    .ok_or("bad orchard nullifier")?,
-                cm,
-                eph_key.clone(),
-                head,
-            );
-            Ok((
-                NoteEncryptionDomain::<V>::for_compact_action(&action),
-                FullOutput { eph_key, cm, enc },
-            ))
+        let cm = Option::<OrchardCmx>::from(OrchardCmx::from_bytes(&n.cm))
+            .ok_or("bad orchard commitment")?;
+        let enc = n.enc_ciphertext;
+        let eph_key = EphemeralKeyBytes(n.eph_key);
+        // The domain is only constructible from an action, so the
+        // compact prefix of this ciphertext stands in for one.
+        let head = enc[..52].try_into().map_err(|_| "short ciphertext")?;
+        let action = CompactAction::from_parts(
+            Option::<Nullifier>::from(Nullifier::from_bytes(&n.rho))
+                .ok_or("bad orchard nullifier")?,
+            cm,
+            eph_key.clone(),
+            head,
+        );
+        Ok((
+            NoteEncryptionDomain::<V>::for_compact_action(&action),
+            FullOutput { eph_key, cm, enc },
+        ))
     };
     let outputs = notes.iter().map(&output).collect::<Result<Vec<_>, _>>()?;
     // Full decryption costs as much as the compact pass, so only its hits get it.
-    let candidates = wanted.iter().map(|&i| output(&notes[i])).collect::<Result<Vec<_>, _>>()?;
+    let candidates = wanted
+        .iter()
+        .map(|&i| output(&notes[i]))
+        .collect::<Result<Vec<_>, _>>()?;
 
-    for (&i, res) in wanted.iter().zip(batch::try_note_decryption(&ivks, &candidates)) {
+    for (&i, res) in wanted
+        .iter()
+        .zip(batch::try_note_decryption(&ivks, &candidates))
+    {
         if let Some(((note, addr, memo), scope_idx)) = res {
             mine[i] = true;
             hits.push(FullHit {
@@ -526,7 +561,8 @@ where
             continue;
         }
         let out = &notes[i].out_ciphertext;
-        let Some(cv) = Option::from(orchard::value::ValueCommitment::from_bytes(&notes[i].cv)) else {
+        let Some(cv) = Option::from(orchard::value::ValueCommitment::from_bytes(&notes[i].cv))
+        else {
             continue;
         };
         for ovk in &ovks {
@@ -547,7 +583,11 @@ where
         }
     }
 
-    Ok(FullChunk { hits, sent, spends: Vec::new() })
+    Ok(FullChunk {
+        hits,
+        sent,
+        spends: Vec::new(),
+    })
 }
 
 fn decrypt_full(
@@ -560,8 +600,14 @@ fn decrypt_full(
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
     match (pool, ufvk.orchard()) {
-        ("orchard", Some(fvk)) => return decrypt_full_orchard::<OrchardVersion>(&network, fvk, "orchard", notes, wanted),
-        ("ironwood", Some(fvk)) => return decrypt_full_orchard::<IronwoodVersion>(&network, fvk, "ironwood", notes, wanted),
+        ("orchard", Some(fvk)) => {
+            return decrypt_full_orchard::<OrchardVersion>(&network, fvk, "orchard", notes, wanted)
+        }
+        ("ironwood", Some(fvk)) => {
+            return decrypt_full_orchard::<IronwoodVersion>(
+                &network, fvk, "ironwood", notes, wanted,
+            )
+        }
         _ => {}
     }
 
@@ -576,23 +622,29 @@ fn decrypt_full(
         let ivks = sapling_ivks(dfvk);
         let indices = output_indices(notes);
         let output = |n: &FullNote| -> Result<_, String> {
-                let cm = Option::<SaplingCmu>::from(SaplingCmu::from_bytes(&n.cm))
-                    .ok_or("bad sapling commitment")?;
-                let enforcement = zip212_enforcement(&network, BlockHeight::from(n.height));
-                Ok((
-                    SaplingDomain::new(enforcement),
-                    FullOutput {
-                        eph_key: EphemeralKeyBytes(n.eph_key),
-                        cm,
-                        enc: n.enc_ciphertext,
-                    },
-                ))
+            let cm = Option::<SaplingCmu>::from(SaplingCmu::from_bytes(&n.cm))
+                .ok_or("bad sapling commitment")?;
+            let enforcement = zip212_enforcement(&network, BlockHeight::from(n.height));
+            Ok((
+                SaplingDomain::new(enforcement),
+                FullOutput {
+                    eph_key: EphemeralKeyBytes(n.eph_key),
+                    cm,
+                    enc: n.enc_ciphertext,
+                },
+            ))
         };
         let outputs = notes.iter().map(&output).collect::<Result<Vec<_>, _>>()?;
         // Full decryption costs as much as the compact pass, so only its hits get it.
-        let candidates = wanted.iter().map(|&i| output(&notes[i])).collect::<Result<Vec<_>, _>>()?;
+        let candidates = wanted
+            .iter()
+            .map(|&i| output(&notes[i]))
+            .collect::<Result<Vec<_>, _>>()?;
 
-        for (&i, res) in wanted.iter().zip(batch::try_note_decryption(&ivks, &candidates)) {
+        for (&i, res) in wanted
+            .iter()
+            .zip(batch::try_note_decryption(&ivks, &candidates))
+        {
             if let Some(((note, addr, memo), scope_idx)) = res {
                 mine[i] = true;
                 hits.push(FullHit {
@@ -646,7 +698,11 @@ fn decrypt_full(
         }
     }
 
-    Ok(FullChunk { hits, sent, spends: Vec::new() })
+    Ok(FullChunk {
+        hits,
+        sent,
+        spends: Vec::new(),
+    })
 }
 
 /// Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
@@ -654,7 +710,13 @@ fn decrypt_full(
 ///
 /// Returns `{ count, min_height, hits: [{ pool, scope, value, nf_mine, index }] }`.
 #[wasm_bindgen]
-pub fn try_decrypt(network: &str, ufvk: &str, pool: &str, chunk: u32, body: &[u8]) -> Result<JsValue, JsError> {
+pub fn try_decrypt(
+    network: &str,
+    ufvk: &str,
+    pool: &str,
+    chunk: u32,
+    body: &[u8],
+) -> Result<JsValue, JsError> {
     let compact = match pool {
         "sapling" => decrypt_sapling(network, ufvk, chunk, body),
         "orchard" => decrypt_orchard::<OrchardVersion>(network, ufvk, "orchard", body),
@@ -688,7 +750,8 @@ pub fn try_decrypt_full(
     if !["sapling", "orchard", "ironwood"].contains(&pool) {
         return Err(JsError::new("unknown pool"));
     }
-    let notes = full_notes(pool, chunk, ciphertexts, memos, outgoing).map_err(|e| JsError::new(&e))?;
+    let notes =
+        full_notes(pool, chunk, ciphertexts, memos, outgoing).map_err(|e| JsError::new(&e))?;
     let indices = |list: &[u32]| -> Result<Vec<usize>, JsError> {
         let out: Vec<usize> = list.iter().map(|&i| i as usize).collect();
         if out.iter().any(|&i| i >= notes.len()) {
@@ -696,7 +759,8 @@ pub fn try_decrypt_full(
         }
         Ok(out)
     };
-    let mut full = decrypt_full(network, ufvk, pool, &notes, &indices(hits)?).map_err(|e| JsError::new(&e))?;
+    let mut full =
+        decrypt_full(network, ufvk, pool, &notes, &indices(hits)?).map_err(|e| JsError::new(&e))?;
     full.spends = spend_places(&notes, &indices(spends)?);
     serde_wasm_bindgen::to_value(&full).map_err(|e| JsError::new(&e.to_string()))
 }
@@ -705,7 +769,11 @@ pub fn try_decrypt_full(
 fn spend_places(notes: &[FullNote], spends: &[usize]) -> Vec<Spend> {
     spends
         .iter()
-        .map(|&i| Spend { nf: hex::encode(notes[i].rho), height: notes[i].height, tx_index: notes[i].tx_index })
+        .map(|&i| Spend {
+            nf: hex::encode(notes[i].rho),
+            height: notes[i].height,
+            tx_index: notes[i].tx_index,
+        })
         .collect()
 }
 
@@ -726,31 +794,56 @@ mod tests {
     #[test]
     fn decrypts_real_shapes_without_matching() {
         let network = "main";
-        let usk = UnifiedSpendingKey::from_seed(&Network::MainNetwork, &[7u8; 32], zip32::AccountId::ZERO)
-            .expect("usk");
-        let ufvk = usk.to_unified_full_viewing_key().encode(&Network::MainNetwork);
+        let usk = UnifiedSpendingKey::from_seed(
+            &Network::MainNetwork,
+            &[7u8; 32],
+            zip32::AccountId::ZERO,
+        )
+        .expect("usk");
+        let ufvk = usk
+            .to_unified_full_viewing_key()
+            .encode(&Network::MainNetwork);
 
-        let sapling = ciphertexts(3_342_508, &[concat!(
+        let sapling = ciphertexts(
+            3_342_508,
+            &[concat!(
             "cb476002450613bae9a8fa4240a80f459ca338ab4ac9d0ccd69507d0a4bef985", // eph_key
             "67294ab5a43ac6750a760eb171df88bf67d5847fe3bd1d7ac9f4d2bd3e1e69da31868f810a478d3d5b39366f43e11a8b88ddf384", // enc_head
             "1e184cee50a61ef8bad79f28a360ae0383b4c2a563723744abb8994145e5d109", // cmu
-        )]);
-        let orchard = ciphertexts(3_424_128, &[concat!(
+        )],
+        );
+        let orchard = ciphertexts(
+            3_424_128,
+            &[concat!(
             "8c03e7196525e7c5370766dcddf8be8592be5a12bdef5de0e0852189a4ceb233", // eph_key
             "87d64a0108dec58c38e80bda117b779a8677477347ebe720b5fccb09d188c1632faa0d30abea7f23223df164cdcf3c0a7e5f344d", // enc_head
             "44ba39dbcf4e55c2b2c308eed761a4ffce3f6ae32ec7f01554bb3b2c61eb2936", // cmx
             "08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39", // rho
-        )]);
+        )],
+        );
 
-        assert_eq!(decrypt_sapling(network, &ufvk, 4511, &sapling).expect("sapling runs").hits.len(), 0);
-        assert_eq!(decrypt_orchard::<OrchardVersion>(network, &ufvk, "orchard", &orchard).expect("orchard runs").hits.len(), 0);
+        assert_eq!(
+            decrypt_sapling(network, &ufvk, 4511, &sapling)
+                .expect("sapling runs")
+                .hits
+                .len(),
+            0
+        );
+        assert_eq!(
+            decrypt_orchard::<OrchardVersion>(network, &ufvk, "orchard", &orchard)
+                .expect("orchard runs")
+                .hits
+                .len(),
+            0
+        );
     }
 
     /// A `/ciphertexts` body around hex records, all at `height`, as the new
     /// server encodes it.
     fn ciphertexts(height: u32, records: &[impl AsRef<str>]) -> Vec<u8> {
         let mut header = [0u8; 32];
-        let header = postcard::to_slice(&(height, height, height, records.len()), &mut header).expect("header");
+        let header = postcard::to_slice(&(height, height, height, records.len()), &mut header)
+            .expect("header");
         let mut body = header.to_vec();
         for record in records {
             body.extend(hex::decode(record.as_ref()).expect("hex"));
@@ -764,13 +857,19 @@ mod tests {
         let field = |k: &str| v[k].as_str().unwrap_or_default();
         let bytes = |k: &str| hex::decode(field(k)).expect("hex");
         FullNote {
-            cm: bytes(if v["cmx"].is_null() { "cmu" } else { "cmx" }).try_into().unwrap(),
+            cm: bytes(if v["cmx"].is_null() { "cmu" } else { "cmx" })
+                .try_into()
+                .unwrap(),
             enc_ciphertext: bytes("enc_ciphertext").try_into().unwrap(),
             eph_key: bytes("eph_key").try_into().unwrap(),
             height: v["height"].as_u64().unwrap() as u32,
             position: v["position"].as_u64().unwrap(),
             tx_index: v["tx_index"].as_u64().unwrap() as u16,
-            rho: if field("rho").is_empty() { [0; 32] } else { bytes("rho").try_into().unwrap() },
+            rho: if field("rho").is_empty() {
+                [0; 32]
+            } else {
+                bytes("rho").try_into().unwrap()
+            },
             cv: bytes("cv").try_into().unwrap(),
             out_ciphertext: bytes("out_ciphertext").try_into().unwrap(),
         }
@@ -782,21 +881,35 @@ mod tests {
         let records: Vec<_> = notes
             .iter()
             .map(|n| {
-                let mut r = [&n.eph_key[..], &n.enc_ciphertext[..COMPACT_NOTE_SIZE], &n.cm].concat();
+                let mut r = [
+                    &n.eph_key[..],
+                    &n.enc_ciphertext[..COMPACT_NOTE_SIZE],
+                    &n.cm,
+                ]
+                .concat();
                 if pool != "sapling" {
                     r.extend(n.rho);
                 }
                 hex::encode(r)
             })
             .collect();
-        let outgoing: Vec<_> = notes.iter().map(|n| hex::encode([&n.cv[..], &n.out_ciphertext].concat())).collect();
+        let outgoing: Vec<_> = notes
+            .iter()
+            .map(|n| hex::encode([&n.cv[..], &n.out_ciphertext].concat()))
+            .collect();
         let mut buf = [0u8; 32];
-        let mut memos = postcard::to_slice(&(height, height, height, notes.len()), &mut buf).unwrap().to_vec();
+        let mut memos = postcard::to_slice(&(height, height, height, notes.len()), &mut buf)
+            .unwrap()
+            .to_vec();
         for n in notes {
             memos.extend(&*postcard::to_slice(&(n.height, n.tx_index), &mut buf).unwrap());
             memos.extend(&n.enc_ciphertext[COMPACT_NOTE_SIZE..]);
         }
-        (ciphertexts(height, &records), memos, ciphertexts(height, &outgoing))
+        (
+            ciphertexts(height, &records),
+            memos,
+            ciphertexts(height, &outgoing),
+        )
     }
 
     #[test]
@@ -805,7 +918,10 @@ mod tests {
         notes[1].rho = [5; 32];
         let spends = spend_places(&notes, &[1]);
         assert_eq!(spends[0].nf, hex::encode([5u8; 32]));
-        assert_eq!((spends[0].height, spends[0].tx_index), (notes[1].height, notes[1].tx_index));
+        assert_eq!(
+            (spends[0].height, spends[0].tx_index),
+            (notes[1].height, notes[1].tx_index)
+        );
     }
 
     #[test]
@@ -820,7 +936,10 @@ mod tests {
 
             // The tip chunk grew between fetches: its later bodies hold one more note.
             let (_, m3, o3) = bodies(pool, &[fixture(json), fixture(json), fixture(json)]);
-            assert_eq!(full_notes(pool, 4_000, &c, &m3, &o3).expect("joins").len(), 2);
+            assert_eq!(
+                full_notes(pool, 4_000, &c, &m3, &o3).expect("joins").len(),
+                2
+            );
             // Never fewer, though.
             let (c3, _, _) = bodies(pool, &[fixture(json), fixture(json), fixture(json)]);
             assert!(full_notes(pool, 4_000, &c3, &m, &o).is_err());
@@ -837,16 +956,30 @@ mod tests {
         use orchard::NoteVersion;
         use zcash_note_encryption::Domain;
 
-        let usk = UnifiedSpendingKey::from_seed(&Network::MainNetwork, &[7u8; 32], zip32::AccountId::ZERO)
-            .expect("usk");
+        let usk = UnifiedSpendingKey::from_seed(
+            &Network::MainNetwork,
+            &[7u8; 32],
+            zip32::AccountId::ZERO,
+        )
+        .expect("usk");
         let ufvk = usk.to_unified_full_viewing_key();
-        let ours = ufvk.orchard().expect("orchard fvk").address_at(0u32, Scope::External);
+        let ours = ufvk
+            .orchard()
+            .expect("orchard fvk")
+            .address_at(0u32, Scope::External);
 
-        let rho_bytes: [u8; 32] = hex_n("08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39").unwrap();
+        let rho_bytes: [u8; 32] =
+            hex_n("08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39").unwrap();
         let rho = Rho::from_bytes(&rho_bytes).unwrap();
         let rseed = RandomSeed::from_bytes([3u8; 32], &rho).unwrap();
-        let note =
-            orchard::Note::from_parts(ours, NoteValue::from_raw(123_456), rho, rseed, NoteVersion::V3).unwrap();
+        let note = orchard::Note::from_parts(
+            ours,
+            NoteValue::from_raw(123_456),
+            rho,
+            rseed,
+            NoteVersion::V3,
+        )
+        .unwrap();
         let encryption = IronwoodNoteEncryption::new(None, note, [0u8; 512]);
         let enc = encryption.encrypt_note_plaintext();
 
@@ -857,12 +990,21 @@ mod tests {
         let body = ciphertexts(3_430_000, &[&hex::encode(record)]);
 
         let ufvk = ufvk.encode(&Network::MainNetwork);
-        let compact = decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body).expect("runs");
+        let compact =
+            decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body).expect("runs");
         assert_eq!((compact.count, compact.min_height), (1, 3_430_000));
         let hits = compact.hits;
         assert_eq!(hits.len(), 1);
-        assert_eq!((hits[0].pool, hits[0].scope, hits[0].value), ("ironwood", "external", 123_456));
-        assert!(decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body).expect("runs").hits.is_empty());
+        assert_eq!(
+            (hits[0].pool, hits[0].scope, hits[0].value),
+            ("ironwood", "external", 123_456)
+        );
+        assert!(
+            decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body)
+                .expect("runs")
+                .hits
+                .is_empty()
+        );
 
         // The whole ciphertext through the full path: same answer, plus where it sits.
         let full = FullNote {
@@ -876,20 +1018,41 @@ mod tests {
             cv: [0; 32],
             out_ciphertext: [0; OUT_CIPHERTEXT_SIZE],
         };
-        let chunk = decrypt_full("main", &ufvk, "ironwood", std::slice::from_ref(&full), &[0]).expect("runs");
+        let chunk = decrypt_full("main", &ufvk, "ironwood", std::slice::from_ref(&full), &[0])
+            .expect("runs");
         assert_eq!(chunk.hits.len(), 1);
-        assert_eq!((chunk.hits[0].pool, chunk.hits[0].value, chunk.hits[0].position), ("ironwood", 123_456, 7));
+        assert_eq!(
+            (
+                chunk.hits[0].pool,
+                chunk.hits[0].value,
+                chunk.hits[0].position
+            ),
+            ("ironwood", 123_456, 7)
+        );
         // What it carries for spending rebuilds the very note.
-        let spendable = notes::decode_orchard(&chunk.hits[0].note, NoteVersion::V3).expect("decodes");
-        assert_eq!(ExtractedNoteCommitment::from(spendable.commitment()), ExtractedNoteCommitment::from(note.commitment()));
-        assert!(decrypt_full("main", &ufvk, "orchard", &[full], &[0]).expect("runs").hits.is_empty());
+        let spendable =
+            notes::decode_orchard(&chunk.hits[0].note, NoteVersion::V3).expect("decodes");
+        assert_eq!(
+            ExtractedNoteCommitment::from(spendable.commitment()),
+            ExtractedNoteCommitment::from(note.commitment())
+        );
+        assert!(decrypt_full("main", &ufvk, "orchard", &[full], &[0])
+            .expect("runs")
+            .hits
+            .is_empty());
     }
 
     #[test]
     fn rejects_a_truncated_chunk() {
         let record = "00".repeat(ORCHARD_RECORD_LEN);
         let mut body = ciphertexts(3_424_128, &[&record, &record]);
-        assert_eq!(chunk_body(&body, ORCHARD_RECORD_LEN).expect("whole").records.len(), 2);
+        assert_eq!(
+            chunk_body(&body, ORCHARD_RECORD_LEN)
+                .expect("whole")
+                .records
+                .len(),
+            2
+        );
 
         body.pop();
         assert!(chunk_body(&body, ORCHARD_RECORD_LEN).is_err());
@@ -899,10 +1062,22 @@ mod tests {
     #[test]
     fn chunk_enforcement_widens_across_a_rule_change() {
         let net = Network::MainNetwork;
-        assert_eq!(chunk_enforcement(&net, 1_000_000, 1_000_100), Zip212Enforcement::Off);
-        assert_eq!(chunk_enforcement(&net, 3_000_000, 3_000_100), Zip212Enforcement::On);
-        assert_eq!(chunk_enforcement(&net, 1_046_000, 1_047_000), Zip212Enforcement::GracePeriod);
-        assert_eq!(chunk_enforcement(&net, 1_000_000, 2_000_000), Zip212Enforcement::GracePeriod);
+        assert_eq!(
+            chunk_enforcement(&net, 1_000_000, 1_000_100),
+            Zip212Enforcement::Off
+        );
+        assert_eq!(
+            chunk_enforcement(&net, 3_000_000, 3_000_100),
+            Zip212Enforcement::On
+        );
+        assert_eq!(
+            chunk_enforcement(&net, 1_046_000, 1_047_000),
+            Zip212Enforcement::GracePeriod
+        );
+        assert_eq!(
+            chunk_enforcement(&net, 1_000_000, 2_000_000),
+            Zip212Enforcement::GracePeriod
+        );
     }
 
     // Same idea for the full tier, over real notes: the whole
@@ -912,9 +1087,15 @@ mod tests {
     // note yields the right memo is what the crawler's own logging shows.
     #[test]
     fn decrypts_real_full_shapes_without_matching() {
-        let usk = UnifiedSpendingKey::from_seed(&Network::MainNetwork, &[7u8; 32], zip32::AccountId::ZERO)
-            .expect("usk");
-        let ufvk = usk.to_unified_full_viewing_key().encode(&Network::MainNetwork);
+        let usk = UnifiedSpendingKey::from_seed(
+            &Network::MainNetwork,
+            &[7u8; 32],
+            zip32::AccountId::ZERO,
+        )
+        .expect("usk");
+        let ufvk = usk
+            .to_unified_full_viewing_key()
+            .encode(&Network::MainNetwork);
 
         let sapling = [fixture(SAPLING_FULL)];
         let orchard = [fixture(ORCHARD_FULL)];
@@ -937,15 +1118,19 @@ mod tests {
     fn recovers_our_own_sapling_output() {
         use rand_core::OsRng;
         use sapling::note_encryption::sapling_note_encryption;
-        use zcash_note_encryption::Domain;
         use sapling::value::{NoteValue, ValueCommitTrapdoor, ValueCommitment};
         use sapling::{Note, Rseed};
+        use zcash_note_encryption::Domain;
 
         let dfvk = |seed: u8| {
-            UnifiedSpendingKey::from_seed(&Network::MainNetwork, &[seed; 32], zip32::AccountId::ZERO)
-                .expect("usk")
-                .sapling()
-                .to_diversifiable_full_viewing_key()
+            UnifiedSpendingKey::from_seed(
+                &Network::MainNetwork,
+                &[seed; 32],
+                zip32::AccountId::ZERO,
+            )
+            .expect("usk")
+            .sapling()
+            .to_diversifiable_full_viewing_key()
         };
         let ours = dfvk(7);
         let (_, theirs) = dfvk(9).default_address();
@@ -972,10 +1157,14 @@ mod tests {
             cv: cv.to_bytes(),
         }];
 
-        let ufvk = UnifiedSpendingKey::from_seed(&Network::MainNetwork, &[7u8; 32], zip32::AccountId::ZERO)
-            .expect("usk")
-            .to_unified_full_viewing_key()
-            .encode(&Network::MainNetwork);
+        let ufvk = UnifiedSpendingKey::from_seed(
+            &Network::MainNetwork,
+            &[7u8; 32],
+            zip32::AccountId::ZERO,
+        )
+        .expect("usk")
+        .to_unified_full_viewing_key()
+        .encode(&Network::MainNetwork);
         let chunk = decrypt_full("main", &ufvk, "sapling", &full, &[]).expect("runs");
 
         // Not ours to receive — only to have sent.
@@ -983,7 +1172,10 @@ mod tests {
         assert_eq!(chunk.sent.len(), 1);
         assert_eq!(chunk.sent[0].value, 123_456);
         // Encoded as a wallet shows it, not as raw diversified bytes.
-        assert_eq!(chunk.sent[0].recipient, Address::Sapling(theirs).encode(&Network::MainNetwork));
+        assert_eq!(
+            chunk.sent[0].recipient,
+            Address::Sapling(theirs).encode(&Network::MainNetwork)
+        );
         assert!(chunk.sent[0].recipient.starts_with("zs1"));
         assert_eq!(chunk.sent[0].memo.as_deref(), Some("paid"));
     }
