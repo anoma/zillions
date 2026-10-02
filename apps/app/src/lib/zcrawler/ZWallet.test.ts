@@ -152,6 +152,8 @@ const { ZWallet } = await import("./ZWallet");
 const zcore = await import("@zillions/zcore");
 const { submitTransaction } = await import("./submit");
 const { cachedTransparent } = await import("./transparent");
+const { fetchBlock } = await import("./lightwalletd");
+const db = await import("./db");
 
 function block(overrides: Partial<Block> = {}): Block {
   return {
@@ -371,5 +373,33 @@ test("shows the transparent side as last synced before any sync answers", async 
         to: { pool: "transparent" },
       }),
     ]),
+  );
+});
+
+test("reads history only once storage is loaded", async () => {
+  vi.mocked(db.loadNotes).mockResolvedValueOnce([
+    { ...note("orchard", 7, nf("ab")), id: "g_orchard_7", spent: false },
+  ]);
+  const wallet = new ZWallet({ id: "g", ufvk: "uview" });
+  expect(await wallet.getTransactionHistory()).toHaveLength(1);
+});
+
+test("stores a recent block, and fetches it again each sync", async () => {
+  chain.sizes = { sapling: 0, orchard: 2 * 16_384, ironwood: 0 };
+  // Mined 50 blocks below the tip: a reorg could still replace it.
+  chain.hits.set("orchard:1", [
+    { ...note("orchard", 16_387, nf("cd")), height: 3_150 },
+  ]);
+  const wallet = new ZWallet({ id: "h", ufvk: "uview" });
+  const fetches = () =>
+    vi.mocked(fetchBlock).mock.calls.filter(([h]) => h === 3_150).length;
+  const before = fetches();
+
+  await wallet.sync();
+  await wallet.sync();
+
+  expect(fetches() - before).toBe(2);
+  expect(vi.mocked(db.saveBlocks)).toHaveBeenCalledWith(
+    expect.arrayContaining([expect.objectContaining({ height: 3_150 })]),
   );
 });

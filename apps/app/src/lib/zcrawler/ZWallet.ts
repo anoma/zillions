@@ -124,7 +124,7 @@ export class ZWallet {
     utxos: [],
     txs: [],
   };
-  /** Blocks history names, for their txids and times. They never change. */
+  /** Blocks history names, for their txids, times and transparent outputs. */
   #blocks: Map<number, Block> = new Map();
   #syncProgressListeners: Set<SyncEventListener> = new Set();
   #abort = new AbortController();
@@ -137,6 +137,8 @@ export class ZWallet {
   #locating: Promise<unknown> = Promise.resolve();
   /** Chunks read in full this sync, as `pool:chunk`: their sends are in. */
   #readChunks = new Set<string>();
+  /** Heights whose block was fetched this sync. */
+  #freshBlocks = new Set<number>();
 
   constructor(options: { id: string; ufvk: string; birthday?: number }) {
     this.id = options.id;
@@ -196,9 +198,9 @@ export class ZWallet {
     this.#emitProgress();
 
     // Transparent takes seconds, so it lands long before the shielded crawl;
-    // announcing it on arrival shows that balance straight away. Recent blocks
-    // aren't stored, so they're fetched now too, or history would wait for
-    // the whole crawl to match a recent transaction's two sides.
+    // announcing it on arrival shows that balance straight away. Blocks are
+    // fetched now too, the tip being known: a new transparent transaction's,
+    // and recent ones a reorg may have replaced.
     const transparent = syncTransparent(this.id, this.#ufvk)
       .then((result) => {
         this.#transparent = result;
@@ -210,6 +212,7 @@ export class ZWallet {
     const lookups = workerChannel();
     this.#locating = Promise.resolve();
     this.#readChunks.clear();
+    this.#freshBlocks.clear();
     let sizes: TreeSizes | undefined;
     // History's blocks are looked up whatever becomes of the crawl: what it
     // did find, and the transparent side, still deserve their txids and times.
@@ -476,26 +479,35 @@ export class ZWallet {
    * seen from both sides show once, and every entry its time.
    */
   #fetchBlocks = async () => {
-    const heights = await this.#restoreBlocks([
+    const { tip } = this.#transparent;
+    const history = [
       ...historyHeights(this.#notes, this.#sent, this.#transparent.txs),
-    ]);
+    ];
+    const missing = await this.#restoreBlocks(history);
+    // A block a reorg can still replace is stored, so history shows it on
+    // load, but fetched again once per sync.
+    const unsettled =
+      tip === undefined
+        ? []
+        : history.filter(
+            (height) =>
+              height > tip - REORG_DEPTH && !this.#freshBlocks.has(height),
+          );
+    const heights = [...new Set([...missing, ...unsettled])];
     // A block that fails is simply asked for again next sync.
     const blocks = await Promise.allSettled(heights.map(fetchBlock));
     const fetched: (Block & { height: number })[] = [];
     blocks.forEach((block, i) => {
       if (block.status === "fulfilled") {
         this.#blocks.set(heights[i], block.value);
+        this.#freshBlocks.add(heights[i]);
         fetched.push({ ...block.value, height: heights[i] });
       } else
         console.error("[sync] block lookup failed", heights[i], block.reason);
     });
-    // A block a reorg can still replace is only held until the page closes.
-    const { tip } = this.#transparent;
-    if (tip !== undefined) {
-      await saveBlocks(
-        fetched.filter(({ height }) => height <= tip - REORG_DEPTH),
-      ).catch((err) => console.error("[sync] block save failed", err));
-    }
+    await saveBlocks(fetched).catch((err) =>
+      console.error("[sync] block save failed", err),
+    );
     this.#emitProgress();
   };
 
@@ -542,7 +554,10 @@ export class ZWallet {
     };
   };
 
+  // Both wait for what storage holds, so a query on mount never reads an
+  // empty wallet first.
   async getBalance() {
+    await this.#seed();
     const { notes, utxos } = this.#spendable();
     return {
       shieldedBalance: notes.reduce((sum, n) => sum + BigInt(n.value), 0n),
@@ -665,6 +680,7 @@ export class ZWallet {
   };
 
   async getTransactionHistory() {
+    await this.#seed();
     return buildHistory(
       this.#notes,
       this.#sent,
