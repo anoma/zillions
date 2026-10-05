@@ -214,8 +214,9 @@ export function parse_transaction(network, height, data) {
 }
 
 /**
- * What a PCZT moves: `{ network, transparentInputs, transparentOutputs,
- * orchardOutputs, fee }`, values in zatoshis as strings.
+ * What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
+ * (`transparent`, `sapling`, `orchard`, `ironwood`), values in zatoshis as
+ * strings.
  * @param {string} network
  * @param {Uint8Array} pczt
  * @returns {any}

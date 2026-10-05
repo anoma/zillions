@@ -172,9 +172,10 @@ pub(crate) struct Summary {
     transparent_outputs: Vec<Flow>,
     sapling_inputs: Vec<Flow>,
     sapling_outputs: Vec<Flow>,
-    /// Orchard and Ironwood together.
     orchard_inputs: Vec<Flow>,
     orchard_outputs: Vec<Flow>,
+    ironwood_inputs: Vec<Flow>,
+    ironwood_outputs: Vec<Flow>,
     fee: String,
 }
 
@@ -208,34 +209,40 @@ pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
         .iter()
         .filter_map(|o| real(*o.value(), o.user_address()).map(|v| (o.user_address().clone(), v)))
         .collect();
-    let orchard_family = [pczt.orchard(), pczt.ironwood()];
-    let orchard_outputs: Vec<_> = orchard_family
-        .iter()
-        .flat_map(|bundle| bundle.actions())
-        .filter_map(|a| {
-            real(*a.output().value(), a.output().user_address())
-                .map(|v| (a.output().user_address().clone(), v))
-        })
-        .collect();
+    let action_outputs = |bundle: &pczt::orchard::Bundle| -> Vec<_> {
+        bundle
+            .actions()
+            .iter()
+            .filter_map(|a| {
+                real(*a.output().value(), a.output().user_address())
+                    .map(|v| (a.output().user_address().clone(), v))
+            })
+            .collect()
+    };
+    let orchard_outputs = action_outputs(pczt.orchard());
+    let ironwood_outputs = action_outputs(pczt.ironwood());
 
     // A bundle's net value is what its spends brought in beyond its outputs.
     let sapling_net = *pczt.sapling().value_sum();
-    let orchard_net: i128 = orchard_family
-        .iter()
-        .map(|b| {
-            let (magnitude, negative) = *b.value_sum();
-            if negative {
-                -i128::from(magnitude)
-            } else {
-                i128::from(magnitude)
-            }
-        })
-        .sum();
+    let action_net = |bundle: &pczt::orchard::Bundle| {
+        let (magnitude, negative) = *bundle.value_sum();
+        if negative {
+            -i128::from(magnitude)
+        } else {
+            i128::from(magnitude)
+        }
+    };
+    let orchard_net = action_net(pczt.orchard());
+    let ironwood_net = action_net(pczt.ironwood());
     let sum =
         |list: &[(Option<String>, u64)]| list.iter().map(|(_, v)| i128::from(*v)).sum::<i128>();
     let sapling_in = sapling_net + sum(&sapling_outputs);
     let orchard_in = orchard_net + sum(&orchard_outputs);
-    let fee = sum(&transparent_inputs) - sum(&transparent_outputs) + sapling_net + orchard_net;
+    let ironwood_in = ironwood_net + sum(&ironwood_outputs);
+    let fee = sum(&transparent_inputs) - sum(&transparent_outputs)
+        + sapling_net
+        + orchard_net
+        + ironwood_net;
 
     let flows = |list: Vec<(Option<String>, u64)>| {
         list.into_iter()
@@ -265,6 +272,8 @@ pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
         sapling_outputs: flows(sapling_outputs),
         orchard_inputs: total(orchard_in),
         orchard_outputs: flows(orchard_outputs),
+        ironwood_inputs: total(ironwood_in),
+        ironwood_outputs: flows(ironwood_outputs),
         fee: fee.to_string(),
     }
 }
@@ -355,8 +364,9 @@ pub fn sign_pczt(
     serialize(signed)
 }
 
-/// What a PCZT moves: `{ network, transparentInputs, transparentOutputs,
-/// orchardOutputs, fee }`, values in zatoshis as strings.
+/// What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
+/// (`transparent`, `sapling`, `orchard`, `ironwood`), values in zatoshis as
+/// strings.
 #[wasm_bindgen]
 pub fn pczt_summary(network: &str, pczt: &[u8]) -> Result<JsValue, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;

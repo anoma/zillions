@@ -25,7 +25,7 @@ export type PcztTransparentIo = {
 };
 
 /**
- * A shielded (sapling/orchard) value flow as surfaced by `pczt.to_json()`.
+ * A shielded (sapling/orchard/ironwood) value flow as surfaced by `pczt.to_json()`.
  */
 export type PcztShieldedIo = {
   address?: string;
@@ -50,6 +50,9 @@ export type PcztSummary = {
   /** Orchard value flows (spends + outputs/actions). */
   orchardInputs: PcztShieldedIo[];
   orchardOutputs: PcztShieldedIo[];
+  /** Ironwood value flows (spends + outputs/actions). */
+  ironwoodInputs: PcztShieldedIo[];
+  ironwoodOutputs: PcztShieldedIo[];
   /** Fee in zatoshis, derived from the PCZT's bundle balances. */
   fee: string;
   /** The full `to_json()` structure for the raw expandable view. */

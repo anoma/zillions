@@ -1,6 +1,6 @@
 /**
- * PCZT summary renderer. Shows transparent inputs/outputs and sapling/orchard
- * value flows derived from `pczt.to_json()`, plus the fee from `pczt.fee()`.
+ * PCZT summary renderer. Shows transparent inputs/outputs and
+ * sapling/orchard/ironwood value flows derived from `pczt.to_json()`, plus the fee from `pczt.fee()`.
  */
 import { ReactNode } from "react";
 import { FaArrowDown, FaArrowUp } from "react-icons/fa6";
@@ -30,7 +30,7 @@ const ioContent = (io: PcztTransparentIo | PcztShieldedIo): ReactNode => (
 );
 
 /**
- * Render a single section (transparent / sapling / orchard) of a PCZT as a set
+ * Render a single section (transparent / sapling / orchard / ironwood) of a PCZT as a set
  * of input/output cards. Sections with no flows are omitted.
  */
 const Section = ({
@@ -74,7 +74,9 @@ export const Commitment = ({ summary }: CommitmentProps) => {
     summary.saplingInputs.length === 0 &&
     summary.saplingOutputs.length === 0 &&
     summary.orchardInputs.length === 0 &&
-    summary.orchardOutputs.length === 0;
+    summary.orchardOutputs.length === 0 &&
+    summary.ironwoodInputs.length === 0 &&
+    summary.ironwoodOutputs.length === 0;
 
   return (
     <>
@@ -92,6 +94,11 @@ export const Commitment = ({ summary }: CommitmentProps) => {
         title="Orchard"
         inputs={summary.orchardInputs}
         outputs={summary.orchardOutputs}
+      />
+      <Section
+        title="Ironwood"
+        inputs={summary.ironwoodInputs}
+        outputs={summary.ironwoodOutputs}
       />
       <TransactionCard
         title="Fee"

@@ -837,10 +837,11 @@ mod tests {
         assert_eq!(
             (
                 summary["fee"].as_str(),
-                summary["orchardOutputs"][0]["value"].as_str()
+                summary["ironwoodOutputs"][0]["value"].as_str()
             ),
             (Some("15000"), Some("85000"))
         );
+        assert_eq!(summary["orchardOutputs"], serde_json::json!([]));
         assert_eq!(
             summary["transparentInputs"][0]["address"].as_str(),
             Some(ours.as_str())
@@ -889,6 +890,21 @@ mod tests {
             .to_bytes();
         let proposal = crate::send::tests::plan_migration(&wallet);
         let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
+        let fee = u64::from(proposal.steps().first().balance().fee_required());
+
+        // What the keychain shows: 200,000 out of Orchard, the rest into Ironwood.
+        let summary =
+            serde_json::to_value(crate::roles::summarize(&Network::MainNetwork, &unsigned))
+                .unwrap();
+        assert_eq!(summary["orchardInputs"][0]["value"], "200000");
+        assert_eq!(summary["orchardOutputs"], serde_json::json!([]));
+        assert_eq!(summary["ironwoodInputs"], serde_json::json!([]));
+        assert_eq!(
+            summary["ironwoodOutputs"][0]["value"],
+            (200_000 - fee).to_string()
+        );
+        assert_eq!(summary["fee"], fee.to_string());
+
         let signed = crate::roles::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
         let (_, raw) = crate::roles::prove(signed, None).unwrap();
         let tx = zcash_primitives::transaction::Transaction::read(
@@ -899,8 +915,7 @@ mod tests {
         let left = i64::from(*tx.orchard_bundle().unwrap().value_balance());
         let arrived = -i64::from(*tx.ironwood_bundle().unwrap().value_balance());
         assert_eq!(left, 200_000);
-        let fee = proposal.steps().first().balance().fee_required();
-        assert_eq!(arrived + i64::try_from(u64::from(fee)).unwrap(), 200_000);
+        assert_eq!(arrived + i64::try_from(fee).unwrap(), 200_000);
         assert!(tx.transparent_bundle().is_none() && tx.sapling_bundle().is_none());
     }
 
@@ -928,9 +943,10 @@ mod tests {
         let summary =
             serde_json::to_value(crate::roles::summarize(&Network::MainNetwork, &unsigned))
                 .unwrap();
-        assert_eq!(summary["orchardInputs"][0]["value"], "200000");
+        assert_eq!(summary["ironwoodInputs"][0]["value"], "200000");
+        assert_eq!(summary["orchardInputs"], serde_json::json!([]));
         let fee: u64 = summary["fee"].as_str().unwrap().parse().unwrap();
-        let change: u64 = summary["orchardOutputs"]
+        let change: u64 = summary["ironwoodOutputs"]
             .as_array()
             .unwrap()
             .iter()

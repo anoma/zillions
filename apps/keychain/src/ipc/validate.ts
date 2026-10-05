@@ -92,7 +92,9 @@ const isPcztSummary = (v: unknown): v is PcztSummary =>
   Array.isArray(v.saplingInputs) &&
   Array.isArray(v.saplingOutputs) &&
   Array.isArray(v.orchardInputs) &&
-  Array.isArray(v.orchardOutputs);
+  Array.isArray(v.orchardOutputs) &&
+  Array.isArray(v.ironwoodInputs) &&
+  Array.isArray(v.ironwoodOutputs);
 
 /**
  * Validate (and narrow) a raw response for a given channel. Throws

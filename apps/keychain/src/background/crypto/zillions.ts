@@ -115,8 +115,8 @@ export const signPczt = (
   bytesToBase64(sign_pczt(getNetwork(), base64ToBytes(pczt), seed, hdIndex));
 
 /**
- * What a PCZT (base64) moves, for the approval screen. Orchard and Ironwood
- * are shown together; shielded inputs are per-pool totals.
+ * What a PCZT (base64) moves, for the approval screen. Shielded inputs are
+ * per-pool totals.
  */
 export const buildPcztSummary = (pczt: string): PcztSummary => {
   const summary = pczt_summary(getNetwork(), base64ToBytes(pczt));

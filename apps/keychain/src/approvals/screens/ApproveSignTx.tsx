@@ -81,7 +81,9 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
       details.summary.saplingInputs.length +
       details.summary.saplingOutputs.length +
       details.summary.orchardInputs.length +
-      details.summary.orchardOutputs.length
+      details.summary.orchardOutputs.length +
+      details.summary.ironwoodInputs.length +
+      details.summary.ironwoodOutputs.length
       : 0;
 
   return (
