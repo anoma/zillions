@@ -29,7 +29,7 @@ lightwalletd; nothing from a local crawler.
   chunk holding a hit or a spend of ours. Outgoing recovery covers the whole
   chunk, so it also finds what our spending transactions paid out.
 - **Orchard and Ironwood spends.** Every action's rho is the nullifier it
-  spends, and it rides in the `/ciphertexts` record. Applying chunk *c* checks
+  spends, and it rides in the `/ciphertexts` record. Applying chunk _c_ checks
   its rho against every note found before it: an exact, 32-byte match whose
   position gives the height and transaction index (from `/memos`). No
   nullifier download at all. Checked against the chain for both pools.
@@ -39,7 +39,7 @@ lightwalletd; nothing from a local crawler.
   only new chunks on later syncs. That proves spent or unspent; the transaction
   is found among our own, whose compact blocks history fetches anyway. A spend
   in a transaction with nothing else of ours stays "spent, transaction unknown"
-  (open question in [product.md](product.md)).
+  (open question in [product.md](../product.md)).
 - **Sends across pools.** A payment can sit in a pool where we hold nothing,
   so the crawl never reads its chunk. After each sync, every transaction of
   ours that spent something is placed exactly: its compact block's tree sizes
@@ -66,12 +66,12 @@ lightwalletd; nothing from a local crawler.
 
 Taken 2026-07-30, `chunk_size = 4096`.
 
-| | sapling | orchard |
-|---|---|---|
-| chain chunks (0..last) | 18,051 | 12,262 |
-| chain positions | ~73.9M | ~50.2M |
-| JSON payload | 307 B/note | 363 B/note |
-| trial decrypt | 5,111 notes/s | 5,334 notes/s |
+|                        | sapling       | orchard       |
+| ---------------------- | ------------- | ------------- |
+| chain chunks (0..last) | 18,051        | 12,262        |
+| chain positions        | ~73.9M        | ~50.2M        |
+| JSON payload           | 307 B/note    | 363 B/note    |
+| trial decrypt          | 5,111 notes/s | 5,334 notes/s |
 
 **Provenance — these are mainnet-scale, not local-index counts.** Totals derive
 from `last_chunk`, the absolute tree position of the newest indexed note
@@ -128,17 +128,17 @@ crawl finds it.
 
 Rule: **reinvent the index, reuse everything downstream of "this note is mine."**
 
-| Component | Owns |
-|---|---|
-| **zcrawler** | Note ciphertexts, commitments, nullifiers. Bulk trial-decrypt over immutable position chunks. Answers *which positions are mine* and *which nullifiers are spent*. |
-| **ziziphus** | Merkle tree structure only. Chunk blobs + tip state; clients assemble witnesses offline. |
-| **librustzcash** | Stateless crypto and consensus: decryption, fees, selection, PCZT build/prove. |
-| **This repo** | Wallet state, orchestration, UI. |
-| **lightwalletd** | Transparent UTXOs (`GetAddressUtxos`). Untouched by the crawler. |
-| **Live tip** | Small enough to be ordinary. Not the crawler's problem. |
+| Component        | Owns                                                                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **zcrawler**     | Note ciphertexts, commitments, nullifiers. Bulk trial-decrypt over immutable position chunks. Answers _which positions are mine_ and _which nullifiers are spent_. |
+| **ziziphus**     | Merkle tree structure only. Chunk blobs + tip state; clients assemble witnesses offline.                                                                           |
+| **librustzcash** | Stateless crypto and consensus: decryption, fees, selection, PCZT build/prove.                                                                                     |
+| **This repo**    | Wallet state, orchestration, UI.                                                                                                                                   |
+| **lightwalletd** | Transparent UTXOs (`GetAddressUtxos`). Untouched by the crawler.                                                                                                   |
+| **Live tip**     | Small enough to be ordinary. Not the crawler's problem.                                                                                                            |
 
 The crawler never touches the unsealed chunk — `last_chunk` becomes "last
-*sealed* chunk", and the partial-tip gap (chunk 18051 serves 1331 of 4096)
+_sealed_ chunk", and the partial-tip gap (chunk 18051 serves 1331 of 4096)
 stops existing rather than needing a fix.
 
 ## Witnesses: ziziphus resolves this
@@ -155,7 +155,7 @@ Three consequences for us:
   design is gone. We never maintain a commitment tree.
 - **No positional leak.** There are deliberately no per-note endpoints; every
   client fetches the same global artifacts. This is strictly better than the
-  nullifier prefix buckets this design first had, which *did* leak.
+  nullifier prefix buckets this design first had, which _did_ leak.
 - **Cost per spend is bounded:** ~1 MiB per chunk holding an unspent note, plus
   one tip state.
 
@@ -169,10 +169,10 @@ integer on both grids.
 ziziphus's README sizes the upper domain at "~10 M notes → fewer than 620 chunk
 roots". Mainnet today is ~74M sapling and ~50M orchard positions, so:
 
-| | chunks | roots array | tip state |
-|---|---|---|---|
-| sapling | ~4,510 | ~144 KB | ~1.19 MiB |
-| orchard | ~3,065 | ~98 KB | ~1.09 MiB |
+|         | chunks | roots array | tip state |
+| ------- | ------ | ----------- | --------- |
+| sapling | ~4,510 | ~144 KB     | ~1.19 MiB |
+| orchard | ~3,065 | ~98 KB      | ~1.09 MiB |
 
 Still fine — depth-18 holds 262,144 chunks — but the roots array is ~7× the
 README's estimate, and total frozen blob storage is ~7.4 GB rather than ~600 MB.
@@ -194,12 +194,12 @@ Hand-rolling any of these is how funds go to addresses nobody controls.
 
 Moves to TS when `zcash_client_memory` retires:
 
-| today | after |
-|---|---|
+| today                                   | after                                                                   |
+| --------------------------------------- | ----------------------------------------------------------------------- |
 | `get_transparent_receivers` (DB-backed) | stateless wasm `derive(ufvk, account, scope, from, count) -> addresses` |
-| gap-limit widening loop | ports near-verbatim; it is a loop, a set, and a re-query |
-| `utxo_query_height` | TS-held cursor |
-| `put_received_transparent_utxo` | Dexie |
+| gap-limit widening loop                 | ports near-verbatim; it is a loop, a set, and a re-query                |
+| `utxo_query_height`                     | TS-held cursor                                                          |
+| `put_received_transparent_utxo`         | Dexie                                                                   |
 
 **Source of UTXOs: keep lightwalletd `GetAddressUtxos`.** It works, it is wired,
 and moving it to zcrawler buys nothing — UTXO sets are mutable, so there is no
@@ -213,7 +213,7 @@ Three properties differ from shielded and are worth exploiting:
   while the shielded backfill runs — it is the fastest path to a wallet that
   looks alive.
 - **No validation gate needed.** `GetAddressUtxos` returns the unspent set
-  directly, so spentness is *observed*, not inferred. The invariant below is
+  directly, so spentness is _observed_, not inferred. The invariant below is
   shielded-specific. (Trust point: spentness is server-asserted — acceptable,
   since transparent is public anyway.)
 - **Birthday-independent.** Gap-limit discovery always starts at index 0;
@@ -225,13 +225,13 @@ around it.
 
 Out of scope for now: ZIP-320 / TEX ephemeral addresses (the vendored backend
 has `reserve_next_n_ephemeral_addresses` if needed) and transparent transaction
-*history*, which needs chain history rather than the current UTXO set.
+_history_, which needs chain history rather than the current UTXO set.
 
 ## Balance invariant: validated-before-spendable (shielded)
 
 **A note counts toward balance only after its nullifier has been checked.**
 
-This makes the balance *monotonically increasing* through the initial sync — it
+This makes the balance _monotonically increasing_ through the initial sync — it
 only ever grows as history is discovered, never corrects downward. That is the
 whole point: a shrinking balance mid-sync reads as lost funds.
 
@@ -302,13 +302,13 @@ skip and history cannot. Treat them as one mechanism.
 
 Compact data is structurally insufficient for it:
 
-| needed | in compact data? |
-|---|---|
-| value, recipient | yes |
-| **memo** | no — compact carries 52 of the 580 ciphertext bytes |
-| **txid** | no |
-| **height** | sapling only; orchard has none |
-| **outgoing payment details** | no — needs `out_ciphertext` + OVK |
+| needed                       | in compact data?                                    |
+| ---------------------------- | --------------------------------------------------- |
+| value, recipient             | yes                                                 |
+| **memo**                     | no — compact carries 52 of the 580 ciphertext bytes |
+| **txid**                     | no                                                  |
+| **height**                   | sapling only; orchard has none                      |
+| **outgoing payment details** | no — needs `out_ciphertext` + OVK                   |
 
 That last row is easy to miss: showing "you sent X to address Y" for a shielded
 send requires decrypting the 80-byte `out_ciphertext` with the outgoing viewing
@@ -327,10 +327,10 @@ step would be a poor trade.
 Serve full ciphertexts chunk-wise, on the same immutable grid, fetched **only
 for chunks that produced a hit**:
 
-| tier | contents | size | when fetched |
-|---|---|---|---|
-| compact | cmu/cmx, epk, 52 B enc prefix | 116 B/note | every chunk |
-| full | `enc_ciphertext` 580 + `out_ciphertext` 80 + txid 32 + height | ~3 MB/chunk | hit chunks only |
+| tier    | contents                                                      | size        | when fetched    |
+| ------- | ------------------------------------------------------------- | ----------- | --------------- |
+| compact | cmu/cmx, epk, 52 B enc prefix                                 | 116 B/note  | every chunk     |
+| full    | `enc_ciphertext` 580 + `out_ciphertext` 80 + txid 32 + height | ~3 MB/chunk | hit chunks only |
 
 Immutable, CDN-cacheable, and the leak is "this wallet has something in chunk
 N" — an anonymity set of 4,096 outputs, the same shape as ziziphus's blobs. A
@@ -349,7 +349,7 @@ names the transaction through its block's txids.
 
 ### Transparent history
 
-`GetAddressUtxos` returns only the *unspent* set, so it cannot serve history.
+`GetAddressUtxos` returns only the _unspent_ set, so it cannot serve history.
 Use lightwalletd's `GetTaddressTxids` per discovered address over the full
 range, then parse inputs and outputs from the returned transactions. Cheap
 (tens of addresses), immediate, and it leaks nothing beyond the address linkage
@@ -376,11 +376,11 @@ nullifiers they hold.
 prefix is ~52M / 2⁸⁰. Consensus needs all 32 bytes because it must resist an
 attacker grinding collisions; a wallet only checks its own, random values.
 
-| pool | nullifiers | chunks | total |
-|---|---|---|---|
-| Sapling | 2.14M | 8 full + tail | ~20 MB |
-| Orchard | ~50.5M (one per action) | 192 full + tail | ~461 MB |
-| Ironwood | 0.66M (one per action) | 2 full + tail | ~6 MB |
+| pool     | nullifiers              | chunks          | total   |
+| -------- | ----------------------- | --------------- | ------- |
+| Sapling  | 2.14M                   | 8 full + tail   | ~20 MB  |
+| Orchard  | ~50.5M (one per action) | 192 full + tail | ~461 MB |
+| Ironwood | 0.66M (one per action)  | 2 full + tail   | ~6 MB   |
 
 Only Sapling uses them: Orchard and Ironwood spends come with the ciphertexts
 (see Sync as built).
@@ -399,10 +399,10 @@ Only Sapling uses them: Orchard and Ironwood spends come with the ciphertexts
 2. **Height → position mapping per pool.** Blocks the optional birthday.
 3. **`height` on orchard entries.** Sapling has it; orchard does not. Needed for
    tail sizing and for ordering history.
-3b. **A full-ciphertext chunk tier** (`enc_ciphertext` + `out_ciphertext` +
+   3b. **A full-ciphertext chunk tier** (`enc_ciphertext` + `out_ciphertext` +
    txid + height, same grid, ~3 MB/chunk). Required for memos and for showing
    your own sends; fetched only for hit chunks. See Transaction history.
-3c. ~~A `/spends/{prefix}/{seal}` detail artifact~~ — not needed; see Spend side.
+   3c. ~~A `/spends/{prefix}/{seal}` detail artifact~~ — not needed; see Spend side.
 4. **Block height in the ziziphus tip state.** The struct carries `tree_size`
    but no height, so the client cannot confirm the anchor sits inside the
    100-block window or set tx expiry. Small addition, blocks the spend path.
@@ -433,7 +433,7 @@ Only Sapling uses them: Orchard and Ironwood spends come with the ciphertexts
 
 ## Phases
 
-0. Seal the tip: `last_chunk` = last *sealed* chunk. Small; fixes a live
+0. Seal the tip: `last_chunk` = last _sealed_ chunk. Small; fixes a live
    data-loss bug.
 1. Validated-before-spendable flag. Small, and it makes every later phase safe
    to ship incrementally.
