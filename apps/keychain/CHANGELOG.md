@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.3.0...zillions-keychain-v0.4.0) (2026-10-06)
+
+
+### Features
+
+* ironwood support on commitments and improved visualization ([#43](https://github.com/heliaxdev/zillions-interface/issues/43)) ([4477e93](https://github.com/heliaxdev/zillions-interface/commit/4477e93f6a885320b9475e51db41de642a9f3f78))
+
 ## [0.3.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.2.1...zillions-keychain-v0.3.0) (2026-10-02)
 
 
