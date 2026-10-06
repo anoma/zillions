@@ -3,22 +3,19 @@
  * the active/default account. Approve → submit (background sets the active
  * account) + close; Reject → fail the dapp promise + close.
  */
-import clsx from "clsx";
 import { useContext } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import {
-  ActionButton,
-  Alert,
-  Checkbox,
-  GapPatterns,
-  Stack,
-} from "@zillions/components";
+import { Stack } from "@zillions/components";
 import { shortenAddress } from "@zillions/utils";
 
 import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
+import { ApprovalActions } from "../ui/ApprovalActions";
+import { SummaryCard } from "../ui/SummaryCard";
+import { SummaryHeader } from "../ui/SummaryHeader";
+import { SummaryRow } from "../ui/SummaryRow";
 
 export const ApproveUpdateDefaultAccount = () => {
   const client = useContext(ClientContext);
@@ -34,38 +31,26 @@ export const ApproveUpdateDefaultAccount = () => {
   };
 
   return (
-    <Stack full gap={GapPatterns.TitleContent} className="pt-4 pb-8">
+    <Stack className="h-full text-black pt-4 pb-6" gap={4}>
       <PageHeader title="Approve Request" />
-      <Stack full className="justify-between" gap={12}>
-        <div>
-          <Alert type="warning">Approve update default account?</Alert>
-          <div
-            className={clsx(
-              "flex items-center gap-3 mt-4",
-              "px-4 py-3 border border-neutral-500 rounded-md"
-            )}
+      <main className="flex flex-col flex-1 gap-4">
+        <SummaryHeader label="Request">Change default account</SummaryHeader>
+        <SummaryCard>
+          <SummaryRow
+            label={
+              <>
+                New default <strong>{alias}</strong>
+              </>
+            }
           >
-            <Checkbox checked readOnly />
-            <div className="leading-[1.2]">
-              <div className="text-base text-black">{alias}</div>
-              <p className="text-sm text-neutral-400 font-medium">
-                {address && shortenAddress(address)}
-              </p>
-            </div>
-          </div>
-        </div>
-        <Stack gap={2}>
-          <ActionButton onClick={() => void handleResponse(true)}>
-            Approve
-          </ActionButton>
-          <ActionButton
-            outlineColor="black"
-            onClick={() => void handleResponse(false)}
-          >
-            Reject
-          </ActionButton>
-        </Stack>
-      </Stack>
+            {address && shortenAddress(address)}
+          </SummaryRow>
+        </SummaryCard>
+      </main>
+      <ApprovalActions
+        onApprove={() => void handleResponse(true)}
+        onReject={() => void handleResponse(false)}
+      />
     </Stack>
   );
 };

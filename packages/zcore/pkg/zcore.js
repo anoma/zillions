@@ -214,18 +214,23 @@ export function parse_transaction(network, height, data) {
 }
 
 /**
- * What a PCZT moves: `{ network, transparentInputs, transparentOutputs,
- * orchardOutputs, fee }`, values in zatoshis as strings.
+ * What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
+ * (`transparent`, `sapling`, `orchard`, `ironwood`), values in zatoshis as
+ * strings. Each output says whether it's `mine`, by the signing account's
+ * `ufvk`; throws if an output's note or label doesn't match what's signed.
  * @param {string} network
  * @param {Uint8Array} pczt
+ * @param {string} ufvk
  * @returns {any}
  */
-export function pczt_summary(network, pczt) {
+export function pczt_summary(network, pczt, ufvk) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.pczt_summary(ptr0, len0, ptr1, len1);
+    const ptr2 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.pczt_summary(ptr0, len0, ptr1, len1, ptr2, len2);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }

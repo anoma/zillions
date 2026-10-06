@@ -65,10 +65,12 @@ export function nullifiers_spent(body: Uint8Array, nullifiers: Uint8Array): any;
 export function parse_transaction(network: string, height: number, data: Uint8Array): any;
 
 /**
- * What a PCZT moves: `{ network, transparentInputs, transparentOutputs,
- * orchardOutputs, fee }`, values in zatoshis as strings.
+ * What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
+ * (`transparent`, `sapling`, `orchard`, `ironwood`), values in zatoshis as
+ * strings. Each output says whether it's `mine`, by the signing account's
+ * `ufvk`; throws if an output's note or label doesn't match what's signed.
  */
-export function pczt_summary(network: string, pczt: Uint8Array): any;
+export function pczt_summary(network: string, pczt: Uint8Array, ufvk: string): any;
 
 /**
  * The plan for moving every spendable Orchard note to Ironwood with
@@ -166,7 +168,7 @@ export interface InitOutput {
     readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
     readonly nullifiers_spent: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly pczt_summary: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly plan_migration: (a: number, b: number, c: any) => [number, number, number];
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly plan_shield: (a: number, b: number, c: any) => [number, number, number];
@@ -179,10 +181,10 @@ export interface InitOutput {
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number) => [number, number, number];
-    readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
-    readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
-    readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
     readonly rustsecp256k1_v0_10_0_context_create: (a: number) => number;
+    readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
+    readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
+    readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

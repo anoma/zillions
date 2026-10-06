@@ -85,14 +85,22 @@ const isPublicAccount = (v: unknown): v is ZCashKeychainAccount =>
 const isPublicAccountArray = (v: unknown): v is ZCashKeychainAccount[] =>
   Array.isArray(v) && v.every(isPublicAccount);
 
+// Outputs must say whose they are: the approval's "Sending ..." line rests on it.
+const isOutputArray = (v: unknown): boolean =>
+  Array.isArray(v) &&
+  v.every((o) => isRecord(o) && typeof o.mine === "boolean");
+
 const isPcztSummary = (v: unknown): v is PcztSummary =>
   isRecord(v) &&
+  typeof v.fee === "string" &&
   Array.isArray(v.transparentInputs) &&
-  Array.isArray(v.transparentOutputs) &&
+  isOutputArray(v.transparentOutputs) &&
   Array.isArray(v.saplingInputs) &&
-  Array.isArray(v.saplingOutputs) &&
+  isOutputArray(v.saplingOutputs) &&
   Array.isArray(v.orchardInputs) &&
-  Array.isArray(v.orchardOutputs);
+  isOutputArray(v.orchardOutputs) &&
+  Array.isArray(v.ironwoodInputs) &&
+  isOutputArray(v.ironwoodOutputs);
 
 /**
  * Validate (and narrow) a raw response for a given channel. Throws

@@ -16,7 +16,7 @@ import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
 import { LocalStorage } from "../../storage";
-import { buildPcztSummary, initZillionsSdk } from "../crypto/zillions";
+import { buildPcztSummary } from "../crypto/zillions";
 import { Keyring } from "../keyring";
 import { VaultService } from "../vault";
 import { AccountRepository } from "../vault/accounts";
@@ -150,7 +150,9 @@ export class ApprovalsService {
     }
 
     const msgId = uuid();
-    this.pendingTxs.set(msgId, { pczt, signer });
+    // The resolved address, so the summary and the signature use one account
+    // even if the active account changes while the popup is open.
+    this.pendingTxs.set(msgId, { pczt, signer: signerAddress });
 
     return this.launchApprovalPopup(
       approvalRoutes.approveSignTx(
@@ -190,8 +192,8 @@ export class ApprovalsService {
     if (!pending) {
       throw new Error(`Transaction data not found for ${msgId}`);
     }
-    await initZillionsSdk();
-    return buildPcztSummary(pending.pczt);
+    const ufvk = await this.keyring.viewingKey(pending.signer);
+    return buildPcztSummary(pending.pczt, ufvk);
   }
 
   /** The approval popup confirmed: sign and settle the dapp's promise. */

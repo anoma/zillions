@@ -1,21 +1,24 @@
 /**
- * PCZT approval screen: shows the parsed transaction summary (or the raw
- * `to_json()` data) for the pending sign request, with Approve → ConfirmSignTx
- * and Reject → fail the dapp promise + close.
+ * PCZT approval screen: what the pending sign request does (amount, from, to,
+ * requesting site, fee), then its every input and output (or the raw summary
+ * data), with Approve → ConfirmSignTx and Reject → fail the dapp promise + close.
  */
 import { useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { ActionButton, GapPatterns, Stack } from "@zillions/components";
-import { shortenAddress } from "@zillions/utils";
+import { Alert, Stack } from "@zillions/components";
 
 import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 import routes from "../routes";
+import { ApprovalActions } from "../ui/ApprovalActions";
 import { ApprovalPanelHeader } from "../ui/ApprovalPanelHeader";
 import { Commitment } from "../ui/Commitment";
 import { TransactionDataPanel } from "../ui/TransactionDataPanel";
+import { TransferSummary } from "../ui/TransferSummary";
+import { walletNameFor } from "../utils/accounts";
+import { flowCount, summaryAsText } from "../utils/pczt";
 
 type Props = {
   details?: ApprovalDetails;
@@ -35,6 +38,8 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const origin = params.origin ?? "";
   const signer = params.signer ?? "";
   const [displayTransactionData, setDisplayTransactionData] = useState(false);
+  const [summaryError, setSummaryError] = useState<string>();
+  const [walletName, setWalletName] = useState<string>();
 
   useEffect(() => {
     const fetchDetails = async (): Promise<void> => {
@@ -44,7 +49,16 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
       }
     };
 
-    fetchDetails().catch((e) => console.error(e));
+    // Unreadable means unverifiable: say so, and leave nothing to approve.
+    fetchDetails().catch((e: unknown) => {
+      console.error(e);
+      setSummaryError(e instanceof Error ? e.message : String(e));
+    });
+
+    client
+      ?.queryAccounts()
+      .then((accounts) => setWalletName(walletNameFor(accounts, signer)))
+      .catch((e) => console.error(e));
   }, []);
 
   const handleApproveSubmit = useCallback((e: React.FormEvent): void => {
@@ -53,8 +67,7 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   }, []);
 
   const handleReject = useCallback(
-    async (e: React.FormEvent): Promise<void> => {
-      e.preventDefault();
+    async (): Promise<void> => {
       try {
         if (msgId) {
           await client?.rejectSignTx(msgId);
@@ -65,70 +78,49 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
         console.warn(e);
       }
     },
-    [msgId]
+    [msgId],
   );
 
-  const getDataAsText = (): string => {
-    if (!details) return "";
-    return JSON.stringify(details.summary.raw, null, 2);
-  };
-
-  // Count of value flows surfaced by the PCZT summary.
-  const numberOfTx =
-    details ?
-      details.summary.transparentInputs.length +
-      details.summary.transparentOutputs.length +
-      details.summary.saplingInputs.length +
-      details.summary.saplingOutputs.length +
-      details.summary.orchardInputs.length +
-      details.summary.orchardOutputs.length
-      : 0;
-
   return (
-    <Stack
-      className="h-full text-black pt-4 pb-6"
-      gap={GapPatterns.TitleContent}
-    >
+    <Stack className="h-full text-black pt-4 pb-6" gap={4}>
       <PageHeader title="Confirm Transaction" />
-      <div className="flex flex-col h-full gap-4 justify-between">
-        <main>
-          <ApprovalPanelHeader
-            numberOfTransactions={numberOfTx}
-            onChangeViewData={setDisplayTransactionData}
-            viewTransactionData={displayTransactionData}
-          />
-          {!displayTransactionData && details && (
-            <Stack gap={1}>
-              <Commitment summary={details.summary} />
-            </Stack>
-          )}
-          {displayTransactionData && details && (
-            <TransactionDataPanel data={getDataAsText()} />
-          )}
-        </main>
-        <Stack gap={2} as="form" onSubmit={handleApproveSubmit}>
-          <p className="text-xs">
-            {signer && (
-              <>
-                Signer: <strong>{shortenAddress(signer)}</strong>
-                <br />
-              </>
-            )}
-            Origin: <strong>{origin}</strong>
-            <br />
-            Network: <strong>{details?.summary.network}</strong>
-          </p>
-          <Stack gap={1.5} direction="vertical">
-            <ActionButton>Approve</ActionButton>
-            <ActionButton
-              onClick={(e: React.FormEvent) => void handleReject(e)}
-              outlineColor="black"
-            >
-              Reject
-            </ActionButton>
-          </Stack>
-        </Stack>
-      </div>
+      <main className="flex flex-col flex-1 gap-4 overflow-y-auto">
+        {summaryError && (
+          <Alert type="error" title="This transaction can't be shown">
+            {summaryError}
+          </Alert>
+        )}
+        {details && (
+          <>
+            <TransferSummary
+              summary={details.summary}
+              walletName={walletName}
+              signer={signer}
+              origin={origin}
+            />
+            <section className="mt-2">
+              <ApprovalPanelHeader
+                numberOfTransactions={flowCount(details.summary)}
+                onChangeViewData={setDisplayTransactionData}
+                viewTransactionData={displayTransactionData}
+              />
+              {displayTransactionData ? (
+                <TransactionDataPanel data={summaryAsText(details.summary)} />
+              ) : (
+                <Stack gap={2}>
+                  <Commitment summary={details.summary} />
+                </Stack>
+              )}
+            </section>
+          </>
+        )}
+      </main>
+      <form onSubmit={handleApproveSubmit}>
+        <ApprovalActions
+          onReject={() => void handleReject()}
+          approveDisabled={!details}
+        />
+      </form>
     </Stack>
   );
 };
