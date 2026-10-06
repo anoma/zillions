@@ -20,6 +20,7 @@ import {
 } from "../crypto/mnemonic";
 import {
   computeSeedFingerprint,
+  deriveAccount,
   initZillionsSdk,
   signPczt,
   spendingKeys,
@@ -120,22 +121,38 @@ export class Keyring {
     await this.vaultService.assertIsUnlocked();
     await initZillionsSdk();
 
-    let record: KeyStoreType | undefined;
+    const record = await this.signingAccount(signer);
+    const { seed, hdIndex } = await this.resolveSeed(record);
+    return signPczt(pczt, seed, hdIndex);
+  }
+
+  /**
+   * The viewing key (UFVK) of the account `sign` would sign with, derived
+   * from its seed: what the approval summary checks outputs against.
+   */
+  public async viewingKey(signer?: string): Promise<string> {
+    await this.vaultService.assertIsUnlocked();
+
+    const record = await this.signingAccount(signer);
+    const { seed, hdIndex } = await this.resolveSeed(record);
+    return (await deriveAccount(seed, hdIndex)).ufvk;
+  }
+
+  /** The `signer` address's account, else the active one. */
+  private async signingAccount(signer?: string): Promise<KeyStoreType> {
     if (signer) {
-      record = await this.accounts.findByAddress(signer);
+      const record = await this.accounts.findByAddress(signer);
       if (!record) {
         throw new Error(`Account for ${signer} not found!`);
       }
-    } else {
-      const active = await this.accounts.getActiveAccount();
-      record = active ? await this.accounts.findById(active.id) : undefined;
-      if (!record) {
-        throw new Error("No active account to sign with");
-      }
+      return record;
     }
-
-    const { seed, hdIndex } = await this.resolveSeed(record);
-    return signPczt(pczt, seed, hdIndex);
+    const active = await this.accounts.getActiveAccount();
+    const record = active ? await this.accounts.findById(active.id) : undefined;
+    if (!record) {
+      throw new Error("No active account to sign with");
+    }
+    return record;
   }
 
   /**

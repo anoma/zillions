@@ -5,14 +5,18 @@
 use std::convert::Infallible;
 
 use orchard::circuit::{OrchardCircuitVersion, ProvingKey, VerifyingKey};
+use pczt::roles::verifier::OrchardError;
 use pczt::roles::{
     prover::Prover, signer::Signer, spend_finalizer::SpendFinalizer,
     tx_extractor::TransactionExtractor, updater::Updater, verifier::Verifier,
 };
 use pczt::Pczt;
 use serde::Serialize;
+use transparent::address::TransparentAddress;
+use transparent::keys::{NonHardenedChildIndex, TransparentKeyScope};
 use wasm_bindgen::prelude::*;
-use zcash_keys::keys::UnifiedSpendingKey;
+use zcash_keys::address::{Address, UnifiedAddress};
+use zcash_keys::keys::{UnifiedFullViewingKey, UnifiedSpendingKey};
 use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 use zip32::fingerprint::SeedFingerprint;
 use zip32::{AccountId, Scope};
@@ -183,9 +187,189 @@ pub(crate) struct Summary {
 struct Flow {
     address: Option<String>,
     value: String,
+    /// Outputs only: whether it lands in the signing account, as its viewing
+    /// key proves. Any other output is a payment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mine: Option<bool>,
 }
 
-pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
+/// An output as the summary shows it: where it pays (`None` when it's ours),
+/// how much, and whether it's ours.
+type Output = (Option<String>, u64, bool);
+
+pub(crate) enum Receiver {
+    Orchard(orchard::Address),
+    Sapling(sapling::PaymentAddress),
+}
+
+/// The address to show for a payment. The dapp's `user_address` must hold the
+/// note's actual receiver; without one, the receiver alone is encoded.
+pub(crate) fn payee(
+    network: &Network,
+    user_address: &Option<String>,
+    to: Receiver,
+) -> Result<String, String> {
+    let Some(claimed) = user_address else {
+        return Ok(match to {
+            Receiver::Orchard(r) => UnifiedAddress::from_receivers(Some(r), None, None)
+                .ok_or("an Orchard receiver makes no address")?
+                .encode(network),
+            Receiver::Sapling(r) => Address::Sapling(r).encode(network),
+        });
+    };
+    let holds = match (Address::decode(network, claimed), to) {
+        (Some(Address::Unified(ua)), Receiver::Orchard(r)) => ua.orchard() == Some(&r),
+        (Some(Address::Unified(ua)), Receiver::Sapling(r)) => ua.sapling() == Some(&r),
+        (Some(Address::Sapling(pa)), Receiver::Sapling(r)) => pa == r,
+        _ => false,
+    };
+    if holds {
+        Ok(claimed.clone())
+    } else {
+        Err(format!(
+            "output claims to pay {claimed} but pays someone else"
+        ))
+    }
+}
+
+/// Every non-padding output, its note checked against its commitment so the
+/// value and receiver shown are the ones signed.
+fn shielded_outputs(
+    network: &Network,
+    pczt: &Pczt,
+    ufvk: &UnifiedFullViewingKey,
+) -> Result<[Vec<Output>; 3], String> {
+    let action_outputs = |bundle: &orchard::pczt::Bundle| -> Result<Vec<Output>, String> {
+        let mut outputs = Vec::new();
+        for action in bundle.actions() {
+            let output = action.output();
+            // Padding carries no value and names no one.
+            if output.value().is_some_and(|v| v.inner() == 0) && output.user_address().is_none() {
+                continue;
+            }
+            output
+                .verify_note_commitment(action.spend())
+                .map_err(|e| format!("an output doesn't match its note: {e:?}"))?;
+            let (Some(recipient), Some(value)) = (*output.recipient(), *output.value()) else {
+                unreachable!("a verified note has its receiver and value");
+            };
+            let mine = ufvk
+                .orchard()
+                .is_some_and(|fvk| fvk.scope_for_address(&recipient).is_some());
+            let address = match mine {
+                true => None,
+                false => Some(payee(
+                    network,
+                    output.user_address(),
+                    Receiver::Orchard(recipient),
+                )?),
+            };
+            outputs.push((address, value.inner(), mine));
+        }
+        Ok(outputs)
+    };
+
+    let mut sapling_outputs = Vec::new();
+    let mut orchard_outputs = Vec::new();
+    let mut ironwood_outputs = Vec::new();
+    Verifier::new(pczt.clone())
+        .with_sapling::<String, _>(|bundle| {
+            for output in bundle.outputs() {
+                if output.value().is_some_and(|v| v.inner() == 0) && output.user_address().is_none()
+                {
+                    continue;
+                }
+                output.verify_note_commitment()?;
+                let (Some(recipient), Some(value)) = (*output.recipient(), *output.value()) else {
+                    unreachable!("a verified note has its receiver and value");
+                };
+                let mine = ufvk
+                    .sapling()
+                    .is_some_and(|dfvk| dfvk.decrypt_diversifier(&recipient).is_some());
+                let address = match mine {
+                    true => None,
+                    false => Some(
+                        payee(network, output.user_address(), Receiver::Sapling(recipient))
+                            .map_err(pczt::roles::verifier::SaplingError::Custom)?,
+                    ),
+                };
+                sapling_outputs.push((address, value.inner(), mine));
+            }
+            Ok(())
+        })
+        .map_err(to_pczt_error)?
+        .with_orchard::<String, _>(|bundle| {
+            orchard_outputs = action_outputs(bundle).map_err(OrchardError::Custom)?;
+            Ok(())
+        })
+        .map_err(to_pczt_error)?
+        .with_ironwood::<String, _>(|bundle| {
+            ironwood_outputs = action_outputs(bundle).map_err(OrchardError::Custom)?;
+            Ok(())
+        })
+        .map_err(to_pczt_error)?;
+    Ok([sapling_outputs, orchard_outputs, ironwood_outputs])
+}
+
+/// Transparent outputs. One is ours when it names a BIP 44 path whose key,
+/// derived from the viewing key, is the one its script pays.
+fn transparent_outputs(
+    network: &Network,
+    pczt: &Pczt,
+    ufvk: &UnifiedFullViewingKey,
+) -> Result<Vec<Output>, String> {
+    let address = |script: &[u8]| crate::transparent_tx::script_address(network, script);
+    let mut derivations = Vec::new();
+    Verifier::new(pczt.clone())
+        .with_transparent::<Infallible, _>(|bundle| {
+            derivations = bundle
+                .outputs()
+                .iter()
+                .map(|o| {
+                    o.bip32_derivation()
+                        .iter()
+                        .map(|(pubkey, d)| (*pubkey, d.derivation_path().clone()))
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            Ok(())
+        })
+        .map_err(to_pczt_error)?;
+    let ours = |paths: &[([u8; 33], Vec<bip32::ChildNumber>)]| -> Option<String> {
+        let account = ufvk.transparent()?;
+        paths.iter().find_map(|(pubkey, path)| {
+            let [.., scope, index] = path[..] else {
+                return None;
+            };
+            let derived = account
+                .derive_address_pubkey(
+                    TransparentKeyScope::custom(scope.index())?,
+                    NonHardenedChildIndex::from_index(index.index())?,
+                )
+                .ok()?;
+            (derived.serialize() == *pubkey).then(|| {
+                Address::Transparent(TransparentAddress::from_pubkey(&derived)).encode(network)
+            })
+        })
+    };
+    Ok(pczt
+        .transparent()
+        .outputs()
+        .iter()
+        .zip(derivations)
+        .map(|(o, paths)| {
+            let pays = address(o.script_pubkey());
+            let mine = pays.is_some() && ours(&paths) == pays;
+            (pays, *o.value(), mine)
+        })
+        .collect())
+}
+
+pub(crate) fn summarize(
+    network: &Network,
+    pczt: &Pczt,
+    ufvk: &UnifiedFullViewingKey,
+) -> Result<Summary, String> {
     let address = |script: &[u8]| crate::transparent_tx::script_address(network, script);
     let transparent_inputs: Vec<_> = pczt
         .transparent()
@@ -193,34 +377,9 @@ pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
         .iter()
         .map(|i| (address(i.script_pubkey()), *i.value()))
         .collect();
-    let transparent_outputs: Vec<_> = pczt
-        .transparent()
-        .outputs()
-        .iter()
-        .map(|o| (address(o.script_pubkey()), *o.value()))
-        .collect();
-    // Padding outputs carry no value and name no one.
-    let real = |value: Option<u64>, address: &Option<String>| {
-        value.filter(|v| *v > 0 || address.is_some())
-    };
-    let sapling_outputs: Vec<_> = pczt
-        .sapling()
-        .outputs()
-        .iter()
-        .filter_map(|o| real(*o.value(), o.user_address()).map(|v| (o.user_address().clone(), v)))
-        .collect();
-    let action_outputs = |bundle: &pczt::orchard::Bundle| -> Vec<_> {
-        bundle
-            .actions()
-            .iter()
-            .filter_map(|a| {
-                real(*a.output().value(), a.output().user_address())
-                    .map(|v| (a.output().user_address().clone(), v))
-            })
-            .collect()
-    };
-    let orchard_outputs = action_outputs(pczt.orchard());
-    let ironwood_outputs = action_outputs(pczt.ironwood());
+    let transparent_outputs = transparent_outputs(network, pczt, ufvk)?;
+    let [sapling_outputs, orchard_outputs, ironwood_outputs] =
+        shielded_outputs(network, pczt, ufvk)?;
 
     // A bundle's net value is what its spends brought in beyond its outputs.
     let sapling_net = *pczt.sapling().value_sum();
@@ -234,21 +393,25 @@ pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
     };
     let orchard_net = action_net(pczt.orchard());
     let ironwood_net = action_net(pczt.ironwood());
-    let sum =
-        |list: &[(Option<String>, u64)]| list.iter().map(|(_, v)| i128::from(*v)).sum::<i128>();
+    let sum = |list: &[Output]| list.iter().map(|(_, v, _)| i128::from(*v)).sum::<i128>();
     let sapling_in = sapling_net + sum(&sapling_outputs);
     let orchard_in = orchard_net + sum(&orchard_outputs);
     let ironwood_in = ironwood_net + sum(&ironwood_outputs);
-    let fee = sum(&transparent_inputs) - sum(&transparent_outputs)
+    let fee = transparent_inputs
+        .iter()
+        .map(|(_, v)| i128::from(*v))
+        .sum::<i128>()
+        - sum(&transparent_outputs)
         + sapling_net
         + orchard_net
         + ironwood_net;
 
-    let flows = |list: Vec<(Option<String>, u64)>| {
+    let flows = |list: Vec<Output>| {
         list.into_iter()
-            .map(|(address, value)| Flow {
+            .map(|(address, value, mine)| Flow {
                 address,
                 value: value.to_string(),
+                mine: Some(mine),
             })
             .collect()
     };
@@ -257,16 +420,24 @@ pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
             .then(|| Flow {
                 address: None,
                 value: value.to_string(),
+                mine: None,
             })
             .into_iter()
             .collect()
     };
-    Summary {
+    Ok(Summary {
         network: match network {
             Network::MainNetwork => "main",
             Network::TestNetwork => "test",
         },
-        transparent_inputs: flows(transparent_inputs),
+        transparent_inputs: transparent_inputs
+            .into_iter()
+            .map(|(address, value)| Flow {
+                address,
+                value: value.to_string(),
+                mine: None,
+            })
+            .collect(),
         transparent_outputs: flows(transparent_outputs),
         sapling_inputs: total(sapling_in),
         sapling_outputs: flows(sapling_outputs),
@@ -275,7 +446,7 @@ pub(crate) fn summarize(network: &Network, pczt: &Pczt) -> Summary {
         ironwood_inputs: total(ironwood_in),
         ironwood_outputs: flows(ironwood_outputs),
         fee: fee.to_string(),
-    }
+    })
 }
 
 /// A signed PCZT, proven and finalized: `{ txid, raw }` to broadcast.
@@ -366,11 +537,13 @@ pub fn sign_pczt(
 
 /// What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
 /// (`transparent`, `sapling`, `orchard`, `ironwood`), values in zatoshis as
-/// strings.
+/// strings. Each output says whether it's `mine`, by the signing account's
+/// `ufvk`; throws if an output's note or label doesn't match what's signed.
 #[wasm_bindgen]
-pub fn pczt_summary(network: &str, pczt: &[u8]) -> Result<JsValue, JsError> {
+pub fn pczt_summary(network: &str, pczt: &[u8], ufvk: &str) -> Result<JsValue, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
-    let summary = summarize(&network, &parse(pczt)?);
+    let ufvk = UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| JsError::new(&e))?;
+    let summary = summarize(&network, &parse(pczt)?, &ufvk).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&summary).map_err(|e| JsError::new(&e.to_string()))
 }
 

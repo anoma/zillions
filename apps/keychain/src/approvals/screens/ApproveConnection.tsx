@@ -6,11 +6,15 @@
 import { useContext, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { ActionButton, Alert, GapPatterns, Stack } from "@zillions/components";
+import { Stack } from "@zillions/components";
 
 import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext, ExtensionLockContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
+import { ApprovalActions } from "../ui/ApprovalActions";
+import { SummaryCard } from "../ui/SummaryCard";
+import { SummaryHeader } from "../ui/SummaryHeader";
+import { SummaryRow } from "../ui/SummaryRow";
 
 export const ApproveConnection = () => {
   const client = useContext(ClientContext);
@@ -40,26 +44,20 @@ export const ApproveConnection = () => {
   }, [isUnlocked]);
 
   return (
-    <Stack full gap={GapPatterns.TitleContent} className="pt-4 pb-8">
+    <Stack className="h-full text-black pt-4 pb-6" gap={4}>
       {typeof isApproved !== "undefined" && !isApproved && (
         <>
           <PageHeader title="Approve Request" />
-          <Stack full className="justify-between" gap={12}>
-            <Alert type="warning">
-              Approve connection for <strong>{interfaceOrigin}</strong>?
-            </Alert>
-            <Stack gap={2}>
-              <ActionButton onClick={() => void handleResponse(true)}>
-                Approve
-              </ActionButton>
-              <ActionButton
-                outlineColor="black"
-                onClick={() => void handleResponse(false)}
-              >
-                Reject
-              </ActionButton>
-            </Stack>
-          </Stack>
+          <main className="flex flex-col flex-1 gap-4">
+            <SummaryHeader label="Request">Connect</SummaryHeader>
+            <SummaryCard>
+              <SummaryRow label="Requested By">{interfaceOrigin}</SummaryRow>
+            </SummaryCard>
+          </main>
+          <ApprovalActions
+            onApprove={() => void handleResponse(true)}
+            onReject={() => void handleResponse(false)}
+          />
         </>
       )}
     </Stack>

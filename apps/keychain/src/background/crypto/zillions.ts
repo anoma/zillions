@@ -116,9 +116,10 @@ export const signPczt = (
 
 /**
  * What a PCZT (base64) moves, for the approval screen. Shielded inputs are
- * per-pool totals.
+ * per-pool totals; each output is `mine` when `ufvk`, the signing account's
+ * viewing key, proves it lands back in the account.
  */
-export const buildPcztSummary = (pczt: string): PcztSummary => {
-  const summary = pczt_summary(getNetwork(), base64ToBytes(pczt));
+export const buildPcztSummary = (pczt: string, ufvk: string): PcztSummary => {
+  const summary = pczt_summary(getNetwork(), base64ToBytes(pczt), ufvk);
   return { ...summary, raw: summary };
 };

@@ -301,6 +301,8 @@ pub(crate) fn pczt<N>(
     let mut sapling_outputs = Vec::new();
     let mut orchard_outputs = Vec::new();
     let mut ironwood_outputs = Vec::new();
+    let mut transparent_outputs = 0;
+    let mut transparent_change = None;
     for (index, pool) in step.payment_pools() {
         let payment = step
             .transaction_request()
@@ -341,6 +343,7 @@ pub(crate) fn pczt<N>(
                 builder
                     .add_transparent_output(&to, amount)
                     .map_err(|e| format!("{e:?}"))?;
+                transparent_outputs += 1;
             }
             (Address::Sapling(to), _) => {
                 builder
@@ -352,6 +355,7 @@ pub(crate) fn pczt<N>(
                 builder
                     .add_transparent_output(&to, amount)
                     .map_err(|e| format!("{e:?}"))?;
+                transparent_outputs += 1;
             }
             (Address::Tex(_), _) => return Err("TEX addresses need a multi-step send".into()),
         }
@@ -415,6 +419,8 @@ pub(crate) fn pczt<N>(
                         value,
                     )
                     .map_err(|e| format!("{e:?}"))?;
+                transparent_change = Some((transparent_outputs, index, pubkey));
+                transparent_outputs += 1;
             }
         }
     }
@@ -520,6 +526,25 @@ pub(crate) fn pczt<N>(
                     Bip32Derivation::parse(fingerprint, path).expect("a BIP-44 path parses");
                 updater.update_input_with(i, |mut input| {
                     input.set_bip32_derivation(pubkey.serialize(), derivation);
+                    Ok(())
+                })?;
+            }
+            // Change names its key, so the keychain can tell it's ours.
+            if let Some((i, index, pubkey)) = transparent_change {
+                let derivation = Bip32Derivation::parse(
+                    fingerprint,
+                    vec![
+                        44 | HARDENED,
+                        coin_type | HARDENED,
+                        hd_index | HARDENED,
+                        bip32::ChildNumber::from(transparent::keys::TransparentKeyScope::INTERNAL)
+                            .into(),
+                        index.index(),
+                    ],
+                )
+                .expect("a BIP-44 path parses");
+                updater.update_output_with(i, |mut output| {
+                    output.set_bip32_derivation(pubkey.serialize(), derivation);
                     Ok(())
                 })?;
             }
@@ -762,13 +787,15 @@ mod tests {
         };
         assert!(pczt_with(None).is_err(), "needs a change address");
         let unsigned = pczt_with(Some(3)).unwrap();
-        let summary = serde_json::to_value(crate::roles::summarize(&network, &unsigned)).unwrap();
+        let summary =
+            serde_json::to_value(crate::roles::summarize(&network, &unsigned, &ufvk).unwrap())
+                .unwrap();
         let change = derive("internal", 3);
         assert_eq!(
             summary["transparentOutputs"],
             serde_json::json!([
-                { "address": derive("external", 9), "value": "50000" },
-                { "address": change, "value": "140000" },
+                { "address": derive("external", 9), "value": "50000", "mine": false },
+                { "address": change, "value": "140000", "mine": true },
             ])
         );
 
@@ -833,7 +860,9 @@ mod tests {
         assert_eq!(unsigned.ironwood().anchor(), &Some(anchor.to_bytes()));
 
         // One coin into two padded Ironwood actions: 3 × 5,000.
-        let summary = serde_json::to_value(crate::roles::summarize(&network, &unsigned)).unwrap();
+        let summary =
+            serde_json::to_value(crate::roles::summarize(&network, &unsigned, &ufvk).unwrap())
+                .unwrap();
         assert_eq!(
             (
                 summary["fee"].as_str(),
@@ -842,6 +871,10 @@ mod tests {
             (Some("15000"), Some("85000"))
         );
         assert_eq!(summary["orchardOutputs"], serde_json::json!([]));
+        assert_eq!(
+            summary["ironwoodOutputs"][0],
+            serde_json::json!({ "address": null, "value": "85000", "mine": true })
+        );
         assert_eq!(
             summary["transparentInputs"][0]["address"].as_str(),
             Some(ours.as_str())
@@ -893,15 +926,16 @@ mod tests {
         let fee = u64::from(proposal.steps().first().balance().fee_required());
 
         // What the keychain shows: 200,000 out of Orchard, the rest into Ironwood.
-        let summary =
-            serde_json::to_value(crate::roles::summarize(&Network::MainNetwork, &unsigned))
-                .unwrap();
+        let summary = serde_json::to_value(
+            crate::roles::summarize(&Network::MainNetwork, &unsigned, &ufvk).unwrap(),
+        )
+        .unwrap();
         assert_eq!(summary["orchardInputs"][0]["value"], "200000");
         assert_eq!(summary["orchardOutputs"], serde_json::json!([]));
         assert_eq!(summary["ironwoodInputs"], serde_json::json!([]));
         assert_eq!(
-            summary["ironwoodOutputs"][0]["value"],
-            (200_000 - fee).to_string()
+            summary["ironwoodOutputs"][0],
+            serde_json::json!({ "address": null, "value": (200_000 - fee).to_string(), "mine": true })
         );
         assert_eq!(summary["fee"], fee.to_string());
 
@@ -940,9 +974,10 @@ mod tests {
         );
         // What the keychain shows: 200,000 in from Ironwood, 50,000 out, the
         // rest as change, and a fee that balances it.
-        let summary =
-            serde_json::to_value(crate::roles::summarize(&Network::MainNetwork, &unsigned))
-                .unwrap();
+        let summary = serde_json::to_value(
+            crate::roles::summarize(&Network::MainNetwork, &unsigned, &ufvk).unwrap(),
+        )
+        .unwrap();
         assert_eq!(summary["ironwoodInputs"][0]["value"], "200000");
         assert_eq!(summary["orchardInputs"], serde_json::json!([]));
         let fee: u64 = summary["fee"].as_str().unwrap().parse().unwrap();
@@ -953,6 +988,12 @@ mod tests {
             .map(|o| o["value"].as_str().unwrap().parse::<u64>().unwrap())
             .sum();
         assert_eq!(50_000 + change + fee, 200_000);
+        assert_eq!(summary["transparentOutputs"][0]["mine"], false);
+        assert!(summary["ironwoodOutputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|o| o["mine"] == true && o["address"].is_null()));
 
         let signed = crate::roles::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
         let (_, raw) = crate::roles::prove(signed, None).unwrap();
@@ -966,5 +1007,80 @@ mod tests {
             u64::from(tx.transparent_bundle().unwrap().vout[0].value()),
             50_000
         );
+    }
+
+    /// A shielded payment to someone else shows their address, and only if
+    /// the dapp's label holds the receiver the note actually pays.
+    #[test]
+    fn summary_shows_the_shielded_payee_the_note_pays() {
+        use zcash_keys::keys::{UnifiedAddressRequest, UnifiedSpendingKey};
+        let network = Network::MainNetwork;
+        let (wallet, trees, _) = wallet_and_trees("ironwood", 200_000);
+        let ufvk = UnifiedFullViewingKey::decode(&network, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+        let ua = |seed: [u8; 32]| {
+            UnifiedSpendingKey::from_seed(&network, &seed, zip32::AccountId::ZERO)
+                .unwrap()
+                .to_unified_full_viewing_key()
+                .default_address(UnifiedAddressRequest::ORCHARD)
+                .unwrap()
+                .0
+                .encode(&network)
+        };
+        let theirs = ua([9u8; 32]);
+        let proposal = crate::send::tests::plan(&wallet, &theirs, 50_000);
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
+
+        let outputs = |pczt: &Pczt| {
+            serde_json::to_value(crate::roles::summarize(&network, pczt, &ufvk).unwrap()).unwrap()
+                ["ironwoodOutputs"]
+                .as_array()
+                .unwrap()
+                .clone()
+        };
+        let payments = |pczt: &Pczt| -> Vec<_> {
+            outputs(pczt)
+                .into_iter()
+                .filter(|o| o["mine"] == false)
+                .collect()
+        };
+        assert_eq!(
+            payments(&unsigned),
+            [serde_json::json!({ "address": theirs, "value": "50000", "mine": false })]
+        );
+
+        let relabel = |label: String| {
+            Updater::new(unsigned.clone())
+                .update_ironwood_with(|mut updater| {
+                    let paying = updater
+                        .bundle()
+                        .actions()
+                        .iter()
+                        .position(|a| a.output().user_address().is_some())
+                        .unwrap();
+                    updater.update_action_with(paying, |mut action| {
+                        action.set_output_user_address(label.clone());
+                        Ok(())
+                    })
+                })
+                .unwrap()
+                .finish()
+        };
+        // A label naming someone the note doesn't pay is refused.
+        assert!(crate::roles::summarize(&network, &relabel(ua([5u8; 32])), &ufvk).is_err());
+        // Our own address as the label doesn't hide the payment either.
+        assert!(crate::roles::summarize(&network, &relabel(ua(SEED)), &ufvk).is_err());
+
+        // Without a label, the receiver itself is shown.
+        let receiver = |a: &str| match Address::decode(&network, a) {
+            Some(Address::Unified(ua)) => ua.orchard().copied(),
+            _ => None,
+        };
+        let to = receiver(&theirs).unwrap();
+        let shown =
+            crate::roles::payee(&network, &None, crate::roles::Receiver::Orchard(to)).unwrap();
+        assert_eq!(receiver(&shown), Some(to));
     }
 }

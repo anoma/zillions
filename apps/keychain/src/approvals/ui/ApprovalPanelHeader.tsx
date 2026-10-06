@@ -15,7 +15,7 @@ export const ApprovalPanelHeader = ({
   onChangeViewData,
 }: ApprovalPanelHeaderProps) => {
   return (
-    <header className="flex w-full items-center justify-between text-sm mb-2">
+    <header className="text-xs flex w-full items-center justify-between mb-2">
       <div>
         <i className="font-bold not-italic">{numberOfTransactions}</i>{" "}
         {numberOfTransactions === 1 ? "Message" : "Messages"}
@@ -24,14 +24,15 @@ export const ApprovalPanelHeader = ({
         className="flex cursor-pointer items-center gap-1 hover:text-neutral-hover"
         onClick={() => onChangeViewData(!displayTransaction)}
       >
-        {displayTransaction ?
+        {displayTransaction ? (
           <>
             Hide Data <FaTimes />
           </>
-          : <>
+        ) : (
+          <>
             View Data <FaCode />
           </>
-        }
+        )}
       </button>
     </header>
   );

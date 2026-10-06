@@ -67,9 +67,10 @@ export function parse_transaction(network: string, height: number, data: Uint8Ar
 /**
  * What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
  * (`transparent`, `sapling`, `orchard`, `ironwood`), values in zatoshis as
- * strings.
+ * strings. Each output says whether it's `mine`, by the signing account's
+ * `ufvk`; throws if an output's note or label doesn't match what's signed.
  */
-export function pczt_summary(network: string, pczt: Uint8Array): any;
+export function pczt_summary(network: string, pczt: Uint8Array, ufvk: string): any;
 
 /**
  * The plan for moving every spendable Orchard note to Ironwood with
@@ -167,7 +168,7 @@ export interface InitOutput {
     readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
     readonly nullifiers_spent: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly pczt_summary: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly plan_migration: (a: number, b: number, c: any) => [number, number, number];
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly plan_shield: (a: number, b: number, c: any) => [number, number, number];

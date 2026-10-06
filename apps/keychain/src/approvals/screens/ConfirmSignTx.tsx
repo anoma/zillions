@@ -6,12 +6,13 @@
 import { useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { ActionButton, Alert, Input, Stack } from "@zillions/components";
+import { Alert, Input, Stack } from "@zillions/components";
 
 import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 import { Status } from "../types";
+import { ApprovalActions } from "../ui/ApprovalActions";
 import { StatusBox } from "../ui/StatusBox";
 
 type Props = {
@@ -83,7 +84,7 @@ export const ConfirmSignTx = ({ details }: Props) => {
   }, [status, requiresAuth]);
 
   return (
-    <Stack full className="py-4">
+    <Stack className="h-full text-black pt-4 pb-6" gap={4}>
       <PageHeader title={requiresAuth ? "Verify" : "Signing transaction"} />
       <Stack
         full
@@ -107,22 +108,14 @@ export const ConfirmSignTx = ({ details }: Props) => {
         )}
         {!requiresAuth && <Alert type="warning">Submitting signature</Alert>}
         <div className="flex-1" />
-        <Stack gap={2}>
-          {requiresAuth && (
-            <>
-              <ActionButton disabled={!password || status === Status.Pending}>
-                Authenticate
-              </ActionButton>
-              <ActionButton
-                outlineColor="primary"
-                type="button"
-                onClick={() => navigate(-1)}
-              >
-                Back
-              </ActionButton>
-            </>
-          )}
-        </Stack>
+        {requiresAuth && (
+          <ApprovalActions
+            onReject={() => navigate(-1)}
+            rejectLabel="Back"
+            approveLabel="Authenticate"
+            approveDisabled={!password || status === Status.Pending}
+          />
+        )}
       </Stack>
     </Stack>
   );
