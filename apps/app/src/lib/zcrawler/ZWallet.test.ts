@@ -119,6 +119,7 @@ vi.mock("./lightwalletd", async (actual) => ({
   fetchBlock: vi.fn(
     async (height: number) => chain.blocks.get(height) ?? block(),
   ),
+  fetchTransaction: vi.fn(),
 }));
 
 vi.mock("./transparent", () => ({
@@ -152,7 +153,7 @@ const { ZWallet } = await import("./ZWallet");
 const zcore = await import("@zillions/zcore");
 const { submitTransaction } = await import("./submit");
 const { cachedTransparent } = await import("./transparent");
-const { fetchBlock } = await import("./lightwalletd");
+const { fetchBlock, fetchTransaction } = await import("./lightwalletd");
 const db = await import("./db");
 
 function block(overrides: Partial<Block> = {}): Block {
@@ -308,6 +309,65 @@ test("places a Sapling spend through our own transaction's block", async () => {
   const sapling = saved.notes.find((n) => n.pool === "sapling");
   expect(sapling?.spent).toEqual({ height: 3_050, tx_index: 4 });
   expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
+});
+
+test("keeps a Sapling-only send with no change in history once mined", async () => {
+  chain.sizes = { sapling: 16_384, orchard: 16_384, ironwood: 0 };
+  chain.hits.set("sapling:0", [note("sapling", 5, nf("ce"))]);
+  const wallet = new ZWallet({ id: "d", ufvk: "uview" });
+  await wallet.sync();
+
+  vi.mocked(submitTransaction).mockResolvedValue({
+    txid: "t2",
+    raw: new Uint8Array(),
+    expiryHeight: 3_240,
+  });
+  vi.mocked(zcore.parse_transaction).mockReturnValue({
+    inputs: [],
+    nullifiers: [nf("ce")],
+  });
+  await wallet.submit(new Uint8Array(), 0n, {
+    tx_type: "Sent",
+    value: -4_000n,
+    fee: 1_000n,
+    timestamp: 1,
+    from: { pool: "shielded" },
+    to: { address: "u1theirs" },
+  });
+
+  // Mined at 3_210, paying one Orchard note and nothing back to us.
+  chain.saplingNullifiers = [nf("ce")];
+  vi.mocked(fetchTransaction).mockResolvedValue({
+    data: new Uint8Array(),
+    height: 3_210,
+  });
+  chain.blocks.set(
+    3_210,
+    block({
+      txids: new Map([[2, "t2"]]),
+      saplingSpends: new Map([[nf("ce"), 2]]),
+      outputs: new Map([[2, { sapling: 0, orchard: 1, ironwood: 0 }]]),
+    }),
+  );
+  chain.sent.set("orchard:0", [
+    {
+      pool: "orchard",
+      value: 4_000,
+      recipient: "u1theirs",
+      height: 3_210,
+      tx_index: 2,
+      position: 16_383,
+    } as Sent,
+  ]);
+  await wallet.sync();
+
+  const sends = (await wallet.getTransactionHistory()).filter(
+    (tx) => tx.txid === "t2",
+  );
+  expect(sends).toEqual([
+    expect.objectContaining({ tx_type: "Sent", value: -4_000n }),
+  ]);
+  expect(sends[0].status).not.toBe("Pending");
 });
 
 test("counts what a send paid to someone else's transparent address, not to ours", async () => {

@@ -31,7 +31,12 @@ import {
   lastChunk,
   type TreeSizes,
 } from "./indexer";
-import { type Block, fetchBlock, outputPositions } from "./lightwalletd";
+import {
+  type Block,
+  fetchBlock,
+  fetchTransaction,
+  outputPositions,
+} from "./lightwalletd";
 import {
   maxSend,
   planMigration,
@@ -264,7 +269,7 @@ export class ZWallet {
       }
     } finally {
       await transparent;
-      await this.#fetchBlocks();
+      await this.#fetchBlocks(await this.#unplacedPendingHeights());
       this.#locateSaplingSpends();
       if (sizes) {
         await this.#recoverSends(sizes, lookups).catch((err) =>
@@ -395,6 +400,31 @@ export class ZWallet {
     }
   };
 
+  /**
+   * Where pending transactions mined with a Sapling spend no block of ours
+   * places, as when nothing else of ours is in them. lightwalletd broadcast
+   * them, so asking it for them back tells it nothing new.
+   */
+  #unplacedPendingHeights = async () => {
+    const unplaced = new Set(
+      this.#notes.filter((n) => n.spent === true).map((n) => n.nf_mine),
+    );
+    const heights = await Promise.all(
+      this.#syncStatus.pending
+        .filter((p) => p.nullifiers.some((nf) => unplaced.has(nf)))
+        .map((p) =>
+          fetchTransaction(p.txid).then(
+            (tx) => tx.height,
+            (err) => {
+              console.error("[sync] pending lookup failed", p.txid, err);
+              return 0;
+            },
+          ),
+        ),
+    );
+    return heights.filter((height) => height > 0);
+  };
+
   /** Our transactions that spent notes or coins of ours, by `height:tx_index`. */
   #sendingTxs = () => {
     const txs = new Map<string, TxLocator>();
@@ -477,14 +507,16 @@ export class ZWallet {
   };
 
   /**
-   * Fetches the blocks behind every transaction in history, once each: they
-   * give shielded transactions their txids, which is what lets a transaction
-   * seen from both sides show once, and every entry its time.
+   * Fetches the blocks behind every transaction in history, and at `extra`,
+   * once each: they give shielded transactions their txids, which is what
+   * lets a transaction seen from both sides show once, and every entry its
+   * time.
    */
-  #fetchBlocks = async () => {
+  #fetchBlocks = async (extra: number[] = []) => {
     const { tip } = this.#transparent;
     const history = [
       ...historyHeights(this.#notes, this.#sent, this.#transparent.txs),
+      ...extra,
     ];
     const missing = await this.#restoreBlocks(history);
     // A block a reorg can still replace is stored, so history shows it on
