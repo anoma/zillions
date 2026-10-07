@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.2](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.7.1...zillions-app-v1.7.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* name and date shielded history mid-sync ([2e60763](https://github.com/heliaxdev/zillions-interface/commit/2e60763b633e7b423f354f6e7feca653737c924f))
+
 ## [1.7.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.7.0...zillions-app-v1.7.1) (2026-10-06)
 
 
