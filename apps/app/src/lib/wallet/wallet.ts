@@ -6,8 +6,14 @@ import initZcore, {
 } from "@zillions/zcore";
 
 import { invariant } from "../invariant";
-import type { TransactionReceipt } from "../sdk/types";
 import { dedupe, singleton } from "../utils";
+import {
+  activityHeights,
+  buildActivity,
+  locatorId,
+  type Payment,
+} from "./activity";
+import { NETWORK } from "./config";
 import { crawlChunks, workerChannel } from "./crawl";
 import {
   loadBlocks,
@@ -17,12 +23,6 @@ import {
   saveBlocks,
   saveSyncState,
 } from "./db";
-import {
-  buildHistory,
-  historyHeights,
-  locatorId,
-  type Payment,
-} from "./history";
 import {
   CHUNK_SIZE,
   fetchNullifierChunk,
@@ -57,9 +57,10 @@ import {
   type TransparentTx,
 } from "./transparent";
 import type {
+  Activity,
   ChunkWorkerSuccess,
   Note,
-  PendingReceipt,
+  PendingActivity,
   Pool,
   Sent,
   SentOutput,
@@ -68,8 +69,6 @@ import type {
 } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
-
-const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 
 /** Each pool's last chunk, possibly still filling; -1 for an empty pool. */
 type LastChunks = Record<Pool, number>;
@@ -111,7 +110,7 @@ const packNullifiers = (notes: Note[]) =>
 
 type Lookups = ReturnType<typeof workerChannel>;
 
-export class ZWallet {
+export class Wallet {
   readonly id: string;
   readonly #ufvk: string;
   /** Block height below which nothing is crawled. Absent means full history. */
@@ -181,7 +180,7 @@ export class ZWallet {
     for (const note of notes) this.#applied.add(note.id);
     for (const out of sent) this.#applied.add(out.id);
     await this.#restoreBlocks([
-      ...historyHeights(notes, sent, this.#transparent.txs),
+      ...activityHeights(notes, sent, this.#transparent.txs),
     ]);
   });
 
@@ -528,7 +527,7 @@ export class ZWallet {
   #fetchBlocks = async (extra: number[] = []) => {
     const { tip } = this.#transparent;
     const history = [
-      ...historyHeights(this.#notes, this.#sent, this.#transparent.txs),
+      ...activityHeights(this.#notes, this.#sent, this.#transparent.txs),
       ...extra,
     ];
     const missing = await this.#restoreBlocks(history);
@@ -655,7 +654,7 @@ export class ZWallet {
   submit = async (
     signed: Uint8Array,
     change: bigint,
-    receipt: PendingReceipt,
+    receipt: PendingActivity,
   ) => {
     const { txid, raw, expiryHeight } = await submitTransaction(signed);
     const { tip } = this.#transparent;
@@ -761,9 +760,9 @@ export class ZWallet {
   };
 
   /** Newest first, pending transactions on top until sync finds them mined. */
-  async getTransactionHistory(): Promise<TransactionReceipt[]> {
+  async getTransactionHistory(): Promise<Activity[]> {
     await this.#seed();
-    const history = buildHistory(
+    const history = buildActivity(
       this.#notes,
       this.#sent,
       this.#transparent.txs,

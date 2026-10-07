@@ -1,9 +1,9 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import type { ZWallet } from "../lib/zcrawler/ZWallet";
+import type { Wallet } from "../lib/wallet/wallet";
 import { useInvalidateOnSync } from "./useInvalidateOnSync";
 import { useWallet } from "./useWallet";
 
-export function getBalance(wallet: ZWallet) {
+export function getBalance(wallet: Wallet) {
   return queryOptions({
     queryKey: ["getBalance", wallet.id],
     queryFn: () => wallet.getBalance(),

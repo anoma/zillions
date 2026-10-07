@@ -2,20 +2,20 @@ import { useEffect, useState, type ReactNode } from "react";
 import { WalletContext } from "../context/wallet";
 import { useAccount } from "../hooks/useAccount";
 import { invariant } from "../lib/invariant";
-import { ZWallet } from "../lib/zcrawler/ZWallet";
+import { Wallet } from "../lib/wallet/wallet";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const account = useAccount();
 
-  const [wallet, setWallet] = useState<ZWallet | undefined>(undefined);
+  const [wallet, setWallet] = useState<Wallet | undefined>(undefined);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
-    const safeSetWallet = (value: ZWallet | undefined) => {
+    const safeSetWallet = (value: Wallet | undefined) => {
       setWallet((prev) => {
         try {
           prev?.free();
@@ -29,7 +29,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         invariant(account.shielded.viewingKey, "viewingKey is not available");
-        const instance = new ZWallet({
+        const instance = new Wallet({
           id: account.shielded.id,
           ufvk: account.shielded.viewingKey,
           birthday: account.shielded.birthday,

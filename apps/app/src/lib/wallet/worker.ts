@@ -1,18 +1,13 @@
 /**
- * Zcrawler worker: fetches one block-range chunk from the indexer and
+ * Decrypt worker: fetches one block-range chunk from the indexer and
  * trial-decrypts it against a UFVK. Each worker owns its own wasm instance —
  * decryption is stateless, so running many in parallel needs no shared state.
  */
 
-import initZcrawler, { try_decrypt, try_decrypt_full } from "@zillions/zcore";
+import initZcore, { try_decrypt, try_decrypt_full } from "@zillions/zcore";
+import { NETWORK } from "./config";
 import { fetchChunk } from "./indexer";
 import type { ChunkRequest, ChunkWorkerResponse } from "./types";
-
-// TODO revisit how config (network, indexer URL) reaches the worker: read from
-// import.meta.env at module load as now, injected at worker creation, or passed
-// per-message. This whole worker + sync orchestration may move into the SDK
-// rather than the app, which would change where config comes from entirely.
-const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 
 let ready: Promise<unknown> | undefined;
 
@@ -28,7 +23,7 @@ worker.onmessage = async (e) => {
   // Does it really worth the complexity?
   const { chunk, ufvk, pool, spends } = e.data;
   try {
-    await (ready ??= initZcrawler());
+    await (ready ??= initZcore());
     const body = await fetchChunk("ciphertexts", chunk, pool);
     // A spend lookup revisits a chunk whose own notes were already read.
     const hits: { index: number }[] = spends

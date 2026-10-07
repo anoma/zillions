@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { buildHistory } from "./history";
+import { buildActivity } from "./activity";
 import type { TransparentTx } from "./transparent";
 import type { Note } from "./types";
 
@@ -22,7 +22,7 @@ const note = (position: number, value: number, memo?: string): Note => ({
 
 test("a transaction's memo is the one its notes carry, wherever it sits", () => {
   const memoOf = (notes: Note[]) =>
-    buildHistory(notes, [], [], new Map())[0].memo;
+    buildActivity(notes, [], [], new Map())[0].memo;
   // An unshield's padding note, then its change.
   expect(memoOf([note(1, 0), note(2, 350_000)])).toBeUndefined();
   expect(memoOf([note(1, 0), note(2, 350_000, "thanks")])).toBe("thanks");
@@ -38,7 +38,7 @@ test("our own transparent addresses show as the pool, others' as the address", (
     spent: 0n,
     ...rest,
   });
-  const history = buildHistory(
+  const history = buildActivity(
     // An unshield: a note spent, its change, and 0.0001 to our internal address.
     [
       { ...note(1, 375_000), spent: at },
@@ -74,7 +74,7 @@ test("our own transparent addresses show as the pool, others' as the address", (
 
 test("a transaction moving our own funds between pools is a migration", () => {
   const at = { height: 3_503_939, tx_index: 2 };
-  const [migration] = buildHistory(
+  const [migration] = buildActivity(
     // An Ironwood note spent; 30,000 lands in our Sapling, the rest is
     // Ironwood change after a 20,000 fee.
     [

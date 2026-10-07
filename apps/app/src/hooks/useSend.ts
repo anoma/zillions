@@ -7,8 +7,8 @@ import {
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
-import type { SendRequest } from "../lib/zcrawler/send";
-import type { PendingReceipt } from "../lib/zcrawler/types";
+import type { SendRequest } from "../lib/wallet/send";
+import type { PendingActivity } from "../lib/wallet/types";
 import { useAccount } from "./useAccount";
 import { internalAddress } from "./useAddresses";
 import { useDebouncedValue } from "./useDebouncedValue";
@@ -104,7 +104,7 @@ export function useSend() {
       ...send
     }: SendRequest & {
       toSelf?: boolean;
-      shown: Omit<PendingReceipt, "fee" | "timestamp">;
+      shown: Omit<PendingActivity, "fee" | "timestamp">;
     }) => {
       const { pczt, plan, changeTo } = await wallet.sendPczt(
         send,

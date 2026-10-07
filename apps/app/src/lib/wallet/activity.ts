@@ -1,7 +1,6 @@
-import type { Party, TransactionReceipt } from "../sdk/types";
 import type { Block } from "./lightwalletd";
 import type { TransparentTx } from "./transparent";
-import type { Note, Pool, Sent, TxLocator } from "./types";
+import type { Activity, Note, Party, Pool, Sent, TxLocator } from "./types";
 
 /** A shielded transaction's identity until its block names it. */
 export const locatorId = ({ height, tx_index }: TxLocator) =>
@@ -101,7 +100,7 @@ function receipt(
   { height, shielded, transparent }: Entry,
   ours: Set<string>,
   time?: number,
-): TransactionReceipt {
+): Activity {
   const base = {
     txid,
     fee: 0n,
@@ -185,14 +184,14 @@ function receipt(
  * there yet keeps a placeholder id and can't be matched with its
  * transparent side.
  */
-export function buildHistory(
+export function buildActivity(
   notes: Note[],
   sent: Sent[],
   transparent: TransparentTx[],
   blocks: Map<number, Block>,
   paid = new Map<string, Payment[]>(),
   ours = new Set<string>(),
-): TransactionReceipt[] {
+): Activity[] {
   const groups = new Map<string, TxGroup>();
   const at = (locator: TxLocator) => {
     const id = locatorId(locator);
@@ -235,7 +234,7 @@ export function buildHistory(
 }
 
 /** Every height history names, so their blocks can be fetched. */
-export function historyHeights(
+export function activityHeights(
   notes: Note[],
   sent: Sent[],
   transparent: TransparentTx[],

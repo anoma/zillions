@@ -4,10 +4,10 @@
  * used; field numbers follow lightwalletd's `service.proto`.
  */
 
+import { LIGHTWALLETD_URL } from "./config";
 import { fetchWithRetry } from "./http";
 import type { Pool } from "./types";
 
-const LIGHTWALLETD_URL = import.meta.env.VITE_GRPC_URL;
 const SERVICE = "cash.z.wallet.sdk.rpc.CompactTxStreamer";
 
 type FieldValue = number | string | Uint8Array;

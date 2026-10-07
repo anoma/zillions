@@ -1,7 +1,6 @@
+import { INDEXER_URL } from "./config";
 import { fetchWithRetry } from "./http";
 import type { Pool } from "./types";
-
-const INDEXER_URL = import.meta.env.VITE_INDEXER_URL;
 
 /** Notes per chunk. */
 export const CHUNK_SIZE = 2 ** 14;

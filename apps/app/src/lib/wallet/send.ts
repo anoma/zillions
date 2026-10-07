@@ -12,11 +12,10 @@ import initZcore, {
   send_pczt,
   shield_pczt,
 } from "@zillions/zcore";
+import { NETWORK } from "./config";
 import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./indexer";
 import type { OwnUtxo } from "./transparent";
 import type { Note, Pool } from "./types";
-
-const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 
 export type SendRequest = {
   to: string;

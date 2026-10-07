@@ -1,7 +1,3 @@
-/** Shared message and result types across the zcrawler main ↔ worker boundary. */
-
-import type { TransactionReceipt } from "../sdk/types";
-
 export type Pool = "sapling" | "orchard" | "ironwood";
 
 /** A note this wallet owns, as `try_decrypt_full` reads it out of a chunk. */
@@ -74,11 +70,11 @@ export interface PendingTx {
   /** Zatoshis it returns to us as change. */
   change: number;
   /** What history lists for it until it's mined; older records have none. */
-  receipt?: PendingReceipt;
+  receipt?: PendingActivity;
 }
 
-export type PendingReceipt = Pick<
-  TransactionReceipt,
+export type PendingActivity = Pick<
+  Activity,
   "tx_type" | "value" | "fee" | "timestamp" | "from" | "to"
 >;
 
@@ -137,3 +133,29 @@ export interface SyncStatus {
   sendsRead: string[];
   pending: PendingTx[];
 }
+
+/** One transaction as history shows it. */
+export type Activity = {
+  txid: string;
+  tx_type: "Received" | "Sent" | "Shielded" | "Unshielded" | "Migrated";
+  value: bigint;
+  fee: bigint;
+  block_height: number;
+  confirmations: number;
+  status: "Confirmed" | "Pending" | "Expired";
+  memo: string | undefined;
+  /** Unix seconds. */
+  timestamp?: number;
+  pool: "ironwood" | "orchard" | "sapling" | "transparent" | "mixed";
+  from: Party;
+  to: Party;
+};
+
+/**
+ * One side of a transaction: someone else's address, or just the pool when
+ * the address isn't shown — our own, or a shielded sender, never revealed. A
+ * migration names the shielded pools it moved between.
+ */
+export type Party =
+  | { address: string }
+  | { pool: "shielded" | "transparent" | "sapling" | "orchard" | "ironwood" };

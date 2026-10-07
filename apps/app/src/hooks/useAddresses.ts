@@ -1,12 +1,11 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import initZcore, { address_kind, fresh_address } from "@zillions/zcore";
 import { useEffect, useState } from "react";
-import type { ZWallet } from "../lib/zcrawler/ZWallet";
+import { NETWORK } from "../lib/wallet/config";
+import type { Wallet } from "../lib/wallet/wallet";
 import { useAccount } from "./useAccount";
 import { useInvalidateOnSync } from "./useInvalidateOnSync";
 import { useWallet } from "./useWallet";
-
-const NETWORK = import.meta.env.VITE_ZCASH_NETWORK ?? "main";
 
 /** A new shielded address per mount of the caller and per change of `round`; undefined while it's made. */
 export function useFreshAddress(round = 0) {
@@ -51,7 +50,7 @@ function addressKind(address: string | undefined) {
 export const useAddressKind = (address: string | undefined) =>
   useQuery(addressKind(address)).data;
 
-export function internalAddress(wallet: ZWallet) {
+export function internalAddress(wallet: Wallet) {
   return queryOptions({
     queryKey: ["internalAddress", wallet.id],
     queryFn: () => wallet.internalAddress(),
