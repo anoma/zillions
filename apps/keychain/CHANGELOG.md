@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.4.0...zillions-keychain-v0.4.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* show keychain approval errors instead of a blank window ([67fdc39](https://github.com/heliaxdev/zillions-interface/commit/67fdc3968771364b6fa97cf73c90a0f9915787bd))
+
 ## [0.4.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.3.0...zillions-keychain-v0.4.0) (2026-10-06)
 
 
