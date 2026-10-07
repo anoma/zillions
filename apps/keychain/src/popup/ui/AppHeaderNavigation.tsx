@@ -126,7 +126,7 @@ export const AppHeaderNavigation = ({
                 <FaDiscord />
               </a>
               <a
-                href="https://twitter.com/zillions"
+                href="https://x.com/zillions_app"
                 target="_blank"
                 className="transition-colors hover:text-neutral-500"
                 rel="noreferrer nofollow"

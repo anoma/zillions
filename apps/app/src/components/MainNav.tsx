@@ -24,7 +24,7 @@ export function HelpLinks() {
           { label: "Help", href: helpUrl },
           { label: "Privacy policy", href: privacyPolicyUrl },
         ].map((item) => (
-          <li key={item.href} className="my-2">
+          <li key={item.label} className="my-2">
             <SmartLink
               href={item.href}
               className="inline-flex text-sm hover:font-semibold transition-all"
