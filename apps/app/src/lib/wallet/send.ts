@@ -12,8 +12,8 @@ import initZcore, {
   send_pczt,
   shield_pczt,
 } from "@zillions/zcore";
+import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./chain/indexer";
 import { NETWORK } from "./config";
-import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./indexer";
 import type { OwnUtxo } from "./transparent";
 import type { Note, Pool } from "./types";
 

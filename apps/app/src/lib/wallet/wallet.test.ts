@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
-import type { Block } from "./lightwalletd";
+import type { Block } from "./chain/lightwalletd";
 import type {
   ChunkRequest,
   ChunkWorkerSuccess,
@@ -67,7 +67,7 @@ vi.mock("@zillions/zcore", () => ({
   shield_pczt: vi.fn(),
 }));
 
-vi.mock("./crawl", () => ({
+vi.mock("./shielded/crawl", () => ({
   crawlChunks: vi.fn(
     async (o: {
       pool: Pool;
@@ -105,8 +105,8 @@ const lookup = vi.fn(async ({ pool, chunk, spends = [] }: ChunkRequest) => {
   };
 });
 
-vi.mock("./indexer", async (actual) => ({
-  ...(await actual<typeof import("./indexer")>()),
+vi.mock("./chain/indexer", async (actual) => ({
+  ...(await actual<typeof import("./chain/indexer")>()),
   fetchTreeSizes: vi.fn(async () => chain.sizes),
   firstChunkFrom: vi.fn(async () => 0),
   fetchNullifierChunk: vi.fn(async (_pool: Pool, chunk: number) =>
@@ -114,8 +114,8 @@ vi.mock("./indexer", async (actual) => ({
   ),
 }));
 
-vi.mock("./lightwalletd", async (actual) => ({
-  ...(await actual<typeof import("./lightwalletd")>()),
+vi.mock("./chain/lightwalletd", async (actual) => ({
+  ...(await actual<typeof import("./chain/lightwalletd")>()),
   fetchBlock: vi.fn(
     async (height: number) => chain.blocks.get(height) ?? block(),
   ),
@@ -135,7 +135,7 @@ vi.mock("./transparent", () => ({
   reserveInternalAddress: vi.fn(),
 }));
 
-vi.mock("./submit", () => ({ submitTransaction: vi.fn() }));
+vi.mock("./chain/submit", () => ({ submitTransaction: vi.fn() }));
 
 vi.mock("./db", () => ({
   loadNotes: vi.fn(async () => []),
@@ -151,11 +151,11 @@ vi.mock("./db", () => ({
 
 const { Wallet } = await import("./wallet");
 const zcore = await import("@zillions/zcore");
-const { submitTransaction } = await import("./submit");
+const { submitTransaction } = await import("./chain/submit");
 const { cachedTransparent } = await import("./transparent");
-const { fetchBlock, fetchTransaction } = await import("./lightwalletd");
+const { fetchBlock, fetchTransaction } = await import("./chain/lightwalletd");
 const db = await import("./db");
-const { crawlChunks } = await import("./crawl");
+const { crawlChunks } = await import("./shielded/crawl");
 
 function block(overrides: Partial<Block> = {}): Block {
   return {

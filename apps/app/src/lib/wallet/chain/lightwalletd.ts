@@ -4,9 +4,9 @@
  * used; field numbers follow lightwalletd's `service.proto`.
  */
 
-import { LIGHTWALLETD_URL } from "./config";
+import { LIGHTWALLETD_URL } from "../config";
+import type { Pool } from "../types";
 import { fetchWithRetry } from "./http";
-import type { Pool } from "./types";
 
 const SERVICE = "cash.z.wallet.sdk.rpc.CompactTxStreamer";
 

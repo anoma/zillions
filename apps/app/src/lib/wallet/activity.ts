@@ -1,4 +1,4 @@
-import type { Block } from "./lightwalletd";
+import type { Block } from "./chain/lightwalletd";
 import type { TransparentTx } from "./transparent";
 import type { Activity, Note, Party, Pool, Sent, TxLocator } from "./types";
 

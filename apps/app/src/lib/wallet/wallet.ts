@@ -13,8 +13,22 @@ import {
   locatorId,
   type Payment,
 } from "./activity";
+import {
+  CHUNK_SIZE,
+  fetchNullifierChunk,
+  fetchTreeSizes,
+  firstChunkFrom,
+  lastChunk,
+  type TreeSizes,
+} from "./chain/indexer";
+import {
+  type Block,
+  fetchBlock,
+  fetchTransaction,
+  outputPositions,
+} from "./chain/lightwalletd";
+import { submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
-import { crawlChunks, workerChannel } from "./crawl";
 import {
   loadBlocks,
   loadNotes,
@@ -24,20 +38,6 @@ import {
   saveSyncState,
 } from "./db";
 import {
-  CHUNK_SIZE,
-  fetchNullifierChunk,
-  fetchTreeSizes,
-  firstChunkFrom,
-  lastChunk,
-  type TreeSizes,
-} from "./indexer";
-import {
-  type Block,
-  fetchBlock,
-  fetchTransaction,
-  outputPositions,
-} from "./lightwalletd";
-import {
   maxSend,
   planMigration,
   planSend,
@@ -46,7 +46,7 @@ import {
   shieldPczt,
   type WalletData,
 } from "./send";
-import { submitTransaction } from "./submit";
+import { crawlChunks, workerChannel } from "./shielded/crawl";
 import {
   cachedTransparent,
   nextInternalAddress,

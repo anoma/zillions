@@ -9,8 +9,6 @@ import initZcore, {
   gap_limits,
   parse_transaction,
 } from "@zillions/zcore";
-import { NETWORK } from "./config";
-import { loadTransparent, updateTransparent } from "./db";
 import {
   fetchAddressTransactions,
   fetchLatestHeight,
@@ -18,7 +16,9 @@ import {
   fetchUtxos,
   type RawTransaction,
   type Utxo,
-} from "./lightwalletd";
+} from "./chain/lightwalletd";
+import { NETWORK } from "./config";
+import { loadTransparent, updateTransparent } from "./db";
 
 /** Unused addresses in a row that end a chain, from zcore once it's loaded. */
 const gapLimits = () => gap_limits() as Record<Scope, number>;

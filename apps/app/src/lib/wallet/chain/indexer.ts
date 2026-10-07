@@ -1,6 +1,6 @@
-import { INDEXER_URL } from "./config";
+import { INDEXER_URL } from "../config";
+import type { Pool } from "../types";
 import { fetchWithRetry } from "./http";
-import type { Pool } from "./types";
 
 /** Notes per chunk. */
 export const CHUNK_SIZE = 2 ** 14;

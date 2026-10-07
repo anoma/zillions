@@ -5,9 +5,9 @@
  */
 
 import initZcore, { try_decrypt, try_decrypt_full } from "@zillions/zcore";
-import { NETWORK } from "./config";
-import { fetchChunk } from "./indexer";
-import type { ChunkRequest, ChunkWorkerResponse } from "./types";
+import { fetchChunk } from "../chain/indexer";
+import { NETWORK } from "../config";
+import type { ChunkRequest, ChunkWorkerResponse } from "../types";
 
 let ready: Promise<unknown> | undefined;
 

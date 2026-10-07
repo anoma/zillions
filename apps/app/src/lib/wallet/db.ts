@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable, type Table } from "dexie";
 
-import type { Block } from "./lightwalletd";
+import type { Block } from "./chain/lightwalletd";
 import type { TransparentCache } from "./transparent";
 import type { Note, Sent, SyncStatus } from "./types";
 
