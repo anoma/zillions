@@ -4,16 +4,18 @@
  * screen is wrapped in WithAuth so a locked vault shows the Login gate first.
  */
 import {
+  Component,
   createContext,
   useEffect,
   useMemo,
   useState,
   type Dispatch,
+  type ReactNode,
   type SetStateAction
 } from "react";
 import { HashRouter, Route, Routes } from "react-router-dom";
 
-import { Container } from "@zillions/components";
+import { Alert, Container } from "@zillions/components";
 import type { PcztSummary } from "@zillions/types";
 
 import { BackgroundClient, createBackgroundClient } from "../ipc/client";
@@ -43,6 +45,21 @@ export type ApprovalDetails = {
   summary: PcztSummary;
 };
 
+/** Without it, a render crash unmounts everything and leaves a blank window. */
+class ErrorBoundary extends Component<{ children: ReactNode }> {
+  state: { error?: unknown } = {};
+
+  static getDerivedStateFromError(error: unknown) {
+    return { error };
+  }
+
+  render() {
+    return this.state.error ?
+        <Alert type="error">{`${this.state.error}`}</Alert>
+      : this.props.children;
+  }
+}
+
 export const ApprovalsApp = () => {
   const client = useMemo(() => createBackgroundClient(), []);
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -60,44 +77,46 @@ export const ApprovalsApp = () => {
       <Container size="popup">
         <ClientContext.Provider value={client}>
           <ExtensionLockContext.Provider value={{ isUnlocked, setIsUnlocked }}>
-            <Routes>
-              <Route
-                path={routes.approveConnection()}
-                element={
-                  <WithAuth>
-                    <ApproveConnection />
-                  </WithAuth>
-                }
-              />
-              <Route
-                path={routes.approveDisconnection()}
-                element={
-                  <WithAuth>
-                    <ApproveDisconnection />
-                  </WithAuth>
-                }
-              />
-              <Route
-                path={routes.approveUpdateDefaultAccount()}
-                element={
-                  <WithAuth>
-                    <ApproveUpdateDefaultAccount />
-                  </WithAuth>
-                }
-              />
-              <Route
-                path={routes.approveSignTx()}
-                element={
-                  <WithAuth>
-                    <ApproveSignTx details={details} setDetails={setDetails} />
-                  </WithAuth>
-                }
-              />
-              <Route
-                path={routes.confirmSignTx()}
-                element={details && <ConfirmSignTx details={details} />}
-              />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route
+                  path={routes.approveConnection()}
+                  element={
+                    <WithAuth>
+                      <ApproveConnection />
+                    </WithAuth>
+                  }
+                />
+                <Route
+                  path={routes.approveDisconnection()}
+                  element={
+                    <WithAuth>
+                      <ApproveDisconnection />
+                    </WithAuth>
+                  }
+                />
+                <Route
+                  path={routes.approveUpdateDefaultAccount()}
+                  element={
+                    <WithAuth>
+                      <ApproveUpdateDefaultAccount />
+                    </WithAuth>
+                  }
+                />
+                <Route
+                  path={routes.approveSignTx()}
+                  element={
+                    <WithAuth>
+                      <ApproveSignTx details={details} setDetails={setDetails} />
+                    </WithAuth>
+                  }
+                />
+                <Route
+                  path={routes.confirmSignTx()}
+                  element={details && <ConfirmSignTx details={details} />}
+                />
+              </Routes>
+            </ErrorBoundary>
           </ExtensionLockContext.Provider>
         </ClientContext.Provider>
       </Container>

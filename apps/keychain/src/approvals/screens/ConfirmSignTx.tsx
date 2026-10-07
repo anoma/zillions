@@ -106,7 +106,10 @@ export const ConfirmSignTx = ({ details }: Props) => {
             />
           </>
         )}
-        {!requiresAuth && <Alert type="warning">Submitting signature</Alert>}
+        {!requiresAuth &&
+          (status === Status.Failed ?
+            <Alert type="error">{error}</Alert>
+          : <Alert type="warning">Submitting signature</Alert>)}
         <div className="flex-1" />
         {requiresAuth && (
           <ApprovalActions
