@@ -11,14 +11,12 @@ import initZcore, {
 } from "@zillions/zcore";
 import {
   fetchAddressTransactions,
-  fetchLatestHeight,
   fetchTransaction,
   fetchUtxos,
   type RawTransaction,
   type Utxo,
 } from "./chain/lightwalletd";
 import { NETWORK } from "./config";
-import { loadTransparent, updateTransparent } from "./db";
 
 /** Unused addresses in a row that end a chain, from zcore once it's loaded. */
 const gapLimits = () => gap_limits() as Record<Scope, number>;
@@ -43,7 +41,6 @@ interface ParsedTx {
 }
 
 export interface TransparentCache {
-  id: string;
   tip: number;
   /** Heights up to here are past any reorg; the ones above are fetched again. */
   final: number;
@@ -57,8 +54,7 @@ export interface TransparentCache {
   reserved?: { index: number; expiryHeight: number }[];
 }
 
-const emptyCache = (id: string): TransparentCache => ({
-  id,
+const emptyCache = (): TransparentCache => ({
   tip: 0,
   final: 0,
   chains: {
@@ -130,10 +126,21 @@ async function discover(
   return { txs, chain: { lastUsed, checked: from } };
 }
 
-export async function syncTransparent(accountId: string, ufvk: string) {
+/** Our view of the transparent side: coins, transactions and addresses. */
+export type TransparentView = Awaited<ReturnType<typeof transparentState>>;
+
+/**
+ * Brings `stored` up to `tip`. The new cache carries no reserved addresses:
+ * an unshield may reserve one meanwhile, so `keepReserved` merges them in
+ * from whatever is stored once this lands.
+ */
+export async function syncTransparent(
+  stored: TransparentCache | undefined,
+  ufvk: string,
+  tip: number,
+) {
   await (ready ??= initZcore());
-  const cache = (await loadTransparent(accountId)) ?? emptyCache(accountId);
-  const tip = await fetchLatestHeight();
+  const cache = stored ?? emptyCache();
 
   const moved = tip !== cache.tip;
   // Above `final` a reorg may have replaced them: they're fetched again.
@@ -167,32 +174,31 @@ export async function syncTransparent(accountId: string, ufvk: string) {
     true,
   );
 
-  await updateTransparent(accountId, (latest) => ({
-    id: accountId,
+  const synced: TransparentCache = {
     tip,
     final: tip - REORG_DEPTH,
     chains,
     txs: [...parsed.values()],
     senders,
     utxos,
-    // Read inside the write: an unshield may have been sent during this sync.
-    // Expiry 0 means the transaction never expires.
-    reserved: latest?.reserved?.filter(
-      (r) =>
-        r.index > chains.internal.lastUsed &&
-        (r.expiryHeight === 0 || r.expiryHeight > tip),
-    ),
-  }));
-  return { ...state, tip };
+  };
+  return { cache: synced, view: state };
 }
 
-/**
- * The transparent state as the last sync left it, from storage alone, so it
- * shows before the next sync answers. Undefined before the first sync.
- */
-export async function cachedTransparent(accountId: string, ufvk: string) {
-  const cache = await loadTransparent(accountId);
-  if (!cache) return undefined;
+/** `reserved` less the addresses `cache` shows used and the transactions expired by its tip. */
+export const keepReserved = (
+  reserved: TransparentCache["reserved"],
+  cache: TransparentCache,
+) =>
+  // Expiry 0 means the transaction never expires.
+  reserved?.filter(
+    (r) =>
+      r.index > cache.chains.internal.lastUsed &&
+      (r.expiryHeight === 0 || r.expiryHeight > cache.tip),
+  );
+
+/** The transparent side as `cache` left it, without asking the chain: what shows before a sync answers. */
+export async function cachedTransparent(cache: TransparentCache, ufvk: string) {
   await (ready ??= initZcore());
   return transparentState(
     ownAddresses(ufvk, cache.chains),
@@ -292,8 +298,10 @@ async function transparentState(
  * or while pending ones fill the gap limit: going past it would hide funds
  * from other wallets restoring the phrase.
  */
-export async function nextInternalAddress(accountId: string, ufvk: string) {
-  const cache = await loadTransparent(accountId);
+export async function nextInternalAddress(
+  cache: TransparentCache | undefined,
+  ufvk: string,
+) {
   if (!cache) return null;
   const { lastUsed } = cache.chains.internal;
   const held = new Set(cache.reserved?.map((r) => r.index));
@@ -312,11 +320,10 @@ export async function nextInternalAddress(accountId: string, ufvk: string) {
 
 /** Holds internal address `index` for a transaction paying it, until it's mined or expires. */
 export const reserveInternalAddress = (
-  accountId: string,
+  cache: TransparentCache = emptyCache(),
   index: number,
   expiryHeight: number,
-) =>
-  updateTransparent(accountId, (cache = emptyCache(accountId)) => ({
-    ...cache,
-    reserved: [...(cache.reserved ?? []), { index, expiryHeight }],
-  }));
+): TransparentCache => ({
+  ...cache,
+  reserved: [...(cache.reserved ?? []), { index, expiryHeight }],
+});

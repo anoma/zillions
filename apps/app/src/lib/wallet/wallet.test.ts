@@ -8,6 +8,7 @@ import type {
   Note,
   Pool,
   Sent,
+  WalletState,
 } from "./types";
 
 // A small chain, described per test: what each chunk holds, which records
@@ -35,7 +36,11 @@ const nullifiers = vi.hoisted(
     ),
 );
 
-const saved = vi.hoisted(() => ({ notes: [] as Note[], sent: [] as Sent[] }));
+const saved = vi.hoisted(() => ({
+  notes: [] as Note[],
+  sent: [] as Sent[],
+  blocks: new Map<number, Block>(),
+}));
 
 vi.mock("@zillions/zcore", () => ({
   default: vi.fn(async () => {}),
@@ -120,32 +125,31 @@ vi.mock("./chain/lightwalletd", async (actual) => ({
     async (height: number) => chain.blocks.get(height) ?? block(),
   ),
   fetchTransaction: vi.fn(),
+  fetchLatestHeight: vi.fn(async () => chain.tip),
 }));
 
 vi.mock("./transparent", () => ({
   REORG_DEPTH: 100,
   cachedTransparent: vi.fn(async () => undefined),
   syncTransparent: vi.fn(async () => ({
-    utxos: [],
-    txs: [],
-    tip: chain.tip,
-    addresses: new Set(["t1ours"]),
+    cache: {},
+    view: { utxos: [], txs: [], addresses: new Set(["t1ours"]) },
   })),
+  keepReserved: vi.fn(),
   nextInternalAddress: vi.fn(),
   reserveInternalAddress: vi.fn(),
 }));
 
 vi.mock("./chain/submit", () => ({ submitTransaction: vi.fn() }));
 
-vi.mock("./db", () => ({
-  loadNotes: vi.fn(async () => []),
-  loadSent: vi.fn(async () => []),
-  loadSyncStatus: vi.fn(async () => undefined),
-  loadBlocks: vi.fn(async (heights: number[]) => heights.map(() => undefined)),
-  saveBlocks: vi.fn(async () => {}),
-  saveSyncState: vi.fn(async (notes: Note[], sent: Sent[]) => {
-    saved.notes = structuredClone(notes);
-    saved.sent = structuredClone(sent);
+vi.mock("./store", async (actual) => ({
+  emptyState: (await actual<typeof import("./store")>()).emptyState,
+  storageKey: vi.fn(async () => ({})),
+  loadState: vi.fn(async () => undefined),
+  saveState: vi.fn(async (state: WalletState) => {
+    saved.notes = structuredClone(state.notes);
+    saved.sent = structuredClone(state.sent);
+    saved.blocks = structuredClone(state.blocks);
   }),
 }));
 
@@ -153,8 +157,9 @@ const { Wallet } = await import("./wallet");
 const zcore = await import("@zillions/zcore");
 const { submitTransaction } = await import("./chain/submit");
 const { cachedTransparent } = await import("./transparent");
+type TransparentCache = import("./transparent").TransparentCache;
 const { fetchBlock, fetchTransaction } = await import("./chain/lightwalletd");
-const db = await import("./db");
+const store = await import("./store");
 const { crawlChunks } = await import("./shielded/crawl");
 
 function block(overrides: Partial<Block> = {}): Block {
@@ -230,7 +235,10 @@ test("finds a spend of an earlier note in chunk order, and what it paid into ano
   const wallet = new Wallet({ id: "a", ufvk: "uview" });
   await wallet.sync();
 
-  expect(saved.notes[0].spent).toEqual({ height: 3_100, tx_index: 2 });
+  expect(saved.notes[0].spend).toEqual({
+    status: "spent",
+    at: { height: 3_100, tx_index: 2 },
+  });
   expect(lookup).toHaveBeenCalledWith(
     expect.objectContaining({ pool: "orchard", chunk: 3, spends: [7] }),
   );
@@ -308,7 +316,10 @@ test("places a Sapling spend through our own transaction's block", async () => {
   await wallet.sync();
 
   const sapling = saved.notes.find((n) => n.pool === "sapling");
-  expect(sapling?.spent).toEqual({ height: 3_050, tx_index: 4 });
+  expect(sapling?.spend).toEqual({
+    status: "spent",
+    at: { height: 3_050, tx_index: 4 },
+  });
   expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
 });
 
@@ -424,6 +435,10 @@ test("counts what a send paid to someone else's transparent address, not to ours
 });
 
 test("shows the transparent side as last synced before any sync answers", async () => {
+  vi.mocked(store.loadState).mockResolvedValueOnce({
+    ...store.emptyState("f"),
+    transparent: {} as TransparentCache,
+  });
   vi.mocked(cachedTransparent).mockResolvedValueOnce({
     utxos: [],
     txs: [
@@ -453,9 +468,16 @@ test("shows the transparent side as last synced before any sync answers", async 
 });
 
 test("reads history only once storage is loaded", async () => {
-  vi.mocked(db.loadNotes).mockResolvedValueOnce([
-    { ...note("orchard", 7, nf("ab")), id: "g_orchard_7", spent: false },
-  ]);
+  vi.mocked(store.loadState).mockResolvedValueOnce({
+    ...store.emptyState("g"),
+    notes: [
+      {
+        ...note("orchard", 7, nf("ab")),
+        id: "g_orchard_7",
+        spend: { status: "unspent" },
+      },
+    ],
+  });
   const wallet = new Wallet({ id: "g", ufvk: "uview" });
   expect(await wallet.getTransactionHistory()).toHaveLength(1);
 });
@@ -475,9 +497,7 @@ test("stores a recent block, and fetches it again each sync", async () => {
   await wallet.sync();
 
   expect(fetches() - before).toBe(2);
-  expect(vi.mocked(db.saveBlocks)).toHaveBeenCalledWith(
-    expect.arrayContaining([expect.objectContaining({ height: 3_150 })]),
-  );
+  expect(saved.blocks.has(3_150)).toBe(true);
 });
 
 test("names and dates what a chunk finds before the crawl ends", async () => {

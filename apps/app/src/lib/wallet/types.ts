@@ -1,3 +1,6 @@
+import type { Block } from "./chain/lightwalletd";
+import type { TransparentCache } from "./transparent";
+
 export type Pool = "sapling" | "orchard" | "ironwood";
 
 /** A note this wallet owns, as `try_decrypt_full` reads it out of a chunk. */
@@ -33,12 +36,16 @@ export interface TxLocator {
 export type Note = DecryptedNote & {
   /** `accountId_pool_position` — positions are unique within a pool. */
   id: string;
-  /**
-   * Where it was spent; `true` when spent in a transaction not found yet;
-   * `false` once checked as far as the sync reached; absent until checked.
-   */
-  spent?: boolean | TxLocator;
+  spend: Spend;
 };
+
+/**
+ * Whether a note was spent, as far as the sync has checked. `at` is the
+ * spending transaction; a Sapling spend can be known before it's found.
+ */
+export type Spend =
+  | { status: "unchecked" | "unspent" }
+  | { status: "spent"; at?: TxLocator };
 
 /** Main → worker: decrypt one chunk of one pool. */
 export interface ChunkRequest {
@@ -122,8 +129,8 @@ export interface PoolScan {
   next: number;
 }
 
-export interface SyncStatus {
-  id: string;
+/** How far the shielded sync has come. */
+export interface ShieldedScan {
   percentage: number;
   /** Absent for a pool not scanned yet. */
   scanned: Partial<Record<Pool, PoolScan>>;
@@ -131,7 +138,21 @@ export interface SyncStatus {
   saplingNullifiers: number;
   /** Our sending transactions (`height:tx_index`) whose sends have all been read. */
   sendsRead: string[];
+}
+
+/** Everything the wallet keeps for one account, stored as a whole. */
+export interface WalletState {
+  /** Bumped when the shape changes: an older state is dropped and synced again. */
+  version: 1;
+  id: string;
+  notes: Note[];
+  sent: Sent[];
+  scan: ShieldedScan;
   pending: PendingTx[];
+  /** Absent before the first transparent sync. */
+  transparent?: TransparentCache;
+  /** The blocks history names, for their txids, times and transparent outputs. */
+  blocks: Map<number, Block>;
 }
 
 /** One transaction as history shows it. */

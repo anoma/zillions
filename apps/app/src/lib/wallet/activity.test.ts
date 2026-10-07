@@ -17,7 +17,7 @@ const note = (position: number, value: number, memo?: string): Note => ({
   output_index: position,
   position,
   note: "",
-  spent: false,
+  spend: { status: "unspent" },
 });
 
 test("a transaction's memo is the one its notes carry, wherever it sits", () => {
@@ -41,7 +41,7 @@ test("our own transparent addresses show as the pool, others' as the address", (
   const history = buildActivity(
     // An unshield: a note spent, its change, and 0.0001 to our internal address.
     [
-      { ...note(1, 375_000), spent: at },
+      { ...note(1, 375_000), spend: { status: "spent", at } },
       { ...note(2, 350_000), ...at },
     ],
     [],
@@ -78,7 +78,7 @@ test("a transaction moving our own funds between pools is a migration", () => {
     // An Ironwood note spent; 30,000 lands in our Sapling, the rest is
     // Ironwood change after a 20,000 fee.
     [
-      { ...note(1, 100_000), pool: "ironwood", spent: at },
+      { ...note(1, 100_000), pool: "ironwood", spend: { status: "spent", at } },
       { ...note(2, 50_000), pool: "ironwood", ...at },
       { ...note(3, 30_000), pool: "sapling", scope: "external", ...at },
     ],

@@ -22,21 +22,13 @@ import {
   type TreeSizes,
 } from "./chain/indexer";
 import {
-  type Block,
   fetchBlock,
+  fetchLatestHeight,
   fetchTransaction,
   outputPositions,
 } from "./chain/lightwalletd";
 import { submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
-import {
-  loadBlocks,
-  loadNotes,
-  loadSent,
-  loadSyncStatus,
-  saveBlocks,
-  saveSyncState,
-} from "./db";
 import {
   maxSend,
   planMigration,
@@ -47,14 +39,15 @@ import {
   type WalletData,
 } from "./send";
 import { crawlChunks, workerChannel } from "./shielded/crawl";
+import { emptyState, loadState, saveState, storageKey } from "./store";
 import {
   cachedTransparent,
+  keepReserved,
   nextInternalAddress,
-  type OwnUtxo,
   REORG_DEPTH,
   reserveInternalAddress,
   syncTransparent,
-  type TransparentTx,
+  type TransparentView,
 } from "./transparent";
 import type {
   Activity,
@@ -62,10 +55,10 @@ import type {
   Note,
   PendingActivity,
   Pool,
-  Sent,
   SentOutput,
-  SyncStatus,
+  ShieldedScan,
   TxLocator,
+  WalletState,
 } from "./types";
 
 export type SyncEventListener = (e: { percentage: number }) => void;
@@ -82,7 +75,7 @@ const EXPIRY_MARGIN = 10;
 /** Newest pool first: that's where recent activity lands. */
 const POOLS = ["ironwood", "orchard", "sapling"] as const satisfies Pool[];
 
-const percentageOf = (scanned: SyncStatus["scanned"], last: LastChunks) => {
+const percentageOf = (scanned: ShieldedScan["scanned"], last: LastChunks) => {
   let [done, total] = [0, 0];
   for (const pool of POOLS) {
     const scan = scanned[pool];
@@ -92,15 +85,6 @@ const percentageOf = (scanned: SyncStatus["scanned"], last: LastChunks) => {
   }
   return total > 0 ? Math.min(100, (done / total) * 100) : 100;
 };
-
-const emptySyncStatus = (accountId: string): SyncStatus => ({
-  id: accountId,
-  percentage: 0,
-  scanned: {},
-  saplingNullifiers: 0,
-  sendsRead: [],
-  pending: [],
-});
 
 /** Notes' nullifiers as zcore takes them: 32 bytes each, back to back. */
 const packNullifiers = (notes: Note[]) =>
@@ -116,27 +100,22 @@ export class Wallet {
   /** Block height below which nothing is crawled. Absent means full history. */
   readonly #birthday?: number;
 
-  #notes: Note[] = [];
-  #sent: Sent[] = [];
+  #state: WalletState;
+  #key?: CryptoKey;
+  /** The chain tip, once this session's sync asks for it. */
+  #tip?: number;
+  /** The transparent side as stored, then as this session's sync finds it. */
+  #transparent?: TransparentView;
+  /** Whether this session's transparent sync landed: coins are planned only then. */
+  #transparentSynced = false;
   /** Note and sent-output ids already held, so a re-read chunk can't double them. */
   #applied: Set<string> = new Set();
-  #syncStatus: SyncStatus;
-  /** The transparent side; `tip` is absent until a sync lands. */
-  #transparent: {
-    utxos: OwnUtxo[];
-    txs: TransparentTx[];
-    tip?: number;
-    addresses?: Set<string>;
-  } = {
-    utxos: [],
-    txs: [],
-  };
-  /** Blocks history names, for their txids, times and transparent outputs. */
-  #blocks: Map<number, Block> = new Map();
   #syncProgressListeners: Set<SyncEventListener> = new Set();
   #abort = new AbortController();
   /** Saves are chained so two overlapping writes can't reorder the sync tip. */
   #saving: Promise<unknown> = Promise.resolve();
+  /** Whether the state changed since the last save began. */
+  #dirty = false;
   /**
    * Each crawled chunk's spend lookup, then its cursor move, chained in chunk
    * order: the cursor never passes a chunk whose spends aren't placed.
@@ -153,7 +132,7 @@ export class Wallet {
     this.id = options.id;
     this.#ufvk = options.ufvk;
     this.#birthday = options.birthday;
-    this.#syncStatus = emptySyncStatus(this.id);
+    this.#state = emptyState(this.id);
     this.#seed();
   }
 
@@ -163,25 +142,15 @@ export class Wallet {
   };
 
   #seed = singleton(async () => {
-    // TODO review if we should have a unified method to load the whole wallet
-    const [notes, sent, syncStatus, transparent] = await Promise.all([
-      loadNotes(this.id),
-      loadSent(this.id),
-      loadSyncStatus(this.id),
-      cachedTransparent(this.id, this.#ufvk),
-    ]);
-    this.#notes = notes;
-    this.#sent = sent;
-    if (syncStatus) {
-      this.#syncStatus = syncStatus;
+    this.#key = await storageKey(this.#ufvk);
+    const stored = await loadState(this.id, this.#key);
+    if (stored) this.#state = stored;
+    const { notes, sent, transparent } = this.#state;
+    if (transparent) {
+      this.#transparent = await cachedTransparent(transparent, this.#ufvk);
     }
-    // No tip: nothing is planned on coins the chain may have moved since.
-    if (transparent) this.#transparent = transparent;
     for (const note of notes) this.#applied.add(note.id);
     for (const out of sent) this.#applied.add(out.id);
-    await this.#restoreBlocks([
-      ...activityHeights(notes, sent, this.#transparent.txs),
-    ]);
   });
 
   subscribeSyncProgress = (listener: SyncEventListener) => {
@@ -192,7 +161,7 @@ export class Wallet {
   };
 
   #emitProgress = () => {
-    const { percentage } = this.#syncStatus;
+    const { percentage } = this.#state.scan;
     this.#syncProgressListeners.forEach((listener) => listener({ percentage }));
   };
 
@@ -206,33 +175,24 @@ export class Wallet {
     await this.#seed();
     this.#emitProgress();
 
-    // Transparent takes seconds, so it lands long before the shielded crawl;
-    // announcing it on arrival shows that balance straight away. Blocks are
-    // fetched now too, the tip being known: a new transparent transaction's,
-    // and recent ones a reorg may have replaced.
-    const transparent = syncTransparent(this.id, this.#ufvk)
-      .then((result) => {
-        this.#transparent = result;
-        this.#emitProgress();
-        return this.#fetchBlocks();
-      })
-      .catch((err) => console.error("[sync] transparent failed", err));
-
     const lookups = workerChannel();
     this.#locating = Promise.resolve();
     this.#placing = Promise.resolve();
     this.#readChunks.clear();
     this.#freshBlocks.clear();
+    let transparent: Promise<unknown> = Promise.resolve();
     let sizes: TreeSizes | undefined;
     // History's blocks are looked up whatever becomes of the crawl: what it
     // did find, and the transparent side, still deserve their txids and times.
     try {
       await initZcore();
+      this.#tip = await fetchLatestHeight();
+      transparent = this.#syncTransparent(this.#tip);
       sizes = await fetchTreeSizes();
       const last = Object.fromEntries(
         POOLS.map((pool) => [pool, lastChunk(sizes![pool])]),
       ) as LastChunks;
-      const { scanned } = this.#syncStatus;
+      const { scanned } = this.#state.scan;
       for (const pool of POOLS) {
         if (scanned[pool]) continue;
         const start =
@@ -261,9 +221,9 @@ export class Wallet {
           await this.#checkSaplingSpends();
         } else {
           // Read to the tip: whatever is still unchecked hasn't been spent.
-          for (const note of this.#notes) {
-            if (note.pool === pool && note.spent === undefined) {
-              note.spent = false;
+          for (const note of this.#state.notes) {
+            if (note.pool === pool && note.spend.status === "unchecked") {
+              note.spend = { status: "unspent" };
             }
           }
         }
@@ -288,6 +248,26 @@ export class Wallet {
     }
   });
 
+  /**
+   * Transparent takes seconds, so it lands long before the shielded crawl;
+   * announcing it on arrival shows that balance straight away. Blocks are
+   * fetched now too: a new transparent transaction's, and recent ones a reorg
+   * may have replaced.
+   */
+  #syncTransparent = (tip: number) =>
+    syncTransparent(this.#state.transparent, this.#ufvk, tip)
+      .then(({ cache, view }) => {
+        // Read on landing: an unshield may have reserved an address meanwhile.
+        const reserved = keepReserved(this.#state.transparent?.reserved, cache);
+        this.#state.transparent = { ...cache, reserved };
+        this.#transparent = view;
+        this.#transparentSynced = true;
+        this.#save();
+        this.#emitProgress();
+        return this.#fetchBlocks();
+      })
+      .catch((err) => console.error("[sync] transparent failed", err));
+
   /** Applies one chunk, in chunk order: its notes and sends, then which of our notes it spends. */
   #applyChunk = (
     pool: Pool,
@@ -303,11 +283,11 @@ export class Wallet {
       const note: Note = {
         ...hit,
         id: `${this.id}_${pool}_${hit.position}`,
-        spent: undefined,
+        spend: { status: "unchecked" },
       };
       if (this.#applied.has(note.id)) continue;
       this.#applied.add(note.id);
-      this.#notes.push(note);
+      this.#state.notes.push(note);
     }
     // History shows a find at once; its txid and time can't wait for the crawl's end.
     if (this.#applied.size > known) {
@@ -320,7 +300,7 @@ export class Wallet {
 
     // An Orchard or Ironwood action names the nullifier it spends as its rho.
     const spends = pool === "sapling" ? [] : this.#findSpends(pool, body);
-    const scan = this.#syncStatus.scanned[pool]!;
+    const scan = this.#state.scan.scanned[pool]!;
     this.#locating = this.#locating.then(async () => {
       if (spends.length) await this.#placeSpends(pool, chunk, spends, lookups);
       scan.next = Math.max(scan.next, chunk + 1);
@@ -333,14 +313,14 @@ export class Wallet {
       const id = `${this.id}_${pool}_${out.position}`;
       if (this.#applied.has(id)) continue;
       this.#applied.add(id);
-      this.#sent.push({ ...out, id });
+      this.#state.sent.push({ ...out, id });
     }
   };
 
   /** Records of `body` spending notes found so far, by index. */
   #findSpends = (pool: Pool, body: Uint8Array) => {
-    const ours = this.#notes.filter(
-      (n) => n.pool === pool && typeof n.spent !== "object",
+    const ours = this.#state.notes.filter(
+      (n) => n.pool === pool && !(n.spend.status === "spent" && n.spend.at),
     );
     return ours.length
       ? [...find_spends(pool, body, packNullifiers(ours))]
@@ -358,10 +338,15 @@ export class Wallet {
     this.#readChunks.add(`${pool}:${chunk}`);
     this.#applySent(pool, result.sent);
     for (const place of result.spends) {
-      const note = this.#notes.find(
+      const note = this.#state.notes.find(
         (n) => n.pool === pool && n.nf_mine === place.nf,
       );
-      if (note) note.spent = { height: place.height, tx_index: place.tx_index };
+      if (note) {
+        note.spend = {
+          status: "spent",
+          at: { height: place.height, tx_index: place.tx_index },
+        };
+      }
     }
   };
 
@@ -372,9 +357,12 @@ export class Wallet {
    */
   #checkSaplingSpends = async () => {
     const unchecked = () =>
-      this.#notes.filter((n) => n.pool === "sapling" && !n.spent);
+      this.#state.notes.filter(
+        (n) => n.pool === "sapling" && n.spend.status !== "spent",
+      );
     if (!unchecked().length) return;
-    for (let chunk = this.#syncStatus.saplingNullifiers; ; chunk++) {
+    const { scan } = this.#state;
+    for (let chunk = scan.saplingNullifiers; ; chunk++) {
       if (this.#abort.signal.aborted) return;
       const body = await fetchNullifierChunk("sapling", chunk);
       if (!body) break;
@@ -383,29 +371,30 @@ export class Wallet {
         body,
         packNullifiers(ours),
       ) as { spent: number[]; frozen: boolean };
-      for (const i of spent) ours[i].spent = true;
+      for (const i of spent) ours[i].spend = { status: "spent" };
       if (!frozen) break;
       // A full chunk never changes, so it's never read again.
-      this.#syncStatus.saplingNullifiers = chunk + 1;
+      scan.saplingNullifiers = chunk + 1;
     }
-    for (const note of unchecked()) note.spent = false;
+    for (const note of unchecked()) note.spend = { status: "unspent" };
   };
 
   /**
    * Places each Sapling spend in a transaction of ours, from the Sapling
    * nullifiers in the blocks history fetched. One in a transaction with
-   * nothing else of ours stays `true`: spent, transaction unknown.
+   * nothing else of ours stays spent with no transaction.
    */
   #locateSaplingSpends = () => {
-    for (const note of this.#notes) {
-      if (note.pool !== "sapling" || note.spent !== true) continue;
-      for (const [height, block] of this.#blocks) {
+    for (const note of this.#state.notes) {
+      if (note.pool !== "sapling" || note.spend.status !== "spent") continue;
+      if (note.spend.at) continue;
+      for (const [height, block] of this.#state.blocks) {
         const tx_index =
           height >= note.height
             ? block.saplingSpends.get(note.nf_mine)
             : undefined;
         if (tx_index !== undefined) {
-          note.spent = { height, tx_index };
+          note.spend = { status: "spent", at: { height, tx_index } };
           break;
         }
       }
@@ -419,10 +408,12 @@ export class Wallet {
    */
   #unplacedPendingHeights = async () => {
     const unplaced = new Set(
-      this.#notes.filter((n) => n.spent === true).map((n) => n.nf_mine),
+      this.#state.notes
+        .filter((n) => n.spend.status === "spent" && !n.spend.at)
+        .map((n) => n.nf_mine),
     );
     const heights = await Promise.all(
-      this.#syncStatus.pending
+      this.#state.pending
         .filter((p) => p.nullifiers.some((nf) => unplaced.has(nf)))
         .map((p) =>
           fetchTransaction(p.txid).then(
@@ -440,14 +431,14 @@ export class Wallet {
   /** Our transactions that spent notes or coins of ours, by `height:tx_index`. */
   #sendingTxs = () => {
     const txs = new Map<string, TxLocator>();
-    for (const { spent } of this.#notes) {
-      if (typeof spent === "object") {
-        txs.set(`${spent.height}:${spent.tx_index}`, spent);
+    for (const { spend } of this.#state.notes) {
+      if (spend.status === "spent" && spend.at) {
+        txs.set(`${spend.at.height}:${spend.at.tx_index}`, spend.at);
       }
     }
-    for (const { txid, height, spent } of this.#transparent.txs) {
+    for (const { txid, height, spent } of this.#transparent?.txs ?? []) {
       if (!spent) continue;
-      const txids = this.#blocks.get(height)?.txids ?? [];
+      const txids = this.#state.blocks.get(height)?.txids ?? [];
       const tx_index = [...txids].find(([, id]) => id === txid)?.[0];
       if (tx_index !== undefined) {
         txs.set(`${height}:${tx_index}`, { height, tx_index });
@@ -462,10 +453,11 @@ export class Wallet {
    * can sit in another pool's chunk. Its block says exactly where.
    */
   #recoverSends = async (sizes: TreeSizes, lookups: Lookups) => {
-    const done = new Set(this.#syncStatus.sendsRead);
+    const { scan, blocks } = this.#state;
+    const done = new Set(scan.sendsRead);
     try {
       for (const [id, { height, tx_index }] of this.#sendingTxs()) {
-        const block = this.#blocks.get(height);
+        const block = blocks.get(height);
         if (done.has(id) || !block) continue;
         const places = outputPositions(block, tx_index).filter((p) => p.count);
         // Not indexed yet: try again next sync.
@@ -488,18 +480,20 @@ export class Wallet {
         done.add(id);
       }
     } finally {
-      this.#syncStatus.sendsRead = [...done];
+      scan.sendsRead = [...done];
     }
   };
 
   /** Drops pending transactions seen mined (a spend of theirs is on chain) or past expiry. */
   #prunePending = () => {
-    const { tip, txs } = this.#transparent;
+    const tip = this.#tip;
     const spent = new Set(
-      this.#notes.filter((n) => n.spent).map((n) => n.nf_mine),
+      this.#state.notes
+        .filter((n) => n.spend.status === "spent")
+        .map((n) => n.nf_mine),
     );
-    const mined = new Set(txs.map((tx) => tx.txid));
-    this.#syncStatus.pending = this.#syncStatus.pending.filter(
+    const mined = new Set(this.#transparent?.txs.map((tx) => tx.txid));
+    this.#state.pending = this.#state.pending.filter(
       (p) =>
         !mined.has(p.txid) &&
         !p.nullifiers.some((nf) => spent.has(nf)) &&
@@ -511,7 +505,7 @@ export class Wallet {
 
   /** Nullifiers and `txid:index` outpoints pending transactions spend. */
   #held = () => {
-    const { pending } = this.#syncStatus;
+    const { pending } = this.#state;
     return {
       notes: new Set(pending.flatMap((p) => p.nullifiers)),
       coins: new Set(pending.flatMap((p) => p.outpoints)),
@@ -525,12 +519,13 @@ export class Wallet {
    * time.
    */
   #fetchBlocks = async (extra: number[] = []) => {
-    const { tip } = this.#transparent;
+    const tip = this.#tip;
+    const { notes, sent, blocks } = this.#state;
     const history = [
-      ...activityHeights(this.#notes, this.#sent, this.#transparent.txs),
+      ...activityHeights(notes, sent, this.#transparent?.txs ?? []),
       ...extra,
     ];
-    const missing = await this.#restoreBlocks(history);
+    const missing = history.filter((height) => !blocks.has(height));
     // A block a reorg can still replace is stored, so history shows it on
     // load, but fetched again once per sync.
     const unsettled =
@@ -542,49 +537,38 @@ export class Wallet {
           );
     const heights = [...new Set([...missing, ...unsettled])];
     // A block that fails is simply asked for again next sync.
-    const blocks = await Promise.allSettled(heights.map(fetchBlock));
-    const fetched: (Block & { height: number })[] = [];
-    blocks.forEach((block, i) => {
+    const fetched = await Promise.allSettled(heights.map(fetchBlock));
+    fetched.forEach((block, i) => {
       if (block.status === "fulfilled") {
-        this.#blocks.set(heights[i], block.value);
+        blocks.set(heights[i], block.value);
         this.#freshBlocks.add(heights[i]);
-        fetched.push({ ...block.value, height: heights[i] });
       } else
         console.error("[sync] block lookup failed", heights[i], block.reason);
     });
-    await saveBlocks(fetched).catch((err) =>
-      console.error("[sync] block save failed", err),
-    );
+    if (heights.length) this.#save();
     this.#emitProgress();
-  };
-
-  /** Takes the stored blocks among `heights`; returns those still missing. */
-  #restoreBlocks = async (heights: number[]) => {
-    const wanted = heights.filter((height) => !this.#blocks.has(height));
-    const stored = await loadBlocks(wanted);
-    stored.forEach((block) => block && this.#blocks.set(block.height, block));
-    return wanted.filter((height) => !this.#blocks.has(height));
   };
 
   /** Recomputes progress from the scanned chunks, then persists and announces it. */
   #advance = (last: LastChunks) => {
-    this.#syncStatus.percentage = percentageOf(this.#syncStatus.scanned, last);
+    const { scan } = this.#state;
+    scan.percentage = percentageOf(scan.scanned, last);
     this.#save();
     this.#emitProgress();
   };
 
-  // TODO persist only the notes that changed, instead of the whole set.
+  /**
+   * Stores the state as it is when the write starts. Calls made while one
+   * write runs share the next, so a sync's many changes cost few writes.
+   */
   #save = () => {
-    console.log("[sync] persisting notes:", this.#notes.length);
-    const snapshot = {
-      ...this.#syncStatus,
-      scanned: structuredClone(this.#syncStatus.scanned),
-    };
+    this.#dirty = true;
     this.#saving = this.#saving
-      // TODO review if it's safe to persist the note.nf_mine.
-      // Otherwise we need to compute them during the seed phase.
-      // The sync phase already compute them in memory only.
-      .then(() => saveSyncState(this.#notes, this.#sent, snapshot))
+      .then(async () => {
+        if (!this.#dirty || !this.#key) return;
+        this.#dirty = false;
+        await saveState(this.#state, this.#key);
+      })
       .catch((err) => console.error("[sync] save failed", err));
   };
 
@@ -592,10 +576,10 @@ export class Wallet {
   #spendable = () => {
     const held = this.#held();
     return {
-      notes: this.#notes.filter(
-        (n) => n.spent === false && !held.notes.has(n.nf_mine),
+      notes: this.#state.notes.filter(
+        (n) => n.spend.status === "unspent" && !held.notes.has(n.nf_mine),
       ),
-      utxos: this.#transparent.utxos.filter(
+      utxos: (this.#transparent?.utxos ?? []).filter(
         (u) => !held.coins.has(`${u.txid}:${u.index}`),
       ),
     };
@@ -612,7 +596,7 @@ export class Wallet {
       orchardBalance: notes
         .filter((n) => n.pool === "orchard")
         .reduce((sum, n) => sum + BigInt(n.value), 0n),
-      pendingChange: this.#syncStatus.pending.reduce(
+      pendingChange: this.#state.pending.reduce(
         (sum, p) => sum + BigInt(p.change),
         0n,
       ),
@@ -622,10 +606,14 @@ export class Wallet {
     };
   }
 
-  /** What a send may spend, at the chain tip. */
-  #walletData = (): WalletData => {
-    const { tip } = this.#transparent;
+  /**
+   * What a send may spend, at the chain tip. Coins only count once this
+   * session's transparent sync lands: the chain may have moved them since.
+   */
+  #walletData = (coins: boolean): WalletData => {
+    const tip = this.#tip;
     invariant(tip !== undefined, "The wallet is still syncing");
+    invariant(!coins || this.#transparentSynced, "The wallet is still syncing");
     const { notes, utxos } = this.#spendable();
     return {
       tip,
@@ -638,10 +626,10 @@ export class Wallet {
         height: n.height,
         // Only names the note: a block not fetched yet mustn't hold a send up.
         txid:
-          this.#blocks.get(n.height)?.txids.get(n.tx_index) ??
+          this.#state.blocks.get(n.height)?.txids.get(n.tx_index) ??
           n.position.toString(16).padStart(64, "0"),
       })),
-      utxos,
+      utxos: coins ? utxos : [],
     };
   };
 
@@ -657,14 +645,14 @@ export class Wallet {
     receipt: PendingActivity,
   ) => {
     const { txid, raw, expiryHeight } = await submitTransaction(signed);
-    const { tip } = this.#transparent;
+    const tip = this.#tip;
     invariant(tip !== undefined, "The wallet is still syncing");
     await initZcore();
     const tx = parse_transaction(NETWORK, tip, raw) as {
       inputs: { txid: string; index: number }[];
       nullifiers: string[];
     };
-    this.#syncStatus.pending.push({
+    this.#state.pending.push({
       txid,
       expiryHeight,
       nullifiers: tx.nullifiers,
@@ -677,32 +665,45 @@ export class Wallet {
     return { txid, expiryHeight };
   };
 
-  planSend = (send: SendRequest) => planSend(this.#walletData(), send);
+  planSend = (send: SendRequest) =>
+    planSend(this.#walletData(send.from === "transparent"), send);
 
   /** The next internal address, shown nowhere; see `nextInternalAddress` for when it's null. */
-  internalAddress = () => nextInternalAddress(this.id, this.#ufvk);
+  internalAddress = async () => {
+    await this.#seed();
+    return nextInternalAddress(this.#state.transparent, this.#ufvk);
+  };
 
   /** Records a transaction paying `internalAddress()`'s `index`, so the next one goes elsewhere. */
-  internalAddressUsed = (index: number, expiryHeight: number) =>
-    reserveInternalAddress(this.id, index, expiryHeight);
+  internalAddressUsed = async (index: number, expiryHeight: number) => {
+    await this.#seed();
+    this.#state.transparent = reserveInternalAddress(
+      this.#state.transparent,
+      index,
+      expiryHeight,
+    );
+    this.#save();
+    await this.#saving;
+  };
 
-  maxSend = (send: SendRequest) => maxSend(this.#walletData(), send);
+  maxSend = (send: SendRequest) =>
+    maxSend(this.#walletData(send.from === "transparent"), send);
 
-  planMigration = () => planMigration(this.#walletData());
+  planMigration = () => planMigration(this.#walletData(false));
 
-  /** The unsigned PCZT for `send`, for the keychain account that signs it. */
   /**
-   * The unsigned PCZT for `send`, and `changeTo`: the internal address index
-   * its transparent change goes to, to record once it's sent.
+   * The unsigned PCZT for `send`, for the keychain account that signs it, and
+   * `changeTo`: the internal address index its transparent change goes to, to
+   * record once it's sent.
    */
   sendPczt = async (
     send: SendRequest,
     account: { seedFingerprint: string; hdIndex: number },
   ) => {
-    const internal =
-      send.from === "transparent" ? await this.internalAddress() : null;
+    const coins = send.from === "transparent";
+    const internal = coins ? await this.internalAddress() : null;
     const built = await sendPczt(
-      this.#walletData(),
+      this.#walletData(coins),
       send,
       this.#ufvk,
       account,
@@ -726,7 +727,7 @@ export class Wallet {
     hdIndex: number;
   }) => {
     const { pczt, plan } = await shieldPczt(
-      this.#walletData(),
+      this.#walletData(true),
       this.#ufvk,
       account,
     );
@@ -738,16 +739,18 @@ export class Wallet {
 
   /**
    * What our sending transactions paid to transparent addresses not ours, by
-   * `locatorId`, from their blocks. Empty until the transparent sync names
+   * `locatorId`, from their blocks. Empty until the transparent side names
    * our addresses: an unshield to one of them isn't a payment.
    */
   #payments = async () => {
     const paid = new Map<string, Payment[]>();
-    const { addresses } = this.#transparent;
+    const addresses = this.#transparent?.addresses;
     if (!addresses) return paid;
     await initZcore();
     for (const locator of this.#sendingTxs().values()) {
-      const vout = this.#blocks.get(locator.height)?.vout.get(locator.tx_index);
+      const vout = this.#state.blocks
+        .get(locator.height)
+        ?.vout.get(locator.tx_index);
       const theirs = (vout ?? []).flatMap(({ value, script }) => {
         const recipient = script_address(NETWORK, script);
         return recipient && addresses.has(recipient)
@@ -763,15 +766,15 @@ export class Wallet {
   async getTransactionHistory(): Promise<Activity[]> {
     await this.#seed();
     const history = buildActivity(
-      this.#notes,
-      this.#sent,
-      this.#transparent.txs,
-      this.#blocks,
+      this.#state.notes,
+      this.#state.sent,
+      this.#transparent?.txs ?? [],
+      this.#state.blocks,
       await this.#payments(),
-      this.#transparent.addresses,
+      this.#transparent?.addresses,
     );
     const mined = new Set(history.map((tx) => tx.txid));
-    const pending = this.#syncStatus.pending
+    const pending = this.#state.pending
       .filter((p) => p.receipt && !mined.has(p.txid))
       .reverse()
       .map(({ txid, receipt }) => ({

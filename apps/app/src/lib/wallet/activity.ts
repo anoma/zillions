@@ -210,7 +210,9 @@ export function buildActivity(
   };
   for (const note of notes) {
     at(note).received.push(note);
-    if (typeof note.spent === "object") at(note.spent).spent.push(note);
+    if (note.spend.status === "spent" && note.spend.at) {
+      at(note.spend.at).spent.push(note);
+    }
   }
   for (const out of sent) at(out).sent.push(out);
 
@@ -241,7 +243,9 @@ export function activityHeights(
 ) {
   return new Set([
     ...notes.flatMap((n) =>
-      typeof n.spent === "object" ? [n.height, n.spent.height] : [n.height],
+      n.spend.status === "spent" && n.spend.at
+        ? [n.height, n.spend.at.height]
+        : [n.height],
     ),
     ...sent.map((s) => s.height),
     ...transparent.map((t) => t.height),
