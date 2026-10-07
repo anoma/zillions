@@ -1,5 +1,5 @@
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
-import type { TransactionReceipt } from "../lib/sdk/types";
+import type { Activity } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
 import { TransactionTypeAndStatus } from "./TransactionTypeAndStatus";
@@ -11,7 +11,7 @@ const explorerUrl = (txid: string) =>
 
 export type TransactionReceiptCardProps = {
   tx: Pick<
-    TransactionReceipt,
+    Activity,
     | "txid"
     | "tx_type"
     | "value"

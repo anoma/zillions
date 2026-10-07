@@ -3,13 +3,12 @@ import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { DatabaseArrowIcon } from "../icons/DatabaseArrowIcon";
 import { ShieldCheckIcon } from "../icons/ShieldCheckIcon";
 import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
-import type { TransactionReceipt } from "../lib/sdk/types";
+import type { Activity } from "../lib/wallet/types";
 
 export function TransactionTypeAndStatus({
   tx,
 }: {
-  tx: Pick<TransactionReceipt, "tx_type"> &
-    Partial<Pick<TransactionReceipt, "status">>;
+  tx: Pick<Activity, "tx_type"> & Partial<Pick<Activity, "status">>;
 }) {
   return (
     <div className="flex items-center gap-2">

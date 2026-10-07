@@ -8,12 +8,12 @@ import type {
   ChunkWorkerResponse,
   ChunkWorkerSuccess,
   Pool,
-} from "./types";
-import ZcrawlerWorker from "./worker.ts?worker";
+} from "../types";
+import DecryptWorker from "./worker.ts?worker";
 
 /** Wraps a worker as a request/response channel: one chunk in flight at a time. */
 export function workerChannel() {
-  const worker = new ZcrawlerWorker();
+  const worker = new DecryptWorker();
   return {
     run: (request: ChunkRequest) =>
       new Promise<ChunkWorkerSuccess>((resolve, reject) => {

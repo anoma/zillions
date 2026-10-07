@@ -1,10 +1,10 @@
-import type { TransactionReceipt } from "../lib/sdk/types";
+import type { Activity } from "../lib/wallet/types";
 import { ZecValue } from "./ZecValue";
 
 export function TransactionValue({
   tx,
 }: {
-  tx: Pick<TransactionReceipt, "tx_type" | "value" | "fee">;
+  tx: Pick<Activity, "tx_type" | "value" | "fee">;
 }) {
   let value = tx.value;
   // Sent values come back negative; flip to positive for display.

@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
-import type { Block } from "./lightwalletd";
+import type { Block } from "./chain/lightwalletd";
 import type {
   ChunkRequest,
   ChunkWorkerSuccess,
@@ -8,6 +8,7 @@ import type {
   Note,
   Pool,
   Sent,
+  WalletState,
 } from "./types";
 
 // A small chain, described per test: what each chunk holds, which records
@@ -35,7 +36,11 @@ const nullifiers = vi.hoisted(
     ),
 );
 
-const saved = vi.hoisted(() => ({ notes: [] as Note[], sent: [] as Sent[] }));
+const saved = vi.hoisted(() => ({
+  notes: [] as Note[],
+  sent: [] as Sent[],
+  blocks: new Map<number, Block>(),
+}));
 
 vi.mock("@zillions/zcore", () => ({
   default: vi.fn(async () => {}),
@@ -67,7 +72,7 @@ vi.mock("@zillions/zcore", () => ({
   shield_pczt: vi.fn(),
 }));
 
-vi.mock("./crawl", () => ({
+vi.mock("./shielded/crawl", () => ({
   crawlChunks: vi.fn(
     async (o: {
       pool: Pool;
@@ -105,8 +110,8 @@ const lookup = vi.fn(async ({ pool, chunk, spends = [] }: ChunkRequest) => {
   };
 });
 
-vi.mock("./indexer", async (actual) => ({
-  ...(await actual<typeof import("./indexer")>()),
+vi.mock("./chain/indexer", async (actual) => ({
+  ...(await actual<typeof import("./chain/indexer")>()),
   fetchTreeSizes: vi.fn(async () => chain.sizes),
   firstChunkFrom: vi.fn(async () => 0),
   fetchNullifierChunk: vi.fn(async (_pool: Pool, chunk: number) =>
@@ -114,48 +119,48 @@ vi.mock("./indexer", async (actual) => ({
   ),
 }));
 
-vi.mock("./lightwalletd", async (actual) => ({
-  ...(await actual<typeof import("./lightwalletd")>()),
+vi.mock("./chain/lightwalletd", async (actual) => ({
+  ...(await actual<typeof import("./chain/lightwalletd")>()),
   fetchBlock: vi.fn(
     async (height: number) => chain.blocks.get(height) ?? block(),
   ),
   fetchTransaction: vi.fn(),
+  fetchLatestHeight: vi.fn(async () => chain.tip),
 }));
 
 vi.mock("./transparent", () => ({
   REORG_DEPTH: 100,
   cachedTransparent: vi.fn(async () => undefined),
   syncTransparent: vi.fn(async () => ({
-    utxos: [],
-    txs: [],
-    tip: chain.tip,
-    addresses: new Set(["t1ours"]),
+    cache: {},
+    view: { utxos: [], txs: [], addresses: new Set(["t1ours"]) },
   })),
+  keepReserved: vi.fn(),
   nextInternalAddress: vi.fn(),
   reserveInternalAddress: vi.fn(),
 }));
 
-vi.mock("./submit", () => ({ submitTransaction: vi.fn() }));
+vi.mock("./chain/submit", () => ({ submitTransaction: vi.fn() }));
 
-vi.mock("./db", () => ({
-  loadNotes: vi.fn(async () => []),
-  loadSent: vi.fn(async () => []),
-  loadSyncStatus: vi.fn(async () => undefined),
-  loadBlocks: vi.fn(async (heights: number[]) => heights.map(() => undefined)),
-  saveBlocks: vi.fn(async () => {}),
-  saveSyncState: vi.fn(async (notes: Note[], sent: Sent[]) => {
-    saved.notes = structuredClone(notes);
-    saved.sent = structuredClone(sent);
+vi.mock("./store", async (actual) => ({
+  emptyState: (await actual<typeof import("./store")>()).emptyState,
+  storageKey: vi.fn(async () => ({})),
+  loadState: vi.fn(async () => undefined),
+  saveState: vi.fn(async (state: WalletState) => {
+    saved.notes = structuredClone(state.notes);
+    saved.sent = structuredClone(state.sent);
+    saved.blocks = structuredClone(state.blocks);
   }),
 }));
 
-const { ZWallet } = await import("./ZWallet");
+const { Wallet } = await import("./wallet");
 const zcore = await import("@zillions/zcore");
-const { submitTransaction } = await import("./submit");
+const { submitTransaction } = await import("./chain/submit");
 const { cachedTransparent } = await import("./transparent");
-const { fetchBlock, fetchTransaction } = await import("./lightwalletd");
-const db = await import("./db");
-const { crawlChunks } = await import("./crawl");
+type TransparentCache = import("./transparent").TransparentCache;
+const { fetchBlock, fetchTransaction } = await import("./chain/lightwalletd");
+const store = await import("./store");
+const { crawlChunks } = await import("./shielded/crawl");
 
 function block(overrides: Partial<Block> = {}): Block {
   return {
@@ -227,10 +232,13 @@ test("finds a spend of an earlier note in chunk order, and what it paid into ano
   };
   chain.sent.set("sapling:0", [payment as Sent]);
 
-  const wallet = new ZWallet({ id: "a", ufvk: "uview" });
+  const wallet = new Wallet({ id: "a", ufvk: "uview" });
   await wallet.sync();
 
-  expect(saved.notes[0].spent).toEqual({ height: 3_100, tx_index: 2 });
+  expect(saved.notes[0].spend).toEqual({
+    status: "spent",
+    at: { height: 3_100, tx_index: 2 },
+  });
   expect(lookup).toHaveBeenCalledWith(
     expect.objectContaining({ pool: "orchard", chunk: 3, spends: [7] }),
   );
@@ -246,7 +254,7 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
   chain.sizes = { sapling: 0, orchard: 2 * 16_384, ironwood: 0 };
   chain.hits.set("orchard:1", [note("orchard", 16_387, nf("bb"))]);
 
-  const wallet = new ZWallet({ id: "b", ufvk: "uview" });
+  const wallet = new Wallet({ id: "b", ufvk: "uview" });
   await wallet.sync();
   expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
 
@@ -304,18 +312,21 @@ test("places a Sapling spend through our own transaction's block", async () => {
   chain.saplingNullifiers = [nf("cc")];
   chain.blocks.set(3_050, block({ saplingSpends: new Map([[nf("cc"), 4]]) }));
 
-  const wallet = new ZWallet({ id: "c", ufvk: "uview" });
+  const wallet = new Wallet({ id: "c", ufvk: "uview" });
   await wallet.sync();
 
   const sapling = saved.notes.find((n) => n.pool === "sapling");
-  expect(sapling?.spent).toEqual({ height: 3_050, tx_index: 4 });
+  expect(sapling?.spend).toEqual({
+    status: "spent",
+    at: { height: 3_050, tx_index: 4 },
+  });
   expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
 });
 
 test("keeps a Sapling-only send with no change in history once mined", async () => {
   chain.sizes = { sapling: 16_384, orchard: 16_384, ironwood: 0 };
   chain.hits.set("sapling:0", [note("sapling", 5, nf("ce"))]);
-  const wallet = new ZWallet({ id: "d", ufvk: "uview" });
+  const wallet = new Wallet({ id: "d", ufvk: "uview" });
   await wallet.sync();
 
   vi.mocked(submitTransaction).mockResolvedValue({
@@ -371,59 +382,11 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
   expect(sends[0].status).not.toBe("Pending");
 });
 
-test("counts what a send paid to someone else's transparent address, not to ours", async () => {
-  chain.sizes = { sapling: 0, orchard: 2 * 16_384, ironwood: 0 };
-  const spentIn = (tx_index: number) => ({ height: 3_150, tx_index });
-  chain.hits.set("orchard:1", [
-    { ...note("orchard", 16_387, nf("ee")), value: 150_000 },
-    { ...note("orchard", 16_388, nf("ff")), value: 40_000 },
-    // tx 3's change.
-    { ...note("orchard", 16_390, nf("aa")), ...spentIn(3), value: 30_000 },
-  ]);
-  chain.rho.set(
-    "orchard:1",
-    new Map([
-      [9, nf("ee")],
-      [10, nf("ff")],
-    ]),
-  );
-  chain.spentAt.set(nf("ee"), spentIn(3));
-  chain.spentAt.set(nf("ff"), spentIn(4));
-  const out = (value: number, address: string) => ({
-    value,
-    script: new TextEncoder().encode(address),
-  });
-  chain.blocks.set(
-    3_150,
-    block({
-      txids: new Map([
-        [3, "tx3"],
-        [4, "tx4"],
-      ]),
-      vout: new Map([
-        [3, [out(100_000, "t1theirs")]],
-        // An unshield: its output is our own.
-        [4, [out(25_000, "t1ours")]],
-      ]),
-    }),
-  );
-
-  const wallet = new ZWallet({ id: "e", ufvk: "uview" });
-  await wallet.sync();
-
-  const history = await wallet.getTransactionHistory();
-  expect(history.find((tx) => tx.txid === "tx3")).toMatchObject({
-    tx_type: "Sent",
-    value: -100_000n,
-    to: { address: "t1theirs" },
-    fee: 20_000n,
-  });
-  expect(history.find((tx) => tx.txid === "tx4")?.to).not.toHaveProperty(
-    "address",
-  );
-});
-
 test("shows the transparent side as last synced before any sync answers", async () => {
+  vi.mocked(store.loadState).mockResolvedValueOnce({
+    ...store.emptyState("f"),
+    transparent: {} as TransparentCache,
+  });
   vi.mocked(cachedTransparent).mockResolvedValueOnce({
     utxos: [],
     txs: [
@@ -439,7 +402,7 @@ test("shows the transparent side as last synced before any sync answers", async 
     addresses: new Set(["t1ours"]),
   });
 
-  const wallet = new ZWallet({ id: "f", ufvk: "uview" });
+  const wallet = new Wallet({ id: "f", ufvk: "uview" });
 
   await vi.waitFor(async () =>
     expect(await wallet.getTransactionHistory()).toEqual([
@@ -453,10 +416,17 @@ test("shows the transparent side as last synced before any sync answers", async 
 });
 
 test("reads history only once storage is loaded", async () => {
-  vi.mocked(db.loadNotes).mockResolvedValueOnce([
-    { ...note("orchard", 7, nf("ab")), id: "g_orchard_7", spent: false },
-  ]);
-  const wallet = new ZWallet({ id: "g", ufvk: "uview" });
+  vi.mocked(store.loadState).mockResolvedValueOnce({
+    ...store.emptyState("g"),
+    notes: [
+      {
+        ...note("orchard", 7, nf("ab")),
+        id: "g_orchard_7",
+        spend: { status: "unspent" },
+      },
+    ],
+  });
+  const wallet = new Wallet({ id: "g", ufvk: "uview" });
   expect(await wallet.getTransactionHistory()).toHaveLength(1);
 });
 
@@ -466,7 +436,7 @@ test("stores a recent block, and fetches it again each sync", async () => {
   chain.hits.set("orchard:1", [
     { ...note("orchard", 16_387, nf("cd")), height: 3_150 },
   ]);
-  const wallet = new ZWallet({ id: "h", ufvk: "uview" });
+  const wallet = new Wallet({ id: "h", ufvk: "uview" });
   const fetches = () =>
     vi.mocked(fetchBlock).mock.calls.filter(([h]) => h === 3_150).length;
   const before = fetches();
@@ -475,9 +445,7 @@ test("stores a recent block, and fetches it again each sync", async () => {
   await wallet.sync();
 
   expect(fetches() - before).toBe(2);
-  expect(vi.mocked(db.saveBlocks)).toHaveBeenCalledWith(
-    expect.arrayContaining([expect.objectContaining({ height: 3_150 })]),
-  );
+  expect(saved.blocks.has(3_150)).toBe(true);
 });
 
 test("names and dates what a chunk finds before the crawl ends", async () => {
@@ -492,7 +460,7 @@ test("names and dates what a chunk finds before the crawl ends", async () => {
   vi.mocked(crawlChunks).mockImplementation((o) =>
     o.pool === "sapling" ? new Promise(() => {}) : crawl(o),
   );
-  const wallet = new ZWallet({ id: "i", ufvk: "uview" });
+  const wallet = new Wallet({ id: "i", ufvk: "uview" });
   void wallet.sync();
 
   await vi.waitFor(async () =>

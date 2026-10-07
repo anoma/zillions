@@ -1,7 +1,7 @@
 import { twMerge } from "tailwind-merge";
 import { useAddressKind } from "../hooks/useAddresses";
-import type { Party } from "../lib/sdk/types";
 import { shortenAddress } from "../lib/utils";
+import type { Party } from "../lib/wallet/types";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
 
 export function AddressBadge({
