@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.7.0...zillions-app-v1.7.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* keep a Sapling-only send with no change in history ([f7034d6](https://github.com/heliaxdev/zillions-interface/commit/f7034d632c91cbad892a06da745f4b05e330d861))
+
 ## [1.7.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.6.0...zillions-app-v1.7.0) (2026-10-02)
 
 
