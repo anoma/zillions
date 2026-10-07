@@ -3,26 +3,30 @@ import type { TransparentCache } from "./transparent";
 
 export type Pool = "sapling" | "orchard" | "ironwood";
 
-/** A note this wallet owns, as `try_decrypt_full` reads it out of a chunk. */
-export interface DecryptedNote {
+/** A shielded output: a note we received, or one we sent. */
+export interface Output {
   pool: Pool;
-  /** "external" (received) or "internal" (change). */
-  scope: "external" | "internal";
   /** Value in zatoshis. */
   value: number;
-  /** This note's own nullifier (hex); shows on-chain when spent. */
-  nf_mine: string;
-  /** The note's memo as text; absent when it carries none. */
-  memo?: string;
-  /** The encoded address the note was sent to — one of ours. */
+  /** The encoded address it was sent to. */
   recipient: string;
+  /** Its memo as text; absent when it carries none. */
+  memo?: string;
   height: number;
-  /** The note's transaction within its block. */
+  /** Its transaction within its block. */
   tx_index: number;
-  /** Its index among the transaction's outputs in this pool. */
-  output_index: number;
   /** Position in the pool's note commitment tree. */
   position: number;
+}
+
+/** A note this wallet owns, as `try_decrypt_full` reads it out of a chunk. */
+export interface DecryptedNote extends Output {
+  /** "external" (received) or "internal" (change). */
+  scope: "external" | "internal";
+  /** This note's own nullifier (hex); shows on-chain when spent. */
+  nf_mine: string;
+  /** Its index among the transaction's outputs in this pool. */
+  output_index: number;
   /** What spending it needs (hex). Only wasm reads its shape. */
   note: string;
 }
@@ -86,17 +90,7 @@ export type PendingActivity = Pick<
 >;
 
 /** An output this wallet created, recovered with its outgoing viewing key. */
-export interface SentOutput {
-  pool: Pool;
-  /** Value in zatoshis, as the recipient received it. */
-  value: number;
-  /** The encoded address it was sent to. */
-  recipient: string;
-  memo?: string;
-  height: number;
-  tx_index: number;
-  position: number;
-}
+export type SentOutput = Output;
 
 export type Sent = SentOutput & {
   /** `accountId_pool_position` — positions are unique within a pool. */

@@ -31,7 +31,7 @@ export function placeSpends(notes: Note[], pool: Pool, places: SpendPlace[]) {
   }
 }
 
-/** Marks `pool` notes still unchecked as unspent: the sync has read to the tip. */
+/** Marks `pool` notes still unchecked as unspent; call only once that pool is read to the tip. */
 export function markUnspent(notes: Note[], pool: Pool) {
   for (const note of notes) {
     if (note.pool === pool && note.spend.status === "unchecked") {

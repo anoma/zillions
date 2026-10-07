@@ -41,7 +41,8 @@ the trade-off is a product decision, written down here.
   that link, 2.10; the wallet holds it only for the moment it's needed and
   never saves it), nothing is signed without
   the user's explicit approval, and what the user approves is exactly what
-  gets signed.
+  gets signed. What the wallet keeps in the browser (balances, history,
+  addresses) is encrypted, and opens only while the Keychain is unlocked.
 - **The best UX possible.** Clear screens, no Zcash jargon the user has to
   understand to use the wallet (pools, notes, blocks), sensible defaults, fast
   feedback, and honest waiting states when something takes time.

@@ -6,7 +6,7 @@ import type { Note, PendingTx, WalletState } from "./types";
 const total = (of: { value: number }[]) =>
   of.reduce((sum, { value }) => sum + BigInt(value), 0n);
 
-/** Unspent notes and UTXOs, less what pending transactions spend. */
+/** Notes checked unspent and UTXOs, less what pending transactions spend. */
 export function spendable(
   notes: Note[],
   utxos: OwnUtxo[],
@@ -38,7 +38,7 @@ export function balances(
   };
 }
 
-/** What zcore plans a send from, at `tip`; `utxos` are only what it may spend. */
+/** What zcore plans a send from, at `tip`; a note whose block isn't fetched gets a stand-in txid. */
 export function walletData(
   tip: number,
   { notes, utxos }: ReturnType<typeof spendable>,

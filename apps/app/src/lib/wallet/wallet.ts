@@ -41,11 +41,7 @@ export type SyncEventListener = (e: { percentage: number }) => void;
 
 type Account = { seedFingerprint: string; hdIndex: number };
 
-/**
- * One account's wallet: its state, loaded from storage and kept up to date by
- * `sync`, and what the app reads and sends with. The work itself lives in
- * the modules this composes; this holds the state and keeps the order.
- */
+/** One account's wallet: its state, kept in storage and brought up to date by `sync`, and what the app reads and sends with. */
 export class Wallet {
   readonly id: string;
   readonly #ufvk: string;
@@ -109,7 +105,7 @@ export class Wallet {
     this.#syncProgressListeners.forEach((listener) => listener({ percentage }));
   };
 
-  /** The shielded and transparent sides side by side, then what needs both. */
+  /** Brings the wallet up to the chain tip; a call while one runs shares it. */
   sync = dedupe(async () => {
     const startTime = Date.now();
     await this.#seed();
@@ -282,9 +278,8 @@ export class Wallet {
   }
 
   /**
-   * What a send may spend, at the chain tip. Coins count only once this
-   * session's transparent sync lands, for `coins` plans: the chain may have
-   * moved them since.
+   * What a send may spend at the chain tip. Throws before the tip is known, or
+   * with `coins` before this session's transparent sync: they may have moved.
    */
   #walletData = (coins: boolean) => {
     const tip = this.#tip;

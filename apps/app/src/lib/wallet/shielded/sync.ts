@@ -84,10 +84,8 @@ function applySent(run: ShieldedRun, pool: Pool, sent: SentOutput[]) {
 }
 
 /**
- * Scans each pool oldest-first, from the birthday's chunk (or chunk 0) to the
- * tip, then on later syncs from where it stopped. Every note older than a
- * chunk is known when that chunk is read, so its spends show up in it.
- * `sizes` are the trees' sizes to read up to.
+ * Reads each pool's chunks oldest-first up to `sizes`, from where the last sync
+ * stopped: every note older than a chunk is known when it's read, so its spends show up in it.
  */
 export async function crawlShielded(run: ShieldedRun, sizes: TreeSizes) {
   const { state, signal } = run;

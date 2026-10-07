@@ -48,11 +48,7 @@ export const pendingActivity = (
       pool: "mixed",
     }));
 
-/**
- * Where pending transactions mined with a Sapling spend no block of ours
- * places, as when nothing else of ours is in them. lightwalletd broadcast
- * them, so asking it for them back tells it nothing new.
- */
+/** Heights of the pending transactions spending a Sapling note not placed yet; ones lightwalletd can't find are left out. */
 export async function minedHeights(pending: PendingTx[], notes: Note[]) {
   const unplaced = new Set(
     notes
@@ -62,6 +58,7 @@ export async function minedHeights(pending: PendingTx[], notes: Note[]) {
   const heights = await Promise.all(
     pending
       .filter((p) => p.nullifiers.some((nf) => unplaced.has(nf)))
+      // lightwalletd broadcast them, so asking for them back tells it nothing new.
       .map((p) =>
         fetchTransaction(p.txid).then(
           (tx) => tx.height,

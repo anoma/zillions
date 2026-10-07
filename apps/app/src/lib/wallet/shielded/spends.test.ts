@@ -30,7 +30,7 @@ vi.mock("../chain/indexer", () => ({
 const { checkSaplingSpends, locateSaplingSpends, markUnspent, placeSpends } =
   await import("./spends");
 
-/** A note whose nullifier is `byte` repeated; `nf` names it by that byte. */
+/** A note whose nullifier is `byte` repeated, with `byte` as its id. */
 const note = (
   byte: string,
   pool: Note["pool"],
