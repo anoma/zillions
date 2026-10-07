@@ -143,6 +143,8 @@ export class ZWallet {
    * order: the cursor never passes a chunk whose spends aren't placed.
    */
   #locating: Promise<unknown> = Promise.resolve();
+  /** Block lookups for what chunks found, chained so none overlap. */
+  #placing: Promise<unknown> = Promise.resolve();
   /** Chunks read in full this sync, as `pool:chunk`: their sends are in. */
   #readChunks = new Set<string>();
   /** Heights whose block was fetched this sync. */
@@ -219,6 +221,7 @@ export class ZWallet {
 
     const lookups = workerChannel();
     this.#locating = Promise.resolve();
+    this.#placing = Promise.resolve();
     this.#readChunks.clear();
     this.#freshBlocks.clear();
     let sizes: TreeSizes | undefined;
@@ -269,6 +272,7 @@ export class ZWallet {
       }
     } finally {
       await transparent;
+      await this.#placing;
       await this.#fetchBlocks(await this.#unplacedPendingHeights());
       this.#locateSaplingSpends();
       if (sizes) {
@@ -294,6 +298,7 @@ export class ZWallet {
   ) => {
     // A worker reads a chunk in full exactly when it holds a note of ours.
     if (hits.length) this.#readChunks.add(`${pool}:${chunk}`);
+    const known = this.#applied.size;
     this.#applySent(pool, sent);
     for (const hit of hits) {
       const note: Note = {
@@ -304,6 +309,14 @@ export class ZWallet {
       if (this.#applied.has(note.id)) continue;
       this.#applied.add(note.id);
       this.#notes.push(note);
+    }
+    // History shows a find at once; its txid and time can't wait for the crawl's end.
+    if (this.#applied.size > known) {
+      this.#placing = this.#placing.then(() =>
+        this.#fetchBlocks().catch((err) =>
+          console.error("[sync] block lookup failed", err),
+        ),
+      );
     }
 
     // An Orchard or Ironwood action names the nullifier it spends as its rho.

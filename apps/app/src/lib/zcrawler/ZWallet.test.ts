@@ -155,6 +155,7 @@ const { submitTransaction } = await import("./submit");
 const { cachedTransparent } = await import("./transparent");
 const { fetchBlock, fetchTransaction } = await import("./lightwalletd");
 const db = await import("./db");
+const { crawlChunks } = await import("./crawl");
 
 function block(overrides: Partial<Block> = {}): Block {
   return {
@@ -477,4 +478,27 @@ test("stores a recent block, and fetches it again each sync", async () => {
   expect(vi.mocked(db.saveBlocks)).toHaveBeenCalledWith(
     expect.arrayContaining([expect.objectContaining({ height: 3_150 })]),
   );
+});
+
+test("names and dates what a chunk finds before the crawl ends", async () => {
+  chain.sizes = { sapling: 100, orchard: 2 * 16_384, ironwood: 0 };
+  chain.hits.set("orchard:1", [note("orchard", 16_387, nf("ef"))]);
+  chain.blocks.set(
+    3_000,
+    block({ time: 1_700_000_000, txids: new Map([[1, "tx1"]]) }),
+  );
+  // Sapling, crawled last, never finishes.
+  const crawl = vi.mocked(crawlChunks).getMockImplementation()!;
+  vi.mocked(crawlChunks).mockImplementation((o) =>
+    o.pool === "sapling" ? new Promise(() => {}) : crawl(o),
+  );
+  const wallet = new ZWallet({ id: "i", ufvk: "uview" });
+  void wallet.sync();
+
+  await vi.waitFor(async () =>
+    expect(await wallet.getTransactionHistory()).toEqual([
+      expect.objectContaining({ txid: "tx1", timestamp: 1_700_000_000 }),
+    ]),
+  );
+  vi.mocked(crawlChunks).mockImplementation(crawl);
 });

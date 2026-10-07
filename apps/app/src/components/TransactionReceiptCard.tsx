@@ -95,18 +95,21 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
           </CopyToClipboardControl>
         </div>
 
-        <div className="mt-3 text-center">
-          <a
-            href={explorerUrl(tx.txid)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-end text-xs hover:underline"
-            title="View on Explorer"
-          >
-            View on Explorer
-            <ExternalLinkIcon className="size-3 ml-1" />
-          </a>
-        </div>
+        {/* Until its block is fetched, a shielded transaction has only a placeholder id. */}
+        {/^[0-9a-f]{64}$/.test(tx.txid) && (
+          <div className="mt-3 text-center">
+            <a
+              href={explorerUrl(tx.txid)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-end text-xs hover:underline"
+              title="View on Explorer"
+            >
+              View on Explorer
+              <ExternalLinkIcon className="size-3 ml-1" />
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );
