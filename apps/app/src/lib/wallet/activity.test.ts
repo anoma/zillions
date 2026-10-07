@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
-import { buildActivity } from "./activity";
+import { buildActivity, payments, sendingTxs } from "./activity";
+import type { Block } from "./chain/lightwalletd";
 import type { TransparentTx } from "./transparent";
 import type { Note } from "./types";
 
@@ -92,5 +93,78 @@ test("a transaction moving our own funds between pools is a migration", () => {
     fee: 20_000n,
     from: { pool: "ironwood" },
     to: { pool: "sapling" },
+  });
+});
+
+const block = (overrides: Partial<Block>): Block => ({
+  time: 0,
+  txids: new Map(),
+  saplingSpends: new Map(),
+  treeSizes: { sapling: 0, orchard: 0, ironwood: 0 },
+  outputs: new Map(),
+  vout: new Map(),
+  ...overrides,
+});
+
+test("our sending transactions are those that spent a note or a coin of ours", () => {
+  const at = { height: 3_150, tx_index: 3 };
+  const blocks = new Map([
+    [3_160, block({ txids: new Map([[5, "tshield"]]) })],
+  ]);
+  const txs = sendingTxs(
+    [
+      { ...note(1, 150_000), spend: { status: "spent", at } },
+      // Spent, but where isn't known yet.
+      { ...note(2, 40_000), spend: { status: "spent" } },
+      note(3, 30_000),
+    ],
+    [
+      { txid: "tshield", height: 3_160, received: 0n, spent: 9_000n },
+      { txid: "treceived", height: 3_160, received: 5_000n, spent: 0n },
+    ],
+    blocks,
+  );
+  expect([...txs.values()]).toEqual([at, { height: 3_160, tx_index: 5 }]);
+});
+
+test("a send's payment is what it paid to someone else's transparent address", () => {
+  const at = { height: 3_150, tx_index: 3 };
+  const out = (value: number, address: string) => ({
+    value,
+    script: new TextEncoder().encode(address),
+  });
+  const blocks = new Map([
+    [
+      at.height,
+      block({
+        txids: new Map([[3, "tx3"]]),
+        // Paid out, and an unshield's padding to our own address.
+        vout: new Map([[3, [out(100_000, "t1theirs"), out(0, "t1ours")]]]),
+      }),
+    ],
+  ]);
+  const paid = payments([at], blocks, new Set(["t1ours"]), (script) =>
+    new TextDecoder().decode(script),
+  );
+  expect([...paid.values()]).toEqual([
+    [{ value: 100_000, recipient: "t1theirs" }],
+  ]);
+
+  const history = buildActivity(
+    [
+      { ...note(1, 150_000), spend: { status: "spent", at } },
+      { ...note(2, 30_000), ...at },
+    ],
+    [],
+    [],
+    blocks,
+    paid,
+  );
+  expect(history.find((tx) => tx.txid === "tx3")).toMatchObject({
+    txid: "tx3",
+    tx_type: "Sent",
+    value: -100_000n,
+    to: { address: "t1theirs" },
+    fee: 20_000n,
   });
 });

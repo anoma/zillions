@@ -382,58 +382,6 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
   expect(sends[0].status).not.toBe("Pending");
 });
 
-test("counts what a send paid to someone else's transparent address, not to ours", async () => {
-  chain.sizes = { sapling: 0, orchard: 2 * 16_384, ironwood: 0 };
-  const spentIn = (tx_index: number) => ({ height: 3_150, tx_index });
-  chain.hits.set("orchard:1", [
-    { ...note("orchard", 16_387, nf("ee")), value: 150_000 },
-    { ...note("orchard", 16_388, nf("ff")), value: 40_000 },
-    // tx 3's change.
-    { ...note("orchard", 16_390, nf("aa")), ...spentIn(3), value: 30_000 },
-  ]);
-  chain.rho.set(
-    "orchard:1",
-    new Map([
-      [9, nf("ee")],
-      [10, nf("ff")],
-    ]),
-  );
-  chain.spentAt.set(nf("ee"), spentIn(3));
-  chain.spentAt.set(nf("ff"), spentIn(4));
-  const out = (value: number, address: string) => ({
-    value,
-    script: new TextEncoder().encode(address),
-  });
-  chain.blocks.set(
-    3_150,
-    block({
-      txids: new Map([
-        [3, "tx3"],
-        [4, "tx4"],
-      ]),
-      vout: new Map([
-        [3, [out(100_000, "t1theirs")]],
-        // An unshield: its output is our own.
-        [4, [out(25_000, "t1ours")]],
-      ]),
-    }),
-  );
-
-  const wallet = new Wallet({ id: "e", ufvk: "uview" });
-  await wallet.sync();
-
-  const history = await wallet.getTransactionHistory();
-  expect(history.find((tx) => tx.txid === "tx3")).toMatchObject({
-    tx_type: "Sent",
-    value: -100_000n,
-    to: { address: "t1theirs" },
-    fee: 20_000n,
-  });
-  expect(history.find((tx) => tx.txid === "tx4")?.to).not.toHaveProperty(
-    "address",
-  );
-});
-
 test("shows the transparent side as last synced before any sync answers", async () => {
   vi.mocked(store.loadState).mockResolvedValueOnce({
     ...store.emptyState("f"),

@@ -251,3 +251,48 @@ export function activityHeights(
     ...transparent.map((t) => t.height),
   ]);
 }
+
+/** Our transactions that spent notes or coins of ours, by `height:tx_index`. */
+export function sendingTxs(
+  notes: Note[],
+  transparent: TransparentTx[],
+  blocks: Map<number, Block>,
+) {
+  const txs = new Map<string, TxLocator>();
+  for (const { spend } of notes) {
+    if (spend.status === "spent" && spend.at) {
+      txs.set(`${spend.at.height}:${spend.at.tx_index}`, spend.at);
+    }
+  }
+  for (const { txid, height, spent } of transparent) {
+    if (!spent) continue;
+    const txids = blocks.get(height)?.txids ?? [];
+    const tx_index = [...txids].find(([, id]) => id === txid)?.[0];
+    if (tx_index !== undefined) {
+      txs.set(`${height}:${tx_index}`, { height, tx_index });
+    }
+  }
+  return txs;
+}
+
+/**
+ * What `txs` paid to transparent addresses not in `ours`, by `locatorId`,
+ * from their blocks; `addressOf` reads an output script's address.
+ */
+export function payments(
+  txs: Iterable<TxLocator>,
+  blocks: Map<number, Block>,
+  ours: Set<string>,
+  addressOf: (script: Uint8Array) => string | undefined,
+) {
+  const paid = new Map<string, Payment[]>();
+  for (const locator of txs) {
+    const vout = blocks.get(locator.height)?.vout.get(locator.tx_index);
+    const theirs = (vout ?? []).flatMap(({ value, script }) => {
+      const recipient = addressOf(script);
+      return recipient && ours.has(recipient) ? [] : [{ value, recipient }];
+    });
+    if (theirs.length) paid.set(locatorId(locator), theirs);
+  }
+  return paid;
+}
