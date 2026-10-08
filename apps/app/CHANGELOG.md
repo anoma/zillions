@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.3](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.7.2...zillions-app-v1.7.3) (2026-10-08)
+
+
+### Bug Fixes
+
+* shorten the total balance label ([5ef2c32](https://github.com/heliaxdev/zillions-interface/commit/5ef2c3287f7d33a4878622fde34847d2e6eb1747))
+
 ## [1.7.2](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.7.1...zillions-app-v1.7.2) (2026-10-07)
 
 
