@@ -96,4 +96,5 @@ else:
     print("the indexer is 300+ blocks behind; skipping the chain check")
 EOF
 
+./patch-crates.sh
 cargo test --release real_ziziphus -- --ignored --nocapture
