@@ -31,7 +31,7 @@ export function TotalBalance() {
   return (
     <div className="p-10 flex max-lg:flex-col lg:items-center justify-between gap-10 font-medium border-b border-gray-300 overflow-auto">
       <div>
-        <Label>Total Balance in Zillions</Label>
+        <Label>Total Balance</Label>
         <div className="my-5 lg:my-10">
           <ZecValue zat={totalBalance} className="text-5xl xl:text-7xl" />
         </div>
