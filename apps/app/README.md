@@ -23,7 +23,7 @@ cp apps/app/.env.example apps/app/.env
 and point `VITE_GRPC_URL` and `VITE_INDEXER_URL` at testnet servers.
 
 The app signs through the Zillions Keychain extension. Download it from
-https://main--zillions-app.netlify.app/zillions-keychain.zip, unzip it into a
+https://zillions-app.netlify.app/zillions-keychain.zip, unzip it into a
 folder, and load that folder in `chrome://extensions` (Developer mode → Load unpacked).
 Or build it from source: see the [Keychain README](../keychain/README.md).
 
