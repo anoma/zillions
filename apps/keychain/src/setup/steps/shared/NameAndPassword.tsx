@@ -55,7 +55,6 @@ export const NameAndPassword = ({ nextStep }: Props) => {
         zip32Path: state.zip32Path,
         passwordRequired: state.passwordRequired,
         password,
-        birthday: state.birthday,
       },
       (info) => dispatch({ type: "completionInfo", info })
     );

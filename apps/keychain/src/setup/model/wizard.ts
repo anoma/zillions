@@ -57,9 +57,6 @@ export type WizardState = {
   bip44Path: Bip44Path;
   zip32Path: Zip32Path;
 
-  /** Block height at account creation/import. undefined = auto-fetch chain tip. */
-  birthday: number | undefined;
-
   // --- persistence results ---
   completion: CompletionStatus;
   completionInfo: string;
@@ -81,7 +78,6 @@ export const initialWizardState = (passwordRequired: boolean): WizardState => ({
   bip39Passphrase: "",
   bip44Path: { account: 0, change: 0, index: 0 },
   zip32Path: { account: 0 },
-  birthday: undefined,
   completion: "idle",
   completionInfo: "",
 });
@@ -96,7 +92,6 @@ export type WizardEvent =
   | { type: "setSecretKind"; kind: SecretKind }
   | { type: "setPrivateKey"; value: string }
   | { type: "setSpendingKey"; value: string }
-  | { type: "setBirthday"; birthday: number | undefined }
   | { type: "setBip39Passphrase"; value: string }
   | { type: "setBip44Path"; path: Bip44Path }
   | { type: "setZip32Path"; path: Zip32Path }
@@ -125,11 +120,6 @@ export const wizardReducer = (
         ...state,
         flow: event.flow,
         step: event.flow === "create" ? "create.warning" : "import.secret",
-        // Create: auto-fetch chain tip (new account has no prior history).
-        // Import: default to 0; the SDK clamps any height at or below Sapling
-        // activation to an empty tree, so this scans from the start of the
-        // shielded chain without a server round-trip.
-        birthday: event.flow === "create" ? undefined : 0,
       };
 
     case "goToStep":
@@ -149,9 +139,6 @@ export const wizardReducer = (
 
     case "setSpendingKey":
       return { ...state, spendingKey: event.value };
-
-    case "setBirthday":
-      return { ...state, birthday: event.birthday };
 
     case "setBip39Passphrase":
       return { ...state, bip39Passphrase: event.value };
