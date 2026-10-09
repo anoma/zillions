@@ -128,7 +128,7 @@ export class Wallet {
   };
 
   #emitProgress = () => {
-    const progress = { ...this.#progress, fullPower: FRY || this.#speedUp };
+    const progress = { ...this.#progress, spedUp: this.#speedUp, fry: FRY };
     this.#syncProgressListeners.forEach((listener) => listener(progress));
   };
 
@@ -137,14 +137,25 @@ export class Wallet {
     this.#emitProgress();
   };
 
-  #workers = (phase: SyncPhase) =>
-    FRY
-      ? CORES
+  #workersLogged = "";
+
+  #workers = (phase: SyncPhase) => {
+    const [count, why]: [number, string] = FRY
+      ? [CORES, "VITE_ALLOW_CPU_TO_FRY"]
       : globalThis.document?.hidden
-        ? 1
-        : phase === "history" && !this.#speedUp
-          ? 2
-          : CORES;
+        ? [1, "tab hidden"]
+        : phase !== "history"
+          ? [CORES, "full power"]
+          : this.#speedUp
+            ? [CORES, "sped up"]
+            : [2, "background"];
+    const line = `${phase}: ${count} workers (${why})`;
+    if (line !== this.#workersLogged) {
+      console.log(`[sync] ${line}`);
+      this.#workersLogged = line;
+    }
+    return count;
+  };
 
   #newRun = (
     tip: number,
@@ -199,13 +210,29 @@ export class Wallet {
       const tip = (this.#tip = await fetchLatestHeight());
       transparent = this.#syncTransparent(tip);
       const birthday = this.#birthday || undefined;
-      const setupHeight = birthday
-        ? Promise.resolve(setupHeightFor(tip, birthday))
-        : transparent.then(() => {
-            const heights = this.#transparent?.txs.map((tx) => tx.height);
-            const oldest = heights?.length ? Math.min(...heights) : undefined;
-            return setupHeightFor(tip, undefined, oldest);
-          });
+      const setupHeight = (
+        birthday
+          ? Promise.resolve([
+              setupHeightFor(tip, birthday),
+              `birthday ${birthday}`,
+            ] as const)
+          : transparent.then(() => {
+              const heights = this.#transparent?.txs.map((tx) => tx.height);
+              const oldest = heights?.length ? Math.min(...heights) : undefined;
+              const why =
+                oldest === undefined
+                  ? "a year back, no transparent history"
+                  : `30 days before the oldest transparent transaction, ${oldest}`;
+              return [setupHeightFor(tip, undefined, oldest), why] as const;
+            })
+      ).then(([height, why]) => {
+        if (!this.#state.scan.setupDone) {
+          console.log(
+            `[sync] setup ends at height ${height} (${why}; never below 2,100,000 on mainnet)`,
+          );
+        }
+        return height;
+      });
       sizes = await fetchTreeSizes();
       run = this.#newRun(tip, this.#abort.signal, setupHeight);
       await crawlRecent(run, sizes);
@@ -213,7 +240,9 @@ export class Wallet {
       await transparent;
       await this.#finish(run, sizes);
       this.#recentRunning = false;
-      console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
+      console.log(
+        `[sync] sync took ${((Date.now() - startTime) / 1000).toFixed(1)} s`,
+      );
     }
     this.#sizes = sizes;
     this.#startHistory();
@@ -252,9 +281,13 @@ export class Wallet {
     if (!scan.setupDone || this.#history || !sizes || tip === undefined) return;
     if (this.#abort.signal.aborted) return;
     if (progressOf(scan, "history", tip).percentage === 100) {
+      console.log("[sync] history: nothing left to read");
       return this.#announce({ phase: "done" });
     }
-    if (!this.#historyAllowed) return this.#announce({ phase: "paused" });
+    if (!this.#historyAllowed) {
+      console.log("[sync] history paused: the browser asks to save data");
+      return this.#announce({ phase: "paused" });
+    }
 
     const abort = new AbortController();
     const signal = AbortSignal.any([this.#abort.signal, abort.signal]);
@@ -268,8 +301,7 @@ export class Wallet {
       .then(async (complete) => {
         await this.#finish(run, sizes);
         console.log(
-          "[sync] history took (seconds):",
-          (Date.now() - startTime) / 1000,
+          `[sync] history ${complete ? "done" : "stopped"} after ${((Date.now() - startTime) / 1000).toFixed(1)} s`,
         );
         if (complete) this.#announce({ phase: "done" });
       })
@@ -285,9 +317,9 @@ export class Wallet {
     this.#history = undefined;
   };
 
-  /** Runs history on every core for the rest of this session. */
-  speedUp = () => {
-    this.#speedUp = true;
+  /** Runs history on every core, or back on 2, for the rest of this session. */
+  setSpeedUp = (on: boolean) => {
+    this.#speedUp = on;
     this.#emitProgress();
   };
 

@@ -54,6 +54,14 @@ export type ShieldedRun = {
   onAdvance: (progress: SyncProgress) => void;
 };
 
+const secs = (since: number) => `${((Date.now() - since) / 1000).toFixed(1)} s`;
+
+const SEGMENTS = {
+  top: "after the spam era",
+  before: "before the spam era",
+  spam: "the spam era",
+} as const;
+
 const id = (state: WalletState, pool: Pool, position: number) =>
   `${state.id}_${pool}_${position}`;
 
@@ -142,6 +150,8 @@ async function locateSetup(run: ShieldedRun, last: Record<Pool, number>) {
     );
     p.setup = Math.max(p.top.floor, chunk);
   }
+  const chunks = POOLS.map((pool) => `${pool} ${scan.scanned[pool]!.setup}`);
+  console.log(`[sync] setup ends at chunks: ${chunks.join(", ")}`);
 }
 
 /**
@@ -157,7 +167,9 @@ export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
   const advance = () => run.onAdvance(progressOf(scan, phase, run.tip));
   const spends = spendChecks(run, advance);
   spends.check(state.notes.filter((n) => n.spend.status !== "spent"));
+  let [started, read] = [Date.now(), 0];
   const onChunk = (pool: Pool) => (result: ChunkWorkerSuccess) => {
+    read++;
     spends.check(applyChunk(run, pool, result));
     advance();
   };
@@ -182,9 +194,11 @@ export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
     }
     top.to = last[pool];
   }
+  console.log(`[sync] catch-up: ${read} chunks in ${secs(started)}`);
 
   if (!scan.setupDone && !signal.aborted) {
     phase = "setup";
+    [started, read] = [Date.now(), 0];
     advance();
     const located = locateSetup(run, last).then(advance);
     located.catch(() => {});
@@ -214,7 +228,7 @@ export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
     if (!signal.aborted) {
       await located;
       scan.setupDone = true;
-      console.log("[sync] setup done");
+      console.log(`[sync] setup done: ${read} chunks in ${secs(started)}`);
     }
   }
   await spends.done();
@@ -232,10 +246,20 @@ export async function crawlHistory(run: ShieldedRun, sizes: TreeSizes) {
   const advance = () => run.onAdvance(progressOf(scan, "history", run.tip));
   const spends = spendChecks(run, advance);
   advance();
+  const left = POOLS.flatMap((pool) =>
+    (["top", "before", "spam"] as const).flatMap((segment) => {
+      const { from, floor } = scan.scanned[pool]![segment];
+      return from > floor
+        ? [`${pool} ${SEGMENTS[segment]} ${from - floor}`]
+        : [];
+    }),
+  );
+  console.log(`[sync] history left (chunks): ${left.join(", ") || "none"}`);
 
   for (const segment of ["top", "before", "spam"] as const) {
     for (const pool of POOLS) {
       const p = scan.scanned[pool]!;
+      const [started, from] = [Date.now(), p[segment].from];
       await crawlSegment(run, pool, p[segment], {
         phase: "history",
         onChunk: (result) => {
@@ -246,6 +270,12 @@ export async function crawlHistory(run: ShieldedRun, sizes: TreeSizes) {
           advance();
         },
       });
+      if (from > p[segment].from) {
+        const read = from - p[segment].from;
+        console.log(
+          `[sync] history ${pool} ${SEGMENTS[segment]}: ${read} chunks in ${secs(started)}`,
+        );
+      }
       if (signal.aborted) return false;
     }
   }
