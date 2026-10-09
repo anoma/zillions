@@ -22,12 +22,13 @@ lightwalletd; nothing from a local crawler.
   chunk is `max-age=3`.
 - **Floor.** Chunk 0, or with a birthday the first chunk whose `max_height`
   reaches it: a binary search over chunk headers, each a 16-byte Range request.
-- **Order.** Each pool newest-first, from the tip down to the floor, one pool
-  after another (Ironwood, Orchard, Sapling). Workers decrypt in parallel;
-  results are applied strictly in chunk order. Each pool keeps the window of
-  chunks read; a later sync first reads the chunks minted since, down to the
-  window's top again (it may have been the filling tip), then continues below
-  the window.
+- **Order.** Newest-first in three phases (catch-up, setup, history), each
+  reading the pools one after another (Ironwood, Orchard, Sapling); see
+  [sync-phases.md](sync-phases.md). Workers decrypt in parallel; results are
+  applied strictly in chunk order. Each pool keeps three segments (after,
+  before and during the spam era) with a newest-first cursor each; a later
+  sync first reads the chunks minted since, down to the newest one read again
+  (it may have been the filling tip).
 - **Notes.** `/ciphertexts` for every chunk; `/memos` and `/outgoing` only for a
   chunk holding a hit or a spend of ours. Outgoing recovery covers the whole
   chunk, so it also finds what our spending transactions paid out.

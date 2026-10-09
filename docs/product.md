@@ -193,7 +193,14 @@ Moves shielded funds to one of the account's own transparent addresses.
 - Scans newest first: from the chain tip back to the account's birthday, or
   to the start of each pool for an imported account, so recent funds and
   history show first.
-- Shows progress ("Shielded sync: N%", then "completed").
+- In three phases: new activity since the last visit; setup, once per account,
+  from the tip back to its birthday (else a month before its first
+  transparent use, else a year), at full speed ("Setting up your wallet:
+  N%"); then older history in the background, using less of the computer,
+  with a "Speed up" option. The 2022–2023 spam era is read last. When the
+  browser asks to save data, older history waits for the user to start it.
+  Details: [design/sync-phases.md](design/sync-phases.md).
+- Shows progress for the current phase, then "completed".
 - What the last sync found shows at once, transparent and shielded. The
   transparent side is refreshed within seconds; new shielded history fills in
   as the sync progresses.

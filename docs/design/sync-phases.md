@@ -1,6 +1,6 @@
 # Sync phases
 
-Status: design, agreed 2026-10-09, not built. It builds on the newest-first
+Status: built 2026-10-09. It builds on the newest-first
 sync and the indexer's spent lookup (#56); see
 [zcrawler-architecture.md](zcrawler-architecture.md) for those.
 
