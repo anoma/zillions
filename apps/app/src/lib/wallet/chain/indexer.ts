@@ -1,5 +1,5 @@
 import { INDEXER_URL } from "../config";
-import type { Pool } from "../types";
+import type { Pool, TxLocator } from "../types";
 import { fetchWithRetry } from "./http";
 
 /** Notes per chunk. */
@@ -50,25 +50,32 @@ export async function fetchTreeSizes(): Promise<TreeSizes> {
   ) as TreeSizes;
 }
 
+/** Reads `bytes` front to back, one postcard field per call. */
+function postcard(bytes: Uint8Array) {
+  let i = 0;
+  return {
+    byte: () => bytes[i++],
+    varint: () => {
+      let n = 0;
+      for (let shift = 0; ; shift += 7) {
+        const byte = bytes[i++];
+        n += (byte & 0x7f) * 2 ** shift;
+        if (byte < 0x80) return n;
+      }
+    },
+  };
+}
+
 /** A chunk's highest block height, read from the head of its body alone. */
 async function maxHeight(pool: Pool, chunk: number) {
   const res = await fetchOk(`${INDEXER_URL}/${pool}/ciphertexts/${chunk}`, {
     headers: { Range: "bytes=0-15" },
   });
-  // Postcard varints: min_height, median_height, max_height, then the count.
-  const head = new Uint8Array(await res.arrayBuffer());
-  let i = 0;
-  const varint = () => {
-    let n = 0;
-    for (let shift = 0; ; shift += 7) {
-      const byte = head[i++];
-      n += (byte & 0x7f) * 2 ** shift;
-      if (byte < 0x80) return n;
-    }
-  };
-  varint();
-  varint();
-  return varint();
+  // Varints: min_height, median_height, max_height, then the count.
+  const head = postcard(new Uint8Array(await res.arrayBuffer()));
+  head.varint();
+  head.varint();
+  return head.varint();
 }
 
 /** The first chunk holding a note at `height` or later; `last` if none does sooner. */
@@ -108,17 +115,34 @@ export async function fetchTreeChunk(pool: Pool, chunk: number) {
   return new Uint8Array(await res.arrayBuffer());
 }
 
+/** Most nullifiers one `/spent` request may name. */
+export const SPENT_BATCH = 1000;
+
+/** `/spent`'s body: per nullifier asked, in order, its spending transaction or null. */
+export function decodeSpent(body: Uint8Array): (TxLocator | null)[] {
+  const read = postcard(body);
+  read.varint(); // the indexer's committed tip
+  return Array.from({ length: read.varint() }, () => {
+    if (!read.byte()) return null;
+    const [height, tx_index] = [read.varint(), read.varint()];
+    read.varint(); // the spend's index in its transaction
+    return { height, tx_index };
+  });
+}
+
 /**
- * One chunk of a pool's revealed nullifiers, raw, in chain order; only wasm
- * reads it. Every client fetches the same chunks, so the server never learns
- * which nullifiers are ours. Absent past the last chunk.
+ * Where each of `nullifiers` (32 bytes each, at most `SPENT_BATCH`) was
+ * revealed, in order; null when it isn't yet. Unlike every other call, it
+ * tells the indexer which nullifiers are ours.
  */
-export async function fetchNullifierChunk(pool: Pool, chunk: number) {
-  const res = await fetchWithRetry(
-    `${INDEXER_URL}/${pool}/nullifiers/${chunk}`,
-  );
-  if (res.status === 404) return undefined;
-  if (!res.ok)
-    throw new Error(`HTTP ${res.status} ${pool} nullifiers ${chunk}`);
-  return new Uint8Array(await res.arrayBuffer());
+export async function fetchSpent(
+  pool: Pool,
+  nullifiers: Uint8Array<ArrayBuffer>,
+) {
+  const res = await fetchOk(`${INDEXER_URL}/${pool}/spent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: nullifiers,
+  });
+  return decodeSpent(new Uint8Array(await res.arrayBuffer()));
 }

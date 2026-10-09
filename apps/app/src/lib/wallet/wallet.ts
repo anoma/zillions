@@ -13,7 +13,7 @@ import { fetchTreeSizes, type TreeSizes } from "./chain/indexer";
 import { fetchBlock, fetchLatestHeight } from "./chain/lightwalletd";
 import { submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
-import { minedHeights, pendingActivity, prunePending } from "./pending";
+import { pendingActivity, prunePending } from "./pending";
 import {
   maxSend,
   planMigration,
@@ -23,7 +23,6 @@ import {
   shieldPczt,
 } from "./send";
 import { workerChannel } from "./shielded/crawl";
-import { locateSaplingSpends } from "./shielded/spends";
 import { crawlShielded, recoverSends, type ShieldedRun } from "./shielded/sync";
 import { emptyState, loadState, saveState, storageKey } from "./store";
 import {
@@ -147,8 +146,7 @@ export class Wallet {
       const { state } = run;
       await transparent;
       await this.#placing;
-      await this.#fetchBlocks(await minedHeights(state.pending, state.notes));
-      locateSaplingSpends(state.notes, state.blocks);
+      await this.#fetchBlocks();
       if (sizes) {
         await recoverSends(run, sizes, this.#sendingTxs()).catch((err) =>
           console.error("[sync] sends lookup failed", err),
@@ -199,17 +197,15 @@ export class Wallet {
     );
 
   /**
-   * Fetches the blocks behind every transaction in history, and at `extra`,
-   * once each: they give shielded transactions their txids, which is what
-   * lets a transaction seen from both sides show once, and every entry its
-   * time.
+   * Fetches the blocks behind every transaction in history, once each: they
+   * give shielded transactions their txids, which is what lets a transaction
+   * seen from both sides show once, and every entry its time.
    */
-  #fetchBlocks = async (extra: number[] = []) => {
+  #fetchBlocks = async () => {
     const tip = this.#tip;
     const { notes, sent, blocks } = this.#state;
     const history = [
       ...activityHeights(notes, sent, this.#transparent?.txs ?? []),
-      ...extra,
     ];
     const missing = history.filter((height) => !blocks.has(height));
     // A block a reorg can still replace is stored, so history shows it on
