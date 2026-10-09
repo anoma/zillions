@@ -347,8 +347,8 @@ user's behalf.
   - Importing from a private key or a spending key. — _Planned_ (offered on
     screen, not working yet).
   - The user never has to know when their wallet was created. The import
-    screen offers an optional block height; whether to keep it is _To
-    confirm_.
+    screen doesn't ask for it: an imported wallet always recovers its full
+    history (see 1).
 - Name the account and set the extension password.
 
 ### 3.2 Manage accounts — Working
@@ -391,13 +391,11 @@ Keychain traffic.
 
 Challenges to check, one by one:
 
-1. **Wallet creation date.** When no date is given, creating or importing a
-   wallet currently asks a Zcash server for the current block height. To
-   explore: estimate the block height from the device's clock, with a safety
-   margin so the estimate is never later than the real creation (a wrong
-   device clock must not hide funds). This only applies to a **newly created**
-   wallet: an imported one may be years old, so it always recovers its full
-   history (see 1).
+1. **Wallet creation date.** — _Built_. A **newly created** wallet's block
+   height is estimated from the device's clock, with a safety margin so the
+   estimate is never later than the real creation (a device clock up to a
+   week fast must not hide funds). An imported one may be years old, so it
+   always recovers its full history (see 1).
 2. **Trustworthy approvals without lookups.** Everything the approval window
    shows (amounts, recipients, fee, network) must come from the transaction
    itself, and the signature must be invalid if a site lies about any of it.
@@ -424,7 +422,6 @@ Challenges to check, one by one:
 ## 5. Open questions
 
 - Recovery-phrase passphrase on import (3.1)?
-- Keep or drop the optional creation block height on import (3.1)?
 - Offline Keychain challenges (3.5): each to be checked.
 - **Sapling spends the wallet can't place (2.6).** When Sapling funds are
   spent in a transaction that leaves nothing else the wallet can see (no

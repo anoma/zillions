@@ -17,7 +17,7 @@ import type {
   Zip32Path,
 } from "../../ipc/contract";
 import { mnemonicToSeed } from "../../background/crypto/mnemonic";
-import { deriveAccount } from "../../background/crypto/zillions";
+import { deriveAccount, getNetwork } from "../../background/crypto/zillions";
 
 export type CreateAccountInput = {
   accountSecret: AccountSecret;
@@ -27,53 +27,28 @@ export type CreateAccountInput = {
   zip32Path: Zip32Path;
   passwordRequired: boolean;
   password?: string;
-  /** Block height at which the account was created/imported. undefined = auto-fetch chain tip. */
-  birthday: number | undefined;
 };
 
+/** A recent block per network: [height, unix time in seconds]. */
+const CHECKPOINTS = {
+  main: [3_511_000, 1_791_490_925],
+  test: [4_481_000, 1_791_528_275],
+} as const;
+// Mainnet averages ~75.36s per block (testnet is faster); assuming a slower
+// rate keeps the estimate below the real height as the checkpoint ages.
+const ASSUMED_BLOCK_SECONDS = 76;
+// Absorbs a device clock running up to a week fast.
+const CLOCK_MARGIN_BLOCKS = (7 * 24 * 60 * 60) / 75;
+
 /**
- * Fetch the current chain tip height from lightwalletd via a minimal gRPC-web
- * call to `GetLatestBlock`. Throws if the request fails: a height of 0 (genesis)
- * is not a safe fallback here, since it gets stored as the account's birthday
- * and later sent to the wallet's GetTreeState RPC, where it's indistinguishable
- * from an unset height/hash and rejected by the server.
- *
- * The request body is a 5-byte gRPC-web frame with an empty `ChainSpec` proto.
- * The response contains a `BlockID` proto; field 1 (height) is a varint uint64.
+ * A new account's birthday, estimated offline from the device clock so the
+ * Keychain never asks a server for the chain tip. It must never be later than
+ * the real height, or the wallet would skip blocks that can hold its funds.
  */
-const fetchChainTipHeight = async (): Promise<number> => {
-  const url = process.env.Z_INTERFACE_LIGHTWALLETD_URL;
-  if (!url) throw new Error("Z_INTERFACE_LIGHTWALLETD_URL is not configured");
-
-  const body = new Uint8Array([0x00, 0x00, 0x00, 0x00, 0x00]);
-  // CompactTxStreamer is the lightwalletd gRPC service; GetLatestBlock returns the chain tip as a BlockID.
-  const res = await fetch(
-    `${url}/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetLatestBlock`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/grpc-web+proto",
-        "X-Grpc-Web": "1",
-      },
-      body,
-    }
-  );
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch chain tip height: HTTP ${res.status}`);
-  }
-
-  // Parse: skip 5-byte gRPC-web frame header, then read BlockID field 1 varint.
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  let height = 0;
-  let shift = 0;
-  // bytes[5] = 0x08 (field 1, wire type 0); height varint starts at bytes[6]
-  for (let i = 6; i < bytes.length; i++) {
-    height |= (bytes[i] & 0x7f) << shift;
-    shift += 7;
-    if ((bytes[i] & 0x80) === 0) break;
-  }
-  return height;
+const estimateBirthday = (): number => {
+  const [height, time] = CHECKPOINTS[getNetwork()];
+  const elapsed = Math.max(0, Date.now() / 1000 - time);
+  return Math.floor(height + elapsed / ASSUMED_BLOCK_SECONDS - CLOCK_MARGIN_BLOCKS);
 };
 
 export type CreateAccountResult =
@@ -101,7 +76,6 @@ export const createAccount = async (
     zip32Path,
     passwordRequired,
     password,
-    birthday,
   } = input;
 
   try {
@@ -118,11 +92,8 @@ export const createAccount = async (
     const { transparentAddress, shieldedAddress, viewingKey } =
       await deriveAddresses(accountSecret, bip44Path.account);
 
-    // Auto-fetch the chain tip when no birthday was provided. For the "create"
-    // flow this is always correct (new account, no prior history). For the
-    // "import" flow it's the right conservative default when the user didn't
-    // enter a known birthday.
-    const resolvedBirthday = birthday ?? await fetchChainTipHeight();
+    // An imported account may be years old: 0 scans its full history.
+    const birthday = flow === "create" ? estimateBirthday() : 0;
 
     onProgress(`Encrypting and storing ${prettySecret(accountSecret)}.`);
     const parentAccount = await client.saveAccountSecret({
@@ -133,7 +104,7 @@ export const createAccount = async (
       transparentAddress,
       shieldedAddress,
       viewingKey,
-      birthday: resolvedBirthday,
+      birthday,
     });
 
     // A spending-key import is itself the shielded account; nothing to derive.
@@ -149,7 +120,7 @@ export const createAccount = async (
       source: flow === "create" ? "generated" : "imported",
       shieldedAddress,
       viewingKey,
-      birthday: resolvedBirthday,
+      birthday,
     });
 
     return { ok: true, parentAccount, shieldedAccount };
