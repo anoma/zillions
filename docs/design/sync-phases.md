@@ -71,13 +71,13 @@ is empty.
 
 ## Workers
 
-| Situation                    | Workers                             |
-| ---------------------------- | ----------------------------------- |
-| Phases 1–2                   | one per core                        |
-| Phase 3                      | 2                                   |
-| Tab hidden                   | 1                                   |
-| "Speed up" pressed (phase 3) | one per core, until history is done |
-| `VITE_ALLOW_CPU_TO_FRY=true` | one per core, always, hidden or not |
+| Situation                    | Workers                                     |
+| ---------------------------- | ------------------------------------------- |
+| Phases 1–2                   | one per core                                |
+| Phase 3                      | 2                                           |
+| Tab hidden                   | 1                                           |
+| "Speed up" pressed (phase 3) | one per core, until "Slow down" or a reload |
+| `VITE_ALLOW_CPU_TO_FRY=true` | one per core, always, hidden or not         |
 
 With `navigator.connection.saveData` on (Chromium only; elsewhere treated as
 off), phase 3 waits for the user to opt in.
@@ -113,6 +113,8 @@ spend lookup says unspent. Tooltip texts:
   responsive."
   - **Speed up:** "Uses your computer's full power until older history is
     done. It may run warm and slow down other apps meanwhile."
+  - **Slow down** (once sped up): "Goes back to using less of your computer,
+    so it stays responsive."
 - **Paused (`saveData`):** "Older history is paused to save data (about
   15 GB)." with **Download older history**. The dot does not pulse; a simple
   static state for now, to be revisited.

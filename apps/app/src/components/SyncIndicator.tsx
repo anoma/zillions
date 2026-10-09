@@ -53,7 +53,7 @@ export function SyncIndicator() {
     return unsubscribe;
   }, [wallet]);
 
-  const { phase, backTo, fullPower } = progress;
+  const { phase, backTo, spedUp, fry } = progress;
   // Catch-up and setup run inside `sync()`: once it settles, they stopped.
   const busy =
     phase === "history" || (running && phase !== "done" && phase !== "paused");
@@ -99,15 +99,34 @@ export function SyncIndicator() {
                   `, back to ${new Date(backTo).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`}
               </div>
               {bar}
-              {fullPower ? (
+              {fry ? (
                 <div>Older history is loading in the background.</div>
+              ) : spedUp ? (
+                <>
+                  <div>
+                    Older history is loading on your computer&apos;s full power.
+                  </div>
+                  <button
+                    className={actionClass}
+                    onClick={() => wallet.setSpeedUp(false)}
+                  >
+                    Slow down
+                  </button>
+                  <div className="text-gray-500">
+                    Goes back to using less of your computer, so it stays
+                    responsive.
+                  </div>
+                </>
               ) : (
                 <>
                   <div>
                     Older history is still loading in the background, using less
                     of your computer so it stays responsive.
                   </div>
-                  <button className={actionClass} onClick={wallet.speedUp}>
+                  <button
+                    className={actionClass}
+                    onClick={() => wallet.setSpeedUp(true)}
+                  >
                     Speed up
                   </button>
                   <div className="text-gray-500">

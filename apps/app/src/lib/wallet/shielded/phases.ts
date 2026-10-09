@@ -20,8 +20,9 @@ export type SyncProgress = {
   percentage?: number;
   /** History: the estimated time (ms) of the oldest block read in every pool. */
   backTo?: number;
-  /** History: whether it runs on every core. */
-  fullPower?: boolean;
+  /** History: whether the user sped it up (every core); `VITE_ALLOW_CPU_TO_FRY` always is. */
+  spedUp?: boolean;
+  fry?: boolean;
 };
 
 /**
