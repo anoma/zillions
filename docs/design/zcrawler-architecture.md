@@ -10,7 +10,7 @@ Companion services live in [heliaxdev/zcrawler](https://github.com/heliaxdev/zcr
 
 Any UFVK syncs with **no required birthday**. If the user supplies one it is a
 pure accelerator; without it we scan from activation. Either way the crawl runs
-oldest-first, so every chunk's spends are found in the same pass.
+newest-first, so recent funds and history show first.
 
 ## Sync as built (October 2026)
 
@@ -20,26 +20,24 @@ lightwalletd; nothing from a local crawler.
 - **Grid.** Ciphertext, memo, outgoing and tree chunks are 2¹⁴ notes;
   nullifier chunks are 2¹⁸. Full chunks are `immutable` for a year; the tail
   chunk is `max-age=3`.
-- **Start.** Chunk 0, or with a birthday the first chunk whose `max_height`
+- **Floor.** Chunk 0, or with a birthday the first chunk whose `max_height`
   reaches it: a binary search over chunk headers, each a 16-byte Range request.
-- **Order.** Each pool oldest-first to the tip. Workers decrypt in parallel;
-  results are applied strictly in chunk order. A later sync resumes at the
-  last chunk read, which may have been the filling tip.
+- **Order.** Each pool newest-first, from the tip down to the floor, one pool
+  after another (Ironwood, Orchard, Sapling). Workers decrypt in parallel;
+  results are applied strictly in chunk order. Each pool keeps the window of
+  chunks read; a later sync first reads the chunks minted since, down to the
+  window's top again (it may have been the filling tip), then continues below
+  the window.
 - **Notes.** `/ciphertexts` for every chunk; `/memos` and `/outgoing` only for a
   chunk holding a hit or a spend of ours. Outgoing recovery covers the whole
   chunk, so it also finds what our spending transactions paid out.
-- **Orchard and Ironwood spends.** Every action's rho is the nullifier it
-  spends, and it rides in the `/ciphertexts` record. Applying chunk _c_ checks
-  its rho against every note found before it: an exact, 32-byte match whose
-  position gives the height and transaction index (from `/memos`). No
-  nullifier download at all. Checked against the chain for both pools.
-- **Sapling spends.** A Sapling spend has no output of its own, so Sapling
-  notes are checked against `/sapling/nullifiers` (all 2.1M Sapling nullifiers
-  ever, ~20 MB, first 10 bytes each) once the Sapling scan reaches the tip, then
-  only new chunks on later syncs. That proves spent or unspent; the transaction
-  is found among our own, whose compact blocks history fetches anyway. A spend
-  in a transaction with nothing else of ours stays "spent, transaction unknown"
-  (open question in [product.md](../product.md)).
+- **Spends.** Newest-first reads the chunk spending a note before it finds
+  the note, so each note found, and each one still unspent at a sync's
+  start, is looked up by nullifier: `POST /{pool}/spent`, up to 1,000 per
+  request, answers where each was revealed (height and transaction index) or
+  that it isn't yet, as of the indexer's committed tip. Exact for all three
+  pools, Sapling included. **Temporary:** it tells the indexer which
+  nullifiers are ours (see Threat model).
 - **Sends across pools.** A payment can sit in a pool where we hold nothing,
   so the crawl never reads its chunk. After each sync, every transaction of
   ours that spent something is placed exactly: its compact block's tree sizes
@@ -50,8 +48,8 @@ lightwalletd; nothing from a local crawler.
   outputs. A sending transaction's transparent outputs come from the same
   compact block (CompactTx field 8: value and script); those not paying one of
   our addresses are its payments. No extra request, so nothing new is revealed.
-- **Balance.** A note counts once it's checked: Orchard and Ironwood when their
-  scan reaches the tip, Sapling after the nullifier check.
+- **Balance.** A note counts once its spend lookup says unspent, so funds show
+  newest first as the crawl finds them.
 - **Pending sends.** A broadcast's raw transaction names the nullifiers and
   coins it spends; those are held out of the balance and of new plans until a
   spend of theirs shows up on chain, or 10 blocks past its expiry (the indexer
@@ -235,13 +233,12 @@ This makes the balance _monotonically increasing_ through the initial sync — i
 only ever grows as history is discovered, never corrects downward. That is the
 whole point: a shrinking balance mid-sync reads as lost funds.
 
-It holds because a note is only marked unspent once nothing after it can
-spend it: Orchard and Ironwood when the oldest-first scan, which checks each
-chunk's spends against every older note, reaches the tip; Sapling when its
-nullifier chunks have all been checked.
+It holds because a note is only marked unspent once the indexer's spend
+lookup, as of its committed tip, finds no spend of it; unspent notes are
+looked up again every sync.
 
-Mechanically: `Note.spent` is absent until checked; `getBalance` and input
-selection count only `spent === false`.
+Mechanically: `Note.spend.status` is `unchecked` until looked up;
+`getBalance` and input selection count only `unspent`.
 
 Monotonicity holds except for reorgs at the tip and the user's own spends. Both
 are real events rather than corrections, and reorgs are bounded by only counting
@@ -382,13 +379,16 @@ attacker grinding collisions; a wallet only checks its own, random values.
 | Orchard  | ~50.5M (one per action) | 192 full + tail | ~461 MB |
 | Ironwood | 0.66M (one per action)  | 2 full + tail   | ~6 MB   |
 
-Only Sapling uses them: Orchard and Ironwood spends come with the ciphertexts
-(see Sync as built).
+The client no longer reads them: spends come from the `/spent` lookup (see
+Sync as built). They are the private way back once that lookup goes.
 
 ### Threat model
 
 - **ziziphus: no leak.** Global artifacts only.
-- **Nullifiers: no leak.** Whole chunks, the same for every client.
+- **Spent lookup: full leak, temporary.** `/spent` sees every nullifier the
+  wallet holds, can link them to each other and to the client's IP, and
+  learns when each is spent. Accepted for newest-first sync until the indexer
+  offers a private lookup.
 - **Memos and outgoing: bounded leak.** Fetched only for chunks holding a note
   or spend of ours: "this wallet has something in chunk N", k = 16,384.
 - **Birthday: bounded leak.** The start-chunk search hints at the account's age.
@@ -415,6 +415,8 @@ Only Sapling uses them: Orchard and Ironwood spends come with the ciphertexts
    nullifiers and tree roots, some in year-long `immutable` chunks.
 9. **The Orchard nullifier tail times out** (504 after 90 s; the chunk after
    it 404s with a DB error). Unused by this client, but broken.
+10. **A private spent lookup** to replace `/spent` (heliaxdev/zcrawler#16),
+    which reveals the wallet's nullifiers.
 
 ## Open questions
 
