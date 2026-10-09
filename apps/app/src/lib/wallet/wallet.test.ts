@@ -39,6 +39,9 @@ const saved = vi.hoisted(() => ({
   blocks: new Map<number, Block>(),
 }));
 
+// No spam era: setup reads the whole small chain.
+vi.mock("./config", () => ({ NETWORK: "test" }));
+
 vi.mock("@zillions/zcore", () => ({
   default: vi.fn(async () => {}),
   parse_transaction: vi.fn(),
@@ -59,9 +62,10 @@ vi.mock("./shielded/crawl", () => ({
       pool: Pool;
       from: number;
       to: number;
+      signal?: AbortSignal;
       onChunk: (r: ChunkWorkerSuccess) => void;
     }) => {
-      for (let chunk = o.to; chunk >= o.from; chunk--) {
+      for (let chunk = o.to; chunk >= o.from && !o.signal?.aborted; chunk--) {
         const hits = chain.hits.get(`${o.pool}:${chunk}`) ?? [];
         o.onChunk({ chunk, hits, sent: [] });
       }
@@ -127,6 +131,7 @@ type TransparentCache = import("./transparent").TransparentCache;
 const { fetchBlock } = await import("./chain/lightwalletd");
 const store = await import("./store");
 const { crawlChunks } = await import("./shielded/crawl");
+const { firstChunkFrom } = await import("./chain/indexer");
 
 function block(overrides: Partial<Block> = {}): Block {
   return {
@@ -448,4 +453,39 @@ test("crawls newest-first, and a later sync reads the chunks minted since and th
   // Those minted since down to chunk 2 again (it may have been filling), then below.
   expect(read).toEqual([2, 4, 3, 2, 1, 0]);
   expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
+});
+
+test("history waits while the browser saves data, then reads what setup left once asked", async () => {
+  chain.sizes = { sapling: 0, orchard: 3 * 16_384, ironwood: 0 };
+  chain.hits.set("orchard:0", [note("orchard", 3, nf("b1"))]);
+  // Setup ends at Orchard chunk 2: chunks 1 and 0 are history.
+  vi.mocked(firstChunkFrom).mockImplementation(async (pool) =>
+    pool === "orchard" ? 2 : 0,
+  );
+  Object.defineProperty(navigator, "connection", {
+    value: { saveData: true },
+    configurable: true,
+  });
+  // A chunk takes seconds: where setup ends is known before the first lands.
+  const crawl = vi.mocked(crawlChunks).getMockImplementation()!;
+  vi.mocked(crawlChunks).mockImplementation(async (o) => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return crawl(o);
+  });
+  const wallet = new Wallet({ id: "k", ufvk: "uview" });
+  const phases: string[] = [];
+  wallet.subscribeSyncProgress((p) => phases.push(p.phase));
+
+  await wallet.sync();
+  expect(phases.at(-1)).toBe("paused");
+  expect((await wallet.getBalance()).shieldedBalance).toBe(0n);
+
+  wallet.downloadHistory();
+  await vi.waitFor(() => expect(phases.at(-1)).toBe("done"));
+  expect(phases).toContain("history");
+  expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
+
+  Object.defineProperty(navigator, "connection", { value: undefined });
+  vi.mocked(firstChunkFrom).mockImplementation(async () => 0);
+  vi.mocked(crawlChunks).mockImplementation(crawl);
 });
