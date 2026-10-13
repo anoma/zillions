@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.4.1...zillions-keychain-v0.5.0) (2026-10-13)
+
+
+### Features
+
+* remove rpc calls and birthday on extension ([#54](https://github.com/heliaxdev/zillions-interface/issues/54)) ([9f7d0d3](https://github.com/heliaxdev/zillions-interface/commit/9f7d0d3cad58d9273d619c3c160600e31b01697a))
+
 ## [0.4.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.4.0...zillions-keychain-v0.4.1) (2026-10-07)
 
 
