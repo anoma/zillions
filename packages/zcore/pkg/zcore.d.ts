@@ -125,10 +125,13 @@ export function spending_keys(network: string, seed: Uint8Array, hd_index: numbe
 /**
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
  * against `ufvk`. `chunk` is its number, which fixes each note's position.
+ * Notes before `from` are skipped while their records still fingerprint as
+ * `tried`, the `digest` an earlier read returned; else all are tried.
  *
- * Returns `{ count, min_height, hits: [{ pool, scope, value, nf_mine, index }] }`.
+ * Returns `{ count, min_height, from, digest, hits: [{ pool, scope, value, nf_mine, index }] }`:
+ * `from` is where it started, `digest` fingerprints all `count` notes.
  */
-export function try_decrypt(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array): any;
+export function try_decrypt(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array, from: number, tried: Uint8Array): any;
 
 /**
  * Trial-decrypt one pool's chunk in full against `ufvk`: the raw
@@ -162,7 +165,7 @@ export interface InitOutput {
     readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any) => [number, number, number, number];
     readonly sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
+    readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;

@@ -128,12 +128,15 @@ struct Hit {
 }
 
 /// One `/ciphertexts` chunk's decryption: how many notes it held and the
-/// lowest height among them, which place it on the chain, and the hits.
+/// lowest height among them, which place it on the chain, and the hits. `from`
+/// is the first note tried; `digest` fingerprints all `count`, for the next read.
 #[derive(Serialize)]
 struct Compact {
     count: usize,
     min_height: u32,
     hits: Vec<Hit>,
+    from: usize,
+    digest: String,
 }
 
 /// A note the UFVK owns, read from its whole ciphertext: everything [`Hit`]
@@ -251,9 +254,34 @@ pub(crate) struct ChunkBody<'a> {
     pub(crate) records: std::slice::ChunksExact<'a, u8>,
 }
 
+/// The fingerprint of `records`, raw record bytes back to back.
+fn tried_digest(records: &[u8]) -> [u8; 32] {
+    let hash = blake2b_simd::Params::new()
+        .hash_length(32)
+        .personal(b"zillions_tried__")
+        .hash(records);
+    hash.as_bytes().try_into().unwrap()
+}
+
+/// Where trial decryption starts in a chunk of `body`'s records: `from`, when
+/// the first `from` records still fingerprint as `tried`; else 0, as after a
+/// reorg rewrote any of them. Also the fingerprint of all of them.
+fn resume(records: &[u8], record_len: usize, from: u32, tried: &[u8]) -> (usize, [u8; 32]) {
+    let from = from as usize;
+    let all = tried_digest(records);
+    let same = from > 0
+        && from * record_len <= records.len()
+        && tried_digest(&records[..from * record_len])[..] == *tried;
+    (if same { from } else { 0 }, all)
+}
+
+/// A chunk body's header, then its records' bytes.
+fn chunk_records(body: &[u8]) -> Result<((u32, u32, u32, usize), &[u8]), String> {
+    postcard::take_from_bytes::<(u32, u32, u32, usize)>(body).map_err(|e| e.to_string())
+}
+
 pub(crate) fn chunk_body(body: &[u8], record_len: usize) -> Result<ChunkBody<'_>, String> {
-    let ((min_height, _median, max_height, count), records) =
-        postcard::take_from_bytes::<(u32, u32, u32, usize)>(body).map_err(|e| e.to_string())?;
+    let ((min_height, _median, max_height, count), records) = chunk_records(body)?;
     if count.checked_mul(record_len) != Some(records.len()) {
         return Err(format!(
             "chunk holds {} bytes for {count} records",
@@ -337,16 +365,26 @@ fn chunk_enforcement(network: &Network, min_height: u32, max_height: u32) -> Zip
     }
 }
 
-fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result<Compact, String> {
+fn decrypt_sapling(
+    network: &str,
+    ufvk: &str,
+    chunk: u32,
+    body: &[u8],
+    (from, tried): (u32, &[u8]),
+) -> Result<Compact, String> {
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+    let (from, digest) = resume(chunk_records(body)?.1, SAPLING_RECORD_LEN, from, tried);
     let body = chunk_body(body, SAPLING_RECORD_LEN)?;
     let (count, min_height) = (body.records.len(), body.min_height);
+    let digest = hex::encode(digest);
     let Some(dfvk) = ufvk.sapling() else {
         return Ok(Compact {
             count,
             min_height,
             hits: Vec::new(),
+            from,
+            digest,
         });
     };
 
@@ -355,6 +393,7 @@ fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result
     let ivks = sapling_ivks(dfvk);
     let outputs = body
         .records
+        .skip(from)
         .map(|r| {
             let (eph_key, r) = r.split_at(32);
             let (enc_head, cmu) = r.split_at(COMPACT_NOTE_SIZE);
@@ -377,13 +416,14 @@ fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result
         .enumerate()
     {
         if let Some(((note, _addr), scope_idx)) = res {
-            let position = u64::from(chunk) * CHUNK_SIZE + i as u64;
+            let index = from + i;
+            let position = u64::from(chunk) * CHUNK_SIZE + index as u64;
             hits.push(Hit {
                 pool: "sapling",
                 scope: SCOPES[scope_idx].0,
                 value: note.value().inner(),
                 nf_mine: hex::encode(note.nf(nk, position).0),
-                index: i,
+                index,
             });
         }
     }
@@ -391,6 +431,8 @@ fn decrypt_sapling(network: &str, ufvk: &str, chunk: u32, body: &[u8]) -> Result
         count,
         min_height,
         hits,
+        from,
+        digest,
     })
 }
 
@@ -401,6 +443,7 @@ fn decrypt_orchard<V: DomainVersion>(
     ufvk: &str,
     pool: &'static str,
     body: &[u8],
+    (from, tried): (u32, &[u8]),
 ) -> Result<Compact, String>
 where
     NoteEncryptionDomain<V>: BatchDomain<IncomingViewingKey = OrchardIvk, Note = orchard::Note>,
@@ -408,13 +451,17 @@ where
 {
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+    let (from, digest) = resume(chunk_records(body)?.1, ORCHARD_RECORD_LEN, from, tried);
     let body = chunk_body(body, ORCHARD_RECORD_LEN)?;
     let (count, min_height) = (body.records.len(), body.min_height);
+    let digest = hex::encode(digest);
     let Some(fvk) = ufvk.orchard() else {
         return Ok(Compact {
             count,
             min_height,
             hits: Vec::new(),
+            from,
+            digest,
         });
     };
 
@@ -422,6 +469,7 @@ where
     let ivks = orchard_ivks(fvk);
     let outputs = body
         .records
+        .skip(from)
         .map(|r| {
             let (eph_key, r) = r.split_at(32);
             let (enc_head, r) = r.split_at(COMPACT_NOTE_SIZE);
@@ -450,7 +498,7 @@ where
                 scope: SCOPES[scope_idx].0,
                 value: note.value().inner(),
                 nf_mine: hex::encode(note.nullifier(fvk).to_bytes()),
-                index: i,
+                index: from + i,
             });
         }
     }
@@ -458,6 +506,8 @@ where
         count,
         min_height,
         hits,
+        from,
+        digest,
     })
 }
 
@@ -690,8 +740,11 @@ fn decrypt_full(
 
 /// Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
 /// against `ufvk`. `chunk` is its number, which fixes each note's position.
+/// Notes before `from` are skipped while their records still fingerprint as
+/// `tried`, the `digest` an earlier read returned; else all are tried.
 ///
-/// Returns `{ count, min_height, hits: [{ pool, scope, value, nf_mine, index }] }`.
+/// Returns `{ count, min_height, from, digest, hits: [{ pool, scope, value, nf_mine, index }] }`:
+/// `from` is where it started, `digest` fingerprints all `count` notes.
 #[wasm_bindgen]
 pub fn try_decrypt(
     network: &str,
@@ -699,11 +752,14 @@ pub fn try_decrypt(
     pool: &str,
     chunk: u32,
     body: &[u8],
+    from: u32,
+    tried: &[u8],
 ) -> Result<JsValue, JsError> {
+    let resume = (from, tried);
     let compact = match pool {
-        "sapling" => decrypt_sapling(network, ufvk, chunk, body),
-        "orchard" => decrypt_orchard::<OrchardVersion>(network, ufvk, "orchard", body),
-        "ironwood" => decrypt_orchard::<IronwoodVersion>(network, ufvk, "ironwood", body),
+        "sapling" => decrypt_sapling(network, ufvk, chunk, body, resume),
+        "orchard" => decrypt_orchard::<OrchardVersion>(network, ufvk, "orchard", body, resume),
+        "ironwood" => decrypt_orchard::<IronwoodVersion>(network, ufvk, "ironwood", body, resume),
         _ => return Err(JsError::new("unknown pool")),
     }
     .map_err(|e| JsError::new(&e))?;
@@ -786,14 +842,14 @@ mod tests {
         );
 
         assert_eq!(
-            decrypt_sapling(network, &ufvk, 4511, &sapling)
+            decrypt_sapling(network, &ufvk, 4511, &sapling, (0, &[]))
                 .expect("sapling runs")
                 .hits
                 .len(),
             0
         );
         assert_eq!(
-            decrypt_orchard::<OrchardVersion>(network, &ufvk, "orchard", &orchard)
+            decrypt_orchard::<OrchardVersion>(network, &ufvk, "orchard", &orchard, (0, &[]))
                 .expect("orchard runs")
                 .hits
                 .len(),
@@ -938,11 +994,12 @@ mod tests {
         record.extend(&enc[..COMPACT_NOTE_SIZE]);
         record.extend(ExtractedNoteCommitment::from(note.commitment()).to_bytes());
         record.extend(rho_bytes);
-        let body = ciphertexts(3_430_000, &[&hex::encode(record)]);
+        let body = ciphertexts(3_430_000, &[&hex::encode(&record)]);
 
         let ufvk = ufvk.encode(&Network::MainNetwork);
         let compact =
-            decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body).expect("runs");
+            decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body, (0, &[]))
+                .expect("runs");
         assert_eq!((compact.count, compact.min_height), (1, 3_430_000));
         let hits = compact.hits;
         assert_eq!(hits.len(), 1);
@@ -951,11 +1008,33 @@ mod tests {
             ("ironwood", "external", 123_456)
         );
         assert!(
-            decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body)
+            decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body, (0, &[]))
                 .expect("runs")
                 .hits
                 .is_empty()
         );
+
+        // The chunk grew by a second copy: resuming past the first tries only
+        // the new note, while a fingerprint that no longer matches (a reorg)
+        // tries both again.
+        let grown = ciphertexts(3_430_000, &[&hex::encode(&record), &hex::encode(&record)]);
+        let tried = hex::decode(&compact.digest).unwrap();
+        let ironwood = |from, tried: &[u8]| {
+            decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &grown, (from, tried))
+                .expect("runs")
+        };
+        let resumed = ironwood(1, &tried);
+        assert_eq!(resumed.from, 1);
+        assert_eq!(
+            resumed.hits.iter().map(|h| h.index).collect::<Vec<_>>(),
+            [1]
+        );
+        assert_eq!(resumed.digest, ironwood(0, &[]).digest);
+        let rewritten = ironwood(1, &[0; 32]);
+        assert_eq!(rewritten.from, 0);
+        assert_eq!(rewritten.hits.len(), 2);
+        // A chunk shorter than `from` (a reorg shrank it) is tried whole too.
+        assert_eq!(ironwood(3, &tried).from, 0);
 
         // The whole ciphertext through the full path: same answer, plus where it sits.
         let full = FullNote {

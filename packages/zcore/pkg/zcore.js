@@ -425,16 +425,21 @@ export function spending_keys(network, seed, hd_index) {
 /**
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
  * against `ufvk`. `chunk` is its number, which fixes each note's position.
+ * Notes before `from` are skipped while their records still fingerprint as
+ * `tried`, the `digest` an earlier read returned; else all are tried.
  *
- * Returns `{ count, min_height, hits: [{ pool, scope, value, nf_mine, index }] }`.
+ * Returns `{ count, min_height, from, digest, hits: [{ pool, scope, value, nf_mine, index }] }`:
+ * `from` is where it started, `digest` fingerprints all `count` notes.
  * @param {string} network
  * @param {string} ufvk
  * @param {string} pool
  * @param {number} chunk
  * @param {Uint8Array} body
+ * @param {number} from
+ * @param {Uint8Array} tried
  * @returns {any}
  */
-export function try_decrypt(network, ufvk, pool, chunk, body) {
+export function try_decrypt(network, ufvk, pool, chunk, body, from, tried) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -443,7 +448,9 @@ export function try_decrypt(network, ufvk, pool, chunk, body) {
     const len2 = WASM_VECTOR_LEN;
     const ptr3 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
     const len3 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3);
+    const ptr4 = passArray8ToWasm0(tried, wasm.__wbindgen_malloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, from, ptr4, len4);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
