@@ -25,7 +25,6 @@ import {
 import { CORES, workerChannel } from "./shielded/crawl";
 import {
   progressOf,
-  setupHeightFor,
   type SyncPhase,
   type SyncProgress,
 } from "./shielded/phases";
@@ -157,17 +156,12 @@ export class Wallet {
     return count;
   };
 
-  #newRun = (
-    tip: number,
-    signal: AbortSignal,
-    setupHeight: Promise<number>,
-  ): ShieldedRun => ({
+  #newRun = (tip: number, signal: AbortSignal): ShieldedRun => ({
     ufvk: this.#ufvk,
     // An import's 0 means none: the whole history.
     birthday: this.#birthday || undefined,
     state: this.#state,
     tip,
-    setupHeight,
     workers: this.#workers,
     applied: this.#applied,
     readChunks: new Set(),
@@ -209,32 +203,8 @@ export class Wallet {
       await initZcore();
       const tip = (this.#tip = await fetchLatestHeight());
       transparent = this.#syncTransparent(tip);
-      const birthday = this.#birthday || undefined;
-      const setupHeight = (
-        birthday
-          ? Promise.resolve([
-              setupHeightFor(tip, birthday),
-              `birthday ${birthday}`,
-            ] as const)
-          : transparent.then(() => {
-              const heights = this.#transparent?.txs.map((tx) => tx.height);
-              const oldest = heights?.length ? Math.min(...heights) : undefined;
-              const why =
-                oldest === undefined
-                  ? "a year back, no transparent history"
-                  : `30 days before the oldest transparent transaction, ${oldest}`;
-              return [setupHeightFor(tip, undefined, oldest), why] as const;
-            })
-      ).then(([height, why]) => {
-        if (!this.#state.scan.setupDone) {
-          console.log(
-            `[sync] setup ends at height ${height} (${why}; never below 2,100,000 on mainnet)`,
-          );
-        }
-        return height;
-      });
       sizes = await fetchTreeSizes();
-      run = this.#newRun(tip, this.#abort.signal, setupHeight);
+      run = this.#newRun(tip, this.#abort.signal);
       await crawlRecent(run, sizes);
     } finally {
       await transparent;
@@ -291,7 +261,7 @@ export class Wallet {
 
     const abort = new AbortController();
     const signal = AbortSignal.any([this.#abort.signal, abort.signal]);
-    const run = this.#newRun(tip, signal, Promise.resolve(scan.setupHeight!));
+    const run = this.#newRun(tip, signal);
     const startTime = Date.now();
     const done = crawlHistory(run, sizes)
       .catch((err) => {

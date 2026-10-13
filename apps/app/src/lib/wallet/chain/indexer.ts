@@ -1,21 +1,17 @@
 import { INDEXER_URL } from "../config";
 import type { Pool, TxLocator } from "../types";
+import {
+  firstChunkFrom as chunkFrom,
+  fetchOk,
+  postcard,
+  treeSize,
+} from "./chunks";
 import { fetchWithRetry } from "./http";
 
-/** Notes per chunk. */
-export const CHUNK_SIZE = 2 ** 14;
+export { CHUNK_SIZE, lastChunk } from "./chunks";
 
 /** Each pool's note count at the indexer's tip. */
 export type TreeSizes = Record<Pool, number>;
-
-/** The chunk holding a tree's newest note, possibly still filling; -1 for an empty tree. */
-export const lastChunk = (size: number) => Math.ceil(size / CHUNK_SIZE) - 1;
-
-async function fetchOk(url: string, init?: RequestInit) {
-  const res = await fetchWithRetry(url, init);
-  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
-  return res;
-}
 
 /**
  * One chunk of a pool's notes, raw; only wasm reads it. `ciphertexts` is the
@@ -31,63 +27,19 @@ export async function fetchChunk(
   return new Uint8Array(await res.arrayBuffer());
 }
 
-/** A pool's note count, from where `/tip` redirects; throws if it names none. */
-async function treeSize(pool: Pool) {
-  // HEAD skips the snapshot body; a stale one 404s, but its URL has the size.
-  const res = await fetchWithRetry(`${INDEXER_URL}/${pool}/tip`, {
-    method: "HEAD",
-  });
-  const size = Number(new URL(res.url).pathname.split("/").pop());
-  if (!Number.isInteger(size)) throw new Error(`No tree size for ${pool}`);
-  return size;
-}
-
 export async function fetchTreeSizes(): Promise<TreeSizes> {
   const pools = ["ironwood", "orchard", "sapling"] as const;
-  const sizes = await Promise.all(pools.map(treeSize));
+  const sizes = await Promise.all(
+    pools.map((pool) => treeSize(INDEXER_URL, pool)),
+  );
   return Object.fromEntries(
     pools.map((pool, i) => [pool, sizes[i]]),
   ) as TreeSizes;
 }
 
-/** Reads `bytes` front to back, one postcard field per call. */
-function postcard(bytes: Uint8Array) {
-  let i = 0;
-  return {
-    byte: () => bytes[i++],
-    varint: () => {
-      let n = 0;
-      for (let shift = 0; ; shift += 7) {
-        const byte = bytes[i++];
-        n += (byte & 0x7f) * 2 ** shift;
-        if (byte < 0x80) return n;
-      }
-    },
-  };
-}
-
-/** A chunk's highest block height, read from the head of its body alone. */
-async function maxHeight(pool: Pool, chunk: number) {
-  const res = await fetchOk(`${INDEXER_URL}/${pool}/ciphertexts/${chunk}`, {
-    headers: { Range: "bytes=0-15" },
-  });
-  // Varints: min_height, median_height, max_height, then the count.
-  const head = postcard(new Uint8Array(await res.arrayBuffer()));
-  head.varint();
-  head.varint();
-  return head.varint();
-}
-
 /** The first chunk holding a note at `height` or later; `last` if none does sooner. */
-export async function firstChunkFrom(pool: Pool, height: number, last: number) {
-  let [low, high] = [0, Math.max(last, 0)];
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2);
-    if ((await maxHeight(pool, mid)) >= height) high = mid;
-    else low = mid + 1;
-  }
-  return low;
-}
+export const firstChunkFrom = (pool: Pool, height: number, last: number) =>
+  chunkFrom(INDEXER_URL, pool, height, last);
 
 /**
  * A pool's note commitment tree at ziziphus's tip, raw, and how many notes it

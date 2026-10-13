@@ -1,8 +1,9 @@
 # Sync phases
 
-Status: built 2026-10-09. It builds on the newest-first
-sync and the indexer's spent lookup (#56); see
-[zcrawler-architecture.md](zcrawler-architecture.md) for those.
+Status: built 2026-10-09; setup's end fixed at build time 2026-10-13. It
+builds on the newest-first sync and the indexer's spent lookup (#56); see
+[zcrawler-architecture.md](zcrawler-architecture.md) for those. A diagram for
+the team: [apps/app/README.md](../../apps/app/README.md#sync).
 
 ## Why
 
@@ -25,33 +26,30 @@ work.
 | 2. Setup    | tip at the first sync → `setupHeight`                                                       | one per core | gold, "Setting up your wallet: N%" |
 | 3. History  | `setupHeight` → 2,100,000, then 1,710,000 → birthday or 0, then the spam era (2.1M → 1.71M) | 2            | green, pulsing                     |
 
-- **Phase 1** runs on every sync once setup is done. It covers the window's
-  newest chunk again, which may have been filling.
-- **Phase 2** runs once per account. When it ends, the wallet records
+- **Phase 1** runs on every sync; on the first it has nothing to read. It
+  covers the window's newest chunk again, which may have been filling.
+- **Phase 2** runs until done, once per account: an interrupted setup goes on
+  after phase 1 on the next visit. When it ends, the wallet records
   `setupDone` and logs it.
 - **Phase 3** starts automatically right after phase 2 and resumes on later
   syncs after phase 1. Its three ranges run in the order above: pre-spam
   history comes before the spam era because it's cheap (~185 MB) and it's where
   a 2018–2021 Sapling wallet keeps its funds.
-- **The birthday bounds every phase.** A birthday inside the spam era gives:
-  phase 2 down to 2.1M, then phase 3 reads only the spam era, from 2.1M down to
-  the birthday.
+- **The birthday bounds every phase.** A birthday newer than `setupHeight`
+  ends phase 2 there and leaves phase 3 nothing. One inside the spam era gives
+  phase 3 its first range, then only the spam era down to the birthday.
 
 ### `setupHeight`
 
-Where setup ends. It is not a birthday: phase 3 still reads below it. The
-first rule that applies wins, and it is never below 2,100,000:
+Where setup ends: the indexer's tip − 1 year (420,480 blocks), as of the
+build. It is not a birthday: phase 3 still reads below it. The build looks up
+each pool's first chunk from that height once (`vite.config.ts`, the app's
+`SETUP_CHUNKS`), so no user does; an account stores it on its first sync, so
+a newer build never moves it. A birthday newer than `setupHeight` ends setup
+there instead, and history then has nothing left.
 
-1. The birthday.
-2. The oldest transaction on the wallet's transparent addresses, minus 30 days
-   (34,560 blocks).
-3. Tip − 1 year (420,480 blocks).
-
-The transparent pass already scans every used address from height 0 on a fresh
-sync and lands within seconds, so rule 2 costs nothing extra. It may be
-unknown when phase 2 starts: the crawl reads from the tip down and only needs
-it on reaching it, which takes longer than the transparent pass. If the
-transparent pass fails, rule 3 applies.
+The build is old by however long since it was made, so setup reaches that
+much further back. Builds are frequent enough for that not to matter.
 
 ### Spam era
 
@@ -88,17 +86,17 @@ The indicator shows one percentage for the current phase, across pools:
 work done ÷ total work in the phase's ranges, with a Sapling chunk counting 2
 (it decrypts ~2× slower than Orchard), so the number moves at an even pace.
 
-Totals need each range's chunk bounds up front. The spam bounds are constants;
-`setupHeight` and the birthday are found with `firstChunkFrom`, about a dozen
-16-byte requests per pool per bound, once per account, then stored. Until
-`setupHeight` is known, phase 2 shows "Setting up your wallet" without a number. If
-those requests become a problem, ask the indexer for a height → chunk endpoint.
+Totals need each range's chunk bounds up front. The spam bounds and
+`setupHeight`'s chunks are constants; the birthday's is found with
+`firstChunkFrom`, about a dozen 16-byte requests per pool, once per account,
+then stored. If those requests become a problem, ask the indexer for a
+height → chunk endpoint.
 
 ## Stored state
 
 Each pool's single window `{start, from, to}` becomes three ranges, each with
 its own newest-first cursor: after-spam (top), before-spam, and spam. The
-account also stores `setupDone`, `setupHeight`, and the bound chunks. The
+account also stores `setupDone` and the bound chunks. The
 crawl itself (`crawlChunks`) is unchanged.
 
 ## UI
@@ -122,7 +120,8 @@ spend lookup says unspent. Tooltip texts:
 ## Expected cost
 
 Measured on an M1 (8 cores) against the remote indexer at tip 3,512,136, with
-the current wasm. Trial decryption, not download, is the bottleneck: ~5.4 s
+the current wasm. A fresh import's setup (the last year, 131 chunks)
+took 173 s on all 8 cores on 2026-10-13. Trial decryption, not download, is the bottleneck: ~5.4 s
 per Orchard or Ironwood chunk (2.42 MB) and ~10.3 s per Sapling chunk
 (1.90 MB) on one core. Full power gave ~4–6× one core. Phones are likely 2–3×
 slower.

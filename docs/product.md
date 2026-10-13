@@ -194,9 +194,8 @@ Moves shielded funds to one of the account's own transparent addresses.
   to the start of each pool for an imported account, so recent funds and
   history show first.
 - In three phases: new activity since the last visit; setup, once per account,
-  from the tip back to its birthday (else a month before its first
-  transparent use, else a year), at full speed ("Setting up your wallet:
-  N%"); then older history in the background, using less of the computer,
+  from the tip back to about a year before the app's release (or the birthday,
+  if newer), at full speed ("Setting up your wallet: N%"); then older history in the background, using less of the computer,
   with a "Speed up" option. The 2022–2023 spam era is read last. When the
   browser asks to save data, older history waits for the user to start it.
   Details: [design/sync-phases.md](design/sync-phases.md).
