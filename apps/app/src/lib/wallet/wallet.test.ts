@@ -130,7 +130,7 @@ const zcore = await import("@zillions/zcore");
 const { submitTransaction } = await import("./chain/submit");
 const { cachedTransparent } = await import("./transparent");
 type TransparentCache = import("./transparent").TransparentCache;
-const { fetchBlock } = await import("./chain/lightwalletd");
+const { fetchBlock, fetchLatestHeight } = await import("./chain/lightwalletd");
 const store = await import("./store");
 const { crawlChunks } = await import("./shielded/crawl");
 
@@ -480,4 +480,30 @@ test("history waits while the browser saves data, then reads what setup left onc
 
   Object.defineProperty(navigator, "connection", { value: undefined });
   chain.setup.orchard = 0;
+});
+
+test("syncs again a minute after a sync ends, never queuing one behind a slow sync", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const tips = vi.mocked(fetchLatestHeight);
+  tips.mockClear();
+  // The first sync takes five minutes: the tip answers late.
+  let answer = () => {};
+  tips.mockImplementationOnce(
+    () => new Promise((resolve) => (answer = () => resolve(chain.tip))),
+  );
+  const wallet = new Wallet({ id: "r", ufvk: "uview" });
+
+  const first = wallet.sync();
+  await vi.advanceTimersByTimeAsync(5 * 60_000);
+  expect(tips).toHaveBeenCalledTimes(1);
+  answer();
+  await first;
+
+  await vi.advanceTimersByTimeAsync(59_000);
+  expect(tips).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(tips).toHaveBeenCalledTimes(2);
+
+  wallet.free();
+  vi.useRealTimers();
 });

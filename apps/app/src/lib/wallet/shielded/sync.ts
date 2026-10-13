@@ -144,9 +144,14 @@ function crawlSegment(
 /**
  * Catch-up, then setup until it's done: the chunks minted since the last
  * sync, then, the first time, each pool down to where setup ends. Checks
- * every note found or still unspent for a spend.
+ * every note found or still unspent for a spend. A pool still at `previous`,
+ * the last sync's sizes, has nothing new to read.
  */
-export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
+export async function crawlRecent(
+  run: ShieldedRun,
+  sizes: TreeSizes,
+  previous?: TreeSizes,
+) {
   const { state, signal } = run;
   const { scan } = state;
   const last = await prepare(run, sizes);
@@ -162,7 +167,7 @@ export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
   };
 
   for (const pool of POOLS) {
-    if (last[pool] < 0) continue;
+    if (last[pool] < 0 || sizes[pool] === previous?.[pool]) continue;
     const { top } = scan.scanned[pool]!;
     if (top.from > top.to) {
       top.from = last[pool] + 1;

@@ -24,7 +24,7 @@ work.
 | ----------- | ------------------------------------------------------------------------------------------- | ------------ | ---------------------------------- |
 | 1. Catch-up | chunks minted since the last sync                                                           | one per core | as today                           |
 | 2. Setup    | tip at the first sync → `setupHeight`                                                       | one per core | gold, "Setting up your wallet: N%" |
-| 3. History  | `setupHeight` → 2,100,000, then 1,710,000 → birthday or 0, then the spam era (2.1M → 1.71M) | 2            | green, pulsing                     |
+| 3. History  | `setupHeight` → 2,100,000, then 1,710,000 → birthday or 0, then the spam era (2.1M → 1.71M) | 2            | green, steady                      |
 
 - **Phase 1** runs on every sync; on the first it has nothing to read. It
   covers the window's newest chunk again, which may have been filling.
@@ -102,7 +102,10 @@ crawl itself (`crawlChunks`) is unchanged.
 ## UI
 
 The balance is right as soon as anything shows: a note only counts once its
-spend lookup says unspent. Tooltip texts:
+spend lookup says unspent. The dot pulses gold during catch-up and setup,
+turns red if the sync fails there, and is otherwise steady green, history
+included, so background work doesn't look urgent. Switching accounts starts
+the indicator afresh. Tooltip texts:
 
 - **Phase 2:** "Setting up your wallet: N%", and "This happens only once, the
   first time you open this account."
@@ -114,8 +117,8 @@ spend lookup says unspent. Tooltip texts:
   - **Slow down** (once sped up): "Goes back to using less of your computer,
     so it stays responsive."
 - **Paused (`saveData`):** "Older history is paused to save data (about
-  16 GB)." with **Download older history**. The dot does not pulse; a simple
-  static state for now, to be revisited.
+  16 GB)." with **Download older history**. A simple state for now, to be
+  revisited.
 
 ## Expected cost
 

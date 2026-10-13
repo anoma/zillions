@@ -23,6 +23,8 @@ export type SyncProgress = {
   /** History: whether the user sped it up (every core); `VITE_ALLOW_CPU_TO_FRY` always is. */
   spedUp?: boolean;
   fry?: boolean;
+  /** Whether `sync()` is running: catch-up or setup still on it once false means it failed. */
+  syncing?: boolean;
 };
 
 /**

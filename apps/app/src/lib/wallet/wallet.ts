@@ -51,6 +51,9 @@ export type SyncEventListener = (e: SyncProgress) => void;
 /** Every phase on every core, hidden tab or not. */
 const FRY = import.meta.env.VITE_ALLOW_CPU_TO_FRY === "true";
 
+/** How long after a sync ends, however it ends, the next one starts by itself. */
+const RESYNC_MS = 60_000;
+
 /** Whether the browser asks to save data (Chromium only). */
 const saveData = () =>
   (navigator as { connection?: { saveData?: boolean } }).connection
@@ -94,6 +97,7 @@ export class Wallet {
   /** The tree sizes the last sync read to; history reads to them too. */
   #sizes?: TreeSizes;
   #recentRunning = false;
+  #resync?: ReturnType<typeof setTimeout>;
 
   constructor(options: { id: string; ufvk: string; birthday?: number }) {
     this.id = options.id;
@@ -104,6 +108,7 @@ export class Wallet {
   }
 
   free = () => {
+    clearTimeout(this.#resync);
     this.#abort.abort();
     this.#syncProgressListeners.clear();
   };
@@ -127,7 +132,12 @@ export class Wallet {
   };
 
   #emitProgress = () => {
-    const progress = { ...this.#progress, spedUp: this.#speedUp, fry: FRY };
+    const progress = {
+      ...this.#progress,
+      spedUp: this.#speedUp,
+      fry: FRY,
+      syncing: this.#recentRunning,
+    };
     this.#syncProgressListeners.forEach((listener) => listener(progress));
   };
 
@@ -183,9 +193,29 @@ export class Wallet {
   /**
    * Brings the wallet up to the chain tip: new chunks, and setup until it's
    * done. History then goes on in the background. A call while one runs
-   * shares it, and pauses history meanwhile.
+   * shares it, and pauses history meanwhile. It runs again by itself a minute
+   * after it ends.
    */
   sync = dedupe(async () => {
+    clearTimeout(this.#resync);
+    try {
+      await this.#syncRecent();
+    } catch (err) {
+      // `syncing` is false by now: says the run stopped short.
+      this.#emitProgress();
+      throw err;
+    } finally {
+      // Counted from the end, so a slow sync never queues another.
+      if (!this.#abort.signal.aborted) {
+        this.#resync = setTimeout(
+          () => this.sync().catch((e) => console.error("[sync] failed", e)),
+          RESYNC_MS,
+        );
+      }
+    }
+  });
+
+  #syncRecent = async () => {
     const startTime = Date.now();
     await this.#seed();
     await this.#stopHistory();
@@ -205,7 +235,7 @@ export class Wallet {
       transparent = this.#syncTransparent(tip);
       sizes = await fetchTreeSizes();
       run = this.#newRun(tip, this.#abort.signal);
-      await crawlRecent(run, sizes);
+      await crawlRecent(run, sizes, this.#sizes);
     } finally {
       await transparent;
       await this.#finish(run, sizes);
@@ -216,7 +246,7 @@ export class Wallet {
     }
     this.#sizes = sizes;
     this.#startHistory();
-  });
+  };
 
   /** What a run leaves to do once its crawl ends, however it ends. */
   #finish = async (run?: ShieldedRun, sizes?: TreeSizes) => {

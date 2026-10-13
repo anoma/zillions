@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useWallet } from "../hooks/useWallet";
 import type { SyncProgress } from "../lib/wallet/shielded/phases";
+import type { Wallet } from "../lib/wallet/wallet";
 import { Tooltip } from "./Tooltip";
 
 function formatPercentage(previous: number, current: number): string {
@@ -32,10 +33,15 @@ function formatPercentage(previous: number, current: number): string {
 const actionClass =
   "w-full rounded-full border border-gray-300 py-1 font-medium cursor-pointer hover:bg-gray-100";
 
+const sync = (wallet: Wallet) =>
+  wallet.sync().catch((e) => console.error("Sync failed", e));
+
 export function SyncIndicator() {
-  const [progress, setProgress] = useState<SyncProgress>({ phase: "catch-up" });
+  const [progress, setProgress] = useState<SyncProgress>({
+    phase: "catch-up",
+    syncing: true,
+  });
   const [percent, setPercent] = useState("0");
-  const [running, setRunning] = useState(true);
   const wallet = useWallet();
 
   useEffect(() => {
@@ -46,18 +52,13 @@ export function SyncIndicator() {
         setPercent((prev) => formatPercentage(Number(prev), e.percentage!));
       }
     });
-    wallet
-      .sync()
-      .catch((e) => console.error("Sync failed", e))
-      .finally(() => setRunning(false));
+    sync(wallet);
     return unsubscribe;
   }, [wallet]);
 
-  const { phase, backTo, spedUp, fry } = progress;
-  // Catch-up and setup run inside `sync()`: once it settles, they stopped.
-  const busy =
-    phase === "history" || (running && phase !== "done" && phase !== "paused");
+  const { phase, backTo, spedUp, fry, syncing } = progress;
   const recent = phase === "catch-up" || phase === "setup";
+  const failed = recent && !syncing;
   const bar = (
     <div className="bg-black h-1 rounded-full overflow-clip mt-1">
       <div
@@ -73,10 +74,10 @@ export function SyncIndicator() {
       className="z-10 w-60 py-3"
       content={
         <div className="px-4 space-y-3 w-full text-xs font-medium">
-          {phase === "catch-up" && running && (
+          {phase === "catch-up" && syncing && (
             <div>Checking for new activity</div>
           )}
-          {phase === "setup" && running && (
+          {phase === "setup" && syncing && (
             <div className="font-normal space-y-2">
               <div>
                 Setting up your wallet
@@ -88,9 +89,7 @@ export function SyncIndicator() {
               </div>
             </div>
           )}
-          {recent && !running && (
-            <div>Shielded sync stopped. Click to retry.</div>
-          )}
+          {failed && <div>Shielded sync stopped. Click to retry.</div>}
           {phase === "history" && (
             <div className="font-normal space-y-2">
               <div>
@@ -151,27 +150,19 @@ export function SyncIndicator() {
     >
       <button
         className="h-10 p-2 text-left cursor-pointer"
-        onClick={() => {
-          setRunning(true);
-          wallet
-            .sync()
-            .catch((e) => console.error("Sync failed", e))
-            .finally(() => setRunning(false));
-        }}
+        onClick={() => sync(wallet)}
       >
-        {busy && (
-          <div
-            className={twMerge(
-              "absolute size-2.5 -m-px animate-ping rounded-full opacity-75",
-              recent ? "bg-gold" : "bg-green-500",
-            )}
-          />
+        {recent && syncing && (
+          <div className="absolute size-2.5 -m-px animate-ping rounded-full opacity-75 bg-gold" />
         )}
         <div
           className={twMerge(
             "size-2 rounded-full",
-            busy && recent ? "bg-gold animate-pulse" : "bg-green-500",
-            busy && !recent && "animate-pulse",
+            recent && syncing
+              ? "bg-gold animate-pulse"
+              : failed
+                ? "bg-red-500"
+                : "bg-green-500",
           )}
         />
       </button>
