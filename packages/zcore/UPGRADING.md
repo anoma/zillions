@@ -35,9 +35,6 @@ in `Cargo.toml`.
 - New pools or note plaintext versions: decryption domains (`lib.rs`), the
   spendable-note encoding (`notes.rs`), tree hashing (`witness.rs`), signing
   (`roles.rs`), and the app's pool list.
-- Spends: whether a new pool's actions reveal the nullifier they spend as
-  rho (`find_spends` in `spends.rs`) or need `/nullifiers` chunks, as Sapling
-  does.
 - Consensus branch for parsing (`transparent_tx.rs`) and building.
 - Fee rules (ZIP 317) and ZIP 318 parameters: nothing to change if upstream
   carries them, but check the shielding threshold still makes sense.

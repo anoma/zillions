@@ -19,7 +19,6 @@ mod migration;
 mod notes;
 mod roles;
 mod send;
-mod spends;
 mod transparent_tx;
 mod wallet;
 mod witness;
@@ -177,21 +176,12 @@ struct SentOutput {
 
 /// Where one of the wallet's notes was spent: an Orchard or Ironwood action
 /// whose rho is that note's nullifier.
-#[derive(Serialize)]
-struct Spend {
-    /// The nullifier spent (hex), which is the spent note's `nf_mine`.
-    nf: String,
-    height: u32,
-    tx_index: u16,
-}
-
-/// One chunk's decryption: the notes this wallet received, the outputs it
-/// sent, and where it spent notes.
+/// One chunk's decryption: the notes this wallet received and the outputs it
+/// sent.
 #[derive(Serialize)]
 struct FullChunk {
     hits: Vec<FullHit>,
     sent: Vec<SentOutput>,
-    spends: Vec<Spend>,
 }
 
 /// External + internal (change) scopes — a note may be addressed to either.
@@ -584,11 +574,7 @@ where
         }
     }
 
-    Ok(FullChunk {
-        hits,
-        sent,
-        spends: Vec::new(),
-    })
+    Ok(FullChunk { hits, sent })
 }
 
 fn decrypt_full(
@@ -699,11 +685,7 @@ fn decrypt_full(
         }
     }
 
-    Ok(FullChunk {
-        hits,
-        sent,
-        spends: Vec::new(),
-    })
+    Ok(FullChunk { hits, sent })
 }
 
 /// Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
@@ -730,11 +712,9 @@ pub fn try_decrypt(
 
 /// Trial-decrypt one pool's chunk in full against `ufvk`: the raw
 /// `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
-/// the `index` of each hit [`try_decrypt`] found in it, and of each spend
-/// [`spends::find_spends`] found. Returns
+/// and the `index` of each hit [`try_decrypt`] found in it. Returns
 /// `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
-///    sent: [{ pool, value, recipient, memo, height, tx_index, position }],
-///    spends: [{ nf, height, tx_index }] }`.
+///    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
 #[wasm_bindgen]
 #[allow(clippy::too_many_arguments)]
 pub fn try_decrypt_full(
@@ -746,36 +726,18 @@ pub fn try_decrypt_full(
     memos: &[u8],
     outgoing: &[u8],
     hits: &[u32],
-    spends: &[u32],
 ) -> Result<JsValue, JsError> {
     if !["sapling", "orchard", "ironwood"].contains(&pool) {
         return Err(JsError::new("unknown pool"));
     }
     let notes =
         full_notes(pool, chunk, ciphertexts, memos, outgoing).map_err(|e| JsError::new(&e))?;
-    let indices = |list: &[u32]| -> Result<Vec<usize>, JsError> {
-        let out: Vec<usize> = list.iter().map(|&i| i as usize).collect();
-        if out.iter().any(|&i| i >= notes.len()) {
-            return Err(JsError::new("index past the chunk's notes"));
-        }
-        Ok(out)
-    };
-    let mut full =
-        decrypt_full(network, ufvk, pool, &notes, &indices(hits)?).map_err(|e| JsError::new(&e))?;
-    full.spends = spend_places(&notes, &indices(spends)?);
+    let hits: Vec<usize> = hits.iter().map(|&i| i as usize).collect();
+    if hits.iter().any(|&i| i >= notes.len()) {
+        return Err(JsError::new("index past the chunk's notes"));
+    }
+    let full = decrypt_full(network, ufvk, pool, &notes, &hits).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&full).map_err(|e| JsError::new(&e.to_string()))
-}
-
-/// Each spend's nullifier and transaction, from the records at `spends`.
-fn spend_places(notes: &[FullNote], spends: &[usize]) -> Vec<Spend> {
-    spends
-        .iter()
-        .map(|&i| Spend {
-            nf: hex::encode(notes[i].rho),
-            height: notes[i].height,
-            tx_index: notes[i].tx_index,
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -911,18 +873,6 @@ mod tests {
             memos,
             ciphertexts(height, &outgoing),
         )
-    }
-
-    #[test]
-    fn places_a_spend() {
-        let mut notes: Vec<FullNote> = (0..3).map(|_| fixture(ORCHARD_FULL)).collect();
-        notes[1].rho = [5; 32];
-        let spends = spend_places(&notes, &[1]);
-        assert_eq!(spends[0].nf, hex::encode([5u8; 32]));
-        assert_eq!(
-            (spends[0].height, spends[0].tx_index),
-            (notes[1].height, notes[1].tx_index)
-        );
     }
 
     #[test]
