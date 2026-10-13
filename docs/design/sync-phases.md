@@ -1,8 +1,9 @@
 # Sync phases
 
-Status: built 2026-10-09. It builds on the newest-first
-sync and the indexer's spent lookup (#56); see
-[zcrawler-architecture.md](zcrawler-architecture.md) for those.
+Status: built 2026-10-09; setup's end fixed at build time 2026-10-13. It
+builds on the newest-first sync and the indexer's spent lookup (#56); see
+[zcrawler-architecture.md](zcrawler-architecture.md) for those. A diagram for
+the team: [apps/app/README.md](../../apps/app/README.md#sync).
 
 ## Why
 
@@ -25,17 +26,18 @@ work.
 | 2. Setup    | tip at the first sync → `setupHeight`                                                       | one per core | gold, "Setting up your wallet: N%" |
 | 3. History  | `setupHeight` → 2,100,000, then 1,710,000 → birthday or 0, then the spam era (2.1M → 1.71M) | 2            | green, pulsing                     |
 
-- **Phase 1** runs on every sync once setup is done. It covers the window's
-  newest chunk again, which may have been filling.
-- **Phase 2** runs once per account. When it ends, the wallet records
+- **Phase 1** runs on every sync; on the first it has nothing to read. It
+  covers the window's newest chunk again, which may have been filling.
+- **Phase 2** runs until done, once per account: an interrupted setup goes on
+  after phase 1 on the next visit. When it ends, the wallet records
   `setupDone` and logs it.
 - **Phase 3** starts automatically right after phase 2 and resumes on later
   syncs after phase 1. Its three ranges run in the order above: pre-spam
   history comes before the spam era because it's cheap (~185 MB) and it's where
   a 2018–2021 Sapling wallet keeps its funds.
-- **The birthday bounds every phase.** A birthday inside the spam era gives:
-  phase 2 down to 2.1M, then phase 3 reads only the spam era, from 2.1M down to
-  the birthday.
+- **The birthday bounds every phase.** A birthday newer than `setupHeight`
+  ends phase 2 there and leaves phase 3 nothing. One inside the spam era gives
+  phase 3 its first range, then only the spam era down to the birthday.
 
 ### `setupHeight`
 
@@ -118,7 +120,8 @@ spend lookup says unspent. Tooltip texts:
 ## Expected cost
 
 Measured on an M1 (8 cores) against the remote indexer at tip 3,512,136, with
-the current wasm. Trial decryption, not download, is the bottleneck: ~5.4 s
+the current wasm. A fresh import's setup (the last year, 131 chunks)
+took 173 s on all 8 cores on 2026-10-13. Trial decryption, not download, is the bottleneck: ~5.4 s
 per Orchard or Ironwood chunk (2.42 MB) and ~10.3 s per Sapling chunk
 (1.90 MB) on one core. Full power gave ~4–6× one core. Phones are likely 2–3×
 slower.
