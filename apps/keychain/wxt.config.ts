@@ -128,10 +128,11 @@ export default defineConfig({
       },
     ],
     icons: {
-      16: "icons/icon-16.png",
-      32: "icons/icon-32.png",
-      48: "icons/icon-48.png",
-      128: "icons/icon-128.png",
+      16: "icons/favicon-16x16.png",
+      32: "icons/favicon-32x32.png",
+      // No 48 or 128 px source; exact 4x downscales keep these sharp.
+      48: "icons/android-chrome-192x192.png",
+      128: "icons/android-chrome-512x512.png",
     },
     ...(browser === "firefox"
       ? {
