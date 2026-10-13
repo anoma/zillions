@@ -14,7 +14,7 @@ const { crawlChunks } = await import("./crawl");
 const { newPoolScan } = await import("./phases");
 const { crawlHistory } = await import("./sync");
 
-test("history reads what setup left, then before the spam era, then the spam era, each in pool order", async () => {
+test("history reads what setup left, then before the spam era, and the spam era is a run of its own, each in pool order", async () => {
   const last = { ironwood: 43, orchard: 3_080, sapling: 4_515 };
   const setup = { ironwood: 0, orchard: 3_006, sapling: 4_505 };
   const scanned = Object.fromEntries(
@@ -31,26 +31,37 @@ test("history reads what setup left, then before the spam era, then the spam era
     scan: { scanned, setupDone: true, sendsRead: [] },
   } as unknown as WalletState;
 
-  await crawlHistory(
-    {
-      state,
-      tip: 3_500_000,
-      workers: () => 2,
-      signal: new AbortController().signal,
-      onAdvance: () => {},
-    } as never,
-    { ironwood: 44 * 16_384, orchard: 3_081 * 16_384, sapling: 4_516 * 16_384 },
-  );
+  const run = {
+    state,
+    tip: 3_500_000,
+    workers: () => 2,
+    signal: new AbortController().signal,
+    onAdvance: () => {},
+  } as never;
+  const sizes = {
+    ironwood: 44 * 16_384,
+    orchard: 3_081 * 16_384,
+    sapling: 4_516 * 16_384,
+  };
+  const reads = () => {
+    const calls = vi
+      .mocked(crawlChunks)
+      .mock.calls.map(([o]) => [o.pool, o.from, o.to])
+      .filter(([, from, to]) => (to as number) >= (from as number));
+    vi.mocked(crawlChunks).mockClear();
+    return calls;
+  };
 
-  const reads = vi
-    .mocked(crawlChunks)
-    .mock.calls.map(([o]) => [o.pool, o.from, o.to])
-    .filter(([, from, to]) => (to as number) >= (from as number));
-  expect(reads).toEqual([
+  await crawlHistory(run, sizes, "history");
+  expect(reads()).toEqual([
     ["orchard", 2_868, 3_005],
     ["sapling", 4_386, 4_504],
     ["orchard", 0, 19],
     ["sapling", 0, 71],
+  ]);
+
+  await crawlHistory(run, sizes, "spam");
+  expect(reads()).toEqual([
     ["orchard", 20, 2_867],
     ["sapling", 72, 4_385],
   ]);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useWallet } from "../hooks/useWallet";
 import type { SyncProgress } from "../lib/wallet/shielded/phases";
@@ -68,6 +68,48 @@ export function SyncIndicator() {
     </div>
   );
 
+  /** History or the spam era running in the background, with its speed controls. */
+  const background = (what: string, title: ReactNode, extra?: ReactNode) => (
+    <div className="font-normal space-y-2">
+      <div>{title}</div>
+      {bar}
+      {fry ? (
+        <div>{what} is loading in the background.</div>
+      ) : spedUp ? (
+        <>
+          <div>{what} is loading on your computer&apos;s full power.</div>
+          <button
+            className={actionClass}
+            onClick={() => wallet.setSpeedUp(false)}
+          >
+            Slow down
+          </button>
+          <div className="text-gray-500">
+            Goes back to using less of your computer, so it stays responsive.
+          </div>
+        </>
+      ) : (
+        <>
+          <div>
+            {what} is still loading in the background, using less of your
+            computer so it stays responsive.
+          </div>
+          <button
+            className={actionClass}
+            onClick={() => wallet.setSpeedUp(true)}
+          >
+            Speed up
+          </button>
+          <div className="text-gray-500">
+            Uses your computer&apos;s full power until it&apos;s done. It may
+            run warm and slow down other apps meanwhile.
+          </div>
+        </>
+      )}
+      {extra}
+    </div>
+  );
+
   return (
     <Tooltip
       position="bottom"
@@ -90,57 +132,57 @@ export function SyncIndicator() {
             </div>
           )}
           {failed && <div>Shielded sync stopped. Click to retry.</div>}
-          {phase === "history" && (
-            <div className="font-normal space-y-2">
-              <div>
+          {phase === "history" &&
+            background(
+              "Older history",
+              <>
                 Older history: {percent}%
                 {backTo !== undefined &&
                   `, back to ${new Date(backTo).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`}
-              </div>
-              {bar}
-              {fry ? (
-                <div>Older history is loading in the background.</div>
-              ) : spedUp ? (
-                <>
-                  <div>
-                    Older history is loading on your computer&apos;s full power.
-                  </div>
-                  <button
-                    className={actionClass}
-                    onClick={() => wallet.setSpeedUp(false)}
-                  >
-                    Slow down
-                  </button>
-                  <div className="text-gray-500">
-                    Goes back to using less of your computer, so it stays
-                    responsive.
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    Older history is still loading in the background, using less
-                    of your computer so it stays responsive.
-                  </div>
-                  <button
-                    className={actionClass}
-                    onClick={() => wallet.setSpeedUp(true)}
-                  >
-                    Speed up
-                  </button>
-                  <div className="text-gray-500">
-                    Uses your computer&apos;s full power until older history is
-                    done. It may run warm and slow down other apps meanwhile.
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+              </>,
+            )}
+          {phase === "spam" &&
+            background(
+              "The spam era",
+              <>Spam era (2022–23): {percent}%</>,
+              <>
+                <button
+                  className={actionClass}
+                  onClick={() => wallet.setSpamSync(false)}
+                >
+                  Pause spam era sync
+                </button>
+                <div className="text-gray-500">
+                  You can resume it any time from here.
+                </div>
+              </>,
+            )}
           {phase === "paused" && (
             <div className="font-normal space-y-2">
-              <div>Older history is paused to save data (about 16 GB).</div>
+              <div>Older history is paused to save data (about 750 MB).</div>
               <button className={actionClass} onClick={wallet.downloadHistory}>
                 Download older history
+              </button>
+            </div>
+          )}
+          {phase === "spam-off" && (
+            <div className="font-normal space-y-2">
+              <div className="font-medium">
+                Shielded sync completed, except the 2022–23 spam era
+                {!!progress.percentage &&
+                  ` (${progress.percentage.toFixed(progress.percentage < 1 ? 1 : 0)}% read)`}
+                .
+              </div>
+              <div>
+                Those years hold millions of spam transactions: about 15 GB and
+                a few hours of work. You only need them if this account received
+                funds in 2022–23.
+              </div>
+              <button
+                className={actionClass}
+                onClick={() => wallet.setSpamSync(true)}
+              >
+                {progress.percentage ? "Resume" : "Sync"} spam era
               </button>
             </div>
           )}

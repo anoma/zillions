@@ -12,7 +12,18 @@ export const POOLS = [
   "sapling",
 ] as const satisfies Pool[];
 
-export type SyncPhase = "catch-up" | "setup" | "history" | "paused" | "done";
+/**
+ * `paused`: history waits because the browser saves data. `spam-off`: all but
+ * the spam era is read, and the user hasn't started (or paused) it.
+ */
+export type SyncPhase =
+  | "catch-up"
+  | "setup"
+  | "history"
+  | "paused"
+  | "spam"
+  | "spam-off"
+  | "done";
 
 export type SyncProgress = {
   phase: SyncPhase;
@@ -106,7 +117,6 @@ export function progressOf(
     for (const [pool, p] of pools) {
       add(pool, span(p.top, p.top.floor, (p.setup ?? p.top.floor) - 1));
       add(pool, span(p.before, p.before.floor, p.before.to));
-      add(pool, span(p.spam, p.spam.floor, p.spam.to));
     }
     // The pool read least far back bounds how far back all of them are.
     const left = pools.filter(([, p]) => p.top.from > p.top.floor);
@@ -118,8 +128,24 @@ export function progressOf(
       percentage: total ? (read / total) * 100 : 100,
       backTo: heightTime(oldest, tip, now),
     };
+  } else if (phase === "spam") {
+    for (const [pool, p] of pools)
+      add(pool, span(p.spam, p.spam.floor, p.spam.to));
   } else {
     return { phase };
   }
   return { phase, percentage: total ? (read / total) * 100 : 100 };
+}
+
+/** What runs in the background once setup is done, or why nothing does. */
+export function backgroundPhase(
+  scan: ShieldedScan,
+  tip: number,
+  historyAllowed: boolean,
+): "history" | "paused" | "spam" | "spam-off" | "done" {
+  if (progressOf(scan, "history", tip).percentage! < 100)
+    return historyAllowed ? "history" : "paused";
+  if (progressOf(scan, "spam", tip).percentage! < 100)
+    return scan.spamSync ? "spam" : "spam-off";
+  return "done";
 }

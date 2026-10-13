@@ -4,7 +4,7 @@ import type { ShieldedScan } from "../types";
 
 vi.mock("../config", () => ({ NETWORK: "main" }));
 
-const { newPoolScan, progressOf } = await import("./phases");
+const { backgroundPhase, newPoolScan, progressOf } = await import("./phases");
 
 const TIP = 3_500_000;
 test("a pool's segments split at the spam era, and the birthday bounds them all", () => {
@@ -64,4 +64,28 @@ test("history counts what setup left and both spam-era sides, and dates the olde
   expect(progressOf(s, "history", TIP, now).backTo).toBe(
     now - (TIP - 2_100_000) * 75_000,
   );
+});
+
+test("history leaves the spam era to a phase of its own, which runs only once the user starts it", () => {
+  const s = scan();
+  s.scanned.orchard!.setup = 3_000;
+  s.scanned.sapling!.setup = 4_510;
+  expect(backgroundPhase(s, TIP, true)).toBe("history");
+  expect(backgroundPhase(s, TIP, false)).toBe("paused");
+
+  for (const p of [s.scanned.orchard!, s.scanned.sapling!]) {
+    p.top.from = p.top.floor;
+    p.before.from = p.before.floor;
+  }
+  expect(progressOf(s, "history", TIP).percentage).toBe(100);
+  expect(progressOf(s, "spam", TIP).percentage).toBe(0);
+  // Save data only holds history back: the spam era waits for the user anyway.
+  expect(backgroundPhase(s, TIP, false)).toBe("spam-off");
+
+  s.spamSync = true;
+  expect(backgroundPhase(s, TIP, true)).toBe("spam");
+  for (const p of [s.scanned.orchard!, s.scanned.sapling!]) {
+    p.spam.from = p.spam.floor;
+  }
+  expect(backgroundPhase(s, TIP, true)).toBe("done");
 });

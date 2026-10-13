@@ -24,6 +24,7 @@ import {
 } from "./send";
 import { CORES, workerChannel } from "./shielded/crawl";
 import {
+  backgroundPhase,
   progressOf,
   type SyncPhase,
   type SyncProgress,
@@ -90,7 +91,11 @@ export class Wallet {
   #freshBlocks = new Set<number>();
   #progress: SyncProgress = { phase: "catch-up" };
   /** History, running in the background after a sync. */
-  #history?: { abort: AbortController; done: Promise<unknown> };
+  #history?: {
+    phase: "history" | "spam";
+    abort: AbortController;
+    done: Promise<boolean>;
+  };
   /** Whether history may download: not when the browser saves data, unless asked. */
   #historyAllowed = !saveData();
   #speedUp = false;
@@ -153,7 +158,7 @@ export class Wallet {
       ? [CORES, "VITE_ALLOW_CPU_TO_FRY"]
       : globalThis.document?.hidden
         ? [1, "tab hidden"]
-        : phase !== "history"
+        : phase !== "history" && phase !== "spam"
           ? [CORES, "full power"]
           : this.#speedUp
             ? [CORES, "sped up"]
@@ -218,8 +223,9 @@ export class Wallet {
   #syncRecent = async () => {
     const startTime = Date.now();
     await this.#seed();
-    await this.#stopHistory();
+    // Raised first: a background run ending meanwhile must not start the next.
     this.#recentRunning = true;
+    await this.#stopHistory();
     this.#emitProgress();
 
     this.#placing = Promise.resolve();
@@ -273,42 +279,41 @@ export class Wallet {
     await this.#saving;
   };
 
-  /** Starts history in the background, or says why it waits or has nothing left. */
+  /** Starts history or the spam era in the background, or says why neither runs. */
   #startHistory = () => {
     const { scan } = this.#state;
     const tip = this.#tip;
     const sizes = this.#sizes;
     if (!scan.setupDone || this.#history || !sizes || tip === undefined) return;
-    if (this.#abort.signal.aborted) return;
-    if (progressOf(scan, "history", tip).percentage === 100) {
-      console.log("[sync] history: nothing left to read");
-      return this.#announce({ phase: "done" });
-    }
-    if (!this.#historyAllowed) {
-      console.log("[sync] history paused: the browser asks to save data");
-      return this.#announce({ phase: "paused" });
+    if (this.#abort.signal.aborted || this.#recentRunning) return;
+    const phase = backgroundPhase(scan, tip, this.#historyAllowed);
+    if (phase !== "history" && phase !== "spam") {
+      console.log(`[sync] background: ${phase}`);
+      return this.#announce({ ...progressOf(scan, "spam", tip), phase });
     }
 
     const abort = new AbortController();
     const signal = AbortSignal.any([this.#abort.signal, abort.signal]);
     const run = this.#newRun(tip, signal);
     const startTime = Date.now();
-    const done = crawlHistory(run, sizes)
+    const done = crawlHistory(run, sizes, phase)
       .catch((err) => {
-        console.error("[sync] history failed", err);
+        console.error(`[sync] ${phase} failed`, err);
         return false;
       })
       .then(async (complete) => {
         await this.#finish(run, sizes);
         console.log(
-          `[sync] history ${complete ? "done" : "stopped"} after ${((Date.now() - startTime) / 1000).toFixed(1)} s`,
+          `[sync] ${phase} ${complete ? "done" : "stopped"} after ${((Date.now() - startTime) / 1000).toFixed(1)} s`,
         );
-        if (complete) this.#announce({ phase: "done" });
+        return complete;
       })
       .finally(() => {
         if (this.#history?.done === done) this.#history = undefined;
       });
-    this.#history = { abort, done };
+    this.#history = { phase, abort, done };
+    // History done: on to the spam era, or why it waits.
+    done.then((complete) => complete && this.#startHistory());
   };
 
   #stopHistory = async () => {
@@ -321,6 +326,14 @@ export class Wallet {
   setSpeedUp = (on: boolean) => {
     this.#speedUp = on;
     this.#emitProgress();
+  };
+
+  /** Starts the spam era's sync, or pauses it; the account remembers which. */
+  setSpamSync = async (on: boolean) => {
+    this.#state.scan.spamSync = on;
+    this.#save();
+    if (!on && this.#history?.phase === "spam") await this.#stopHistory();
+    this.#startHistory();
   };
 
   /** Lets history download although the browser saves data. */

@@ -1,6 +1,7 @@
 # Sync phases
 
-Status: built 2026-10-09; setup's end fixed at build time 2026-10-13. It
+Status: built 2026-10-09; setup's end fixed at build time and the spam era
+made its own, user-started phase 2026-10-13. It
 builds on the newest-first sync and the indexer's spent lookup (#56); see
 [zcrawler-architecture.md](zcrawler-architecture.md) for those. A diagram for
 the team: [apps/app/README.md](../../apps/app/README.md#sync).
@@ -20,11 +21,12 @@ Every phase reads each pool newest-first, in the same pool order:
 the last pool finishes it, and a pool with nothing in a phase's range adds no
 work.
 
-| Phase       | Range (per pool)                                                                            | Workers      | Indicator                          |
-| ----------- | ------------------------------------------------------------------------------------------- | ------------ | ---------------------------------- |
-| 1. Catch-up | chunks minted since the last sync                                                           | one per core | as today                           |
-| 2. Setup    | tip at the first sync → `setupHeight`                                                       | one per core | gold, "Setting up your wallet: N%" |
-| 3. History  | `setupHeight` → 2,100,000, then 1,710,000 → birthday or 0, then the spam era (2.1M → 1.71M) | 2            | green, steady                      |
+| Phase       | Range (per pool)                                          | Workers      | Indicator                          |
+| ----------- | --------------------------------------------------------- | ------------ | ---------------------------------- |
+| 1. Catch-up | chunks minted since the last sync                         | one per core | gold, "Checking for new activity"  |
+| 2. Setup    | tip at the first sync → `setupHeight`                     | one per core | gold, "Setting up your wallet: N%" |
+| 3. History  | `setupHeight` → 2,100,000, then 1,710,000 → birthday or 0 | 2            | green, "Older history: N%"         |
+| 4. Spam era | 2,100,000 → 1,710,000, once the user starts it            | 2            | green, "Spam era (2022–23): N%"    |
 
 - **Phase 1** runs on every sync; on the first it has nothing to read. It
   covers the window's newest chunk again, which may have been filling.
@@ -32,12 +34,21 @@ work.
   after phase 1 on the next visit. When it ends, the wallet records
   `setupDone` and logs it.
 - **Phase 3** starts automatically right after phase 2 and resumes on later
-  syncs after phase 1. Its three ranges run in the order above: pre-spam
-  history comes before the spam era because it's cheap (~185 MB) and it's where
-  a 2018–2021 Sapling wallet keeps its funds.
+  syncs after phase 1. Its two ranges run in the order above: pre-spam history
+  is cheap (~185 MB) and it's where a 2018–2021 Sapling wallet keeps its funds.
+- **Phase 4** waits for the user: once phase 3 is done, the indicator offers
+  **Sync spam era**, saying why it waits (~15 GB and hours of work, needed
+  only for funds received in 2022–23). The user can pause and resume it. The
+  choice is stored with the account (`spamSync`), so it resumes on later
+  visits until done or paused. Until it's read, funds from those years don't
+  show.
 - **The birthday bounds every phase.** A birthday newer than `setupHeight`
-  ends phase 2 there and leaves phase 3 nothing. One inside the spam era gives
-  phase 3 its first range, then only the spam era down to the birthday.
+  ends phase 2 there and leaves phases 3–4 nothing. One inside the spam era
+  gives phase 3 only its first range, and phase 4 the spam era down to the
+  birthday.
+- **Every sync pauses phases 3–4** and starts them again when it ends, so
+  the one-minute re-sync (`RESYNC_MS`) costs them up to ~25 s a minute:
+  waiting for the chunks in flight, then the sync itself.
 
 ### `setupHeight`
 
@@ -64,21 +75,22 @@ constants:
 | 1,710,000 | 20            | 72            |
 | 2,100,000 | 2,868         | 4,386         |
 
-Ironwood is younger than both. Testnet has no spam range: phase 3's spam range
-is empty.
+Ironwood is younger than both. Testnet has no spam range: phase 4 has
+nothing to read, so testnet goes from phase 3 to done.
 
 ## Workers
 
 | Situation                    | Workers                                     |
 | ---------------------------- | ------------------------------------------- |
 | Phases 1–2                   | one per core                                |
-| Phase 3                      | 2                                           |
+| Phases 3–4                   | 2                                           |
 | Tab hidden                   | 1                                           |
-| "Speed up" pressed (phase 3) | one per core, until "Slow down" or a reload |
+| "Speed up" pressed (3–4)     | one per core, until "Slow down" or a reload |
 | `VITE_ALLOW_CPU_TO_FRY=true` | one per core, always, hidden or not         |
 
 With `navigator.connection.saveData` on (Chromium only; elsewhere treated as
-off), phase 3 waits for the user to opt in.
+off), phase 3 waits for the user to opt in. Phase 4 needs the user anyway, so
+save data doesn't hold it.
 
 ## Progress
 
@@ -96,7 +108,8 @@ height → chunk endpoint.
 
 Each pool's single window `{start, from, to}` becomes three ranges, each with
 its own newest-first cursor: after-spam (top), before-spam, and spam. The
-account also stores `setupDone` and the bound chunks. The
+account also stores `setupDone`, `spamSync` (the user started phase 4 and
+hasn't paused it) and the bound chunks. The
 crawl itself (`crawlChunks`) is unchanged.
 
 ## UI
@@ -112,13 +125,21 @@ the indicator afresh. Tooltip texts:
 - **Phase 3:** "Older history: N%, back to <date>", and "Older history is
   still loading in the background, using less of your computer so it stays
   responsive."
-  - **Speed up:** "Uses your computer's full power until older history is
-    done. It may run warm and slow down other apps meanwhile."
+  - **Speed up:** "Uses your computer's full power until it's done. It may
+    run warm and slow down other apps meanwhile."
   - **Slow down** (once sped up): "Goes back to using less of your computer,
     so it stays responsive."
 - **Paused (`saveData`):** "Older history is paused to save data (about
-  16 GB)." with **Download older history**. A simple state for now, to be
+  750 MB)." with **Download older history**. A simple state for now, to be
   revisited.
+- **Phase 4 waiting:** "Shielded sync completed, except the 2022–23 spam era"
+  (with "N% read" once started), "Those years hold millions of spam
+  transactions: about 15 GB and a few hours of work. You only need them if
+  this account received funds in 2022–23.", and **Sync spam era**, or
+  **Resume spam era** once started.
+- **Phase 4:** "Spam era (2022–23): N%", the same speed controls as phase 3,
+  and **Pause spam era sync** with "You can resume it any time from here."
+- **Done:** "Shielded sync completed" once phase 4 is read too.
 
 ## Expected cost
 

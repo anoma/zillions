@@ -128,6 +128,8 @@ export interface ShieldedScan {
   /** Absent for a pool not scanned yet. */
   scanned: Partial<Record<Pool, PoolScan>>;
   setupDone: boolean;
+  /** Whether the user started the spam era's sync; kept until they pause it. */
+  spamSync?: boolean;
   /** Our sending transactions (`height:tx_index`) whose sends have all been read. */
   sendsRead: string[];
 }
