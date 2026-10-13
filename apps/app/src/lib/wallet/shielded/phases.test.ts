@@ -4,18 +4,9 @@ import type { ShieldedScan } from "../types";
 
 vi.mock("../config", () => ({ NETWORK: "main" }));
 
-const { newPoolScan, progressOf, setupHeightFor } = await import("./phases");
+const { newPoolScan, progressOf } = await import("./phases");
 
 const TIP = 3_500_000;
-const DAY = 1_152;
-
-test("setup ends at the birthday, else a month before the oldest transparent use, else a year back, never in the spam era", () => {
-  expect(setupHeightFor(TIP, 3_200_000, 3_000_000)).toBe(3_200_000);
-  expect(setupHeightFor(TIP, undefined, 3_000_000)).toBe(3_000_000 - 30 * DAY);
-  expect(setupHeightFor(TIP)).toBe(TIP - 365 * DAY);
-  expect(setupHeightFor(TIP, 1_000_000)).toBe(2_100_000);
-});
-
 test("a pool's segments split at the spam era, and the birthday bounds them all", () => {
   expect(newPoolScan("orchard", 3_080, 0)).toEqual({
     top: { floor: 2_868, from: 3_081, to: 3_080 },
@@ -45,9 +36,8 @@ const scan = (): ShieldedScan => {
   };
 };
 
-test("setup's progress waits for where it ends, and weighs a Sapling chunk double", () => {
+test("setup's progress weighs a Sapling chunk double", () => {
   const s = scan();
-  expect(progressOf(s, "setup", TIP)).toEqual({ phase: "setup" });
   s.scanned.orchard!.setup = 2_981;
   s.scanned.sapling!.setup = 4_506;
   // Orchard 81 of 100 read; Sapling 6 of 10, counted twice.

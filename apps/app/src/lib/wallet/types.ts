@@ -117,7 +117,7 @@ export interface PoolScan {
   top: Segment;
   before: Segment;
   spam: Segment;
-  /** The chunk in `top` where setup ends; absent until `setupHeight` is known. */
+  /** The chunk in `top` where setup ends: the build's `SETUP_CHUNKS`, never below `top.floor`. */
   setup?: number;
   /** The oldest block height read in `top`. */
   oldestHeight?: number;
@@ -127,8 +127,6 @@ export interface PoolScan {
 export interface ShieldedScan {
   /** Absent for a pool not scanned yet. */
   scanned: Partial<Record<Pool, PoolScan>>;
-  /** Where setup ends; absent until known. */
-  setupHeight?: number;
   setupDone: boolean;
   /** Our sending transactions (`height:tx_index`) whose sends have all been read. */
   sendsRead: string[];

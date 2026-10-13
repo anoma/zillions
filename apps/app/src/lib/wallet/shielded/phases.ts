@@ -1,6 +1,6 @@
 /**
  * The rules behind the sync's phases (docs/design/sync-phases.md): where the
- * spam era sits, where setup ends, and how far each phase has come.
+ * spam era sits and how far each phase has come.
  */
 
 import { NETWORK } from "../config";
@@ -39,25 +39,6 @@ const SPAM =
         >,
       }
     : undefined;
-
-const BLOCKS_PER_DAY = (24 * 60 * 60) / 75;
-
-/**
- * Where setup ends: the birthday; else the oldest transparent transaction
- * less 30 days; else a year back. Never inside the spam era.
- */
-export function setupHeightFor(
-  tip: number,
-  birthday?: number,
-  oldestTransparent?: number,
-) {
-  const height =
-    birthday ??
-    (oldestTransparent === undefined
-      ? tip - 365 * BLOCKS_PER_DAY
-      : oldestTransparent - 30 * BLOCKS_PER_DAY);
-  return Math.max(Math.round(height), SPAM?.end ?? 0);
-}
 
 /** A pool's segments before anything is read: `last` is its newest chunk, `birthday` the first that can hold its notes. */
 export function newPoolScan(
@@ -117,9 +98,8 @@ export function progressOf(
   };
 
   if (phase === "setup") {
-    if (pools.some(([, p]) => p.setup === undefined)) return { phase };
     for (const [pool, { top, setup }] of pools)
-      add(pool, span(top, setup!, top.to));
+      add(pool, span(top, setup ?? top.floor, top.to));
   } else if (phase === "history") {
     for (const [pool, p] of pools) {
       add(pool, span(p.top, p.top.floor, (p.setup ?? p.top.floor) - 1));

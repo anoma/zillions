@@ -11,6 +11,7 @@ import {
   type TreeSizes,
 } from "../chain/indexer";
 import { outputPositions } from "../chain/lightwalletd";
+import { SETUP_CHUNKS } from "../config";
 import type {
   ChunkWorkerSuccess,
   Note,
@@ -38,8 +39,6 @@ export type ShieldedRun = {
   state: WalletState;
   /** The chain tip this run started at. */
   tip: number;
-  /** Where setup ends, once the transparent side can tell. */
-  setupHeight: Promise<number>;
   /** Workers a phase may use right now. */
   workers: (phase: SyncPhase) => number;
   /** Note and sent-output ids already held, so a re-read chunk can't double them. */
@@ -74,18 +73,24 @@ function applySent(run: ShieldedRun, pool: Pool, sent: SentOutput[]) {
   }
 }
 
-/** Each pool's newest chunk at `sizes`, with its segments set up the first time. */
+/** Each pool's newest chunk at `sizes`, with its segments and setup's end set the first time. */
 async function prepare(run: ShieldedRun, sizes: TreeSizes) {
   const last = Object.fromEntries(
     POOLS.map((pool) => [pool, lastChunk(sizes[pool])]),
   ) as Record<Pool, number>;
   const { scanned } = run.state.scan;
   for (const pool of POOLS) {
-    if (scanned[pool]) continue;
-    const birthday = run.birthday
-      ? await firstChunkFrom(pool, run.birthday, Math.max(last[pool], 0))
-      : 0;
-    scanned[pool] = newPoolScan(pool, last[pool], birthday);
+    if (!scanned[pool]) {
+      const birthday = run.birthday
+        ? await firstChunkFrom(pool, run.birthday, Math.max(last[pool], 0))
+        : 0;
+      scanned[pool] = newPoolScan(pool, last[pool], birthday);
+    }
+    const p = scanned[pool];
+    if (p.setup === undefined) {
+      p.setup = Math.max(p.top.floor, SETUP_CHUNKS[pool]);
+      console.log(`[sync] setup ends at ${pool} chunk ${p.setup}`);
+    }
   }
   return last;
 }
@@ -136,24 +141,6 @@ function crawlSegment(
   });
 }
 
-/** Each pool's chunk where setup ends, once `setupHeight` is known. */
-async function locateSetup(run: ShieldedRun, last: Record<Pool, number>) {
-  const { scan } = run.state;
-  scan.setupHeight ??= await run.setupHeight;
-  for (const pool of POOLS) {
-    const p = scan.scanned[pool]!;
-    if (p.setup !== undefined) continue;
-    const chunk = await firstChunkFrom(
-      pool,
-      scan.setupHeight,
-      Math.max(last[pool], 0),
-    );
-    p.setup = Math.max(p.top.floor, chunk);
-  }
-  const chunks = POOLS.map((pool) => `${pool} ${scan.scanned[pool]!.setup}`);
-  console.log(`[sync] setup ends at chunks: ${chunks.join(", ")}`);
-}
-
 /**
  * Catch-up, then setup until it's done: the chunks minted since the last
  * sync, then, the first time, each pool down to where setup ends. Checks
@@ -200,25 +187,19 @@ export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
     phase = "setup";
     [started, read] = [Date.now(), 0];
     advance();
-    const located = locateSetup(run, last).then(advance);
-    located.catch(() => {});
     for (const pool of POOLS) {
       if (last[pool] < 0) continue;
       const p = scan.scanned[pool]!;
-      // Until `setupHeight` is known, the crawl goes on and stops once it is.
-      const stop = new AbortController();
       await crawlSegment(
         run,
         pool,
-        { ...p.top, floor: p.setup ?? p.top.floor },
+        { ...p.top, floor: p.setup! },
         {
           phase,
-          signal: AbortSignal.any([signal, stop.signal]),
           onChunk: (result) => {
-            p.top.from = Math.min(p.top.from, result.chunk);
+            p.top.from = result.chunk;
             if (result.minHeight !== undefined)
               p.oldestHeight = result.minHeight;
-            if (p.setup !== undefined && result.chunk <= p.setup) stop.abort();
             onChunk(pool)(result);
           },
         },
@@ -226,7 +207,6 @@ export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
       if (signal.aborted) break;
     }
     if (!signal.aborted) {
-      await located;
       scan.setupDone = true;
       console.log(`[sync] setup done: ${read} chunks in ${secs(started)}`);
     }

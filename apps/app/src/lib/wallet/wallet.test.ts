@@ -21,6 +21,8 @@ const chain = vi.hoisted(() => ({
   sent: new Map<string, Sent[]>(),
   blocks: new Map<number, Block>(),
   tip: 3_200,
+  /** The build's `SETUP_CHUNKS`. */
+  setup: { sapling: 0, orchard: 0, ironwood: 0 },
 }));
 
 /** The 32-byte nullifiers packed in `nfs`, as hex. */
@@ -40,7 +42,7 @@ const saved = vi.hoisted(() => ({
 }));
 
 // No spam era: setup reads the whole small chain.
-vi.mock("./config", () => ({ NETWORK: "test" }));
+vi.mock("./config", () => ({ NETWORK: "test", SETUP_CHUNKS: chain.setup }));
 
 vi.mock("@zillions/zcore", () => ({
   default: vi.fn(async () => {}),
@@ -131,7 +133,6 @@ type TransparentCache = import("./transparent").TransparentCache;
 const { fetchBlock } = await import("./chain/lightwalletd");
 const store = await import("./store");
 const { crawlChunks } = await import("./shielded/crawl");
-const { firstChunkFrom } = await import("./chain/indexer");
 
 function block(overrides: Partial<Block> = {}): Block {
   return {
@@ -459,18 +460,10 @@ test("history waits while the browser saves data, then reads what setup left onc
   chain.sizes = { sapling: 0, orchard: 3 * 16_384, ironwood: 0 };
   chain.hits.set("orchard:0", [note("orchard", 3, nf("b1"))]);
   // Setup ends at Orchard chunk 2: chunks 1 and 0 are history.
-  vi.mocked(firstChunkFrom).mockImplementation(async (pool) =>
-    pool === "orchard" ? 2 : 0,
-  );
+  chain.setup.orchard = 2;
   Object.defineProperty(navigator, "connection", {
     value: { saveData: true },
     configurable: true,
-  });
-  // A chunk takes seconds: where setup ends is known before the first lands.
-  const crawl = vi.mocked(crawlChunks).getMockImplementation()!;
-  vi.mocked(crawlChunks).mockImplementation(async (o) => {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    return crawl(o);
   });
   const wallet = new Wallet({ id: "k", ufvk: "uview" });
   const phases: string[] = [];
@@ -486,6 +479,5 @@ test("history waits while the browser saves data, then reads what setup left onc
   expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
 
   Object.defineProperty(navigator, "connection", { value: undefined });
-  vi.mocked(firstChunkFrom).mockImplementation(async () => 0);
-  vi.mocked(crawlChunks).mockImplementation(crawl);
+  chain.setup.orchard = 0;
 });
