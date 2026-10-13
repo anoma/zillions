@@ -46,9 +46,11 @@ work.
   ends phase 2 there and leaves phases 3–4 nothing. One inside the spam era
   gives phase 3 only its first range, and phase 4 the spam era down to the
   birthday.
-- **Every sync pauses phases 3–4** and starts them again when it ends, so
-  the one-minute re-sync (`RESYNC_MS`) costs them up to ~25 s a minute:
-  waiting for the chunks in flight, then the sync itself.
+- **Every sync pauses phases 3–4** and starts them again when it ends:
+  waiting for the chunks in flight, then the sync itself, ~10 s on 1 worker.
+  So the one-minute re-sync (`RESYNC_MS`) holds off while phases 3–4 run,
+  and new activity then shows once they end or on a refresh. The first sync
+  of a visit, and a tap on the indicator, still run at once.
 
 ### `setupHeight`
 
@@ -164,3 +166,9 @@ slower.
 - A real design for the paused state.
 - PR #53's field-multiplication patch lowers every CPU number above; no code
   change here.
+- Decrypt only what's new in a pool's newest chunk. Catch-up re-reads it
+  whole (11–13k notes, ~6 s of one core; ~28 s for all three on the first
+  catch-up of a visit). Keep, per pool, how many of its notes were tried and a
+  hash of their bytes; while the hash still matches, a reorg didn't touch
+  them, so only the rest is tried, else the whole chunk again. Needs
+  `try_decrypt` in zcore to start at a given note (a wasm rebuild).

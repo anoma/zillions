@@ -114,8 +114,8 @@ flowchart TB
   user taps "Download older history". The spam era needs the user's tap
   anyway.
 - **Re-sync**: a minute after each sync ends, the wallet syncs again for new
-  activity. It pauses history or the spam era meanwhile, and catch-up skips
-  pools with nothing new.
+  activity, unless history or the spam era is running (a sync would pause
+  it); then it waits until they end. Catch-up skips pools with nothing new.
 - **`VITE_ALLOW_CPU_TO_FRY=true`** runs every phase on every core, hidden tab
   or not. Handy for testing a full sync quickly.
 - **Birthday**: a created account gets one from the device clock; an imported

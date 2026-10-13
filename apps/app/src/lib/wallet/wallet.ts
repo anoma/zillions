@@ -199,7 +199,7 @@ export class Wallet {
    * Brings the wallet up to the chain tip: new chunks, and setup until it's
    * done. History then goes on in the background. A call while one runs
    * shares it, and pauses history meanwhile. It runs again by itself a minute
-   * after it ends.
+   * after it ends, once nothing runs in the background.
    */
   sync = dedupe(async () => {
     clearTimeout(this.#resync);
@@ -212,13 +212,19 @@ export class Wallet {
     } finally {
       // Counted from the end, so a slow sync never queues another.
       if (!this.#abort.signal.aborted) {
-        this.#resync = setTimeout(
-          () => this.sync().catch((e) => console.error("[sync] failed", e)),
-          RESYNC_MS,
-        );
+        this.#resync = setTimeout(this.#resyncTick, RESYNC_MS);
       }
     }
   });
+
+  /** The timed sync, held back while history or the spam era runs: a sync would pause it. */
+  #resyncTick = () => {
+    if (this.#history) {
+      this.#resync = setTimeout(this.#resyncTick, RESYNC_MS);
+      return;
+    }
+    this.sync().catch((e) => console.error("[sync] failed", e));
+  };
 
   #syncRecent = async () => {
     const startTime = Date.now();

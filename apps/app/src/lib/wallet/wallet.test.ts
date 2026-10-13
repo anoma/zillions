@@ -507,3 +507,37 @@ test("syncs again a minute after a sync ends, never queuing one behind a slow sy
   wallet.free();
   vi.useRealTimers();
 });
+
+test("holds the timed sync while history runs, and syncs once it ends", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  chain.sizes = { sapling: 0, orchard: 3 * 16_384, ironwood: 0 };
+  // Setup ends at Orchard chunk 2: history reads chunks 1 and 0, until released.
+  chain.setup.orchard = 2;
+  const crawl = vi.mocked(crawlChunks).getMockImplementation()!;
+  let release = () => {};
+  vi.mocked(crawlChunks).mockImplementation(async (o) => {
+    if (o.to === 1) {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+        o.signal?.addEventListener("abort", () => resolve());
+      });
+    }
+    return crawl(o);
+  });
+  const tips = vi.mocked(fetchLatestHeight);
+  tips.mockClear();
+  const wallet = new Wallet({ id: "h", ufvk: "uview" });
+
+  await wallet.sync();
+  await vi.advanceTimersByTimeAsync(3 * 60_000);
+  expect(tips).toHaveBeenCalledTimes(1);
+
+  release();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(tips).toHaveBeenCalledTimes(2);
+
+  wallet.free();
+  vi.useRealTimers();
+  chain.setup.orchard = 0;
+  vi.mocked(crawlChunks).mockImplementation(crawl);
+});
