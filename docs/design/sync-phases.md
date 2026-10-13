@@ -114,7 +114,7 @@ spend lookup says unspent. Tooltip texts:
   - **Slow down** (once sped up): "Goes back to using less of your computer,
     so it stays responsive."
 - **Paused (`saveData`):** "Older history is paused to save data (about
-  15 GB)." with **Download older history**. The dot does not pulse; a simple
+  16 GB)." with **Download older history**. The dot does not pulse; a simple
   static state for now, to be revisited.
 
 ## Expected cost
@@ -126,13 +126,13 @@ per Orchard or Ironwood chunk (2.42 MB) and ~10.3 s per Sapling chunk
 (1.90 MB) on one core. Full power gave ~4–6× one core. Phones are likely 2–3×
 slower.
 
-| Range                       | Ironwood / Orchard / Sapling chunks | Download | CPU     | Full power | 2 workers | 1 worker |
-| --------------------------- | ----------------------------------- | -------- | ------- | ---------- | --------- | -------- |
-| Last year                   | 44 / 75 / 11                        | ~310 MB  | ~13 min | ~2–3 min   | ~7 min    | ~13 min  |
-| After the spam (2.1M → tip) | 44 / 213 / 130                      | ~870 MB  | ~45 min | ~8–11 min  | ~23 min   | ~45 min  |
-| Spam (1.71M → 2.1M)         | 0 / 2,848 / 4,314                   | ~15.1 GB | ~16.5 h | ~3.3 h     | ~8 h      | ~16.5 h  |
-| Before the spam (< 1.71M)   | 0 / 20 / 72                         | ~185 MB  | ~14 min | ~3 min     | ~7 min    | ~14 min  |
-| Everything                  | 44 / 3,081 / 4,516                  | ~16.1 GB | ~17.6 h | ~3.5 h     | ~9 h      | ~18 h    |
+| Range                     | Ironwood / Orchard / Sapling chunks | Download | CPU     | Full power | 2 workers | 1 worker |
+| ------------------------- | ----------------------------------- | -------- | ------- | ---------- | --------- | -------- |
+| Last year (setup)         | 44 / 75 / 11                        | ~310 MB  | ~13 min | ~2–3 min   | ~7 min    | ~13 min  |
+| A year back → 2.1M        | 0 / 138 / 119                       | ~560 MB  | ~33 min | ~6–8 min   | ~17 min   | ~33 min  |
+| Spam (1.71M → 2.1M)       | 0 / 2,848 / 4,314                   | ~15.1 GB | ~16.5 h | ~3.3 h     | ~8 h      | ~16.5 h  |
+| Before the spam (< 1.71M) | 0 / 20 / 72                         | ~185 MB  | ~14 min | ~3 min     | ~7 min    | ~14 min  |
+| Everything                | 44 / 3,081 / 4,516                  | ~16.1 GB | ~17.6 h | ~3.5 h     | ~9 h      | ~18 h    |
 
 ## Later
 

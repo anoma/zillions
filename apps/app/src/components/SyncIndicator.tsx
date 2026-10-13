@@ -139,7 +139,7 @@ export function SyncIndicator() {
           )}
           {phase === "paused" && (
             <div className="font-normal space-y-2">
-              <div>Older history is paused to save data (about 15 GB).</div>
+              <div>Older history is paused to save data (about 16 GB).</div>
               <button className={actionClass} onClick={wallet.downloadHistory}>
                 Download older history
               </button>
