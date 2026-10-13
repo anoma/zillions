@@ -7,6 +7,10 @@
  * answers via the trusted `approvals/resolve*` channels (its tab id comes from
  * the message sender), which settles the parked promise and so the dapp's
  * original request. Closing the popup rejects with "Window closed".
+ *
+ * Each origin may have one popup open at a time, and at most
+ * `MAX_OPEN_APPROVALS` popups are open overall, so a page cannot flood the
+ * user with windows.
  */
 import { v4 as uuid } from "uuid";
 import browser, { Windows } from "webextension-polyfill";
@@ -27,6 +31,8 @@ type Resolver = {
   resolve: (result?: unknown) => void;
   reject: (error?: unknown) => void;
 };
+
+const MAX_OPEN_APPROVALS = 3;
 
 /**
  * The active (parent) account and its derived children: the only accounts a
@@ -51,6 +57,16 @@ export class ApprovalsService {
    * with the worker anyway (its resolver lives in `resolverMap`).
    */
   protected readonly pendingTxs = new Map<string, PendingSignTx>();
+
+  /**
+   * Origins with an approval popup open, mapped to its window id. Reserved
+   * (window id undefined) before the window exists, so concurrent requests
+   * from one origin cannot all pass the check.
+   */
+  protected readonly popupWindowByOrigin = new Map<
+    string,
+    number | undefined
+  >();
 
   constructor(
     protected readonly localStorage: LocalStorage,
@@ -87,9 +103,11 @@ export class ApprovalsService {
     const needsApproval = !(await this.isConnectionApproved(origin));
 
     if (needsApproval || isLocked) {
-      return this.launchApprovalPopup(approvalRoutes.approveConnection(), {
-        interfaceOrigin: origin,
-      });
+      return this.launchApprovalPopup(
+        origin,
+        approvalRoutes.approveConnection(),
+        { interfaceOrigin: origin }
+      );
     }
   }
 
@@ -98,9 +116,11 @@ export class ApprovalsService {
     const isConnected = await this.isConnectionApproved(origin);
 
     if (isConnected) {
-      return this.launchApprovalPopup(approvalRoutes.approveDisconnection(), {
-        interfaceOrigin: origin,
-      });
+      return this.launchApprovalPopup(
+        origin,
+        approvalRoutes.approveDisconnection(),
+        { interfaceOrigin: origin }
+      );
     }
   }
 
@@ -149,14 +169,21 @@ export class ApprovalsService {
     // The resolved address, so the summary and the signature use one account.
     this.pendingTxs.set(msgId, { pczt, signer: record.address });
 
-    return this.launchApprovalPopup(
-      approvalRoutes.approveSignTx(
-        msgId,
-        encodeURIComponent(origin),
-        record.type,
-        record.address
-      )
-    );
+    try {
+      return await this.launchApprovalPopup<string>(
+        origin,
+        approvalRoutes.approveSignTx(
+          msgId,
+          encodeURIComponent(origin),
+          record.type,
+          record.address
+        )
+      );
+    } finally {
+      // Also covers a refused launch and a closed window, which never reach
+      // submitSignTx/rejectSignTx.
+      this.pendingTxs.delete(msgId);
+    }
   }
 
   /**
@@ -174,6 +201,7 @@ export class ApprovalsService {
       throw new Error(`Account for ${address} not found!`);
     }
     return this.launchApprovalPopup(
+      origin,
       approvalRoutes.approveUpdateDefaultAccount(),
       { address, alias: record.alias }
     );
@@ -362,23 +390,50 @@ export class ApprovalsService {
   };
 
   private launchApprovalPopup = async <T>(
+    origin: string,
     route: string,
     params?: Record<string, string>
   ): Promise<T> => {
+    if (this.popupWindowByOrigin.has(origin)) {
+      const windowId = this.popupWindowByOrigin.get(origin);
+      if (windowId !== undefined) {
+        void browser.windows
+          .update(windowId, { focused: true })
+          .catch(() => undefined);
+      }
+      throw new Error("A request from this site is already pending");
+    }
+    if (this.popupWindowByOrigin.size >= MAX_OPEN_APPROVALS) {
+      throw new Error(
+        "Too many pending Keychain approvals; resolve one and try again"
+      );
+    }
+    // No await between the checks above and this reservation.
+    this.popupWindowByOrigin.set(origin, undefined);
+
     const baseUrl = `${browser.runtime.getURL("/approvals.html")}#${route}`;
     const url = params ? paramsToUrl(baseUrl, params) : baseUrl;
 
-    const window = await this.createPopup(url);
-    const popupTabId = this.getPopupTabId(window);
+    let popupTabId: number;
+    try {
+      const window = await this.createPopup(url);
+      popupTabId = this.getPopupTabId(window);
+      this.popupWindowByOrigin.set(origin, window.id);
+    } catch (e) {
+      this.popupWindowByOrigin.delete(origin);
+      throw e;
+    }
 
     return new Promise<T>((resolve, reject) => {
       this.resolverMap[popupTabId] = {
         resolve: (args) => {
           this.removeResolver(popupTabId);
+          this.popupWindowByOrigin.delete(origin);
           return resolve(args as T);
         },
         reject: (args) => {
           this.removeResolver(popupTabId);
+          this.popupWindowByOrigin.delete(origin);
           return reject(args);
         },
       };
