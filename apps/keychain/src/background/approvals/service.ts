@@ -102,6 +102,10 @@ export class ApprovalsService {
    * vault is locked) and wait for the user's verdict.
    */
   async approveConnection(origin: string): Promise<void> {
+    // Without a password the approval popup's Login gate can never succeed.
+    if (!(await this.vaultService.passwordInitialized())) {
+      throw new Error("Keychain is not set up");
+    }
     const isLocked = await this.vaultService.isLocked();
     const needsApproval = !(await this.isConnectionApproved(origin));
 
