@@ -47,12 +47,12 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 
 **Finding notes**
 
-| Function            | Does                                                                  |
-| ------------------- | --------------------------------------------------------------------- |
-| `try_decrypt`       | Trial-decrypts one chunk of compact ciphertexts (2¹⁴ notes per chunk) |
-| `try_decrypt_full`  | Reads a chunk in full: memos and the wallet's sends                   |
-| `parse_transaction` | A raw transaction's transparent side and the nullifiers it spends     |
-| `script_address`    | The address a transparent output's script pays                        |
+| Function            | Does                                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `try_decrypt`       | Trial-decrypts one chunk of compact ciphertexts (2¹⁴ notes per chunk), skipping notes an earlier read tried while they are unchanged |
+| `try_decrypt_full`  | Reads a chunk in full: memos and the wallet's sends                                                                                  |
+| `parse_transaction` | A raw transaction's transparent side and the nullifiers it spends                                                                    |
+| `script_address`    | The address a transparent output's script pays                                                                                       |
 
 **Sending**, in the order a send runs:
 

@@ -159,9 +159,10 @@ export async function crawlRecent(
   const advance = () => run.onAdvance(progressOf(scan, phase, run.tip));
   const spends = spendChecks(run, advance);
   spends.check(state.notes.filter((n) => n.spend.status !== "spent"));
-  let [started, read] = [Date.now(), 0];
+  let [started, read, skipped] = [Date.now(), 0, 0];
   const onChunk = (pool: Pool) => (result: ChunkWorkerSuccess) => {
     read++;
+    skipped += result.skipped ?? 0;
     spends.check(applyChunk(run, pool, result));
     advance();
   };
@@ -181,12 +182,15 @@ export async function crawlRecent(
         signal,
         workers: () => run.workers(phase),
         onChunk: onChunk(pool),
+        tried: scan.scanned[pool]!.tried,
       });
       if (signal.aborted) break;
     }
     top.to = last[pool];
   }
-  console.log(`[sync] catch-up: ${read} chunks in ${secs(started)}`);
+  console.log(
+    `[sync] catch-up: ${read} chunks in ${secs(started)}, ${skipped} notes skipped as tried`,
+  );
 
   if (!scan.setupDone && !signal.aborted) {
     phase = "setup";
@@ -279,8 +283,10 @@ export async function crawlHistory(
 function applyChunk(
   run: ShieldedRun,
   pool: Pool,
-  { chunk, hits, sent }: ChunkWorkerSuccess,
+  { chunk, hits, sent, tried }: ChunkWorkerSuccess,
 ) {
+  const p = run.state.scan.scanned[pool]!;
+  if (tried && tried.chunk >= (p.tried?.chunk ?? -1)) p.tried = tried;
   // A worker reads a chunk in full exactly when it holds a note of ours.
   if (hits.length) run.readChunks.add(`${pool}:${chunk}`);
   const known = run.applied.size;
