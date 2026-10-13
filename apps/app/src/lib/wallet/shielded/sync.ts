@@ -15,56 +15,52 @@ import type {
   ChunkWorkerSuccess,
   Note,
   Pool,
+  Segment,
   SentOutput,
-  ShieldedScan,
   TxLocator,
   WalletState,
 } from "../types";
 import { crawlChunks, workerChannel } from "./crawl";
+import {
+  newPoolScan,
+  POOLS,
+  progressOf,
+  type SyncPhase,
+  type SyncProgress,
+} from "./phases";
 import { checkSpends } from "./spends";
 
-/** Newest pool first: that's where recent activity lands. */
-export const POOLS = [
-  "ironwood",
-  "orchard",
-  "sapling",
-] as const satisfies Pool[];
-
-/** Each pool's last chunk, possibly still filling; -1 for an empty pool. */
-export type LastChunks = Record<Pool, number>;
-
-/** How much of the chunks from each pool's start to `last` is read, 0 to 100. */
-export function percentageOf(
-  scanned: ShieldedScan["scanned"],
-  last: LastChunks,
-) {
-  let [done, total] = [0, 0];
-  for (const pool of POOLS) {
-    const scan = scanned[pool];
-    if (!scan) continue;
-    done += Math.max(0, scan.to - scan.from + 1);
-    total += Math.max(0, last[pool] + 1 - scan.start);
-  }
-  return total > 0 ? Math.min(100, (done / total) * 100) : 100;
-}
-
-/** One sync's shielded work, over `state`. */
+/** One run of shielded work, over `state`. */
 export type ShieldedRun = {
   ufvk: string;
   /** Block height below which nothing is crawled. Absent means full history. */
   birthday?: number;
   state: WalletState;
+  /** The chain tip this run started at. */
+  tip: number;
+  /** Where setup ends, once the transparent side can tell. */
+  setupHeight: Promise<number>;
+  /** Workers a phase may use right now. */
+  workers: (phase: SyncPhase) => number;
   /** Note and sent-output ids already held, so a re-read chunk can't double them. */
   applied: Set<string>;
-  /** Chunks read in full this sync, as `pool:chunk`: their sends are in. */
+  /** Chunks read in full this run, as `pool:chunk`: their sends are in. */
   readChunks: Set<string>;
   lookups: ReturnType<typeof workerChannel>;
   signal: AbortSignal;
   /** New notes, sends or spends: their blocks are worth fetching now. */
   onFound: () => void;
-  /** The cursor or what's known moved: worth saving and announcing. */
-  onAdvance: () => void;
+  /** The cursors or what's known moved: worth saving and announcing. */
+  onAdvance: (progress: SyncProgress) => void;
 };
+
+const secs = (since: number) => `${((Date.now() - since) / 1000).toFixed(1)} s`;
+
+const SEGMENTS = {
+  top: "after the spam era",
+  before: "before the spam era",
+  spam: "the spam era",
+} as const;
 
 const id = (state: WalletState, pool: Pool, position: number) =>
   `${state.id}_${pool}_${position}`;
@@ -78,81 +74,214 @@ function applySent(run: ShieldedRun, pool: Pool, sent: SentOutput[]) {
   }
 }
 
-/**
- * Reads each pool's chunks newest-first: those minted since the last sync,
- * then the history below, down to the birthday's. Checks every note found
- * or still unspent for a spend.
- */
-export async function crawlShielded(run: ShieldedRun, sizes: TreeSizes) {
-  const { state, signal } = run;
+/** Each pool's newest chunk at `sizes`, with its segments set up the first time. */
+async function prepare(run: ShieldedRun, sizes: TreeSizes) {
   const last = Object.fromEntries(
     POOLS.map((pool) => [pool, lastChunk(sizes[pool])]),
-  ) as LastChunks;
-  const { scanned } = state.scan;
+  ) as Record<Pool, number>;
+  const { scanned } = run.state.scan;
   for (const pool of POOLS) {
     if (scanned[pool]) continue;
-    const start =
-      run.birthday === undefined
-        ? 0
-        : await firstChunkFrom(pool, run.birthday, last[pool]);
-    scanned[pool] = { start, from: last[pool] + 1, to: last[pool] };
+    const birthday = run.birthday
+      ? await firstChunkFrom(pool, run.birthday, Math.max(last[pool], 0))
+      : 0;
+    scanned[pool] = newPoolScan(pool, last[pool], birthday);
   }
-  const advance = () => {
-    state.scan.percentage = percentageOf(scanned, last);
-    run.onAdvance();
-  };
+  return last;
+}
 
-  // Off the crawl, whose `onChunk` must stay synchronous; a failed check retries next sync.
+/**
+ * Spend checks for the notes a crawl finds, chained off it: its `onChunk`
+ * must stay synchronous. A failed check retries next sync.
+ */
+function spendChecks(run: ShieldedRun, advance: () => void) {
   let checking: Promise<unknown> = Promise.resolve();
-  const check = (notes: Note[]) => {
-    if (!notes.length) return;
-    checking = checking
-      .then(() => checkSpends(notes, signal))
-      .then(() => {
-        run.onFound();
-        advance();
-      })
-      .catch((err) => console.error("[sync] spend check failed", err));
+  return {
+    check: (notes: Note[]) => {
+      if (!notes.length) return;
+      checking = checking
+        .then(() => checkSpends(notes, run.signal))
+        .then(() => {
+          run.onFound();
+          advance();
+        })
+        .catch((err) => console.error("[sync] spend check failed", err));
+    },
+    done: () => checking,
   };
-  check(state.notes.filter((n) => n.spend.status !== "spent"));
+}
+
+/** Reads `segment` down to its floor, newest first, moving its cursor chunk by chunk. */
+function crawlSegment(
+  run: ShieldedRun,
+  pool: Pool,
+  segment: Segment,
+  options: {
+    phase: SyncPhase;
+    signal?: AbortSignal;
+    onChunk: (result: ChunkWorkerSuccess) => void;
+  },
+) {
+  return crawlChunks({
+    ufvk: run.ufvk,
+    pool,
+    from: segment.floor,
+    to: segment.from - 1,
+    signal: options.signal ?? run.signal,
+    workers: () => run.workers(options.phase),
+    onChunk: (result) => {
+      segment.from = result.chunk;
+      options.onChunk(result);
+    },
+  });
+}
+
+/** Each pool's chunk where setup ends, once `setupHeight` is known. */
+async function locateSetup(run: ShieldedRun, last: Record<Pool, number>) {
+  const { scan } = run.state;
+  scan.setupHeight ??= await run.setupHeight;
+  for (const pool of POOLS) {
+    const p = scan.scanned[pool]!;
+    if (p.setup !== undefined) continue;
+    const chunk = await firstChunkFrom(
+      pool,
+      scan.setupHeight,
+      Math.max(last[pool], 0),
+    );
+    p.setup = Math.max(p.top.floor, chunk);
+  }
+  const chunks = POOLS.map((pool) => `${pool} ${scan.scanned[pool]!.setup}`);
+  console.log(`[sync] setup ends at chunks: ${chunks.join(", ")}`);
+}
+
+/**
+ * Catch-up, then setup until it's done: the chunks minted since the last
+ * sync, then, the first time, each pool down to where setup ends. Checks
+ * every note found or still unspent for a spend.
+ */
+export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
+  const { state, signal } = run;
+  const { scan } = state;
+  const last = await prepare(run, sizes);
+  let phase: SyncPhase = "catch-up";
+  const advance = () => run.onAdvance(progressOf(scan, phase, run.tip));
+  const spends = spendChecks(run, advance);
+  spends.check(state.notes.filter((n) => n.spend.status !== "spent"));
+  let [started, read] = [Date.now(), 0];
+  const onChunk = (pool: Pool) => (result: ChunkWorkerSuccess) => {
+    read++;
+    spends.check(applyChunk(run, pool, result));
+    advance();
+  };
 
   for (const pool of POOLS) {
     if (last[pool] < 0) continue;
-    const scan = scanned[pool]!;
-    const onChunk = (result: ChunkWorkerSuccess) =>
-      check(applyChunk(run, pool, result));
-
-    if (scan.from > scan.to) {
-      scan.from = last[pool] + 1;
+    const { top } = scan.scanned[pool]!;
+    if (top.from > top.to) {
+      top.from = last[pool] + 1;
     } else {
+      // Down to the last sync's newest chunk again: it may have been filling.
       await crawlChunks({
         ufvk: run.ufvk,
         pool,
-        from: scan.to,
+        from: top.to,
         to: last[pool],
         signal,
-        onChunk,
+        workers: () => run.workers(phase),
+        onChunk: onChunk(pool),
       });
       if (signal.aborted) break;
     }
-    scan.to = last[pool];
-    advance();
-
-    await crawlChunks({
-      ufvk: run.ufvk,
-      pool,
-      from: scan.start,
-      to: scan.from - 1,
-      signal,
-      onChunk: (result) => {
-        onChunk(result);
-        scan.from = result.chunk;
-        advance();
-      },
-    });
-    if (signal.aborted) break;
+    top.to = last[pool];
   }
-  await checking;
+  console.log(`[sync] catch-up: ${read} chunks in ${secs(started)}`);
+
+  if (!scan.setupDone && !signal.aborted) {
+    phase = "setup";
+    [started, read] = [Date.now(), 0];
+    advance();
+    const located = locateSetup(run, last).then(advance);
+    located.catch(() => {});
+    for (const pool of POOLS) {
+      if (last[pool] < 0) continue;
+      const p = scan.scanned[pool]!;
+      // Until `setupHeight` is known, the crawl goes on and stops once it is.
+      const stop = new AbortController();
+      await crawlSegment(
+        run,
+        pool,
+        { ...p.top, floor: p.setup ?? p.top.floor },
+        {
+          phase,
+          signal: AbortSignal.any([signal, stop.signal]),
+          onChunk: (result) => {
+            p.top.from = Math.min(p.top.from, result.chunk);
+            if (result.minHeight !== undefined)
+              p.oldestHeight = result.minHeight;
+            if (p.setup !== undefined && result.chunk <= p.setup) stop.abort();
+            onChunk(pool)(result);
+          },
+        },
+      );
+      if (signal.aborted) break;
+    }
+    if (!signal.aborted) {
+      await located;
+      scan.setupDone = true;
+      console.log(`[sync] setup done: ${read} chunks in ${secs(started)}`);
+    }
+  }
+  await spends.done();
+  advance();
+}
+
+/**
+ * History: what setup left above the spam era, then what lies before it,
+ * then the spam era itself, each in pool order. True once all of it is read.
+ */
+export async function crawlHistory(run: ShieldedRun, sizes: TreeSizes) {
+  const { state, signal } = run;
+  const { scan } = state;
+  await prepare(run, sizes);
+  const advance = () => run.onAdvance(progressOf(scan, "history", run.tip));
+  const spends = spendChecks(run, advance);
+  advance();
+  const left = POOLS.flatMap((pool) =>
+    (["top", "before", "spam"] as const).flatMap((segment) => {
+      const { from, floor } = scan.scanned[pool]![segment];
+      return from > floor
+        ? [`${pool} ${SEGMENTS[segment]} ${from - floor}`]
+        : [];
+    }),
+  );
+  console.log(`[sync] history left (chunks): ${left.join(", ") || "none"}`);
+
+  for (const segment of ["top", "before", "spam"] as const) {
+    for (const pool of POOLS) {
+      const p = scan.scanned[pool]!;
+      const [started, from] = [Date.now(), p[segment].from];
+      await crawlSegment(run, pool, p[segment], {
+        phase: "history",
+        onChunk: (result) => {
+          if (segment === "top" && result.minHeight !== undefined) {
+            p.oldestHeight = result.minHeight;
+          }
+          spends.check(applyChunk(run, pool, result));
+          advance();
+        },
+      });
+      if (from > p[segment].from) {
+        const read = from - p[segment].from;
+        console.log(
+          `[sync] history ${pool} ${SEGMENTS[segment]}: ${read} chunks in ${secs(started)}`,
+        );
+      }
+      if (signal.aborted) return false;
+    }
+  }
+  await spends.done();
+  advance();
+  return !signal.aborted;
 }
 
 /** Takes one chunk's notes and sends; returns the notes new to us. */

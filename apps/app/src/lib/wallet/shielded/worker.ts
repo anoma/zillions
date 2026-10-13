@@ -25,12 +25,12 @@ worker.onmessage = async (e) => {
   try {
     await (ready ??= initZcore());
     const body = await fetchChunk("ciphertexts", chunk, pool);
-    const hits: { index: number }[] = sends
-      ? []
-      : try_decrypt(NETWORK, ufvk, pool, chunk, body).hits;
+    const { hits, min_height: minHeight } = (
+      sends ? { hits: [] } : try_decrypt(NETWORK, ufvk, pool, chunk, body)
+    ) as { hits: { index: number }[]; min_height?: number };
 
     if (!hits.length && !sends) {
-      worker.postMessage({ chunk, hits: [], sent: [] });
+      worker.postMessage({ chunk, hits: [], sent: [], minHeight });
       return;
     }
 
@@ -49,7 +49,7 @@ worker.onmessage = async (e) => {
       outgoing,
       Uint32Array.from(hits, (hit) => hit.index),
     );
-    worker.postMessage({ chunk, ...full });
+    worker.postMessage({ chunk, ...full, minHeight });
   } catch (err) {
     worker.postMessage({ chunk, error: String(err) });
   }

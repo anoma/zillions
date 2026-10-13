@@ -90,6 +90,8 @@ export type ChunkWorkerSuccess = {
   chunk: number;
   hits: DecryptedNote[];
   sent: SentOutput[];
+  /** The chunk's oldest block height; absent for a sends read. */
+  minHeight?: number;
 };
 
 export type ChunkWorkerError = {
@@ -100,20 +102,34 @@ export type ChunkWorkerError = {
 /** Worker → main: a chunk's result, or the error that chunk hit. */
 export type ChunkWorkerResponse = ChunkWorkerSuccess | ChunkWorkerError;
 
-/** How far a pool's newest-first scan has come: chunks `from` to `to` are read, none when `from > to`. */
-export interface PoolScan {
-  /** The first chunk that can hold the wallet's notes: the birthday's, or 0. */
-  start: number;
+/** Chunks read newest-first: `from` to `to` are read (none when `from > to`), `floor` to `from - 1` are left. */
+export interface Segment {
+  floor: number;
   from: number;
-  /** The newest chunk read, read again next sync: it may have been filling. */
   to: number;
+}
+
+/**
+ * A pool's chunks in three segments: after the spam era (`top`, which grows
+ * with the chain), before it, and the spam era itself.
+ */
+export interface PoolScan {
+  top: Segment;
+  before: Segment;
+  spam: Segment;
+  /** The chunk in `top` where setup ends; absent until `setupHeight` is known. */
+  setup?: number;
+  /** The oldest block height read in `top`. */
+  oldestHeight?: number;
 }
 
 /** How far the shielded sync has come. */
 export interface ShieldedScan {
-  percentage: number;
   /** Absent for a pool not scanned yet. */
   scanned: Partial<Record<Pool, PoolScan>>;
+  /** Where setup ends; absent until known. */
+  setupHeight?: number;
+  setupDone: boolean;
   /** Our sending transactions (`height:tx_index`) whose sends have all been read. */
   sendsRead: string[];
 }
@@ -121,7 +137,7 @@ export interface ShieldedScan {
 /** Everything the wallet keeps for one account, stored as a whole. */
 export interface WalletState {
   /** Bumped when the shape changes: an older state is dropped and synced again. */
-  version: 2;
+  version: 3;
   id: string;
   notes: Note[];
   sent: Sent[];
