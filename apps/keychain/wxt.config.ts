@@ -118,11 +118,12 @@ export default defineConfig({
       extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
     },
     // `injected.js` is the MAIN-world provider script the content script
-    // injects into pages (sets `window.zc`), and `crypto_bg.wasm`
-    // (@zillions/crypto). zcore's wasm only loads in extension pages.
+    // injects into pages (sets `window.zc`). Keep this list minimal: every
+    // entry is fetchable by any site and lets it detect the wallet. The wasm
+    // binaries only load in extension contexts, which don't need an entry.
     web_accessible_resources: [
       {
-        resources: ["injected.js", "crypto_bg.wasm"],
+        resources: ["injected.js"],
         matches: ["<all_urls>"],
       },
     ],
