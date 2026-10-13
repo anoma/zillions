@@ -8,6 +8,7 @@ import type {
   ChunkWorkerResponse,
   ChunkWorkerSuccess,
   Pool,
+  Tried,
 } from "../types";
 import DecryptWorker from "./worker.ts?worker";
 
@@ -57,8 +58,10 @@ export async function crawlChunks(options: {
   /** Called once per chunk, in descending chunk order. Must stay synchronous:
    *  an await here would let concurrent workers interleave out of order. */
   onChunk: (result: ChunkWorkerSuccess) => void;
+  /** Notes already tried in one of these chunks, for its read to skip. */
+  tried?: Tried;
 }) {
-  const { ufvk, pool, from, to, signal, workers, onChunk } = options;
+  const { ufvk, pool, from, to, signal, workers, onChunk, tried } = options;
 
   const total = to - from + 1;
   if (total <= 0) return;
@@ -82,9 +85,10 @@ export async function crawlChunks(options: {
           }
           const channel = (channels[i] ??= workerChannel());
           const chunk = nextChunk--;
-          release(chunk, await channel.run({ ufvk, chunk, pool })).forEach(
-            onChunk,
-          );
+          release(
+            chunk,
+            await channel.run({ ufvk, chunk, pool, tried }),
+          ).forEach(onChunk);
         }
       }),
     );

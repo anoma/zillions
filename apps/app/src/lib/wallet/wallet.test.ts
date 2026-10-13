@@ -541,3 +541,34 @@ test("holds the timed sync while history runs, and syncs once it ends", async ()
   chain.setup.orchard = 0;
   vi.mocked(crawlChunks).mockImplementation(crawl);
 });
+
+test("catch-up hands the newest chunk's tried notes to its next read", async () => {
+  chain.sizes = { sapling: 0, orchard: 100, ironwood: 0 };
+  const crawl = vi.mocked(crawlChunks).getMockImplementation()!;
+  vi.mocked(crawlChunks).mockImplementation(async (o) =>
+    crawl({
+      ...o,
+      onChunk: (r) =>
+        o.onChunk({
+          ...r,
+          tried: { chunk: r.chunk, count: chain.sizes.orchard, digest: "d" },
+        }),
+    }),
+  );
+  const wallet = new Wallet({ id: "t", ufvk: "uview" });
+  await wallet.sync();
+
+  vi.mocked(crawlChunks).mockClear();
+  // A new object, as the indexer's answer is: the last sync's sizes stay as read.
+  chain.sizes = { ...chain.sizes, orchard: 150 };
+  await wallet.sync();
+  const [catchUp] = vi.mocked(crawlChunks).mock.calls[0];
+  expect([catchUp.from, catchUp.to, catchUp.tried]).toEqual([
+    0,
+    0,
+    { chunk: 0, count: 100, digest: "d" },
+  ]);
+
+  wallet.free();
+  vi.mocked(crawlChunks).mockImplementation(crawl);
+});

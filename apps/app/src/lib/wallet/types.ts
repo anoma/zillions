@@ -55,6 +55,15 @@ export interface ChunkRequest {
   pool: Pool;
   /** Reads only what the chunk shows we sent, even with no note of ours in it. */
   sends?: true;
+  /** The notes an earlier read tried, skipped when it was this chunk and they're unchanged. */
+  tried?: Tried;
+}
+
+/** How many of a chunk's notes a read tried, and a fingerprint of their bytes. */
+export interface Tried {
+  chunk: number;
+  count: number;
+  digest: string;
 }
 
 /** A transaction we broadcast that isn't seen mined yet. */
@@ -92,6 +101,9 @@ export type ChunkWorkerSuccess = {
   sent: SentOutput[];
   /** The chunk's oldest block height; absent for a sends read. */
   minHeight?: number;
+  /** What this read tried, and how many notes it skipped as tried before; absent for a sends read. */
+  tried?: Tried;
+  skipped?: number;
 };
 
 export type ChunkWorkerError = {
@@ -121,6 +133,8 @@ export interface PoolScan {
   setup?: number;
   /** The oldest block height read in `top`. */
   oldestHeight?: number;
+  /** The newest chunk's notes tried so far: catch-up re-reads that chunk and tries only the rest. */
+  tried?: Tried;
 }
 
 /** How far the shielded sync has come. */

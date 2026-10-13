@@ -29,7 +29,13 @@ work.
 | 4. Spam era | 2,100,000 → 1,710,000, once the user starts it            | 2            | green, "Spam era (2022–23): N%"    |
 
 - **Phase 1** runs on every sync; on the first it has nothing to read. It
-  covers the window's newest chunk again, which may have been filling.
+  covers the window's newest chunk again, which may have been filling, but
+  tries only the notes added since: each pool keeps how many of that chunk's
+  notes were tried and a fingerprint of their bytes (`tried`), and zcore's
+  `try_decrypt` skips them while the fingerprint still matches. A reorg that
+  rewrote any of them changes it, and the whole chunk is tried again. A visit's
+  first catch-up went from ~30 s to ~6 s on 1 worker, a one-minute re-sync
+  from ~6 s to ~2 s; what's left is mostly downloading the chunks.
 - **Phase 2** runs until done, once per account: an interrupted setup goes on
   after phase 1 on the next visit. When it ends, the wallet records
   `setupDone` and logs it.
@@ -111,7 +117,7 @@ height → chunk endpoint.
 Each pool's single window `{start, from, to}` becomes three ranges, each with
 its own newest-first cursor: after-spam (top), before-spam, and spam. The
 account also stores `setupDone`, `spamSync` (the user started phase 4 and
-hasn't paused it) and the bound chunks. The
+hasn't paused it), the bound chunks, and per pool `tried` (see phase 1). The
 crawl itself (`crawlChunks`) is unchanged.
 
 ## UI
@@ -166,9 +172,5 @@ slower.
 - A real design for the paused state.
 - PR #53's field-multiplication patch lowers every CPU number above; no code
   change here.
-- Decrypt only what's new in a pool's newest chunk. Catch-up re-reads it
-  whole (11–13k notes, ~6 s of one core; ~28 s for all three on the first
-  catch-up of a visit). Keep, per pool, how many of its notes were tried and a
-  hash of their bytes; while the hash still matches, a reorg didn't touch
-  them, so only the rest is tried, else the whole chunk again. Needs
-  `try_decrypt` in zcore to start at a given note (a wasm rebuild).
+- Download only what's new in a pool's newest chunk too (a range request
+  past the notes already tried): catch-up still fetches it whole, ~2 s each.
