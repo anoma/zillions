@@ -250,7 +250,7 @@ export class VaultStorage extends ExtStorage {
   }
 
   private isEmpty(data: unknown): boolean {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return Object.keys((data as any)?.data || {}).length === 0;
+    const vault = data as Partial<VaultType> | undefined;
+    return !vault?.password && Object.keys(vault?.data || {}).length === 0;
   }
 }

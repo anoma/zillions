@@ -82,11 +82,9 @@ from the UFVK.
 - **Finding links:** sync already opens, with our OVK, every output our
   transactions paid (`#applySent`, `#recoverSends`). One whose memo starts
   `0xFF "PAYLINK"` is a link; its row becomes "Payment link". This also
-  recovers links made elsewhere or before a restore. Gap: a link paid for
-  entirely from Sapling with no change, whose transaction sync can't place
-  (product.md 5).
+  recovers links made elsewhere or before a restore.
 - **Status:** with the link's viewing key (from the Keychain, no approval)
-  the note's nullifier joins the ones sync watches (`#findSpends`). Spent by
+  the note's nullifier joins the ones sync looks up (`checkSpends`). Spent by
   a transaction of ours = Cancelled, by anyone else's = Claimed.
 - **Show again / Cancel:** the Keychain derives the secret (approval). Before
   using it, check that its address equals, byte for byte, the address the

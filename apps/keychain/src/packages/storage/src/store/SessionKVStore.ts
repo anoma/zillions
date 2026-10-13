@@ -5,20 +5,21 @@ export class SessionKVStore<T> implements KVStore<T[]> {
   constructor(private readonly _prefix: string) {}
 
   public async get<T = unknown>(key: string): Promise<T | undefined> {
-    const obj = await browser.storage.session.get(this.prefix());
-    const bucket = obj[this.prefix()] as Record<string, T> | undefined;
-    if (bucket && bucket.hasOwnProperty(key)) {
-      return bucket[key];
-    }
-    return undefined;
+    const k = this.prefix() + "/" + key;
+
+    const obj = await browser.storage.session.get(k);
+    return obj[k] as T | undefined;
   }
 
-  public async set<T = unknown>(key: string, data: T | null): Promise<void> {
-    const obj = await browser.storage.session.get(this.prefix());
-    const bucket = (obj[this.prefix()] as Record<string, unknown>) ?? {};
-    await browser.storage.session.set({
-      [this.prefix()]: { ...bucket, [key]: data },
-    });
+  // One storage item per key: a read-modify-write of a shared bucket lets
+  // concurrent writers restore each other's stale values (e.g. undo a lock).
+  public set<T = unknown>(key: string, data: T | null): Promise<void> {
+    const k = this.prefix() + "/" + key;
+
+    if (data === null) {
+      return browser.storage.session.remove(k);
+    }
+    return browser.storage.session.set({ [k]: data });
   }
 
   public prefix(): string {

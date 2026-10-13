@@ -1,3 +1,5 @@
+import browser from "webextension-polyfill";
+
 import { startBackgroundServer } from "../src/background/server";
 import { getServices } from "../src/background/services";
 
@@ -8,8 +10,9 @@ import { getServices } from "../src/background/services";
  * `action.onClicked` handler here — the popup decides whether to show the
  * wallet UI or redirect to the Setup tab (when no wallet exists yet).
  *
- * `defineBackground`'s main must be synchronous, so async work (server
- * registration, service warm-up) is kicked off without awaiting.
+ * `defineBackground`'s main must be synchronous, and event listeners are
+ * registered in it directly so the event that woke the worker is delivered;
+ * async work (service warm-up) is kicked off without awaiting.
  */
 export default defineBackground(() => {
   // Kick off vault/keyring init (wasm + IndexedDB) so the first IPC call
@@ -18,5 +21,13 @@ export default defineBackground(() => {
     // Init failed; individual IPC handlers will surface the error to the UI.
   });
 
-  void startBackgroundServer();
+  startBackgroundServer();
+
+  browser.tabs.onRemoved.addListener((tabId) => {
+    void getServices()
+      .then(({ approvals }) => approvals.handleTabRemoved(tabId))
+      .catch(() => {
+        // Init failed, so no approval can be pending for this tab.
+      });
+  });
 });
