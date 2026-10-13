@@ -65,6 +65,13 @@ export const transferAmount = (summary: PcztSummary): bigint => {
     : total(outputPools(summary).flatMap(({ outputs }) => outputs));
 };
 
+// ZIP 317 charges 5_000 zatoshi per logical action, so honest fees stay far below this.
+export const HIGH_FEE_ZATOSHI = 1_000_000n;
+
+/** The fee is whatever the PCZT's creator leaves between inputs and outputs. */
+export const isHighFee = (summary: PcztSummary): boolean =>
+  BigInt(summary.fee) > HIGH_FEE_ZATOSHI;
+
 export const flowCount = (summary: PcztSummary): number =>
   poolFlows(summary).reduce(
     (count, { inputs, outputs }) => count + inputs.length + outputs.length,
