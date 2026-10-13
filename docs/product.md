@@ -78,7 +78,8 @@ Spending is _Built_: it awaits a first real transaction.
 - **Sending chooses the best option** among the funds the wallet holds (which
   funds to use and how), without asking the user about pools.
 - Funds received before the wallet was created or imported are found too: the
-  wallet always recovers the account's full history.
+  wallet recovers the account's full history, except the 2022–2023 spam era,
+  which it reads only once the user asks (about 15 GB; see 2.7).
 
 ## 2. Wallet app
 
@@ -193,12 +194,15 @@ Moves shielded funds to one of the account's own transparent addresses.
 - Scans newest first: from the chain tip back to the account's birthday, or
   to the start of each pool for an imported account, so recent funds and
   history show first.
-- In three phases: new activity since the last visit; setup, once per account,
+- In four phases: new activity since the last visit; setup, once per account,
   from the tip back to about a year before the app's release (or the birthday,
-  if newer), at full speed ("Setting up your wallet: N%"); then older history in the background, using less of the computer,
-  with a "Speed up" option. The 2022–2023 spam era is read last. When the
-  browser asks to save data, older history waits for the user to start it.
-  Details: [design/sync-phases.md](design/sync-phases.md).
+  if newer), at full speed ("Setting up your wallet: N%"); older history in
+  the background, using less of the computer, with a "Speed up" option; and
+  last the 2022–2023 spam era, only once the user starts it from the sync
+  indicator, which explains why it waits. The user can pause and resume it;
+  the account remembers the choice. When the browser asks to save data, older
+  history waits for the user to start it too. Details:
+  [design/sync-phases.md](design/sync-phases.md).
 - Shows progress for the current phase, then "completed".
 - What the last sync found shows at once, transparent and shielded. The
   transparent side is refreshed within seconds; new shielded history fills in

@@ -130,7 +130,7 @@ const zcore = await import("@zillions/zcore");
 const { submitTransaction } = await import("./chain/submit");
 const { cachedTransparent } = await import("./transparent");
 type TransparentCache = import("./transparent").TransparentCache;
-const { fetchBlock } = await import("./chain/lightwalletd");
+const { fetchBlock, fetchLatestHeight } = await import("./chain/lightwalletd");
 const store = await import("./store");
 const { crawlChunks } = await import("./shielded/crawl");
 
@@ -480,4 +480,64 @@ test("history waits while the browser saves data, then reads what setup left onc
 
   Object.defineProperty(navigator, "connection", { value: undefined });
   chain.setup.orchard = 0;
+});
+
+test("syncs again a minute after a sync ends, never queuing one behind a slow sync", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const tips = vi.mocked(fetchLatestHeight);
+  tips.mockClear();
+  // The first sync takes five minutes: the tip answers late.
+  let answer = () => {};
+  tips.mockImplementationOnce(
+    () => new Promise((resolve) => (answer = () => resolve(chain.tip))),
+  );
+  const wallet = new Wallet({ id: "r", ufvk: "uview" });
+
+  const first = wallet.sync();
+  await vi.advanceTimersByTimeAsync(5 * 60_000);
+  expect(tips).toHaveBeenCalledTimes(1);
+  answer();
+  await first;
+
+  await vi.advanceTimersByTimeAsync(59_000);
+  expect(tips).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(tips).toHaveBeenCalledTimes(2);
+
+  wallet.free();
+  vi.useRealTimers();
+});
+
+test("holds the timed sync while history runs, and syncs once it ends", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  chain.sizes = { sapling: 0, orchard: 3 * 16_384, ironwood: 0 };
+  // Setup ends at Orchard chunk 2: history reads chunks 1 and 0, until released.
+  chain.setup.orchard = 2;
+  const crawl = vi.mocked(crawlChunks).getMockImplementation()!;
+  let release = () => {};
+  vi.mocked(crawlChunks).mockImplementation(async (o) => {
+    if (o.to === 1) {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+        o.signal?.addEventListener("abort", () => resolve());
+      });
+    }
+    return crawl(o);
+  });
+  const tips = vi.mocked(fetchLatestHeight);
+  tips.mockClear();
+  const wallet = new Wallet({ id: "h", ufvk: "uview" });
+
+  await wallet.sync();
+  await vi.advanceTimersByTimeAsync(3 * 60_000);
+  expect(tips).toHaveBeenCalledTimes(1);
+
+  release();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(tips).toHaveBeenCalledTimes(2);
+
+  wallet.free();
+  vi.useRealTimers();
+  chain.setup.orchard = 0;
+  vi.mocked(crawlChunks).mockImplementation(crawl);
 });

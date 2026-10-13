@@ -144,9 +144,14 @@ function crawlSegment(
 /**
  * Catch-up, then setup until it's done: the chunks minted since the last
  * sync, then, the first time, each pool down to where setup ends. Checks
- * every note found or still unspent for a spend.
+ * every note found or still unspent for a spend. A pool still at `previous`,
+ * the last sync's sizes, has nothing new to read.
  */
-export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
+export async function crawlRecent(
+  run: ShieldedRun,
+  sizes: TreeSizes,
+  previous?: TreeSizes,
+) {
   const { state, signal } = run;
   const { scan } = state;
   const last = await prepare(run, sizes);
@@ -162,7 +167,7 @@ export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
   };
 
   for (const pool of POOLS) {
-    if (last[pool] < 0) continue;
+    if (last[pool] < 0 || sizes[pool] === previous?.[pool]) continue;
     const { top } = scan.scanned[pool]!;
     if (top.from > top.to) {
       top.from = last[pool] + 1;
@@ -216,32 +221,38 @@ export async function crawlRecent(run: ShieldedRun, sizes: TreeSizes) {
 }
 
 /**
- * History: what setup left above the spam era, then what lies before it,
- * then the spam era itself, each in pool order. True once all of it is read.
+ * History: what setup left above the spam era, then what lies before it; or,
+ * as `spam`, the spam era itself. Each in pool order. True once all is read.
  */
-export async function crawlHistory(run: ShieldedRun, sizes: TreeSizes) {
+export async function crawlHistory(
+  run: ShieldedRun,
+  sizes: TreeSizes,
+  phase: "history" | "spam",
+) {
   const { state, signal } = run;
   const { scan } = state;
   await prepare(run, sizes);
-  const advance = () => run.onAdvance(progressOf(scan, "history", run.tip));
+  const advance = () => run.onAdvance(progressOf(scan, phase, run.tip));
   const spends = spendChecks(run, advance);
   advance();
+  const segments =
+    phase === "history" ? (["top", "before"] as const) : (["spam"] as const);
   const left = POOLS.flatMap((pool) =>
-    (["top", "before", "spam"] as const).flatMap((segment) => {
+    segments.flatMap((segment) => {
       const { from, floor } = scan.scanned[pool]![segment];
       return from > floor
         ? [`${pool} ${SEGMENTS[segment]} ${from - floor}`]
         : [];
     }),
   );
-  console.log(`[sync] history left (chunks): ${left.join(", ") || "none"}`);
+  console.log(`[sync] ${phase} left (chunks): ${left.join(", ") || "none"}`);
 
-  for (const segment of ["top", "before", "spam"] as const) {
+  for (const segment of segments) {
     for (const pool of POOLS) {
       const p = scan.scanned[pool]!;
       const [started, from] = [Date.now(), p[segment].from];
       await crawlSegment(run, pool, p[segment], {
-        phase: "history",
+        phase,
         onChunk: (result) => {
           if (segment === "top" && result.minHeight !== undefined) {
             p.oldestHeight = result.minHeight;
@@ -253,7 +264,7 @@ export async function crawlHistory(run: ShieldedRun, sizes: TreeSizes) {
       if (from > p[segment].from) {
         const read = from - p[segment].from;
         console.log(
-          `[sync] history ${pool} ${SEGMENTS[segment]}: ${read} chunks in ${secs(started)}`,
+          `[sync] ${phase} ${pool} ${SEGMENTS[segment]}: ${read} chunks in ${secs(started)}`,
         );
       }
       if (signal.aborted) return false;
