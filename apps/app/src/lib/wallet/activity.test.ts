@@ -99,7 +99,6 @@ test("a transaction moving our own funds between pools is a migration", () => {
 const block = (overrides: Partial<Block>): Block => ({
   time: 0,
   txids: new Map(),
-  saplingSpends: new Map(),
   treeSizes: { sapling: 0, orchard: 0, ironwood: 0 },
   outputs: new Map(),
   vout: new Map(),
@@ -112,12 +111,7 @@ test("our sending transactions are those that spent a note or a coin of ours", (
     [3_160, block({ txids: new Map([[5, "tshield"]]) })],
   ]);
   const txs = sendingTxs(
-    [
-      { ...note(1, 150_000), spend: { status: "spent", at } },
-      // Spent, but where isn't known yet.
-      { ...note(2, 40_000), spend: { status: "spent" } },
-      note(3, 30_000),
-    ],
+    [{ ...note(1, 150_000), spend: { status: "spent", at } }, note(3, 30_000)],
     [
       { txid: "tshield", height: 3_160, received: 0n, spent: 9_000n },
       { txid: "treceived", height: 3_160, received: 5_000n, spent: 0n },

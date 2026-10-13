@@ -37,9 +37,7 @@ export class VaultService {
   }
 
   public async isLocked(): Promise<boolean> {
-    const password = await this.getPassword();
-    const isInitialized = await this.passwordInitialized();
-    return !password && isInitialized;
+    return !(await this.getPassword());
   }
 
   public async logout(): Promise<void> {
@@ -135,14 +133,11 @@ export class VaultService {
   }
 
   public async reveal<T>(sensitive?: CryptoRecord): Promise<T | undefined> {
-    await this.assertIsUnlocked();
+    const key = await this.getSessionKeyOrFail();
     if (!sensitive) return;
 
     try {
-      const decryptedJson = this.crypto.decrypt(
-        sensitive,
-        await this.getPassword()
-      );
+      const decryptedJson = this.crypto.decrypt(sensitive, key);
       return JSON.parse(decryptedJson) as T;
     } catch (error) {
       console.error(error);
@@ -191,9 +186,19 @@ export class VaultService {
     sensitiveData: T,
     password?: string
   ): Promise<CryptoRecord> {
-    const pwd =
-      password ? await this.hashPassword(password) : await this.getPassword();
-    return this.crypto.encrypt(JSON.stringify(sensitiveData), pwd);
+    const key =
+      password ?
+        await this.hashPassword(password)
+      : await this.getSessionKeyOrFail();
+    return this.crypto.encrypt(JSON.stringify(sensitiveData), key);
+  }
+
+  private async getSessionKeyOrFail(): Promise<string> {
+    const key = await this.getPassword();
+    if (!key) {
+      throw new Error("Extension is locked");
+    }
+    return key;
   }
 
   protected async getEncryptedPassword(

@@ -58,6 +58,9 @@ const requireTabId = (ctx: IpcSenderContext): number => {
   return ctx.tabId;
 };
 
+/** Far above any real PCZT; bounds what a page can park in worker memory. */
+const MAX_PCZT_BASE64_LENGTH = 2 * 1024 * 1024;
+
 /** A handler maps a typed request payload to a typed response (sync or async). */
 export type Handler<K extends IpcKind> = (
   payload: IpcRequest<K>,
@@ -228,6 +231,9 @@ export const handlers: HandlerMap = {
       (signer !== undefined && typeof signer !== "string")
     ) {
       throw new Error("zc.sign: invalid arguments");
+    }
+    if (pczt.length > MAX_PCZT_BASE64_LENGTH) {
+      throw new Error("zc.sign: PCZT exceeds the 2 MiB limit");
     }
     const { approvals } = await getServices();
     return approvals.approveSignTx(pczt, requireOrigin(ctx), signer);

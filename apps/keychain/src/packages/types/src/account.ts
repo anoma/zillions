@@ -61,15 +61,20 @@ export type Account = Pick<
   viewingKey?: string;
 };
 
+/**
+ * A dapp-facing account. `viewingKey`, `hdIndex`, `seedFingerprint`,
+ * `birthday`, `source` and `timestamp` are only set on the active account and
+ * its derived children; every other account carries just its identity.
+ */
 export type ZCashKeychainAccount = Account & {
   id: string;
   parentId?: string;
   /** ZIP-32 account index used to derive this account's keys. */
-  hdIndex: number;
+  hdIndex?: number;
   /** ZIP-32 seed fingerprint (hex). Empty string for accounts with no seed. */
-  seedFingerprint: string;
+  seedFingerprint?: string;
   /** Block height at which this account was created/imported. Used to skip scanning earlier blocks. */
-  birthday: number;
+  birthday?: number;
 };
 
 /**

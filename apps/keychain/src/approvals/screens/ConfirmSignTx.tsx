@@ -3,7 +3,7 @@
  * window expired, then submits the approved sign request (the background
  * decrypts the seed and signs the PCZT) and closes.
  */
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert, Input, Stack } from "@zillions/components";
@@ -30,10 +30,22 @@ export const ConfirmSignTx = ({ details }: Props) => {
   const [status, setStatus] = useState<Status>();
   const [statusInfo, setStatusInfo] = useState("");
 
+  // The background consumes the request on the first submit, and StrictMode
+  // runs the auto-submit effect twice: a ref survives both, state would not.
+  const submitted = useRef(false);
+
   const signTx = async (): Promise<void> => {
+    if (submitted.current) return;
+    submitted.current = true;
     setStatus(Status.Pending);
-    // A PCZT covers transparent + shielded in a single signing pass.
-    await client?.submitSignTx(msgId, signer);
+    try {
+      // A PCZT covers transparent + shielded in a single signing pass.
+      await client?.submitSignTx(msgId, signer);
+      setStatus(Status.Completed);
+    } catch (e) {
+      setError(`${e}`);
+      setStatus(Status.Failed);
+    }
   };
 
   const handleApproveSignTx = useCallback(
@@ -42,6 +54,7 @@ export const ConfirmSignTx = ({ details }: Props) => {
 
       try {
         if (requiresAuth) {
+          setStatus(Status.Pending);
           setStatusInfo(`Decrypting keys and signing transaction...`);
           const isAuthenticated = await client?.checkPassword(password);
 
@@ -49,39 +62,32 @@ export const ConfirmSignTx = ({ details }: Props) => {
             throw new Error("Invalid password!");
           }
         }
-
-        await signTx();
-        setStatus(Status.Completed);
       } catch (e) {
         setError(`${e}`);
         setStatus(Status.Failed);
+        return;
       }
+
+      await signTx();
     },
     [requiresAuth, password]
   );
 
   useEffect(() => {
-    if (status === undefined && typeof requiresAuth === "undefined") {
-      client
-        ?.requiresAuth()
-        .then((isAuthRequired) => setRequiresAuth(isAuthRequired))
-        .catch((e) => console.error(e));
-    }
+    client
+      ?.requiresAuth()
+      .then((isAuthRequired) => setRequiresAuth(isAuthRequired))
+      .catch((e) => console.error(e));
+  }, []);
 
-    if (typeof requiresAuth !== "undefined" && !requiresAuth) {
-      // User is authenticated with a valid session, so submit signed Tx:
-      signTx()
-        .then(() => setStatus(Status.Completed))
-        .catch((e) => {
-          setError(`${e}`);
-          setStatus(Status.Failed);
-        });
-    }
+  useEffect(() => {
+    // User is authenticated with a valid session, so submit signed Tx:
+    if (requiresAuth === false) void signTx();
+  }, [requiresAuth]);
 
-    if (status === Status.Completed) {
-      void closeCurrentTab();
-    }
-  }, [status, requiresAuth]);
+  useEffect(() => {
+    if (status === Status.Completed) void closeCurrentTab();
+  }, [status]);
 
   return (
     <Stack className="h-full text-black pt-4 pb-6" gap={4}>
@@ -116,7 +122,9 @@ export const ConfirmSignTx = ({ details }: Props) => {
             onReject={() => navigate(-1)}
             rejectLabel="Back"
             approveLabel="Authenticate"
-            approveDisabled={!password || status === Status.Pending}
+            approveDisabled={
+              !password || status === Status.Pending || submitted.current
+            }
           />
         )}
       </Stack>
