@@ -48,6 +48,8 @@ type PendingSignTx = {
   signer?: string;
 };
 
+const KEEPALIVE_INTERVAL_MS = 20_000;
+
 export class ApprovalsService {
   /** Pending dapp requests, keyed by their approval popup's tab id. */
   protected resolverMap: Record<number, Resolver> = {};
@@ -73,14 +75,15 @@ export class ApprovalsService {
     protected readonly vaultService: VaultService,
     protected readonly accounts: AccountRepository,
     protected readonly keyring: Keyring
-  ) {
-    browser.tabs.onRemoved.addListener((tabId) => {
-      const resolver = this.resolverMap[tabId];
-      if (resolver) {
-        resolver.reject(new Error("Window closed"));
-        this.removeResolver(tabId);
-      }
-    });
+  ) {}
+
+  /** `tabs.onRemoved` handler, registered by the background entrypoint. */
+  handleTabRemoved(tabId: number): void {
+    const resolver = this.resolverMap[tabId];
+    if (resolver) {
+      resolver.reject(new Error("Window closed"));
+      this.removeResolver(tabId);
+    }
   }
 
   // ---- dapp-facing (origin always derived from the message sender) ----
@@ -425,6 +428,13 @@ export class ApprovalsService {
       throw e;
     }
 
+    // Chrome stops an idle MV3 worker after 30 s, taking the parked resolver
+    // with it; any extension API call resets that timer.
+    const keepAlive = setInterval(
+      () => void browser.runtime.getPlatformInfo(),
+      KEEPALIVE_INTERVAL_MS
+    );
+
     return new Promise<T>((resolve, reject) => {
       this.resolverMap[popupTabId] = {
         resolve: (args) => {
@@ -438,7 +448,7 @@ export class ApprovalsService {
           return reject(args);
         },
       };
-    });
+    }).finally(() => clearInterval(keepAlive));
   };
 
   private getResolver = (popupTabId: number): Resolver => {
