@@ -6,7 +6,7 @@
 import { useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { Alert, Stack } from "@zillions/components";
+import { Alert, Checkbox, Stack } from "@zillions/components";
 
 import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
@@ -18,7 +18,13 @@ import { Commitment } from "../ui/Commitment";
 import { TransactionDataPanel } from "../ui/TransactionDataPanel";
 import { TransferSummary } from "../ui/TransferSummary";
 import { walletNameFor } from "../utils/accounts";
-import { flowCount, summaryAsText } from "../utils/pczt";
+import { formatZec } from "../utils/format";
+import {
+  flowCount,
+  HIGH_FEE_ZATOSHI,
+  isHighFee,
+  summaryAsText,
+} from "../utils/pczt";
 
 type Props = {
   details?: ApprovalDetails;
@@ -40,6 +46,8 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const [displayTransactionData, setDisplayTransactionData] = useState(false);
   const [summaryError, setSummaryError] = useState<string>();
   const [walletName, setWalletName] = useState<string>();
+  const [highFeeAccepted, setHighFeeAccepted] = useState(false);
+  const highFee = details ? isHighFee(details.summary) : false;
 
   useEffect(() => {
     const fetchDetails = async (): Promise<void> => {
@@ -66,20 +74,17 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
     navigate(routes.confirmSignTx());
   }, []);
 
-  const handleReject = useCallback(
-    async (): Promise<void> => {
-      try {
-        if (msgId) {
-          await client?.rejectSignTx(msgId);
-          return await closeCurrentTab();
-        }
-        throw new Error("msgId was not provided!");
-      } catch (e) {
-        console.warn(e);
+  const handleReject = useCallback(async (): Promise<void> => {
+    try {
+      if (msgId) {
+        await client?.rejectSignTx(msgId);
+        return await closeCurrentTab();
       }
-    },
-    [msgId],
-  );
+      throw new Error("msgId was not provided!");
+    } catch (e) {
+      console.warn(e);
+    }
+  }, [msgId]);
 
   return (
     <Stack className="h-full text-black pt-4 pb-6" gap={4}>
@@ -116,9 +121,30 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
         )}
       </main>
       <form onSubmit={handleApproveSubmit}>
+        {details && highFee && (
+          <Alert
+            type="error"
+            title="Unusually high fee"
+            className="mb-3 text-xs"
+          >
+            This transaction pays {formatZec(details.summary.fee)} in fees, more
+            than {formatZec(HIGH_FEE_ZATOSHI)}. The fee goes to miners, not to
+            the recipient, and cannot be recovered.
+            <div className="flex items-center gap-3 mt-3">
+              <Checkbox
+                id="accept-high-fee"
+                checked={highFeeAccepted}
+                onChange={(e) => setHighFeeAccepted(e.target.checked)}
+              />
+              <label htmlFor="accept-high-fee" className="text-xs font-bold">
+                I understand and want to pay this fee
+              </label>
+            </div>
+          </Alert>
+        )}
         <ApprovalActions
           onReject={() => void handleReject()}
-          approveDisabled={!details}
+          approveDisabled={!details || (highFee && !highFeeAccepted)}
         />
       </form>
     </Stack>

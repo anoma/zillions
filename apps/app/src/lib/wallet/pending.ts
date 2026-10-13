@@ -1,5 +1,4 @@
-import { fetchTransaction } from "./chain/lightwalletd";
-import type { Activity, Note, PendingTx } from "./types";
+import type { Activity, PendingTx } from "./types";
 
 /**
  * Blocks past a pending transaction's expiry before it's dropped: the indexer
@@ -47,27 +46,3 @@ export const pendingActivity = (
       memo: undefined,
       pool: "mixed",
     }));
-
-/** Heights of the pending transactions spending a Sapling note not placed yet; ones lightwalletd can't find are left out. */
-export async function minedHeights(pending: PendingTx[], notes: Note[]) {
-  const unplaced = new Set(
-    notes
-      .filter((n) => n.spend.status === "spent" && !n.spend.at)
-      .map((n) => n.nf_mine),
-  );
-  const heights = await Promise.all(
-    pending
-      .filter((p) => p.nullifiers.some((nf) => unplaced.has(nf)))
-      // lightwalletd broadcast them, so asking for them back tells it nothing new.
-      .map((p) =>
-        fetchTransaction(p.txid).then(
-          (tx) => tx.height,
-          (err) => {
-            console.error("[sync] pending lookup failed", p.txid, err);
-            return 0;
-          },
-        ),
-      ),
-  );
-  return heights.filter((height) => height > 0);
-}

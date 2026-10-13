@@ -26,6 +26,8 @@ wasm-bindgen = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 hex = "0.4"
+# Fingerprints the notes of a chunk already tried, so a re-read skips them.
+blake2b_simd = "1"
 # Decodes the new server's binary chunk header; records are sliced by hand.
 postcard = { version = "1", default-features = false }
 
@@ -58,8 +60,6 @@ incrementalmerkletree = "0.8"
 nonempty = { version = "0.11", default-features = false }
 # ziziphus bodies cross from JS as byte arrays.
 serde_bytes = "0.11"
-# Decodes the indexer's compressed nullifier chunks; the same crate encodes them.
-vers-vecs = { version = "1.10", features = ["serde"] }
 
 [dev-dependencies]
 incrementalmerkletree = { version = "0.8", features = ["legacy-api"] }

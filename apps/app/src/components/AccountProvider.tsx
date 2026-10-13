@@ -1,5 +1,9 @@
 import { useMemo, type ReactNode } from "react";
-import { AccountContext, type Account } from "../context/account";
+import {
+  AccountContext,
+  type Account,
+  type ShieldedAccount,
+} from "../context/account";
 import type { KeychainAccount } from "../lib/keychain/keychain";
 
 export function AccountProvider({
@@ -7,7 +11,7 @@ export function AccountProvider({
   transparentAccount,
   children,
 }: {
-  shieldedAccount: KeychainAccount;
+  shieldedAccount: ShieldedAccount;
   transparentAccount: KeychainAccount;
   children: ReactNode;
 }) {

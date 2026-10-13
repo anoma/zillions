@@ -7,6 +7,10 @@
  * answers via the trusted `approvals/resolve*` channels (its tab id comes from
  * the message sender), which settles the parked promise and so the dapp's
  * original request. Closing the popup rejects with "Window closed".
+ *
+ * Each origin may have one popup open at a time, and at most
+ * `MAX_OPEN_APPROVALS` popups are open overall, so a page cannot flood the
+ * user with windows.
  */
 import { v4 as uuid } from "uuid";
 import browser, { Windows } from "webextension-polyfill";
@@ -15,7 +19,7 @@ import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
-import { LocalStorage } from "../../storage";
+import { LocalStorage, type KeyStoreType } from "../../storage";
 import { buildPcztSummary } from "../crypto/zillions";
 import { Keyring } from "../keyring";
 import { VaultService } from "../vault";
@@ -27,6 +31,16 @@ type Resolver = {
   resolve: (result?: unknown) => void;
   reject: (error?: unknown) => void;
 };
+
+const MAX_OPEN_APPROVALS = 3;
+
+/**
+ * The active (parent) account and its derived children: the only accounts a
+ * dapp may see key material for or sign with.
+ */
+const isInActiveScope = (record: KeyStoreType, activeId?: string): boolean =>
+  activeId !== undefined &&
+  (record.id === activeId || record.parentId === activeId);
 
 /** A dapp's PCZT awaiting user approval, parked under its `msgId`. */
 type PendingSignTx = {
@@ -45,6 +59,16 @@ export class ApprovalsService {
    * with the worker anyway (its resolver lives in `resolverMap`).
    */
   protected readonly pendingTxs = new Map<string, PendingSignTx>();
+
+  /**
+   * Origins with an approval popup open, mapped to its window id. Reserved
+   * (window id undefined) before the window exists, so concurrent requests
+   * from one origin cannot all pass the check.
+   */
+  protected readonly popupWindowByOrigin = new Map<
+    string,
+    number | undefined
+  >();
 
   constructor(
     protected readonly localStorage: LocalStorage,
@@ -82,9 +106,11 @@ export class ApprovalsService {
     const needsApproval = !(await this.isConnectionApproved(origin));
 
     if (needsApproval || isLocked) {
-      return this.launchApprovalPopup(approvalRoutes.approveConnection(), {
-        interfaceOrigin: origin,
-      });
+      return this.launchApprovalPopup(
+        origin,
+        approvalRoutes.approveConnection(),
+        { interfaceOrigin: origin }
+      );
     }
   }
 
@@ -93,16 +119,24 @@ export class ApprovalsService {
     const isConnected = await this.isConnectionApproved(origin);
 
     if (isConnected) {
-      return this.launchApprovalPopup(approvalRoutes.approveDisconnection(), {
-        interfaceOrigin: origin,
-      });
+      return this.launchApprovalPopup(
+        origin,
+        approvalRoutes.approveDisconnection(),
+        { interfaceOrigin: origin }
+      );
     }
   }
 
-  /** Public account records for a connected dapp. */
+  /**
+   * Every account for a connected dapp (so it can offer a switcher), with key
+   * material only on the active account and its children.
+   */
   async dappAccounts(origin: string): Promise<ZCashKeychainAccount[]> {
     await this.assertConnected(origin);
-    return (await this.accounts.findAll()).map(toPublicAccount);
+    const activeId = (await this.accounts.getActiveAccount())?.id;
+    return (await this.accounts.findAll()).map((record) =>
+      toPublicAccount(record, isInActiveScope(record, activeId))
+    );
   }
 
   /** The active account for a connected dapp, or null when none is set. */
@@ -113,13 +147,14 @@ export class ApprovalsService {
     const active = await this.accounts.getActiveAccount();
     if (!active) return null;
     const record = await this.accounts.findById(active.id);
-    return record ? toPublicAccount(record) : null;
+    return record ? toPublicAccount(record, true) : null;
   }
 
   /**
    * Resolve a `sign()` call: park the PCZT under a msgId and open the
    * approval popup; resolves with the signed PCZT (base64) once the user
-   * confirms. Requires an unlocked vault and a connected origin.
+   * confirms. Requires an unlocked vault, a connected origin, and a signer
+   * within the active account.
    */
   async approveSignTx(
     pczt: string,
@@ -131,40 +166,27 @@ export class ApprovalsService {
     }
     await this.assertConnected(origin);
 
-    // Resolve the signer/account type shown by the approval popup.
-    let signerAddress = signer;
-    let accountType: string;
-    if (signerAddress) {
-      const record = await this.accounts.findByAddress(signerAddress);
-      if (!record) {
-        throw new Error(`Account for ${signerAddress} not found!`);
-      }
-      accountType = record.type;
-    } else {
-      const active = await this.accounts.getActiveAccount();
-      const record = active
-        ? await this.accounts.findById(active.id)
-        : undefined;
-      if (!record) {
-        throw new Error("No active account to sign with");
-      }
-      signerAddress = record.address;
-      accountType = record.type;
-    }
+    const record = await this.activeSigner(signer);
 
     const msgId = uuid();
-    // The resolved address, so the summary and the signature use one account
-    // even if the active account changes while the popup is open.
-    this.pendingTxs.set(msgId, { pczt, signer: signerAddress });
+    // The resolved address, so the summary and the signature use one account.
+    this.pendingTxs.set(msgId, { pczt, signer: record.address });
 
-    return this.launchApprovalPopup(
-      approvalRoutes.approveSignTx(
-        msgId,
-        encodeURIComponent(origin),
-        accountType,
-        signerAddress
-      )
-    );
+    try {
+      return await this.launchApprovalPopup<string>(
+        origin,
+        approvalRoutes.approveSignTx(
+          msgId,
+          encodeURIComponent(origin),
+          record.type,
+          record.address
+        )
+      );
+    } finally {
+      // Also covers a refused launch and a closed window, which never reach
+      // submitSignTx/rejectSignTx.
+      this.pendingTxs.delete(msgId);
+    }
   }
 
   /**
@@ -182,6 +204,7 @@ export class ApprovalsService {
       throw new Error(`Account for ${address} not found!`);
     }
     return this.launchApprovalPopup(
+      origin,
       approvalRoutes.approveUpdateDefaultAccount(),
       { address, alias: record.alias }
     );
@@ -211,20 +234,21 @@ export class ApprovalsService {
     if (!pending) {
       throw new Error(`Pending signing data not found for ${msgId}`);
     }
+    // Claim the request before awaiting, so a concurrent submit for the same
+    // msgId fails the check above instead of signing a second time.
+    this.pendingTxs.delete(msgId);
 
     try {
+      // The active account may have changed while the popup was open, and a
+      // site may only sign with the one active now.
+      const record = await this.activeSigner(signer || pending.signer);
       // A PCZT spans transparent + shielded; the keyring signs the whole PCZT
       // in one pass and returns the signed PCZT as base64.
-      const signed = await this.keyring.sign(
-        pending.pczt,
-        signer || pending.signer
-      );
+      const signed = await this.keyring.sign(pending.pczt, record.address);
       resolvers.resolve(signed);
     } catch (e) {
       resolvers.reject(e);
     }
-
-    this.pendingTxs.delete(msgId);
   }
 
   /** The approval popup rejected: drop the PCZT and fail the dapp's promise. */
@@ -319,6 +343,24 @@ export class ApprovalsService {
     return approvedOrigins.includes(origin);
   }
 
+  /** The `signer` address's account (else the active one), if within the active account. */
+  private async activeSigner(signer?: string): Promise<KeyStoreType> {
+    const activeId = (await this.accounts.getActiveAccount())?.id;
+    const record = signer
+      ? await this.accounts.findByAddress(signer)
+      : activeId
+        ? await this.accounts.findById(activeId)
+        : undefined;
+    if (!signer && !record) {
+      throw new Error("No active account to sign with");
+    }
+    // One error for unknown and inactive addresses: a site learns nothing new.
+    if (!record || !isInActiveScope(record, activeId)) {
+      throw new Error(`Signer ${signer} is not the active account`);
+    }
+    return record;
+  }
+
   private async assertConnected(origin: string): Promise<void> {
     if (await this.vaultService.isLocked()) {
       throw new Error("Keychain is locked");
@@ -352,14 +394,39 @@ export class ApprovalsService {
   };
 
   private launchApprovalPopup = async <T>(
+    origin: string,
     route: string,
     params?: Record<string, string>
   ): Promise<T> => {
+    if (this.popupWindowByOrigin.has(origin)) {
+      const windowId = this.popupWindowByOrigin.get(origin);
+      if (windowId !== undefined) {
+        void browser.windows
+          .update(windowId, { focused: true })
+          .catch(() => undefined);
+      }
+      throw new Error("A request from this site is already pending");
+    }
+    if (this.popupWindowByOrigin.size >= MAX_OPEN_APPROVALS) {
+      throw new Error(
+        "Too many pending Keychain approvals; resolve one and try again"
+      );
+    }
+    // No await between the checks above and this reservation.
+    this.popupWindowByOrigin.set(origin, undefined);
+
     const baseUrl = `${browser.runtime.getURL("/approvals.html")}#${route}`;
     const url = params ? paramsToUrl(baseUrl, params) : baseUrl;
 
-    const window = await this.createPopup(url);
-    const popupTabId = this.getPopupTabId(window);
+    let popupTabId: number;
+    try {
+      const window = await this.createPopup(url);
+      popupTabId = this.getPopupTabId(window);
+      this.popupWindowByOrigin.set(origin, window.id);
+    } catch (e) {
+      this.popupWindowByOrigin.delete(origin);
+      throw e;
+    }
 
     // Chrome stops an idle MV3 worker after 30 s, taking the parked resolver
     // with it; any extension API call resets that timer.
@@ -372,10 +439,12 @@ export class ApprovalsService {
       this.resolverMap[popupTabId] = {
         resolve: (args) => {
           this.removeResolver(popupTabId);
+          this.popupWindowByOrigin.delete(origin);
           return resolve(args as T);
         },
         reject: (args) => {
           this.removeResolver(popupTabId);
+          this.popupWindowByOrigin.delete(origin);
           return reject(args);
         },
       };

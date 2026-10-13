@@ -210,8 +210,6 @@ export interface Block {
   time: number;
   /** Transactions with a shielded part only: a compact block omits the rest. */
   txids: Map<number, string>;
-  /** Sapling nullifier (hex) → index of the transaction that spent it. */
-  saplingSpends: Map<string, number>;
   /** Each pool's note commitment tree size with this block applied. */
   treeSizes: Record<Pool, number>;
   /** How many notes each transaction, by index, adds to each pool. */
@@ -243,16 +241,12 @@ export async function fetchBlock(height: number): Promise<Block> {
   const [compact] = await call("GetBlock", message([[1, height]]));
   const block = fields(compact);
   const txids = new Map<number, string>();
-  const saplingSpends = new Map<string, number>();
   const outputs = new Map<number, Record<Pool, number>>();
   const vout = new Map<number, { value: number; script: Uint8Array }[]>();
   for (const raw of block.get(7) ?? []) {
     const tx = fields(raw as Uint8Array);
     const index = num(tx, 1);
     txids.set(index, displayTxid(bytes(tx, 2)));
-    for (const spend of tx.get(4) ?? []) {
-      saplingSpends.set(hex(bytes(fields(spend as Uint8Array), 1)), index);
-    }
     const transparent = tx.get(8) ?? [];
     if (transparent.length) {
       vout.set(
@@ -277,7 +271,6 @@ export async function fetchBlock(height: number): Promise<Block> {
   return {
     time: num(block, 5),
     txids,
-    saplingSpends,
     treeSizes,
     outputs,
     vout,

@@ -78,7 +78,8 @@ Spending is _Built_: it awaits a first real transaction.
 - **Sending chooses the best option** among the funds the wallet holds (which
   funds to use and how), without asking the user about pools.
 - Funds received before the wallet was created or imported are found too: the
-  wallet always recovers the account's full history.
+  wallet recovers the account's full history, except the 2022–2023 spam era,
+  which it reads only once the user asks (about 15 GB; see 2.7).
 
 ## 2. Wallet app
 
@@ -190,13 +191,27 @@ Moves shielded funds to one of the account's own transparent addresses.
 ### 2.7 Sync — Working
 
 - Starts by itself when the wallet opens and resumes where it left off.
-- Shows progress ("Shielded sync: N%", then "completed").
+- Scans newest first: from the chain tip back to the account's birthday, or
+  to the start of each pool for an imported account, so recent funds and
+  history show first.
+- In four phases: new activity since the last visit; setup, once per account,
+  from the tip back to about a year before the app's release (or the birthday,
+  if newer), at full speed ("Setting up your wallet: N%"); older history in
+  the background, using less of the computer, with a "Speed up" option; and
+  last the 2022–2023 spam era, only once the user starts it from the sync
+  indicator, which explains why it waits. The user can pause and resume it;
+  the account remembers the choice. When the browser asks to save data, older
+  history waits for the user to start it too. Details:
+  [design/sync-phases.md](design/sync-phases.md).
+- Shows progress for the current phase, then "completed".
 - What the last sync found shows at once, transparent and shielded. The
   transparent side is refreshed within seconds; new shielded history fills in
   as the sync progresses.
 - Shielded funds count toward the balance only once the wallet has checked
   they are still unspent, so the balance never shows money that is already
-  gone. Each pool's funds appear when its scan reaches the present.
+  gone. Funds appear as the scan finds them, newest first.
+- For now, checking a note is unspent tells the indexer which notes are the
+  wallet's (temporary, until the indexer offers a private check).
 - Balance and history update as the sync finds things; no reload needed.
 
 ### 2.8 Accounts and Keychain connection — Working
@@ -324,8 +339,7 @@ Ironwood; how it's built is in [payment-links.md](design/payment-links.md).
   sender included, can see where the money went.
 - **Restoring:** links made in another browser or before restoring the
   recovery phrase are found again by the normal sync and show in history
-  with their status. Exception: a link paid for entirely from Sapling with
-  no change, the case in 5 (Sapling spends the wallet can't place).
+  with their status.
 - Links point at the app's own address, set per deployment (e.g.
   `https://zillions-app.netlify.app/`).
 - _To confirm_: the AnomaPay onboarding screens and flow to copy.
@@ -423,15 +437,6 @@ Challenges to check, one by one:
 
 - Recovery-phrase passphrase on import (3.1)?
 - Offline Keychain challenges (3.5): each to be checked.
-- **Sapling spends the wallet can't place (2.6).** When Sapling funds are
-  spent in a transaction that leaves nothing else the wallet can see (no
-  change, no payment it can read back, no transparent side of its own), the
-  wallet knows the funds are spent but not in which transaction. The balance
-  is right; the history has no entry for it, and a send made in this browser
-  disappears from history once it's mined. Typical cases: sending a whole
-  Sapling note, with no change, to someone else's transparent or shielded
-  address, or to a payment link (2.10). How should history show it, and is a
-  slower lookup to find the transaction worth it? A fix is planned, on hold.
 
 ## References
 

@@ -50,7 +50,10 @@ const notes = [
   note("held", 7_000, { status: "unspent" }),
   // Not checked to the tip yet: it may be spent.
   note("unchecked", 11_000, { status: "unchecked" }),
-  note("spent", 13_000, { status: "spent" }),
+  note("spent", 13_000, {
+    status: "spent",
+    at: { height: 3_100, tx_index: 0 },
+  }),
 ];
 const utxos = [utxo("coin", 1_000), utxo("heldcoin", 4_000)];
 
