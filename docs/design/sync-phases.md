@@ -39,19 +39,15 @@ work.
 
 ### `setupHeight`
 
-Where setup ends. It is not a birthday: phase 3 still reads below it. The
-first rule that applies wins, and it is never below 2,100,000:
+Where setup ends: the indexer's tip − 1 year (420,480 blocks), as of the
+build. It is not a birthday: phase 3 still reads below it. The build looks up
+each pool's first chunk from that height once (`vite.config.ts`, the app's
+`SETUP_CHUNKS`), so no user does; an account stores it on its first sync, so
+a newer build never moves it. A birthday newer than `setupHeight` ends setup
+there instead, and history then has nothing left.
 
-1. The birthday.
-2. The oldest transaction on the wallet's transparent addresses, minus 30 days
-   (34,560 blocks).
-3. Tip − 1 year (420,480 blocks).
-
-The transparent pass already scans every used address from height 0 on a fresh
-sync and lands within seconds, so rule 2 costs nothing extra. It may be
-unknown when phase 2 starts: the crawl reads from the tip down and only needs
-it on reaching it, which takes longer than the transparent pass. If the
-transparent pass fails, rule 3 applies.
+The build is old by however long since it was made, so setup reaches that
+much further back. Builds are frequent enough for that not to matter.
 
 ### Spam era
 
@@ -88,17 +84,17 @@ The indicator shows one percentage for the current phase, across pools:
 work done ÷ total work in the phase's ranges, with a Sapling chunk counting 2
 (it decrypts ~2× slower than Orchard), so the number moves at an even pace.
 
-Totals need each range's chunk bounds up front. The spam bounds are constants;
-`setupHeight` and the birthday are found with `firstChunkFrom`, about a dozen
-16-byte requests per pool per bound, once per account, then stored. Until
-`setupHeight` is known, phase 2 shows "Setting up your wallet" without a number. If
-those requests become a problem, ask the indexer for a height → chunk endpoint.
+Totals need each range's chunk bounds up front. The spam bounds and
+`setupHeight`'s chunks are constants; the birthday's is found with
+`firstChunkFrom`, about a dozen 16-byte requests per pool, once per account,
+then stored. If those requests become a problem, ask the indexer for a
+height → chunk endpoint.
 
 ## Stored state
 
 Each pool's single window `{start, from, to}` becomes three ranges, each with
 its own newest-first cursor: after-spam (top), before-spam, and spam. The
-account also stores `setupDone`, `setupHeight`, and the bound chunks. The
+account also stores `setupDone` and the bound chunks. The
 crawl itself (`crawlChunks`) is unchanged.
 
 ## UI
