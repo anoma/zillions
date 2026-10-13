@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.5.0...zillions-keychain-v0.5.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **keychain:** fail closed without a password and keep a password-only vault ([#80](https://github.com/heliaxdev/zillions-interface/issues/80)) ([9114475](https://github.com/heliaxdev/zillions-interface/commit/91144755d782f0e2e4c35a680884d248739e4e47))
+* **keychain:** inject the provider in the top frame only ([#83](https://github.com/heliaxdev/zillions-interface/issues/83)) ([86f38d3](https://github.com/heliaxdev/zillions-interface/commit/86f38d326a6b42d01ab38f6bdbdb7d6e2ab5b991))
+* **keychain:** keep the service worker alive while approvals are pending ([#79](https://github.com/heliaxdev/zillions-interface/issues/79)) ([108051e](https://github.com/heliaxdev/zillions-interface/commit/108051e1c5106dcb46609e82a4953f516a4fc027))
+* **keychain:** limit approval windows and pending sign requests ([#74](https://github.com/heliaxdev/zillions-interface/issues/74)) ([3698f7b](https://github.com/heliaxdev/zillions-interface/commit/3698f7be6f4e7b28ab9356417eb8082a85851dd6))
+* **keychain:** scope viewing keys and signing to the active account ([#73](https://github.com/heliaxdev/zillions-interface/issues/73)) ([53258ed](https://github.com/heliaxdev/zillions-interface/commit/53258eda88ff551d1c090e5f36e68094f0b41b5e))
+* **keychain:** stop deriving account ids from the seed phrase ([#82](https://github.com/heliaxdev/zillions-interface/issues/82)) ([2ba21ae](https://github.com/heliaxdev/zillions-interface/commit/2ba21aea72d352a4be7b5c0846bd73eec1d18cc3))
+* **keychain:** store each session value as its own storage item ([#81](https://github.com/heliaxdev/zillions-interface/issues/81)) ([3e324ac](https://github.com/heliaxdev/zillions-interface/commit/3e324acfdb03a7458655cdfb86d1fe69bbdba275))
+* **keychain:** submit each sign approval exactly once ([#75](https://github.com/heliaxdev/zillions-interface/issues/75)) ([5b39e29](https://github.com/heliaxdev/zillions-interface/commit/5b39e29de8be2fd49df04b6b8aa30f9da64cc413))
+* **keychain:** warn and require acknowledgement for high sign fees ([#71](https://github.com/heliaxdev/zillions-interface/issues/71)) ([6f360d5](https://github.com/heliaxdev/zillions-interface/commit/6f360d5f0669b786ac9337fb96924edfabac5bc9))
+
 ## [0.5.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.4.1...zillions-keychain-v0.5.0) (2026-10-13)
 
 

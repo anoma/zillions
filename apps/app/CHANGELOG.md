@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.9.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.8.0...zillions-app-v1.9.0) (2026-10-13)
+
+
+### Features
+
+* incremental catch-up decrypt ([#78](https://github.com/heliaxdev/zillions-interface/issues/78)) ([f36b2dc](https://github.com/heliaxdev/zillions-interface/commit/f36b2dc128e255a501ee37220489cd1c3c7d8ffe))
+* spam era on demand ([#76](https://github.com/heliaxdev/zillions-interface/issues/76)) ([1285997](https://github.com/heliaxdev/zillions-interface/commit/128599755dd3008ec65abc7aca2de59c13be9237))
+
+
+### Bug Fixes
+
+* **keychain:** limit approval windows and pending sign requests ([#74](https://github.com/heliaxdev/zillions-interface/issues/74)) ([3698f7b](https://github.com/heliaxdev/zillions-interface/commit/3698f7be6f4e7b28ab9356417eb8082a85851dd6))
+* **keychain:** scope viewing keys and signing to the active account ([#73](https://github.com/heliaxdev/zillions-interface/issues/73)) ([53258ed](https://github.com/heliaxdev/zillions-interface/commit/53258eda88ff551d1c090e5f36e68094f0b41b5e))
+
 ## [1.8.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.7.3...zillions-app-v1.8.0) (2026-10-13)
 
 ### Features
