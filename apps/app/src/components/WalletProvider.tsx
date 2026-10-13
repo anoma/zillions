@@ -6,6 +6,13 @@ import { Wallet } from "../lib/wallet/wallet";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 
+const walletKeys = new WeakMap<Wallet, number>();
+let walletCount = 0;
+const keyOf = (wallet: Wallet) => {
+  if (!walletKeys.has(wallet)) walletKeys.set(wallet, ++walletCount);
+  return walletKeys.get(wallet);
+};
+
 export function WalletProvider({ children }: { children: ReactNode }) {
   const account = useAccount();
 
@@ -62,7 +69,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return <PageLoader />;
   }
 
+  // A new wallet remounts everything below: no state outlives its account.
   return (
-    <WalletContext.Provider value={wallet}>{children}</WalletContext.Provider>
+    <WalletContext.Provider key={keyOf(wallet)} value={wallet}>
+      {children}
+    </WalletContext.Provider>
   );
 }
