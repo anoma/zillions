@@ -9,7 +9,7 @@
  * scripts — i.e. web pages — may ONLY use `dapp/*` channels, and their origin
  * is taken from the sender, never the payload. Unknown senders are refused.
  */
-import type { Runtime } from "webextension-polyfill";
+import browser, { type Runtime } from "webextension-polyfill";
 
 import type { IpcKind, IpcMessage, IpcResult } from "../ipc/contract";
 import { handlers, TRUSTED_SENDER, type IpcSenderContext } from "./handlers";
@@ -65,14 +65,11 @@ const classifySender = (
 };
 
 /**
- * Register the server on the extension runtime. Called from the background
- * entrypoint. Returns a teardown function.
- *
- * `browser` is provided by WXT auto-imports inside the entrypoint, but we
- * import explicitly so this module stands alone.
+ * Register the server on the extension runtime. Must run synchronously on
+ * worker start-up so a message that woke the worker is not missed. Returns a
+ * teardown function.
  */
-export const startBackgroundServer = async (): Promise<() => void> => {
-  const { default: browser } = await import("webextension-polyfill");
+export const startBackgroundServer = (): (() => void) => {
   const extensionBaseUrl = browser.runtime.getURL("");
 
   const listener = (
