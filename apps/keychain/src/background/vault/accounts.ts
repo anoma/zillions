@@ -51,11 +51,6 @@ export class AccountRepository {
     return entries.map((entry) => entry.public);
   }
 
-  /** Number of stored account records. Feeds the keyring's deterministic id recipe. */
-  public async count(): Promise<number> {
-    return (await this.vaultStorage.findAll(KeyStore)).length;
-  }
-
   /** The encrypted blob stored alongside an account's public record. */
   public async getSensitive(
     accountId: string

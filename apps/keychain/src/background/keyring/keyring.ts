@@ -1,4 +1,5 @@
 import { truncateInMiddle } from "@zillions/utils";
+import { v4 as uuidv4 } from "uuid";
 
 import type {
   AccountFlow,
@@ -285,30 +286,9 @@ export class Keyring {
       seedFingerprint = "";
     }
 
-    const vaultLength = await this.accounts.count();
-
-    // Deterministic id: shielded accounts key on the viewing key, others on path.
-    const id =
-      accountType === "shielded-keys"
-        ? generateId(
-            UUID_NAMESPACE,
-            text,
-            alias,
-            address,
-            input.viewingKey,
-            path.account,
-            vaultLength
-          )
-        : generateId(
-            UUID_NAMESPACE,
-            text,
-            alias,
-            address,
-            path.account,
-            path.change,
-            path.index,
-            vaultLength
-          );
+    // Random, so nothing secret (the phrase or key in `text`) feeds an id that
+    // dapps and the popup routes see.
+    const id = uuidv4();
 
     const accountStore: KeyStoreType = {
       id,
