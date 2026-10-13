@@ -231,6 +231,9 @@ export class ApprovalsService {
     if (!pending) {
       throw new Error(`Pending signing data not found for ${msgId}`);
     }
+    // Claim the request before awaiting, so a concurrent submit for the same
+    // msgId fails the check above instead of signing a second time.
+    this.pendingTxs.delete(msgId);
 
     try {
       // The active account may have changed while the popup was open, and a
@@ -243,8 +246,6 @@ export class ApprovalsService {
     } catch (e) {
       resolvers.reject(e);
     }
-
-    this.pendingTxs.delete(msgId);
   }
 
   /** The approval popup rejected: drop the PCZT and fail the dapp's promise. */
