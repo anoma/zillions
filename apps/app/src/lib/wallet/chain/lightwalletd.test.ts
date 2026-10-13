@@ -9,7 +9,6 @@ const none = { sapling: 0, orchard: 0, ironwood: 0 };
 const block: Block = {
   time: 0,
   txids: new Map(),
-  saplingSpends: new Map(),
   treeSizes: { sapling: 73_980_053, orchard: 50_471_686, ironwood: 659_384 },
   outputs: new Map(
     [0, 1, 2, 7, 8, 11, 13, 3].map((index, i) => [

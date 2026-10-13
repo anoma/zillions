@@ -72,30 +72,6 @@ export function derive_transparent(network, ufvk, scope, from, count) {
 }
 
 /**
- * The records of an Orchard or Ironwood `/ciphertexts` chunk that spend one
- * of `nullifiers` (each 32 bytes, concatenated), by index in the chunk.
- * @param {string} pool
- * @param {Uint8Array} ciphertexts
- * @param {Uint8Array} nullifiers
- * @returns {Uint32Array}
- */
-export function find_spends(pool, ciphertexts, nullifiers) {
-    const ptr0 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(ciphertexts, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passArray8ToWasm0(nullifiers, wasm.__wbindgen_malloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ret = wasm.find_spends(ptr0, len0, ptr1, len1, ptr2, len2);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v4 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-    return v4;
-}
-
-/**
  * A new shielded address of the account `ufvk` names, unlinkable to its
  * others; nothing needs to remember it, the viewing key finds what it receives.
  * @param {string} network
@@ -169,26 +145,6 @@ export function needs_sapling_params(pczt) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return ret[0] !== 0;
-}
-
-/**
- * Which of `nullifiers` (each 32 bytes, concatenated) a `/nullifiers` chunk
- * holds, matched on the 10 bytes it serves. Returns `{ spent, frozen }`:
- * `spent` indexes into `nullifiers`; a chunk that isn't `frozen` is the tail.
- * @param {Uint8Array} body
- * @param {Uint8Array} nullifiers
- * @returns {any}
- */
-export function nullifiers_spent(body, nullifiers) {
-    const ptr0 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(nullifiers, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.nullifiers_spent(ptr0, len0, ptr1, len1);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
 }
 
 /**
@@ -469,16 +425,21 @@ export function spending_keys(network, seed, hd_index) {
 /**
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
  * against `ufvk`. `chunk` is its number, which fixes each note's position.
+ * Notes before `from` are skipped while their records still fingerprint as
+ * `tried`, the `digest` an earlier read returned; else all are tried.
  *
- * Returns `{ count, min_height, hits: [{ pool, scope, value, nf_mine, index }] }`.
+ * Returns `{ count, min_height, from, digest, hits: [{ pool, scope, value, nf_mine, index }] }`:
+ * `from` is where it started, `digest` fingerprints all `count` notes.
  * @param {string} network
  * @param {string} ufvk
  * @param {string} pool
  * @param {number} chunk
  * @param {Uint8Array} body
+ * @param {number} from
+ * @param {Uint8Array} tried
  * @returns {any}
  */
-export function try_decrypt(network, ufvk, pool, chunk, body) {
+export function try_decrypt(network, ufvk, pool, chunk, body, from, tried) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -487,7 +448,9 @@ export function try_decrypt(network, ufvk, pool, chunk, body) {
     const len2 = WASM_VECTOR_LEN;
     const ptr3 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
     const len3 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3);
+    const ptr4 = passArray8ToWasm0(tried, wasm.__wbindgen_malloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, from, ptr4, len4);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -497,11 +460,9 @@ export function try_decrypt(network, ufvk, pool, chunk, body) {
 /**
  * Trial-decrypt one pool's chunk in full against `ufvk`: the raw
  * `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
- * the `index` of each hit [`try_decrypt`] found in it, and of each spend
- * [`spends::find_spends`] found. Returns
+ * and the `index` of each hit [`try_decrypt`] found in it. Returns
  * `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
- *    sent: [{ pool, value, recipient, memo, height, tx_index, position }],
- *    spends: [{ nf, height, tx_index }] }`.
+ *    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
  * @param {string} network
  * @param {string} ufvk
  * @param {string} pool
@@ -510,10 +471,9 @@ export function try_decrypt(network, ufvk, pool, chunk, body) {
  * @param {Uint8Array} memos
  * @param {Uint8Array} outgoing
  * @param {Uint32Array} hits
- * @param {Uint32Array} spends
  * @returns {any}
  */
-export function try_decrypt_full(network, ufvk, pool, chunk, ciphertexts, memos, outgoing, hits, spends) {
+export function try_decrypt_full(network, ufvk, pool, chunk, ciphertexts, memos, outgoing, hits) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -528,9 +488,7 @@ export function try_decrypt_full(network, ufvk, pool, chunk, ciphertexts, memos,
     const len5 = WASM_VECTOR_LEN;
     const ptr6 = passArray32ToWasm0(hits, wasm.__wbindgen_malloc);
     const len6 = WASM_VECTOR_LEN;
-    const ptr7 = passArray32ToWasm0(spends, wasm.__wbindgen_malloc);
-    const len7 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt_full(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6, ptr7, len7);
+    const ret = wasm.try_decrypt_full(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -897,11 +855,6 @@ function getArrayJsValueFromWasm0(ptr, len) {
     }
     wasm.__externref_drop_slice(ptr, len);
     return result;
-}
-
-function getArrayU32FromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    return getUint32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
 }
 
 function getArrayU8FromWasm0(ptr, len) {

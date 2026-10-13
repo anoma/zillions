@@ -2032,15 +2032,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "vers-vecs"
-version = "1.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ab7f54690e244b9c886609bc08e12d0cf4738c3a780214642598674cffef6a9"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2355,6 +2346,7 @@ name = "zcore"
 version = "0.1.0"
 dependencies = [
  "bip32",
+ "blake2b_simd",
  "ff",
  "getrandom 0.2.17",
  "hex",
@@ -2370,7 +2362,6 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_bytes",
  "serde_json",
- "vers-vecs",
  "wasm-bindgen",
  "zcash_address",
  "zcash_client_backend",
