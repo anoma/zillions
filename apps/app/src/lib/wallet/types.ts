@@ -43,30 +43,18 @@ export type Note = DecryptedNote & {
   spend: Spend;
 };
 
-/**
- * Whether a note was spent, as far as the sync has checked. `at` is the
- * spending transaction; a Sapling spend can be known before it's found.
- */
+/** Whether a note was spent, as far as the sync has checked; `at` is the spending transaction. */
 export type Spend =
   | { status: "unchecked" | "unspent" }
-  | { status: "spent"; at?: TxLocator };
+  | { status: "spent"; at: TxLocator };
 
 /** Main → worker: decrypt one chunk of one pool. */
 export interface ChunkRequest {
   ufvk: string;
   chunk: number;
   pool: Pool;
-  /**
-   * Revisits a chunk already read, in full: where these records (indices from
-   * `find_spends`) spent our notes, and what the chunk shows we sent.
-   */
-  spends?: number[];
-}
-
-/** Where one of our notes was spent, from the action that spent it. */
-export interface SpendPlace extends TxLocator {
-  /** The nullifier spent: the spent note's `nf_mine`. */
-  nf: string;
+  /** Reads only what the chunk shows we sent, even with no note of ours in it. */
+  sends?: true;
 }
 
 /** A transaction we broadcast that isn't seen mined yet. */
@@ -97,14 +85,13 @@ export type Sent = SentOutput & {
   id: string;
 };
 
-/** A worker's decrypted output for one chunk: what this UFVK received, sent and spent. */
+/** A worker's decrypted output for one chunk: what this UFVK received and sent. */
 export type ChunkWorkerSuccess = {
   chunk: number;
   hits: DecryptedNote[];
   sent: SentOutput[];
-  spends: SpendPlace[];
-  /** The raw `/ciphertexts` body, for the spend check that must run in chunk order. */
-  body: Uint8Array;
+  /** The chunk's oldest block height; absent for a sends read. */
+  minHeight?: number;
 };
 
 export type ChunkWorkerError = {
@@ -115,21 +102,32 @@ export type ChunkWorkerError = {
 /** Worker → main: a chunk's result, or the error that chunk hit. */
 export type ChunkWorkerResponse = ChunkWorkerSuccess | ChunkWorkerError;
 
-/** How far a pool's oldest-first scan has come. */
+/** Chunks read newest-first: `from` to `to` are read (none when `from > to`), `floor` to `from - 1` are left. */
+export interface Segment {
+  floor: number;
+  from: number;
+  to: number;
+}
+
+/**
+ * A pool's chunks in three segments: after the spam era (`top`, which grows
+ * with the chain), before it, and the spam era itself.
+ */
 export interface PoolScan {
-  /** The first chunk that can hold the wallet's notes: the birthday's, or 0. */
-  start: number;
-  /** The first chunk not read yet. */
-  next: number;
+  top: Segment;
+  before: Segment;
+  spam: Segment;
+  /** The chunk in `top` where setup ends: the build's `SETUP_CHUNKS`, never below `top.floor`. */
+  setup?: number;
+  /** The oldest block height read in `top`. */
+  oldestHeight?: number;
 }
 
 /** How far the shielded sync has come. */
 export interface ShieldedScan {
-  percentage: number;
   /** Absent for a pool not scanned yet. */
   scanned: Partial<Record<Pool, PoolScan>>;
-  /** The first Sapling `/nullifiers` chunk not checked yet. */
-  saplingNullifiers: number;
+  setupDone: boolean;
   /** Our sending transactions (`height:tx_index`) whose sends have all been read. */
   sendsRead: string[];
 }
@@ -137,7 +135,7 @@ export interface ShieldedScan {
 /** Everything the wallet keeps for one account, stored as a whole. */
 export interface WalletState {
   /** Bumped when the shape changes: an older state is dropped and synced again. */
-  version: 1;
+  version: 3;
   id: string;
   notes: Note[];
   sent: Sent[];

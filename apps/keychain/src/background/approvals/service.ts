@@ -19,7 +19,7 @@ import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
-import { LocalStorage } from "../../storage";
+import { LocalStorage, type KeyStoreType } from "../../storage";
 import { buildPcztSummary } from "../crypto/zillions";
 import { Keyring } from "../keyring";
 import { VaultService } from "../vault";
@@ -33,6 +33,14 @@ type Resolver = {
 };
 
 const MAX_OPEN_APPROVALS = 3;
+
+/**
+ * The active (parent) account and its derived children: the only accounts a
+ * dapp may see key material for or sign with.
+ */
+const isInActiveScope = (record: KeyStoreType, activeId?: string): boolean =>
+  activeId !== undefined &&
+  (record.id === activeId || record.parentId === activeId);
 
 /** A dapp's PCZT awaiting user approval, parked under its `msgId`. */
 type PendingSignTx = {
@@ -116,10 +124,16 @@ export class ApprovalsService {
     }
   }
 
-  /** Public account records for a connected dapp. */
+  /**
+   * Every account for a connected dapp (so it can offer a switcher), with key
+   * material only on the active account and its children.
+   */
   async dappAccounts(origin: string): Promise<ZCashKeychainAccount[]> {
     await this.assertConnected(origin);
-    return (await this.accounts.findAll()).map(toPublicAccount);
+    const activeId = (await this.accounts.getActiveAccount())?.id;
+    return (await this.accounts.findAll()).map((record) =>
+      toPublicAccount(record, isInActiveScope(record, activeId))
+    );
   }
 
   /** The active account for a connected dapp, or null when none is set. */
@@ -130,13 +144,14 @@ export class ApprovalsService {
     const active = await this.accounts.getActiveAccount();
     if (!active) return null;
     const record = await this.accounts.findById(active.id);
-    return record ? toPublicAccount(record) : null;
+    return record ? toPublicAccount(record, true) : null;
   }
 
   /**
    * Resolve a `sign()` call: park the PCZT under a msgId and open the
    * approval popup; resolves with the signed PCZT (base64) once the user
-   * confirms. Requires an unlocked vault and a connected origin.
+   * confirms. Requires an unlocked vault, a connected origin, and a signer
+   * within the active account.
    */
   async approveSignTx(
     pczt: string,
@@ -148,31 +163,11 @@ export class ApprovalsService {
     }
     await this.assertConnected(origin);
 
-    // Resolve the signer/account type shown by the approval popup.
-    let signerAddress = signer;
-    let accountType: string;
-    if (signerAddress) {
-      const record = await this.accounts.findByAddress(signerAddress);
-      if (!record) {
-        throw new Error(`Account for ${signerAddress} not found!`);
-      }
-      accountType = record.type;
-    } else {
-      const active = await this.accounts.getActiveAccount();
-      const record = active
-        ? await this.accounts.findById(active.id)
-        : undefined;
-      if (!record) {
-        throw new Error("No active account to sign with");
-      }
-      signerAddress = record.address;
-      accountType = record.type;
-    }
+    const record = await this.activeSigner(signer);
 
     const msgId = uuid();
-    // The resolved address, so the summary and the signature use one account
-    // even if the active account changes while the popup is open.
-    this.pendingTxs.set(msgId, { pczt, signer: signerAddress });
+    // The resolved address, so the summary and the signature use one account.
+    this.pendingTxs.set(msgId, { pczt, signer: record.address });
 
     try {
       return await this.launchApprovalPopup<string>(
@@ -180,8 +175,8 @@ export class ApprovalsService {
         approvalRoutes.approveSignTx(
           msgId,
           encodeURIComponent(origin),
-          accountType,
-          signerAddress
+          record.type,
+          record.address
         )
       );
     } finally {
@@ -238,12 +233,12 @@ export class ApprovalsService {
     }
 
     try {
+      // The active account may have changed while the popup was open, and a
+      // site may only sign with the one active now.
+      const record = await this.activeSigner(signer || pending.signer);
       // A PCZT spans transparent + shielded; the keyring signs the whole PCZT
       // in one pass and returns the signed PCZT as base64.
-      const signed = await this.keyring.sign(
-        pending.pczt,
-        signer || pending.signer
-      );
+      const signed = await this.keyring.sign(pending.pczt, record.address);
       resolvers.resolve(signed);
     } catch (e) {
       resolvers.reject(e);
@@ -342,6 +337,24 @@ export class ApprovalsService {
   private async isDomainApproved(origin: string): Promise<boolean> {
     const approvedOrigins = (await this.localStorage.getApprovedOrigins()) || [];
     return approvedOrigins.includes(origin);
+  }
+
+  /** The `signer` address's account (else the active one), if within the active account. */
+  private async activeSigner(signer?: string): Promise<KeyStoreType> {
+    const activeId = (await this.accounts.getActiveAccount())?.id;
+    const record = signer
+      ? await this.accounts.findByAddress(signer)
+      : activeId
+        ? await this.accounts.findById(activeId)
+        : undefined;
+    if (!signer && !record) {
+      throw new Error("No active account to sign with");
+    }
+    // One error for unknown and inactive addresses: a site learns nothing new.
+    if (!record || !isInActiveScope(record, activeId)) {
+      throw new Error(`Signer ${signer} is not the active account`);
+    }
+    return record;
   }
 
   private async assertConnected(origin: string): Promise<void> {

@@ -13,7 +13,7 @@ import { fetchTreeSizes, type TreeSizes } from "./chain/indexer";
 import { fetchBlock, fetchLatestHeight } from "./chain/lightwalletd";
 import { submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
-import { minedHeights, pendingActivity, prunePending } from "./pending";
+import { pendingActivity, prunePending } from "./pending";
 import {
   maxSend,
   planMigration,
@@ -22,9 +22,18 @@ import {
   type SendRequest,
   shieldPczt,
 } from "./send";
-import { workerChannel } from "./shielded/crawl";
-import { locateSaplingSpends } from "./shielded/spends";
-import { crawlShielded, recoverSends, type ShieldedRun } from "./shielded/sync";
+import { CORES, workerChannel } from "./shielded/crawl";
+import {
+  progressOf,
+  type SyncPhase,
+  type SyncProgress,
+} from "./shielded/phases";
+import {
+  crawlHistory,
+  crawlRecent,
+  recoverSends,
+  type ShieldedRun,
+} from "./shielded/sync";
 import { emptyState, loadState, saveState, storageKey } from "./store";
 import {
   cachedTransparent,
@@ -37,7 +46,15 @@ import {
 } from "./transparent";
 import type { Activity, PendingActivity, WalletState } from "./types";
 
-export type SyncEventListener = (e: { percentage: number }) => void;
+export type SyncEventListener = (e: SyncProgress) => void;
+
+/** Every phase on every core, hidden tab or not. */
+const FRY = import.meta.env.VITE_ALLOW_CPU_TO_FRY === "true";
+
+/** Whether the browser asks to save data (Chromium only). */
+const saveData = () =>
+  (navigator as { connection?: { saveData?: boolean } }).connection
+    ?.saveData === true;
 
 type Account = { seedFingerprint: string; hdIndex: number };
 
@@ -68,6 +85,15 @@ export class Wallet {
   #placing: Promise<unknown> = Promise.resolve();
   /** Heights whose block was fetched this sync. */
   #freshBlocks = new Set<number>();
+  #progress: SyncProgress = { phase: "catch-up" };
+  /** History, running in the background after a sync. */
+  #history?: { abort: AbortController; done: Promise<unknown> };
+  /** Whether history may download: not when the browser saves data, unless asked. */
+  #historyAllowed = !saveData();
+  #speedUp = false;
+  /** The tree sizes the last sync read to; history reads to them too. */
+  #sizes?: TreeSizes;
+  #recentRunning = false;
 
   constructor(options: { id: string; ufvk: string; birthday?: number }) {
     this.id = options.id;
@@ -101,75 +127,177 @@ export class Wallet {
   };
 
   #emitProgress = () => {
-    const { percentage } = this.#state.scan;
-    this.#syncProgressListeners.forEach((listener) => listener({ percentage }));
+    const progress = { ...this.#progress, spedUp: this.#speedUp, fry: FRY };
+    this.#syncProgressListeners.forEach((listener) => listener(progress));
   };
 
-  /** Brings the wallet up to the chain tip; a call while one runs shares it. */
+  #announce = (progress: SyncProgress) => {
+    this.#progress = progress;
+    this.#emitProgress();
+  };
+
+  #workersLogged = "";
+
+  #workers = (phase: SyncPhase) => {
+    const [count, why]: [number, string] = FRY
+      ? [CORES, "VITE_ALLOW_CPU_TO_FRY"]
+      : globalThis.document?.hidden
+        ? [1, "tab hidden"]
+        : phase !== "history"
+          ? [CORES, "full power"]
+          : this.#speedUp
+            ? [CORES, "sped up"]
+            : [2, "background"];
+    const line = `${phase}: ${count} workers (${why})`;
+    if (line !== this.#workersLogged) {
+      console.log(`[sync] ${line}`);
+      this.#workersLogged = line;
+    }
+    return count;
+  };
+
+  #newRun = (tip: number, signal: AbortSignal): ShieldedRun => ({
+    ufvk: this.#ufvk,
+    // An import's 0 means none: the whole history.
+    birthday: this.#birthday || undefined,
+    state: this.#state,
+    tip,
+    workers: this.#workers,
+    applied: this.#applied,
+    readChunks: new Set(),
+    lookups: workerChannel(),
+    signal,
+    onFound: () => {
+      this.#placing = this.#placing.then(() =>
+        this.#fetchBlocks().catch((err) =>
+          console.error("[sync] block lookup failed", err),
+        ),
+      );
+    },
+    onAdvance: (progress) => {
+      this.#save();
+      this.#announce(progress);
+    },
+  });
+
+  /**
+   * Brings the wallet up to the chain tip: new chunks, and setup until it's
+   * done. History then goes on in the background. A call while one runs
+   * shares it, and pauses history meanwhile.
+   */
   sync = dedupe(async () => {
     const startTime = Date.now();
     await this.#seed();
+    await this.#stopHistory();
+    this.#recentRunning = true;
     this.#emitProgress();
 
     this.#placing = Promise.resolve();
     this.#freshBlocks.clear();
-    const run: ShieldedRun = {
-      ufvk: this.#ufvk,
-      birthday: this.#birthday,
-      state: this.#state,
-      applied: this.#applied,
-      readChunks: new Set(),
-      lookups: workerChannel(),
-      signal: this.#abort.signal,
-      onFound: () => {
-        this.#placing = this.#placing.then(() =>
-          this.#fetchBlocks().catch((err) =>
-            console.error("[sync] block lookup failed", err),
-          ),
-        );
-      },
-      onAdvance: () => {
-        this.#save();
-        this.#emitProgress();
-      },
-    };
     let transparent: Promise<unknown> = Promise.resolve();
+    let run: ShieldedRun | undefined;
     let sizes: TreeSizes | undefined;
     // History's blocks are looked up whatever becomes of the crawl: what it
     // did find, and the transparent side, still deserve their txids and times.
     try {
       await initZcore();
-      this.#tip = await fetchLatestHeight();
-      transparent = this.#syncTransparent(this.#tip);
+      const tip = (this.#tip = await fetchLatestHeight());
+      transparent = this.#syncTransparent(tip);
       sizes = await fetchTreeSizes();
-      await crawlShielded(run, sizes);
+      run = this.#newRun(tip, this.#abort.signal);
+      await crawlRecent(run, sizes);
     } finally {
-      const { state } = run;
       await transparent;
-      await this.#placing;
-      await this.#fetchBlocks(await minedHeights(state.pending, state.notes));
-      locateSaplingSpends(state.notes, state.blocks);
-      if (sizes) {
-        await recoverSends(run, sizes, this.#sendingTxs()).catch((err) =>
-          console.error("[sync] sends lookup failed", err),
-        );
-      }
-      run.lookups.terminate();
-      state.pending = prunePending(state.pending, {
-        spent: new Set(
-          state.notes
-            .filter((n) => n.spend.status === "spent")
-            .map((n) => n.nf_mine),
-        ),
-        mined: new Set(this.#transparent?.txs.map((tx) => tx.txid)),
-        tip: this.#tip,
-      });
-      this.#save();
-      this.#emitProgress();
-      await this.#saving;
-      console.log("[sync] took (seconds):", (Date.now() - startTime) / 1000);
+      await this.#finish(run, sizes);
+      this.#recentRunning = false;
+      console.log(
+        `[sync] sync took ${((Date.now() - startTime) / 1000).toFixed(1)} s`,
+      );
     }
+    this.#sizes = sizes;
+    this.#startHistory();
   });
+
+  /** What a run leaves to do once its crawl ends, however it ends. */
+  #finish = async (run?: ShieldedRun, sizes?: TreeSizes) => {
+    const state = this.#state;
+    await this.#placing;
+    await this.#fetchBlocks();
+    if (run && sizes) {
+      await recoverSends(run, sizes, this.#sendingTxs()).catch((err) =>
+        console.error("[sync] sends lookup failed", err),
+      );
+    }
+    run?.lookups.terminate();
+    state.pending = prunePending(state.pending, {
+      spent: new Set(
+        state.notes
+          .filter((n) => n.spend.status === "spent")
+          .map((n) => n.nf_mine),
+      ),
+      mined: new Set(this.#transparent?.txs.map((tx) => tx.txid)),
+      tip: this.#tip,
+    });
+    this.#save();
+    this.#emitProgress();
+    await this.#saving;
+  };
+
+  /** Starts history in the background, or says why it waits or has nothing left. */
+  #startHistory = () => {
+    const { scan } = this.#state;
+    const tip = this.#tip;
+    const sizes = this.#sizes;
+    if (!scan.setupDone || this.#history || !sizes || tip === undefined) return;
+    if (this.#abort.signal.aborted) return;
+    if (progressOf(scan, "history", tip).percentage === 100) {
+      console.log("[sync] history: nothing left to read");
+      return this.#announce({ phase: "done" });
+    }
+    if (!this.#historyAllowed) {
+      console.log("[sync] history paused: the browser asks to save data");
+      return this.#announce({ phase: "paused" });
+    }
+
+    const abort = new AbortController();
+    const signal = AbortSignal.any([this.#abort.signal, abort.signal]);
+    const run = this.#newRun(tip, signal);
+    const startTime = Date.now();
+    const done = crawlHistory(run, sizes)
+      .catch((err) => {
+        console.error("[sync] history failed", err);
+        return false;
+      })
+      .then(async (complete) => {
+        await this.#finish(run, sizes);
+        console.log(
+          `[sync] history ${complete ? "done" : "stopped"} after ${((Date.now() - startTime) / 1000).toFixed(1)} s`,
+        );
+        if (complete) this.#announce({ phase: "done" });
+      })
+      .finally(() => {
+        if (this.#history?.done === done) this.#history = undefined;
+      });
+    this.#history = { abort, done };
+  };
+
+  #stopHistory = async () => {
+    this.#history?.abort.abort();
+    await this.#history?.done;
+    this.#history = undefined;
+  };
+
+  /** Runs history on every core, or back on 2, for the rest of this session. */
+  setSpeedUp = (on: boolean) => {
+    this.#speedUp = on;
+    this.#emitProgress();
+  };
+
+  /** Lets history download although the browser saves data. */
+  downloadHistory = () => {
+    this.#historyAllowed = true;
+    if (!this.#recentRunning) this.#startHistory();
+  };
 
   /**
    * Transparent takes seconds, so it lands long before the shielded crawl;
@@ -199,17 +327,15 @@ export class Wallet {
     );
 
   /**
-   * Fetches the blocks behind every transaction in history, and at `extra`,
-   * once each: they give shielded transactions their txids, which is what
-   * lets a transaction seen from both sides show once, and every entry its
-   * time.
+   * Fetches the blocks behind every transaction in history, once each: they
+   * give shielded transactions their txids, which is what lets a transaction
+   * seen from both sides show once, and every entry its time.
    */
-  #fetchBlocks = async (extra: number[] = []) => {
+  #fetchBlocks = async () => {
     const tip = this.#tip;
     const { notes, sent, blocks } = this.#state;
     const history = [
       ...activityHeights(notes, sent, this.#transparent?.txs ?? []),
-      ...extra,
     ];
     const missing = history.filter((height) => !blocks.has(height));
     // A block a reorg can still replace is stored, so history shows it on

@@ -210,7 +210,7 @@ export function buildActivity(
   };
   for (const note of notes) {
     at(note).received.push(note);
-    if (note.spend.status === "spent" && note.spend.at) {
+    if (note.spend.status === "spent") {
       at(note.spend.at).spent.push(note);
     }
   }
@@ -243,9 +243,7 @@ export function activityHeights(
 ) {
   return new Set([
     ...notes.flatMap((n) =>
-      n.spend.status === "spent" && n.spend.at
-        ? [n.height, n.spend.at.height]
-        : [n.height],
+      n.spend.status === "spent" ? [n.height, n.spend.at.height] : [n.height],
     ),
     ...sent.map((s) => s.height),
     ...transparent.map((t) => t.height),
@@ -260,7 +258,7 @@ export function sendingTxs(
 ) {
   const txs = new Map<string, TxLocator>();
   for (const { spend } of notes) {
-    if (spend.status === "spent" && spend.at) {
+    if (spend.status === "spent") {
       txs.set(`${spend.at.height}:${spend.at.tx_index}`, spend.at);
     }
   }
