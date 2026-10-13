@@ -11,18 +11,15 @@ import type {
   WalletState,
 } from "./types";
 
-// A small chain, described per test: what each chunk holds, which records
-// spend what, and the blocks history asks for.
+// A small chain, described per test: what each chunk holds, where
+// nullifiers were spent, and the blocks history asks for.
 const chain = vi.hoisted(() => ({
   sizes: { sapling: 0, orchard: 0, ironwood: 0 },
   hits: new Map<string, DecryptedNote[]>(),
-  /** `pool:chunk` → record index → the nullifier it spends. */
-  rho: new Map<string, Map<number, string>>(),
-  /** Nullifier → where it was spent, as the spend's `/memos` record says. */
+  /** Nullifier → where it was spent, as the indexer's `/spent` says. */
   spentAt: new Map<string, { height: number; tx_index: number }>(),
   sent: new Map<string, Sent[]>(),
   blocks: new Map<number, Block>(),
-  saplingNullifiers: [] as string[],
   tip: 3_200,
 }));
 
@@ -44,22 +41,6 @@ const saved = vi.hoisted(() => ({
 
 vi.mock("@zillions/zcore", () => ({
   default: vi.fn(async () => {}),
-  // The chunk number rides in the body's first byte.
-  find_spends: vi.fn((pool: Pool, body: Uint8Array, nfs: Uint8Array) => {
-    const ours = new Set(nullifiers(nfs));
-    const records = chain.rho.get(`${pool}:${body[0]}`) ?? new Map();
-    return Uint32Array.from(
-      [...records].filter(([, nf]) => ours.has(nf)).map(([i]) => i),
-    );
-  }),
-  nullifiers_spent: vi.fn((_body: Uint8Array, nfs: Uint8Array) => {
-    return {
-      spent: nullifiers(nfs).flatMap((nf, i) =>
-        chain.saplingNullifiers.includes(nf) ? [i] : [],
-      ),
-      frozen: false,
-    };
-  }),
   parse_transaction: vi.fn(),
   // Test scripts are their address, as text.
   script_address: vi.fn((_network: string, script: Uint8Array) =>
@@ -80,42 +61,28 @@ vi.mock("./shielded/crawl", () => ({
       to: number;
       onChunk: (r: ChunkWorkerSuccess) => void;
     }) => {
-      for (let chunk = o.from; chunk <= o.to; chunk++) {
-        const key = `${o.pool}:${chunk}`;
-        o.onChunk({
-          chunk,
-          hits: chain.hits.get(key) ?? [],
-          sent: [],
-          spends: [],
-          body: Uint8Array.of(chunk),
-        });
+      for (let chunk = o.to; chunk >= o.from; chunk--) {
+        const hits = chain.hits.get(`${o.pool}:${chunk}`) ?? [];
+        o.onChunk({ chunk, hits, sent: [] });
       }
     },
   ),
   workerChannel: vi.fn(() => ({ run: lookup, terminate: vi.fn() })),
 }));
 
-/** A spend lookup or a sends read: the chunk revisited in full. */
-const lookup = vi.fn(async ({ pool, chunk, spends = [] }: ChunkRequest) => {
-  const records = chain.rho.get(`${pool}:${chunk}`) ?? new Map();
-  return {
-    chunk,
-    hits: [],
-    sent: chain.sent.get(`${pool}:${chunk}`) ?? [],
-    spends: spends.map((i) => {
-      const nf = records.get(i)!;
-      return { nf, ...chain.spentAt.get(nf)! };
-    }),
-    body: Uint8Array.of(chunk),
-  };
-});
+/** A sends read: what a chunk shows we sent. */
+const lookup = vi.fn(async ({ pool, chunk }: ChunkRequest) => ({
+  chunk,
+  hits: [],
+  sent: chain.sent.get(`${pool}:${chunk}`) ?? [],
+}));
 
 vi.mock("./chain/indexer", async (actual) => ({
   ...(await actual<typeof import("./chain/indexer")>()),
   fetchTreeSizes: vi.fn(async () => chain.sizes),
   firstChunkFrom: vi.fn(async () => 0),
-  fetchNullifierChunk: vi.fn(async (_pool: Pool, chunk: number) =>
-    chunk === 0 ? new Uint8Array() : undefined,
+  fetchSpent: vi.fn(async (_pool: Pool, nfs: Uint8Array) =>
+    nullifiers(nfs).map((nf) => chain.spentAt.get(nf) ?? null),
   ),
 }));
 
@@ -124,7 +91,6 @@ vi.mock("./chain/lightwalletd", async (actual) => ({
   fetchBlock: vi.fn(
     async (height: number) => chain.blocks.get(height) ?? block(),
   ),
-  fetchTransaction: vi.fn(),
   fetchLatestHeight: vi.fn(async () => chain.tip),
 }));
 
@@ -158,7 +124,7 @@ const zcore = await import("@zillions/zcore");
 const { submitTransaction } = await import("./chain/submit");
 const { cachedTransparent } = await import("./transparent");
 type TransparentCache = import("./transparent").TransparentCache;
-const { fetchBlock, fetchTransaction } = await import("./chain/lightwalletd");
+const { fetchBlock } = await import("./chain/lightwalletd");
 const store = await import("./store");
 const { crawlChunks } = await import("./shielded/crawl");
 
@@ -166,7 +132,6 @@ function block(overrides: Partial<Block> = {}): Block {
   return {
     time: 0,
     txids: new Map(),
-    saplingSpends: new Map(),
     treeSizes: { ...chain.sizes },
     outputs: new Map(),
     vout: new Map(),
@@ -195,24 +160,16 @@ beforeEach(() => {
   Object.assign(chain, {
     sizes: { sapling: 0, orchard: 0, ironwood: 0 },
     tip: 3_200,
-    saplingNullifiers: [],
   });
-  for (const map of [
-    chain.hits,
-    chain.rho,
-    chain.spentAt,
-    chain.sent,
-    chain.blocks,
-  ]) {
+  for (const map of [chain.hits, chain.spentAt, chain.sent, chain.blocks]) {
     map.clear();
   }
   lookup.mockClear();
 });
 
-test("finds a spend of an earlier note in chunk order, and what it paid into another pool", async () => {
+test("places a note's spend from the indexer, and reads what it paid into another pool", async () => {
   chain.sizes = { sapling: 100, orchard: 3 * 16_384 + 10, ironwood: 0 };
   chain.hits.set("orchard:1", [note("orchard", 16_387, nf("aa"))]);
-  chain.rho.set("orchard:3", new Map([[7, nf("aa")]]));
   chain.spentAt.set(nf("aa"), { height: 3_100, tx_index: 2 });
   // The spending transaction pays one Sapling note, the block's last.
   chain.blocks.set(
@@ -239,12 +196,12 @@ test("finds a spend of an earlier note in chunk order, and what it paid into ano
     status: "spent",
     at: { height: 3_100, tx_index: 2 },
   });
+  // Neither chunk holds a note of ours: only the block points at them.
   expect(lookup).toHaveBeenCalledWith(
-    expect.objectContaining({ pool: "orchard", chunk: 3, spends: [7] }),
+    expect.objectContaining({ pool: "orchard", chunk: 3, sends: true }),
   );
-  // Sapling chunk 0 holds nothing of ours: only the block points at it.
   expect(lookup).toHaveBeenCalledWith(
-    expect.objectContaining({ pool: "sapling", chunk: 0, spends: [] }),
+    expect.objectContaining({ pool: "sapling", chunk: 0, sends: true }),
   );
   expect(saved.sent).toEqual([expect.objectContaining(payment)]);
   expect((await wallet.getBalance()).shieldedBalance).toBe(0n);
@@ -302,15 +259,14 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
   ).toBe(false);
 });
 
-test("places a Sapling spend through our own transaction's block", async () => {
+test("places a Sapling spend from the indexer", async () => {
   chain.sizes = { sapling: 16_384, orchard: 16_384, ironwood: 0 };
   chain.hits.set("sapling:0", [note("sapling", 5, nf("cc"))]);
   // Its change, received in the spending transaction.
   chain.hits.set("orchard:0", [
     { ...note("orchard", 9, nf("dd")), height: 3_050, tx_index: 4 },
   ]);
-  chain.saplingNullifiers = [nf("cc")];
-  chain.blocks.set(3_050, block({ saplingSpends: new Map([[nf("cc"), 4]]) }));
+  chain.spentAt.set(nf("cc"), { height: 3_050, tx_index: 4 });
 
   const wallet = new Wallet({ id: "c", ufvk: "uview" });
   await wallet.sync();
@@ -348,16 +304,11 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
   });
 
   // Mined at 3_210, paying one Orchard note and nothing back to us.
-  chain.saplingNullifiers = [nf("ce")];
-  vi.mocked(fetchTransaction).mockResolvedValue({
-    data: new Uint8Array(),
-    height: 3_210,
-  });
+  chain.spentAt.set(nf("ce"), { height: 3_210, tx_index: 2 });
   chain.blocks.set(
     3_210,
     block({
       txids: new Map([[2, "t2"]]),
-      saplingSpends: new Map([[nf("ce"), 2]]),
       outputs: new Map([[2, { sapling: 0, orchard: 1, ironwood: 0 }]]),
     }),
   );
@@ -469,4 +420,32 @@ test("names and dates what a chunk finds before the crawl ends", async () => {
     ]),
   );
   vi.mocked(crawlChunks).mockImplementation(crawl);
+});
+
+test("crawls newest-first, and a later sync reads the chunks minted since and the history left", async () => {
+  chain.sizes = { sapling: 0, orchard: 3 * 16_384, ironwood: 0 };
+  chain.hits.set("orchard:0", [note("orchard", 3, nf("a1"))]);
+  const read: number[] = [];
+  const crawl = vi.mocked(crawlChunks).getMockImplementation()!;
+  // The first sync fails after chunk 2.
+  vi.mocked(crawlChunks).mockImplementation(async (o) => {
+    o.onChunk({ chunk: o.to, hits: [], sent: [] });
+    read.push(o.to);
+    throw new Error("network");
+  });
+  const wallet = new Wallet({ id: "j", ufvk: "uview" });
+  await expect(wallet.sync()).rejects.toThrow("network");
+  expect((await wallet.getBalance()).shieldedBalance).toBe(0n);
+
+  chain.sizes.orchard = 5 * 16_384;
+  vi.mocked(crawlChunks).mockImplementation(async (o) => {
+    for (let chunk = o.to; chunk >= o.from; chunk--) read.push(chunk);
+    return crawl(o);
+  });
+  await wallet.sync();
+  vi.mocked(crawlChunks).mockImplementation(crawl);
+
+  // Those minted since down to chunk 2 again (it may have been filling), then below.
+  expect(read).toEqual([2, 4, 3, 2, 1, 0]);
+  expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
 });

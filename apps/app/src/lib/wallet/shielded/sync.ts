@@ -1,5 +1,5 @@
 /**
- * The shielded sync: each pool's chunks oldest-first, the notes and sends
+ * The shielded sync: each pool's chunks newest-first, the notes and sends
  * they hold for us, and where our notes were spent. It updates the state it
  * is given in place; the wallet saves and announces through the callbacks.
  */
@@ -21,12 +21,7 @@ import type {
   WalletState,
 } from "../types";
 import { crawlChunks, workerChannel } from "./crawl";
-import {
-  checkSaplingSpends,
-  findSpends,
-  markUnspent,
-  placeSpends,
-} from "./spends";
+import { checkSpends } from "./spends";
 
 /** Newest pool first: that's where recent activity lands. */
 export const POOLS = [
@@ -47,7 +42,7 @@ export function percentageOf(
   for (const pool of POOLS) {
     const scan = scanned[pool];
     if (!scan) continue;
-    done += Math.max(0, scan.next - scan.start);
+    done += Math.max(0, scan.to - scan.from + 1);
     total += Math.max(0, last[pool] + 1 - scan.start);
   }
   return total > 0 ? Math.min(100, (done / total) * 100) : 100;
@@ -65,7 +60,7 @@ export type ShieldedRun = {
   readChunks: Set<string>;
   lookups: ReturnType<typeof workerChannel>;
   signal: AbortSignal;
-  /** New notes or sends: their blocks are worth fetching now. */
+  /** New notes, sends or spends: their blocks are worth fetching now. */
   onFound: () => void;
   /** The cursor or what's known moved: worth saving and announcing. */
   onAdvance: () => void;
@@ -84,8 +79,9 @@ function applySent(run: ShieldedRun, pool: Pool, sent: SentOutput[]) {
 }
 
 /**
- * Reads each pool's chunks oldest-first up to `sizes`, from where the last sync
- * stopped: every note older than a chunk is known when it's read, so its spends show up in it.
+ * Reads each pool's chunks newest-first: those minted since the last sync,
+ * then the history below, down to the birthday's. Checks every note found
+ * or still unspent for a spend.
  */
 export async function crawlShielded(run: ShieldedRun, sizes: TreeSizes) {
   const { state, signal } = run;
@@ -99,59 +95,77 @@ export async function crawlShielded(run: ShieldedRun, sizes: TreeSizes) {
       run.birthday === undefined
         ? 0
         : await firstChunkFrom(pool, run.birthday, last[pool]);
-    scanned[pool] = { start, next: start };
+    scanned[pool] = { start, from: last[pool] + 1, to: last[pool] };
   }
   const advance = () => {
     state.scan.percentage = percentageOf(scanned, last);
     run.onAdvance();
   };
 
+  // Off the crawl, whose `onChunk` must stay synchronous; a failed check retries next sync.
+  let checking: Promise<unknown> = Promise.resolve();
+  const check = (notes: Note[]) => {
+    if (!notes.length) return;
+    checking = checking
+      .then(() => checkSpends(notes, signal))
+      .then(() => {
+        run.onFound();
+        advance();
+      })
+      .catch((err) => console.error("[sync] spend check failed", err));
+  };
+  check(state.notes.filter((n) => n.spend.status !== "spent"));
+
   for (const pool of POOLS) {
     if (last[pool] < 0) continue;
     const scan = scanned[pool]!;
-    // Each chunk's spend lookup, then its cursor move, chained in chunk
-    // order: the cursor never passes a chunk whose spends aren't placed.
-    let locating: Promise<unknown> = Promise.resolve();
+    const onChunk = (result: ChunkWorkerSuccess) =>
+      check(applyChunk(run, pool, result));
+
+    if (scan.from > scan.to) {
+      scan.from = last[pool] + 1;
+    } else {
+      await crawlChunks({
+        ufvk: run.ufvk,
+        pool,
+        from: scan.to,
+        to: last[pool],
+        signal,
+        onChunk,
+      });
+      if (signal.aborted) break;
+    }
+    scan.to = last[pool];
+    advance();
+
     await crawlChunks({
       ufvk: run.ufvk,
       pool,
-      // The last chunk read may have been the tip, still filling.
-      from: Math.max(scan.start, scan.next - 1),
-      to: last[pool],
+      from: scan.start,
+      to: scan.from - 1,
       signal,
       onChunk: (result) => {
-        const spends = applyChunk(run, pool, result);
-        locating = locating.then(async () => {
-          if (spends.length) {
-            await locateSpends(run, pool, result.chunk, spends);
-          }
-          scan.next = Math.max(scan.next, result.chunk + 1);
-          advance();
-        });
+        onChunk(result);
+        scan.from = result.chunk;
+        advance();
       },
     });
-    await locating;
     if (signal.aborted) break;
-
-    if (pool === "sapling") {
-      await checkSaplingSpends(state.notes, state.scan, signal);
-    } else {
-      markUnspent(state.notes, pool);
-    }
-    advance();
   }
+  await checking;
 }
 
-/** Takes one chunk's notes and sends; returns its records spending our notes, by index. */
+/** Takes one chunk's notes and sends; returns the notes new to us. */
 function applyChunk(
   run: ShieldedRun,
   pool: Pool,
-  { chunk, hits, sent, body }: ChunkWorkerSuccess,
+  { chunk, hits, sent }: ChunkWorkerSuccess,
 ) {
   // A worker reads a chunk in full exactly when it holds a note of ours.
   if (hits.length) run.readChunks.add(`${pool}:${chunk}`);
   const known = run.applied.size;
   applySent(run, pool, sent);
+  const found: Note[] = [];
   for (const hit of hits) {
     const note: Note = {
       ...hit,
@@ -161,25 +175,11 @@ function applyChunk(
     if (run.applied.has(note.id)) continue;
     run.applied.add(note.id);
     run.state.notes.push(note);
+    found.push(note);
   }
   // History shows a find at once; its txid and time can't wait for the crawl's end.
   if (run.applied.size > known) run.onFound();
-
-  // An Orchard or Ironwood action names the nullifier it spends as its rho.
-  return pool === "sapling" ? [] : findSpends(run.state.notes, pool, body);
-}
-
-/** Places `spends`, records of `chunk`, and takes what the chunk shows we sent. */
-async function locateSpends(
-  run: ShieldedRun,
-  pool: Pool,
-  chunk: number,
-  spends: number[],
-) {
-  const result = await run.lookups.run({ ufvk: run.ufvk, chunk, pool, spends });
-  run.readChunks.add(`${pool}:${chunk}`);
-  applySent(run, pool, result.sent);
-  placeSpends(run.state.notes, pool, result.spends);
+  return found;
 }
 
 /**
@@ -210,7 +210,7 @@ export async function recoverSends(
             ufvk: run.ufvk,
             chunk,
             pool,
-            spends: [],
+            sends: true,
           });
           applySent(run, pool, sent);
           run.readChunks.add(`${pool}:${chunk}`);

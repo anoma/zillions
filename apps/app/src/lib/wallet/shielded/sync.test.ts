@@ -10,9 +10,10 @@ test("progress counts each pool's chunks from its start, and nothing to read is 
   expect(
     percentageOf(
       {
-        ironwood: { start: 0, next: 10 },
-        orchard: { start: 10, next: 10 },
-        sapling: { start: 0, next: 0 },
+        ironwood: { start: 0, from: 0, to: 9 },
+        // Nothing read yet.
+        orchard: { start: 10, from: 20, to: 19 },
+        sapling: { start: 0, from: 0, to: -1 },
       },
       last,
     ),

@@ -27,7 +27,6 @@ const state = (): WalletState => ({
       {
         time: 1,
         txids: new Map([[2, "tx2"]]),
-        saplingSpends: new Map(),
         treeSizes: { sapling: 1, orchard: 2, ironwood: 3 },
         outputs: new Map(),
         vout: new Map([[2, [{ value: 5, script: Uint8Array.of(1, 2) }]]]),

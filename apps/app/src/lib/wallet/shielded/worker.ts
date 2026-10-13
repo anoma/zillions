@@ -14,29 +14,27 @@ let ready: Promise<unknown> | undefined;
 // `self` typed as Window in a DOM-lib project; cast to the message surface we use.
 const worker = self as unknown as {
   onmessage: ((e: MessageEvent<ChunkRequest>) => void) | null;
-  postMessage: (msg: ChunkWorkerResponse, transfer?: Transferable[]) => void;
+  postMessage: (msg: ChunkWorkerResponse) => void;
 };
 
 worker.onmessage = async (e) => {
   // TODO can we save JS ↔ WASM boundary time by registering the ufvk?
   // And if we create a sequence on the from/to based on the mod of the total blocks?
   // Does it really worth the complexity?
-  const { chunk, ufvk, pool, spends } = e.data;
+  const { chunk, ufvk, pool, sends } = e.data;
   try {
     await (ready ??= initZcore());
     const body = await fetchChunk("ciphertexts", chunk, pool);
-    // A spend lookup revisits a chunk whose own notes were already read.
-    const hits: { index: number }[] = spends
+    const hits: { index: number }[] = sends
       ? []
       : try_decrypt(NETWORK, ufvk, pool, chunk, body).hits;
 
-    if (!hits.length && !spends) {
-      const empty = { chunk, hits: [], sent: [], spends: [], body };
-      worker.postMessage(empty, [body.buffer]);
+    if (!hits.length && !sends) {
+      worker.postMessage({ chunk, hits: [], sent: [] });
       return;
     }
 
-    // A hit or a spend makes the memos and outgoing ciphertexts (our sends) worth fetching.
+    // A hit makes the memos and outgoing ciphertexts (our sends) worth fetching.
     const [memos, outgoing] = await Promise.all([
       fetchChunk("memos", chunk, pool),
       fetchChunk("outgoing", chunk, pool),
@@ -50,9 +48,8 @@ worker.onmessage = async (e) => {
       memos,
       outgoing,
       Uint32Array.from(hits, (hit) => hit.index),
-      Uint32Array.from(spends ?? []),
     );
-    worker.postMessage({ chunk, ...full, body }, [body.buffer]);
+    worker.postMessage({ chunk, ...full });
   } catch (err) {
     worker.postMessage({ chunk, error: String(err) });
   }
