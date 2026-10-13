@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.8.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.7.3...zillions-app-v1.8.0) (2026-10-13)
+
+
+### Features
+
+* fixed setup height ([#70](https://github.com/heliaxdev/zillions-interface/issues/70)) ([4a36c2d](https://github.com/heliaxdev/zillions-interface/commit/4a36c2df6585f4d82c18f50c744c1446a3787801))
+* newest-first sync ([#56](https://github.com/heliaxdev/zillions-interface/issues/56)) ([ebcbad4](https://github.com/heliaxdev/zillions-interface/commit/ebcbad4fa19754740da4f7c842b5387319d88c57))
+* sync phases ([#57](https://github.com/heliaxdev/zillions-interface/issues/57)) ([dc37100](https://github.com/heliaxdev/zillions-interface/commit/dc37100a643abd4b5bb2b5b91eedd9ba4d78bd62))
+
 ## [1.7.3](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.7.2...zillions-app-v1.7.3) (2026-10-08)
 
 
