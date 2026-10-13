@@ -3,7 +3,7 @@ import type { PcztSummary } from "@zillions/types";
 import { shortenAddress } from "@zillions/utils";
 
 import { formatZec } from "../utils/format";
-import { keptByPool, payments, transferAmount } from "../utils/pczt";
+import { isHighFee, keptByPool, payments, transferAmount } from "../utils/pczt";
 import { SummaryCard } from "./SummaryCard";
 import { SummaryHeader } from "./SummaryHeader";
 import { SummaryRow } from "./SummaryRow";
@@ -34,7 +34,14 @@ export const TransferSummary = ({
 
   return (
     <Stack gap={3}>
-      <SummaryHeader label={moving ? "Moving" : "Sending"}>
+      <SummaryHeader
+        label={moving ? "Moving" : "Sending"}
+        detail={
+          <span className={isHighFee(summary) ? "font-bold text-red-500" : ""}>
+            + {formatZec(summary.fee)} fee
+          </span>
+        }
+      >
         {formatZec(transferAmount(summary))}
       </SummaryHeader>
       <SummaryCard>
