@@ -8,7 +8,7 @@ import { startProxy } from "../src/provider/proxy";
 export default defineContentScript({
   matches: ["<all_urls>"],
   runAt: "document_start",
-  allFrames: true,
+  allFrames: false,
   world: "ISOLATED",
   async main() {
     // Relay page provider calls to the background over the typed dapp channels.
