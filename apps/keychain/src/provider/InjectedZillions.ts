@@ -23,13 +23,11 @@ import { InjectedProxy } from "./InjectedProxy";
 import { Signer } from "./Signer";
 
 const notSupported = (method: string): never => {
-  throw new Error(
-    `zc.${method} is not supported yet by the Zillions Keychain (z)`
-  );
+  throw new Error(`zc.${method} is not supported yet by the Zillions Keychain`);
 };
 
 export class InjectedZillions implements IZillions {
-  constructor(private readonly _version: string) {}
+  constructor(private readonly _version: string) { }
 
   public async connect(_chainId?: string): Promise<void> {
     return await InjectedProxy.requestMethod<undefined, void>("connect");
@@ -45,27 +43,27 @@ export class InjectedZillions implements IZillions {
 
   public async accounts(): Promise<ZCashKeychainAccount[]> {
     return await InjectedProxy.requestMethod<undefined, ZCashKeychainAccount[]>(
-      "accounts"
+      "accounts",
     );
   }
 
   public async defaultAccount(): Promise<ZCashKeychainAccount> {
     return await InjectedProxy.requestMethod<undefined, ZCashKeychainAccount>(
-      "defaultAccount"
+      "defaultAccount",
     );
   }
 
   public async updateDefaultAccount(address: string): Promise<void> {
     return await InjectedProxy.requestMethod<string, void>(
       "updateDefaultAccount",
-      address
+      address,
     );
   }
 
   public async sign(props: SignProps): Promise<PcztBase64> {
     return await InjectedProxy.requestMethod<SignProps, PcztBase64>(
       "sign",
-      props
+      props,
     );
   }
 
@@ -76,13 +74,13 @@ export class InjectedZillions implements IZillions {
   }
 
   public async persistDisposableKeypair(
-    _props: PersistDisposableSignerProps
+    _props: PersistDisposableSignerProps,
   ): Promise<void> {
     return notSupported("persistDisposableKeypair");
   }
 
   public async clearDisposableKeypair(
-    _props: ClearDisposableSignerProps
+    _props: ClearDisposableSignerProps,
   ): Promise<void> {
     return notSupported("clearDisposableKeypair");
   }
