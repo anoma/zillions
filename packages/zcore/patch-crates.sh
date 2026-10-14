@@ -9,6 +9,7 @@ cd "$(dirname "$0")"
 for patch in patches/*.patch; do
     crate=$(basename "$patch" .patch)
     dir=patched/$crate
+    # Skip the following patching process if this patch has already been applied.
     # .applied.patch is copied last: a changed patch or a run that failed partway redoes the crate.
     cmp -s "$patch" "$dir/.applied.patch" && continue
 
@@ -16,9 +17,11 @@ for patch in patches/*.patch; do
     mkdir -p patched
     tmp=$(mktemp -d)
     curl -sSfL -o "$tmp/$crate.crate" "https://static.crates.io/crates/${crate%-*}/$crate.crate"
+    # Check that the downloaded crate has the checksum listed in patches/SHA256SUMS.
     grep " $crate.crate\$" patches/SHA256SUMS | (cd "$tmp" && shasum -a 256 -c - >/dev/null)
     tar -xzf "$tmp/$crate.crate" -C patched
     rm -rf "$tmp"
     patch -s -p1 -d "$dir" < "$patch"
+    # Record that the patch has been applied, so the next run skips this crate.
     cp "$patch" "$dir/.applied.patch"
 done
