@@ -1,4 +1,5 @@
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
+import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
 import type { Activity } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
@@ -24,6 +25,9 @@ export type TransactionReceiptCardProps = {
 };
 
 export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
+  const { signal, value } = transactionValue(tx);
+  // +2 for the half-size " ZEC" suffix.
+  const valueChars = signal.length + zatoshiToZec(value).length + 2;
   return (
     <div className="p-10 max-sm:px-6">
       <h1 className="text-center text-lg font-bold">Transaction receipt</h1>
@@ -33,12 +37,15 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
         )}
       </div>
 
-      <div className="max-w-125 mx-auto">
+      <div className="@container max-w-125 mx-auto">
         <div className="mt-15 mx-auto w-fit">
           <TransactionTypeAndStatus tx={tx} />
         </div>
 
-        <div className="mt-2 text-center text-6xl leading-none font-medium">
+        <div
+          className="mt-2 text-center leading-none font-medium"
+          style={{ fontSize: fitFontSize(valueChars, "3.75rem") }}
+        >
           <TransactionValue tx={tx} />
         </div>
 

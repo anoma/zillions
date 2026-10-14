@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { useGetBalance } from "../hooks/useGetBalance";
+import { fitFontSize, zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { ActionButton } from "./ui/ActionButton";
@@ -26,13 +27,18 @@ export function TotalBalance() {
     balance.data.pendingChange + balance.data.pendingSpendable;
   const transparentBalance = balance.data.unshieldedBalance;
   const totalBalance = shieldedBalance + transparentBalance + pendingBalance;
+  // +2 for the half-size " ZEC" suffix.
+  const totalChars = zatoshiToZec(totalBalance).length + 2;
 
   return (
-    <div className="p-10 max-sm:px-6 flex max-lg:flex-col lg:items-center justify-between gap-10 font-medium border-b border-gray-300 overflow-auto">
+    <div className="@container p-10 max-sm:px-6 flex max-lg:flex-col lg:items-center justify-between gap-10 font-medium border-b border-gray-300 overflow-auto">
       <div>
         <Label>Total Balance</Label>
-        <div className="my-5 lg:my-10">
-          <ZecValue zat={totalBalance} className="text-5xl xl:text-7xl" />
+        <div
+          className="my-5 lg:my-10 [--max:3rem] xl:[--max:4.5rem]"
+          style={{ fontSize: fitFontSize(totalChars, "var(--max)") }}
+        >
+          <ZecValue zat={totalBalance} />
         </div>
         <div className="flex gap-2">
           <ActionButton href="/send" size="sm" className="w-50 max-sm:flex-1">

@@ -8,7 +8,7 @@ import { ZecValue } from "../components/ZecValue";
 import { useAddressKind } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
-import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
+import { fitFontSize, zatoshiToZec, zecToZatoshi } from "../lib/utils";
 import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/send")({
@@ -92,11 +92,17 @@ function SendRoute() {
 
   const error = send.error?.message ?? planProblem(planned);
 
+  const amountInput = isMax
+    ? maxAmount.data
+      ? zatoshiToZec(maxAmount.data)
+      : ""
+    : amountString;
+
   return (
     <div className="p-10 max-sm:px-6">
       <h1 className="text-center text-lg font-bold">Send</h1>
       <form
-        className="w-full max-w-125 mx-auto mt-10 flex flex-col"
+        className="@container w-full max-w-125 mx-auto mt-10 flex flex-col"
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit();
@@ -138,14 +144,9 @@ function SendRoute() {
           type="text"
           placeholder="0"
           autoComplete="off"
-          className="mt-2 h-30 w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
-          value={
-            isMax
-              ? maxAmount.data
-                ? zatoshiToZec(maxAmount.data)
-                : ""
-              : amountString
-          }
+          className="mt-2 h-30 w-full text-center leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
+          style={{ fontSize: fitFontSize(amountInput.length, "6rem") }}
+          value={amountInput}
           onFocus={() => setValidationMessage("")}
           onChange={(e) => {
             setIsMax(false);

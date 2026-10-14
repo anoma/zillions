@@ -1,3 +1,4 @@
+import { transactionValue } from "../lib/utils";
 import type { Activity } from "../lib/wallet/types";
 import { ZecValue } from "./ZecValue";
 
@@ -6,22 +7,7 @@ export function TransactionValue({
 }: {
   tx: Pick<Activity, "tx_type" | "value" | "fee">;
 }) {
-  let value = tx.value;
-  // Sent values come back negative; flip to positive for display.
-  if (tx.tx_type === "Sent") {
-    value *= -1n;
-  }
-  // Shielded values exclude the fee; add it back for the total amount.
-  if (tx.tx_type === "Shielded") {
-    value += tx.fee;
-  }
-
-  let signal = "";
-  // Prefix received amounts with + to show the balance increase.
-  if (tx.tx_type === "Received") {
-    signal = "+";
-  }
-
+  const { signal, value } = transactionValue(tx);
   return (
     <span>
       {signal}
