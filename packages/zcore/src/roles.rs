@@ -489,7 +489,8 @@ pub(crate) fn prove(
             .create_sapling_proofs(&params.spend, &params.output)
             .map_err(to_pczt_error)?;
     }
-    if prover.requires_orchard_proof() || prover.requires_ironwood_proof() {
+    let halo2 = prover.requires_orchard_proof() || prover.requires_ironwood_proof();
+    if halo2 {
         let pk = ProvingKey::build(circuit);
         if prover.requires_orchard_proof() {
             prover = prover.create_orchard_proof(&pk).map_err(to_pczt_error)?;
@@ -501,9 +502,13 @@ pub(crate) fn prove(
     let pczt = SpendFinalizer::new(prover.finish())
         .finalize_spends()
         .map_err(to_pczt_error)?;
-    let vk = VerifyingKey::build(circuit);
+    // Building it takes seconds: only when there's a Halo2 proof to check.
+    let vk = halo2.then(|| VerifyingKey::build(circuit));
     let sapling_vks = sapling.map(|p| (p.spend.verifying_key(), p.output.verifying_key()));
-    let mut extractor = TransactionExtractor::new(pczt).with_orchard(&vk);
+    let mut extractor = TransactionExtractor::new(pczt);
+    if let Some(vk) = &vk {
+        extractor = extractor.with_orchard(vk);
+    }
     if let Some((spend_vk, output_vk)) = &sapling_vks {
         extractor = extractor.with_sapling(spend_vk, output_vk);
     }
