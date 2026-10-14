@@ -9,6 +9,7 @@ cd "$(dirname "$0")"
 for patch in patches/*.patch; do
     crate=$(basename "$patch" .patch)
     dir=patched/$crate
+    # .applied.patch is copied last: a changed patch or a run that failed partway redoes the crate.
     cmp -s "$patch" "$dir/.applied.patch" && continue
 
     rm -rf "$dir"
