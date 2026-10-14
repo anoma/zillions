@@ -15,5 +15,6 @@ if ! echo 'int f(void){return 0;}' | "${CC:-clang}" --target=wasm32-unknown-unkn
     export AR="$LLVM_PREFIX/bin/llvm-ar"
 fi
 
+./patch-crates.sh
 wasm-pack build --target web --release --out-dir pkg --no-pack
 rm -f pkg/.gitignore

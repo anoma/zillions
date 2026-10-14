@@ -87,6 +87,11 @@ script picks it up.
 
 This rebuilds `pkg/`. Commit it along with the Rust change.
 
+The build first runs `./patch-crates.sh`, which unpacks two patched curve crates
+into `patched/` (see [patches/README.md](patches/README.md)). Cargo needs them,
+so run it once on a fresh checkout before any other `cargo` command, including
+rust-analyzer's.
+
 ## Test
 
 ```bash

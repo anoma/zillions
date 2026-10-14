@@ -1,0 +1,19 @@
+--- a/src/arithmetic/fields.rs
++++ b/src/arithmetic/fields.rs
+@@ -253,6 +253,14 @@
+ /// Compute a + (b * c) + carry, returning the result and the new carry over.
+ #[inline(always)]
+ pub(crate) const fn mac(a: u64, b: u64, c: u64, carry: u64) -> (u64, u64) {
+-    let ret = (a as u128) + ((b as u128) * (c as u128)) + (carry as u128);
+-    (ret as u64, (ret >> 64) as u64)
++    // wasm has no 64x64->128 multiply: a u128 product calls the slow `__multi3`.
++    let (b_lo, b_hi) = (b & 0xffff_ffff, b >> 32);
++    let (c_lo, c_hi) = (c & 0xffff_ffff, c >> 32);
++    let (ll, lh, hl, hh) = (b_lo * c_lo, b_lo * c_hi, b_hi * c_lo, b_hi * c_hi);
++    let mid = (ll >> 32) + (lh & 0xffff_ffff) + (hl & 0xffff_ffff);
++    let lo = (ll & 0xffff_ffff) | (mid << 32);
++    let hi = hh + (lh >> 32) + (hl >> 32) + (mid >> 32);
++    let (lo, c1) = lo.overflowing_add(a);
++    let (lo, c2) = lo.overflowing_add(carry);
++    (lo, hi + c1 as u64 + c2 as u64)
+ }

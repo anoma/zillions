@@ -1,0 +1,21 @@
+[package]
+name = "field-bench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bls12_381 = { version = "=0.8.0", default-features = false }
+ff = "0.13"
+pasta_curves = { version = "=0.5.2", default-features = false }
+
+# Same as zcore's.
+[profile.release]
+opt-level = 3
+lto = true
+
+# Not part of zcore's workspace: build.sh picks crates.io or patched/ per build.
+[workspace]

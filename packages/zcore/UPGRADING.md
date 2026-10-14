@@ -18,6 +18,11 @@ Move the whole family to one release line at once; mixed lines don't
 compile or, worse, disagree on consensus rules. Rust version: `rust-version`
 in `Cargo.toml`.
 
+If the family moves to new `pasta_curves` or `bls12_381` versions, the
+patches in `patches/` stop applying (Cargo only warns that a patch is
+unused): redo them for the new versions, or drop them if upstream has the
+change (`patches/README.md`).
+
 ## 2. Re-compare what zcore ports or mirrors
 
 | zcore                           | follows upstream                                                                | what to check                                                                                                                                          |

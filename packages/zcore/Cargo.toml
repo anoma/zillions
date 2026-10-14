@@ -68,3 +68,9 @@ zcash_keys = { version = "0.16", features = ["orchard", "sapling", "transparent-
 serde_json = "1"
 # Only the tests encode nullifier chunks, as the indexer does.
 postcard = { version = "1", features = ["alloc"] }
+
+# crates.io releases with one change each, unpacked by ./patch-crates.sh;
+# see patches/README.md.
+[patch.crates-io]
+pasta_curves = { path = "patched/pasta_curves-0.5.2" }
+bls12_381 = { path = "patched/bls12_381-0.8.0" }
