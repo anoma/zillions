@@ -1,0 +1,49 @@
+name: field-bench
+
+# Runs packages/zcore/patches/bench (crates.io vs patched curve crates) in Node
+# on GitHub's runners, on demand only: Actions → field-bench → Run workflow, or
+# `gh workflow run field-bench.yml --ref <branch> [-f macos=true]`.
+# Delete together with packages/zcore/patches/.
+on:
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: "Also run on macOS (Apple Silicon). macOS minutes count 10× against the org's monthly Actions minutes (Windows 2×, Linux 1×), so this adds about 20 to a run that otherwise costs about 7."
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Without it a hung job runs, and bills, for up to 6 hours.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: packages/zcore/patches/bench/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm
+          path: packages/zcore/patches/bench/out
+
+  run:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.macos && '["ubuntu-latest", "windows-latest", "macos-latest"]' || '["ubuntu-latest", "windows-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm
+          path: packages/zcore/patches/bench/out
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node packages/zcore/patches/bench/bench.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+        shell: bash

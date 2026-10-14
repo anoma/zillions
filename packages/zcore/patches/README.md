@@ -37,10 +37,14 @@ bench/build.sh && node bench/bench.mjs
 On an M1 (Node 24): `mac` −28%; pasta `Fp` and `Fq` and bls12_381 `Scalar`
 multiplication −33%.
 
+To run it on GitHub's x86-64 Linux and Windows runners (and optionally macOS),
+start the `field-bench` workflow from the Actions tab.
+
 ## Leaving
 
 The goal is the same change upstream, behind `cfg(target_arch = "wasm32")`:
 `zcash/pasta_curves` and `zkcrypto/bls12_381`. Before opening those PRs,
 measure it on more devices: x86-64 Windows and Linux, phones. Once upstream
-releases it, delete this directory, `../patch-crates.sh` and the
-`[patch.crates-io]` section, and bump the crates.
+releases it, delete this directory, `../patch-crates.sh`, the
+`[patch.crates-io]` section and `.github/workflows/field-bench.yml`, and bump
+the crates.
