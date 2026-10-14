@@ -25,7 +25,7 @@ export type TransactionReceiptCardProps = {
 
 export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
   return (
-    <div className="p-10">
+    <div className="p-10 max-sm:px-6">
       <h1 className="text-center text-lg font-bold">Transaction receipt</h1>
       <div className="mt-1 text-center text-xs">
         {tx.timestamp && (

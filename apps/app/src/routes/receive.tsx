@@ -18,7 +18,7 @@ function ReceiveRoute() {
   const address = isTransparent ? account.transparent.address : shielded;
 
   return (
-    <div className="p-10 w-full max-w-120 mx-auto">
+    <div className="p-10 max-sm:px-6 w-full max-w-120 mx-auto">
       <h1 className="text-center text-lg font-bold">Receive</h1>
       <div className="mt-10">
         <ShieldedTransparentToggle

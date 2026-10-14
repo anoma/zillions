@@ -74,7 +74,7 @@ function ShieldRoute() {
   const tooLittle = available > 0n && available < SHIELDING_THRESHOLD;
 
   return (
-    <div className="p-10">
+    <div className="p-10 max-sm:px-6">
       <h1 className="text-center text-lg font-bold">Shield</h1>
       <form
         className="w-full max-w-125 mx-auto mt-10 flex flex-col"
