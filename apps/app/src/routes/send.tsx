@@ -9,7 +9,7 @@ import {
   AvailableWithMax,
   Field,
   FormError,
-  ProvingNotice,
+  SubmitProgress,
   TransferForm,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
@@ -191,7 +191,7 @@ function SendRoute() {
           </div>
         )}
 
-        {send.isPending && <ProvingNotice />}
+        {send.isPending && <SubmitProgress stages={send.stages} />}
 
         {(validationMessage || error) && (
           <FormError>{validationMessage || error}</FormError>

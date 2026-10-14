@@ -1,5 +1,12 @@
-import type { ReactNode } from "react";
+import {
+  type ComponentProps,
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import { twMerge } from "tailwind-merge";
+import type { StageEntry, SubmitStage } from "../hooks/useSubmitStage";
+import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { ZecValue } from "./ZecValue";
 
 export function TransferForm({
@@ -105,11 +112,113 @@ export function AvailableWithMax({
   );
 }
 
-export function ProvingNotice() {
+const STEPS: { label: string; stages: SubmitStage[]; optional?: boolean }[] = [
+  { label: "Preparing the transaction", stages: ["building"], optional: true },
+  { label: "Approve in your keychain", stages: ["approval"] },
+  {
+    label: "Downloading Sapling parameters",
+    stages: ["sapling-params"],
+    optional: true,
+  },
+  {
+    label: "Generating the proof",
+    stages: [
+      "sapling-proofs",
+      "proving-key",
+      "orchard-proof",
+      "ironwood-proof",
+    ],
+  },
+  { label: "Verifying", stages: ["verifying"] },
+  { label: "Broadcasting", stages: ["broadcast"] },
+];
+
+const DETAIL: Partial<Record<SubmitStage, string>> = {
+  "sapling-proofs": "Sapling",
+  "proving-key": "building the proving key",
+  "orchard-proof": "Orchard",
+  "ironwood-proof": "Ironwood",
+};
+
+/** A submission's steps: done, the current one with its time so far, and those to come. */
+export function SubmitProgress({ stages }: { stages: StageEntry[] }) {
+  const current = stages.at(-1)?.stage;
+  const steps = STEPS.filter(
+    (step) =>
+      !step.optional ||
+      stages.some((entry) => step.stages.includes(entry.stage)),
+  );
+  const active = steps.findIndex(
+    (step) => current && step.stages.includes(current),
+  );
+  const since = stages.find((entry) =>
+    steps[active]?.stages.includes(entry.stage),
+  )?.at;
+  const [now, setNow] = useState(() => performance.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(performance.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
-    <div className="mt-2 text-sm text-center font-medium">
-      Proving takes up to a minute after you approve in the keychain.
+    <div className="mt-4">
+      <ol className="flex flex-col gap-2 text-sm" aria-live="polite">
+        {steps.map((step, i) => {
+          const state = i < active ? "done" : i === active ? "active" : "next";
+          const detail = state === "active" && current && DETAIL[current];
+          return (
+            <li
+              key={step.label}
+              className={twMerge(
+                "flex items-center gap-2",
+                state === "next" && "text-gray-400",
+                state === "active" && "font-medium",
+              )}
+            >
+              <span className="size-4 shrink-0 flex items-center justify-center">
+                {state === "done" ? (
+                  <CheckIcon className="size-4 text-gold" />
+                ) : state === "active" ? (
+                  <SpinnerIcon className="size-4 text-gold" />
+                ) : (
+                  <span className="size-2 rounded-full border border-current" />
+                )}
+              </span>
+              <span>
+                {step.label}
+                {detail && (
+                  <span className="font-normal text-gray-500"> · {detail}</span>
+                )}
+              </span>
+              {state === "active" && since !== undefined && (
+                <span className="ml-auto text-xs tabular-nums text-gray-500">
+                  {Math.max(0, Math.floor((now - since) / 1000))}s
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      <div className="mt-3 text-xs text-center text-gray-500">
+        Proving runs on this device and can take up to a minute.
+      </div>
     </div>
+  );
+}
+
+function CheckIcon(props: ComponentProps<"svg">) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
+    </svg>
   );
 }
 

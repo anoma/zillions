@@ -6,7 +6,7 @@ import {
   Field,
   FormError,
   PoolPill,
-  ProvingNotice,
+  SubmitProgress,
   TransferForm,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
@@ -14,6 +14,7 @@ import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
 import { useGetBalance } from "../hooks/useGetBalance";
+import { useSubmitStage } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
@@ -49,9 +50,11 @@ function ShieldRoute() {
     }),
   );
 
+  const { stages, track } = useSubmitStage();
   const shield = useMutation({
     mutationFn: async () => {
       const { pczt, value, fee } = proposal.data!;
+      track("approval");
       const signed = await keychain().sign({
         signer: account.transparent.address,
         pczt: bytesToBase64(pczt),
@@ -69,9 +72,11 @@ function ShieldRoute() {
         base64ToBytes(signed),
         value,
         receipt,
+        track,
       );
       return { ...receipt, txid };
     },
+    onSettled: (_, error) => track(undefined, error),
   });
 
   if (shield.data) {
@@ -117,7 +122,7 @@ function ShieldRoute() {
           {shield.isPending ? "Shielding..." : "Shield"}
         </ActionButton>
 
-        {shield.isPending && <ProvingNotice />}
+        {shield.isPending && <SubmitProgress stages={stages} />}
 
         {tooLittle && (
           <div className="mt-2 text-sm text-center font-medium">

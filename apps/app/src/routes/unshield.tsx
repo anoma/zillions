@@ -9,7 +9,7 @@ import {
   Field,
   FormError,
   PoolPill,
-  ProvingNotice,
+  SubmitProgress,
   TransferForm,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
@@ -150,7 +150,7 @@ function UnshieldRoute() {
           {send.isPending ? "Unshielding..." : "Unshield"}
         </ActionButton>
 
-        {send.isPending && <ProvingNotice />}
+        {send.isPending && <SubmitProgress stages={send.stages} />}
 
         {(validationMessage || error) && (
           <FormError>{validationMessage || error}</FormError>

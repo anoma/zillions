@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { PageLoader } from "../components/PageLoader";
-import { FormError, ProvingNotice } from "../components/TransferForm";
+import { FormError, SubmitProgress } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
@@ -292,7 +292,7 @@ function MigrateRoute() {
       <Primary onClick={confirm} disabled={!amount || send.isPending}>
         {send.isPending ? "Sending..." : "Confirm"}
       </Primary>
-      {send.isPending && <ProvingNotice />}
+      {send.isPending && <SubmitProgress stages={send.stages} />}
     </Page>
   );
 }
