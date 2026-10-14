@@ -17,11 +17,20 @@ export function PlannedFee({
     maxAmount.isLoading ||
     (ceiling !== undefined && ceiling.amount > 0n);
   return (
+    <FeeRow
+      fee={fee !== undefined ? BigInt(fee) : undefined}
+      pending={pending}
+    />
+  );
+}
+
+export function FeeRow({ fee, pending }: { fee?: bigint; pending: boolean }) {
+  return (
     <div className="mt-4 flex items-center justify-between text-xs font-medium">
       <div>Transaction fee</div>
       <div>
         {fee !== undefined ? (
-          <ZecValue zat={BigInt(fee)} />
+          <ZecValue zat={fee} />
         ) : pending ? (
           <SpinnerIcon className="size-3" />
         ) : (

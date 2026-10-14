@@ -3,6 +3,7 @@ import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
 import type { Activity } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
+import { PageShell } from "./PageShell";
 import { TransactionTypeAndStatus } from "./TransactionTypeAndStatus";
 import { TransactionValue } from "./TransactionValue";
 import { ZecValue } from "./ZecValue";
@@ -29,8 +30,7 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
   // +2 for the half-size " ZEC" suffix.
   const valueChars = signal.length + zatoshiToZec(value).length + 2;
   return (
-    <div className="p-10 max-sm:px-6">
-      <h1 className="text-center text-lg font-bold">Transaction receipt</h1>
+    <PageShell title="Transaction receipt">
       <div className="mt-1 text-center text-xs">
         {tx.timestamp && (
           <time>{new Date(Number(tx.timestamp) * 1000).toLocaleString()}</time>
@@ -118,6 +118,6 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }

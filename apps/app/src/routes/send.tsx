@@ -2,8 +2,17 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { AmountInput } from "../components/AmountInput";
+import { PageShell } from "../components/PageShell";
 import { PlannedFee } from "../components/PlannedFee";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
+import {
+  AvailableWithMax,
+  Field,
+  FormError,
+  ProvingNotice,
+  TransferForm,
+} from "../components/TransferForm";
+import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
 import { placeholderClassName } from "../components/ui/utils";
 import { ZecValue } from "../components/ZecValue";
@@ -11,7 +20,6 @@ import { useAddressKind } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
-import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/send")({
   component: SendRoute,
@@ -101,17 +109,9 @@ function SendRoute() {
     : amountString;
 
   return (
-    <div className="p-10 max-sm:px-6">
-      <h1 className="text-center text-lg font-bold">Send</h1>
-      <form
-        className="w-full max-w-125 mx-auto mt-10 flex flex-col"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit();
-        }}
-      >
-        <label>
-          <div className="text-xs font-medium mb-1">From</div>
+    <PageShell title="Send">
+      <TransferForm onSubmit={onSubmit}>
+        <Field label="From">
           <ShieldedTransparentToggle
             isTransparent={isTransparentFrom}
             setIsTransparent={(value) => {
@@ -119,27 +119,17 @@ function SendRoute() {
               setValidationMessage("");
             }}
           />
-        </label>
+        </Field>
 
-        <div className="mt-4 flex items-center justify-center gap-2 text-xs font-medium">
-          <span>
-            Available: <ZecValue zat={availableBalance} />
-          </span>
-          <button
-            type="button"
-            className={twMerge(
-              "px-2 py-0.5 rounded-full border border-gray-300",
-              isMax && "bg-black text-white border-black",
-            )}
-            title={to ? undefined : "Enter a recipient to fill the maximum"}
-            onClick={() => {
-              setIsMax(!isMax);
-              setValidationMessage("");
-            }}
-          >
-            Max
-          </button>
-        </div>
+        <AvailableWithMax
+          available={availableBalance}
+          isMax={isMax}
+          maxTitle={to ? undefined : "Enter a recipient to fill the maximum"}
+          onToggleMax={() => {
+            setIsMax(!isMax);
+            setValidationMessage("");
+          }}
+        />
 
         <AmountInput
           className="mt-2"
@@ -152,8 +142,7 @@ function SendRoute() {
           }}
         />
 
-        <label className="mt-4">
-          <div className="text-xs font-medium mb-1">To</div>
+        <Field label="To" className="mt-4">
           <input
             name="to"
             type="text"
@@ -171,7 +160,7 @@ function SendRoute() {
               setValidationMessage("");
             }}
           />
-        </label>
+        </Field>
 
         <PlannedFee {...planned} />
 
@@ -202,18 +191,12 @@ function SendRoute() {
           </div>
         )}
 
-        {send.isPending && (
-          <div className="mt-2 text-sm text-center font-medium">
-            Proving takes up to a minute after you approve in the keychain.
-          </div>
-        )}
+        {send.isPending && <ProvingNotice />}
 
         {(validationMessage || error) && (
-          <div className="mt-4 text-red-500 text-center">
-            {validationMessage || error}
-          </div>
+          <FormError>{validationMessage || error}</FormError>
         )}
-      </form>
-    </div>
+      </TransferForm>
+    </PageShell>
   );
 }

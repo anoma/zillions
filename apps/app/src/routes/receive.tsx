@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import QRCode from "react-qr-code";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
+import { PageShell } from "../components/PageShell";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
@@ -18,8 +19,7 @@ function ReceiveRoute() {
   const address = isTransparent ? account.transparent.address : shielded;
 
   return (
-    <div className="p-10 max-sm:px-6 w-full max-w-120 mx-auto">
-      <h1 className="text-center text-lg font-bold">Receive</h1>
+    <PageShell title="Receive" className="w-full max-w-120 mx-auto">
       <div className="mt-10">
         <ShieldedTransparentToggle
           isTransparent={isTransparent}
@@ -47,6 +47,6 @@ function ReceiveRoute() {
           </div>
         </>
       )}
-    </div>
+    </PageShell>
   );
 }

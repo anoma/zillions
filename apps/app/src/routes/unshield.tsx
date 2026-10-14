@@ -1,17 +1,24 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { twMerge } from "tailwind-merge";
 import { AmountInput } from "../components/AmountInput";
+import { PageShell } from "../components/PageShell";
 import { PlannedFee } from "../components/PlannedFee";
+import {
+  AvailableWithMax,
+  Field,
+  FormError,
+  PoolPill,
+  ProvingNotice,
+  TransferForm,
+} from "../components/TransferForm";
+import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
-import { ZecValue } from "../components/ZecValue";
 import { internalAddress, useInternalAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
 import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
-import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/unshield")({
   component: UnshieldRoute,
@@ -101,42 +108,20 @@ function UnshieldRoute() {
     : amountString;
 
   return (
-    <div className="p-10 max-sm:px-6">
-      <h1 className="text-center text-lg font-bold">Unshield</h1>
-      <form
-        className="w-full max-w-125 mx-auto mt-10 flex flex-col"
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit();
-        }}
-      >
-        <div>
-          <div className="text-xs font-medium mb-1">From</div>
-          <div className="h-11 w-full p-0.5 rounded-full border border-gray-300">
-            <div className="h-full w-full flex items-center justify-center rounded-full bg-gold font-medium">
-              Shielded
-            </div>
-          </div>
-        </div>
+    <PageShell title="Unshield">
+      <TransferForm onSubmit={onSubmit}>
+        <Field label="From">
+          <PoolPill pool="shielded" />
+        </Field>
 
-        <div className="mt-4 flex items-center justify-center gap-2 text-xs font-medium">
-          <span>
-            Available: <ZecValue zat={availableBalance} />
-          </span>
-          <button
-            type="button"
-            className={twMerge(
-              "px-2 py-0.5 rounded-full border border-gray-300",
-              isMax && "bg-black text-white border-black",
-            )}
-            onClick={() => {
-              setIsMax(!isMax);
-              setValidationMessage("");
-            }}
-          >
-            Max
-          </button>
-        </div>
+        <AvailableWithMax
+          available={availableBalance}
+          isMax={isMax}
+          onToggleMax={() => {
+            setIsMax(!isMax);
+            setValidationMessage("");
+          }}
+        />
 
         <AmountInput
           className="mt-2"
@@ -149,12 +134,9 @@ function UnshieldRoute() {
           }}
         />
 
-        <div className="mt-4">
-          <div className="text-xs font-medium mb-1">To</div>
-          <div className="h-11 w-full flex items-center justify-center rounded-full border border-gray-300 font-medium">
-            Transparent
-          </div>
-        </div>
+        <Field label="To" className="mt-4">
+          <PoolPill pool="transparent" />
+        </Field>
 
         <PlannedFee {...planned} />
 
@@ -168,18 +150,12 @@ function UnshieldRoute() {
           {send.isPending ? "Unshielding..." : "Unshield"}
         </ActionButton>
 
-        {send.isPending && (
-          <div className="mt-2 text-sm text-center font-medium">
-            Proving takes up to a minute after you approve in the keychain.
-          </div>
-        )}
+        {send.isPending && <ProvingNotice />}
 
         {(validationMessage || error) && (
-          <div className="mt-4 text-red-500 text-center">
-            {validationMessage || error}
-          </div>
+          <FormError>{validationMessage || error}</FormError>
         )}
-      </form>
-    </div>
+      </TransferForm>
+    </PageShell>
   );
 }
