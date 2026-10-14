@@ -1,0 +1,31 @@
+[package]
+name = "webgpu-decrypt-bench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+# The versions zcore ships (Cargo.lock copied from zcore).
+[dependencies]
+blake2b_simd = "1"
+chacha20 = "0.9"
+ff = "0.13"
+getrandom = { version = "0.2", features = ["js"] }
+group = "0.13"
+orchard = { version = "0.15", default-features = false, features = ["std"] }
+pasta_curves = "0.5"
+wasm-bindgen = "0.2"
+zcash_note_encryption = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+
+# zcore's patched field multiply (PR #53), what the app ships.
+[patch.crates-io]
+pasta_curves = { path = "../../patched/pasta_curves-0.5.2" }
+
+# Not part of zcore's workspace.
+[workspace]
