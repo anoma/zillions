@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.5.1...zillions-keychain-v0.6.0) (2026-10-14)
+
+
+### Features
+
+* preparing keychain for release ([#59](https://github.com/heliaxdev/zillions-interface/issues/59)) ([d7a761f](https://github.com/heliaxdev/zillions-interface/commit/d7a761f8cd70722a2c6cc6f509cac695981b2ee3))
+* update url to zillions.money ([#86](https://github.com/heliaxdev/zillions-interface/issues/86)) ([e1ec742](https://github.com/heliaxdev/zillions-interface/commit/e1ec74294d301e23bd39d37c5eb39f7515a9fb32))
+
 ## [0.5.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.5.0...zillions-keychain-v0.5.1) (2026-10-13)
 
 
