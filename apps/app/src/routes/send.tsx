@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
+import { AmountInput } from "../components/AmountInput";
 import { PlannedFee } from "../components/PlannedFee";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { ActionButton } from "../components/ui/ActionButton";
+import { placeholderClassName } from "../components/ui/utils";
 import { ZecValue } from "../components/ZecValue";
 import { useAddressKind } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
-import { fitFontSize, zatoshiToZec, zecToZatoshi } from "../lib/utils";
+import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
 import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/send")({
@@ -102,7 +104,7 @@ function SendRoute() {
     <div className="p-10 max-sm:px-6">
       <h1 className="text-center text-lg font-bold">Send</h1>
       <form
-        className="@container w-full max-w-125 mx-auto mt-10 flex flex-col"
+        className="w-full max-w-125 mx-auto mt-10 flex flex-col"
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit();
@@ -139,13 +141,8 @@ function SendRoute() {
           </button>
         </div>
 
-        <input
-          name="amount"
-          type="text"
-          placeholder="0"
-          autoComplete="off"
-          className="mt-2 h-30 w-full text-center leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
-          style={{ fontSize: fitFontSize(amountInput.length, "6rem") }}
+        <AmountInput
+          className="mt-2"
           value={amountInput}
           onFocus={() => setValidationMessage("")}
           onChange={(e) => {
@@ -162,7 +159,8 @@ function SendRoute() {
             type="text"
             placeholder="Enter Zcash address..."
             className={twMerge(
-              "h-11 w-full px-4 font-medium rounded-lg border border-gray-300 outline-none placeholder:text-black focus:placeholder:text-transparent",
+              "h-11 w-full px-4 font-medium rounded-lg border border-gray-300 outline-none",
+              placeholderClassName,
               isTransparentTo && "border-black",
               isShieldedTo && "border-gold",
             )}

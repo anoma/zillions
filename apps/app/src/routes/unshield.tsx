@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
+import { AmountInput } from "../components/AmountInput";
 import { PlannedFee } from "../components/PlannedFee";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
@@ -9,7 +10,7 @@ import { internalAddress, useInternalAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
-import { fitFontSize, zatoshiToZec, zecToZatoshi } from "../lib/utils";
+import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
 import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/unshield")({
@@ -103,7 +104,7 @@ function UnshieldRoute() {
     <div className="p-10 max-sm:px-6">
       <h1 className="text-center text-lg font-bold">Unshield</h1>
       <form
-        className="@container w-full max-w-125 mx-auto mt-10 flex flex-col"
+        className="w-full max-w-125 mx-auto mt-10 flex flex-col"
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit();
@@ -137,13 +138,8 @@ function UnshieldRoute() {
           </button>
         </div>
 
-        <input
-          name="amount"
-          type="text"
-          placeholder="0"
-          autoComplete="off"
-          className="mt-2 h-30 w-full text-center leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
-          style={{ fontSize: fitFontSize(amountInput.length, "6rem") }}
+        <AmountInput
+          className="mt-2"
           value={amountInput}
           onFocus={() => setValidationMessage("")}
           onChange={(e) => {
