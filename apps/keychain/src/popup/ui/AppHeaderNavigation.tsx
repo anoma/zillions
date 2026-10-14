@@ -2,7 +2,7 @@
  * Slide-in settings drawer, opened from the header's gear icon.
  */
 import clsx from "clsx";
-import { FaDiscord, FaXTwitter } from "react-icons/fa6";
+import { FaXTwitter } from "react-icons/fa6";
 import { GoLinkExternal, GoQuestion } from "react-icons/go";
 import { useNavigate } from "react-router-dom";
 
@@ -43,7 +43,7 @@ export const AppHeaderNavigation = ({
 
   const listItemClassList = clsx(
     "relative cursor-pointer text-black transition-colors duration-100",
-    "ease-out hover:text-neutral-500 active:top-px"
+    "ease-out hover:text-neutral-500 active:top-px",
   );
 
   return (
@@ -52,13 +52,13 @@ export const AppHeaderNavigation = ({
         className={clsx(
           "bg-neutral text-black h-full fixed pt-16 px-6 pb-8 right-0 top-0",
           "transition-all duration-[600ms] w-[65%] z-50 translate-x-full ease-out-expo",
-          { "!translate-x-0": open }
+          { "!translate-x-0": open },
         )}
       >
         <i
           className={clsx(
             "text-[1.85em] cursor-pointer leading-[0] absolute right-0 px-5 py-8 not-italic",
-            "top-0 transition-colors duration-100 ease-out select-none hover:text-neutral-500 active:top-px"
+            "top-0 transition-colors duration-100 ease-out select-none hover:text-neutral-500 active:top-px",
           )}
           role="button"
           aria-label="Close menu"
@@ -81,7 +81,7 @@ export const AppHeaderNavigation = ({
               Connected Sites
             </li>
             <li className={listItemClassList} onClick={() => void onLock()}>
-              Lock Wallet
+              Lock Keychain
             </li>
           </Stack>
           <div className="relative h-full">
@@ -118,14 +118,6 @@ export const AppHeaderNavigation = ({
               className="items-center"
             >
               <a
-                href="https://discord.com/invite/zillions"
-                target="_blank"
-                className="transition-colors text-[1.15em] hover:text-neutral-500"
-                rel="noreferrer nofollow"
-              >
-                <FaDiscord />
-              </a>
-              <a
                 href="https://x.com/zillions_app"
                 target="_blank"
                 className="transition-colors hover:text-neutral-500"
@@ -141,7 +133,7 @@ export const AppHeaderNavigation = ({
               className="items-center"
             >
               <a
-                href="https://discord.com/channels/833618405537218590/1074984397599678534"
+                href="https://zillions.app"
                 target="_blank"
                 className="transition-colors hover:text-neutral-500"
                 rel="noreferrer nofollow"
@@ -156,7 +148,7 @@ export const AppHeaderNavigation = ({
         <div
           className={clsx(
             "animate-fade-in bg-black/50 cursor-pointer h-full",
-            "left-0 fixed top-0 w-full z-40 last:self-end"
+            "left-0 fixed top-0 w-full z-40 last:self-end",
           )}
           onClick={onClick}
         />

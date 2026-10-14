@@ -18,7 +18,7 @@ const pkg = JSON.parse(readFileSync(r("package.json"), "utf-8")) as {
  * that read `process.env.Z_INTERFACE_*` keep resolving.
  */
 const buildProcessEnv = (
-  target: string
+  target: string,
 ): Record<string, string | undefined> => {
   const fileEnv: Record<string, string | undefined> = {};
   loadDotenv({ path: r(".env"), processEnv: fileEnv });
@@ -60,7 +60,7 @@ const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
         find: new RegExp(`^@zillions/${name}(?:/(.*))?$`),
         replacement: r(`src/packages/${name}/src/$1`),
       },
-    ]
+    ],
   );
 
   const crypto = [
@@ -89,15 +89,15 @@ const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   srcDir: ".",
-  
+
   runner: {
     // This forces the dev browser to reuse the same profile directory
     // keeping cookies, localStorage, and IndexedDB safe between sessions.
-    chromiumArgs: ['--user-data-dir=./.wxt/dev-profile'],
+    chromiumArgs: ["--user-data-dir=./.wxt/dev-profile"],
   },
 
   manifest: ({ browser }) => ({
-    name: "Zillions Keychain (z)",
+    name: "Zillions Keychain",
     description:
       "The Zillions Keychain manages a user's wallet for the Zcash ecosystem.",
     version: pkg.version,
@@ -115,7 +115,8 @@ export default defineConfig({
     // (`script-src 'self'`) forbids. `'wasm-unsafe-eval'` is the only addition
     // Chrome MV3 allows for this and is what enables WASM instantiation.
     content_security_policy: {
-      extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
+      extension_pages:
+        "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
     },
     // `injected.js` is the MAIN-world provider script the content script
     // injects into pages (sets `window.zc`). Keep this list minimal: every
@@ -136,13 +137,13 @@ export default defineConfig({
     },
     ...(browser === "firefox"
       ? {
-          browser_specific_settings: {
-            gecko: {
-              strict_min_version: "115.0",
-              data_collection_permissions: { required: ["none"] },
-            },
+        browser_specific_settings: {
+          gecko: {
+            strict_min_version: "115.0",
+            data_collection_permissions: { required: ["none"] },
           },
-        }
+        },
+      }
       : {}),
   }),
 
@@ -153,7 +154,12 @@ export default defineConfig({
     plugins: [
       tailwindcss(),
       svgr({
-        svgrOptions: { prettier: false, svgo: false, titleProp: true, ref: true },
+        svgrOptions: {
+          prettier: false,
+          svgo: false,
+          titleProp: true,
+          ref: true,
+        },
         include: "**/*.svg",
       }),
       nodePolyfills({
