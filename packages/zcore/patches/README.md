@@ -25,6 +25,18 @@ In the app (Chrome, 8 workers), a fresh sync of a test wallet from block
 3,342,500 took 140 s before and 108–113 s after, with the same balance and
 history.
 
+## Benchmark
+
+`bench/` times `mac` on its own (the `u128` version against the new one) and a
+field multiplication from each crate, in wasm, crates.io → patched:
+
+```sh
+bench/build.sh && node bench/bench.mjs
+```
+
+On an M1 (Node 24): `mac` −28%; pasta `Fp` and `Fq` and bls12_381 `Scalar`
+multiplication −33%.
+
 ## Leaving
 
 The goal is the same change upstream, behind `cfg(target_arch = "wasm32")`:
