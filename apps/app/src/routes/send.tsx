@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
+import { AmountInput } from "../components/AmountInput";
 import { PlannedFee } from "../components/PlannedFee";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { ActionButton } from "../components/ui/ActionButton";
+import { placeholderClassName } from "../components/ui/utils";
 import { ZecValue } from "../components/ZecValue";
 import { useAddressKind } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
@@ -92,8 +94,14 @@ function SendRoute() {
 
   const error = send.error?.message ?? planProblem(planned);
 
+  const amountInput = isMax
+    ? maxAmount.data
+      ? zatoshiToZec(maxAmount.data)
+      : ""
+    : amountString;
+
   return (
-    <div className="p-10">
+    <div className="p-10 max-sm:px-6">
       <h1 className="text-center text-lg font-bold">Send</h1>
       <form
         className="w-full max-w-125 mx-auto mt-10 flex flex-col"
@@ -133,19 +141,9 @@ function SendRoute() {
           </button>
         </div>
 
-        <input
-          name="amount"
-          type="text"
-          placeholder="0"
-          autoComplete="off"
-          className="mt-2 h-30 w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
-          value={
-            isMax
-              ? maxAmount.data
-                ? zatoshiToZec(maxAmount.data)
-                : ""
-              : amountString
-          }
+        <AmountInput
+          className="mt-2"
+          value={amountInput}
           onFocus={() => setValidationMessage("")}
           onChange={(e) => {
             setIsMax(false);
@@ -161,7 +159,8 @@ function SendRoute() {
             type="text"
             placeholder="Enter Zcash address..."
             className={twMerge(
-              "h-11 w-full px-4 font-medium rounded-lg border border-gray-300 outline-none placeholder:text-black focus:placeholder:text-transparent",
+              "h-11 w-full px-4 font-medium rounded-lg border border-gray-300 outline-none",
+              placeholderClassName,
               isTransparentTo && "border-black",
               isShieldedTo && "border-gold",
             )}

@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { DatabaseArrowIcon } from "../icons/DatabaseArrowIcon";
 import { MIGRATION_MINIMUM } from "../lib/utils";
@@ -12,7 +11,7 @@ export function MigrationSection() {
   if (orchard < MIGRATION_MINIMUM) return null;
 
   return (
-    <div className="px-10 py-6 flex max-sm:flex-col sm:items-center gap-4 bg-neutral-800 text-white">
+    <div className="px-10 max-sm:px-6 py-6 flex max-sm:flex-col sm:items-center gap-4 bg-neutral-800 text-white">
       <DatabaseArrowIcon className="size-6 shrink-0" />
       <div className="flex-1">
         <div className="font-medium">Move to Ironwood</div>
@@ -21,11 +20,9 @@ export function MigrationSection() {
           the new shielded pool.
         </div>
       </div>
-      <Link to="/migrate">
-        <ActionButton size="sm" className="w-40 isolate">
-          Migrate
-        </ActionButton>
-      </Link>
+      <ActionButton href="/migrate" size="sm" className="w-40 isolate">
+        Migrate
+      </ActionButton>
     </div>
   );
 }

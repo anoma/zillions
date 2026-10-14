@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { createLink } from "@tanstack/react-router";
 import { createElement, type CSSProperties } from "react";
 import { twMerge } from "tailwind-merge";
 import { tv, type VariantProps } from "tailwind-variants";
@@ -7,7 +7,7 @@ import { getDefaultColorString } from "./utils";
 
 const actionButtonShape = tv({
   base: twMerge(
-    `group relative flex items-center cursor-pointer min-h-[2em]`,
+    `group relative inline-flex items-center cursor-pointer min-h-[2em]`,
     `overflow-hidden justify-center text-center font-medium relative`,
     `text-[var(--text-color)] hover:text-[var(--text-hover-color)]`,
     `before:border before:border-transparent`,
@@ -166,6 +166,10 @@ const Button = <HtmlTag extends keyof HTMLElementTagNameMap = "button">({
   );
 };
 
+const LinkButton = createLink((props: ActionButtonProps<"a">) => (
+  <Button as="a" {...props} />
+));
+
 export const ActionButton = <HtmlTag extends keyof HTMLElementTagNameMap>(
   props: ActionButtonProps<HtmlTag>,
 ) => {
@@ -176,9 +180,7 @@ export const ActionButton = <HtmlTag extends keyof HTMLElementTagNameMap>(
         return <Button as="a" {...(props as ActionButtonProps<"a">)} />;
       }
       return (
-        <Link to={href}>
-          <Button as="div" {...(otherProps as ActionButtonProps<"div">)} />
-        </Link>
+        <LinkButton to={href} {...(otherProps as ActionButtonProps<"a">)} />
       );
     }
   }

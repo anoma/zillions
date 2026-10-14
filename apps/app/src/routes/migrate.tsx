@@ -323,7 +323,7 @@ function Page({
   children: ReactNode;
 }) {
   return (
-    <div className="p-10">
+    <div className="p-10 max-sm:px-6">
       <div className="max-w-125 mx-auto flex flex-col">
         {onBack && (
           <button

@@ -8,7 +8,7 @@ import { useWallet } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
-import { zatoshiToZec } from "../lib/utils";
+import { fitFontSize, zatoshiToZec } from "../lib/utils";
 import { TransferSuccess } from "./TransferSuccess";
 
 /** Least a shielding may move: zcore's rule, as the fee would eat the rest. */
@@ -74,10 +74,10 @@ function ShieldRoute() {
   const tooLittle = available > 0n && available < SHIELDING_THRESHOLD;
 
   return (
-    <div className="p-10">
+    <div className="p-10 max-sm:px-6">
       <h1 className="text-center text-lg font-bold">Shield</h1>
       <form
-        className="w-full max-w-125 mx-auto mt-10 flex flex-col"
+        className="@container w-full max-w-125 mx-auto mt-10 flex flex-col"
         onSubmit={(e) => {
           e.preventDefault();
           shield.mutate();
@@ -97,7 +97,12 @@ function ShieldRoute() {
           Shields all transparent funds
         </div>
 
-        <div className="mt-2 h-30 w-full flex items-center justify-center text-center text-8xl leading-none font-medium">
+        <div
+          className="mt-2 h-30 w-full flex items-center justify-center text-center leading-none font-medium"
+          style={{
+            fontSize: fitFontSize(zatoshiToZec(available).length, "6rem"),
+          }}
+        >
           {zatoshiToZec(available)}
         </div>
 

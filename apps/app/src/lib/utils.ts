@@ -1,3 +1,5 @@
+import type { Activity } from "./wallet/types";
+
 const ZATOSHI_PER_ZEC = 100_000_000n;
 const DECIMALS = 8;
 
@@ -6,6 +8,14 @@ const DECIMALS = 8;
  * since moving a distinctive dust amount would single the wallet out.
  */
 export const MIGRATION_MINIMUM = ZATOSHI_PER_ZEC / 100n;
+
+/**
+ * CSS font size that fits `chars` characters in the nearest `@container`,
+ * never above `max`. 0.65em is Montserrat's widest digit.
+ */
+export function fitFontSize(chars: number, max: string) {
+  return `min(${max}, 100cqw / ${(Math.max(chars, 1) * 0.65).toFixed(2)})`;
+}
 
 /** Convert zatoshi (bigint) → ZEC decimal string. */
 export function zatoshiToZec(zatoshi: bigint): string {
@@ -75,3 +85,25 @@ export const shortenAddress = (
   );
   return [prefix, delimiter, suffix].join("");
 };
+
+export function transactionValue(
+  tx: Pick<Activity, "tx_type" | "value" | "fee">,
+) {
+  let value = tx.value;
+  // Sent values come back negative; flip to positive for display.
+  if (tx.tx_type === "Sent") {
+    value *= -1n;
+  }
+  // Shielded values exclude the fee; add it back for the total amount.
+  if (tx.tx_type === "Shielded") {
+    value += tx.fee;
+  }
+
+  let signal = "";
+  // Prefix received amounts with + to show the balance increase.
+  if (tx.tx_type === "Received") {
+    signal = "+";
+  }
+
+  return { signal, value };
+}

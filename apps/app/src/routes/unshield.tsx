@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
+import { AmountInput } from "../components/AmountInput";
 import { PlannedFee } from "../components/PlannedFee";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
@@ -93,8 +94,14 @@ function UnshieldRoute() {
 
   const error = send.error?.message ?? planProblem(planned);
 
+  const amountInput = isMax
+    ? maxAmount.data
+      ? zatoshiToZec(maxAmount.data)
+      : ""
+    : amountString;
+
   return (
-    <div className="p-10">
+    <div className="p-10 max-sm:px-6">
       <h1 className="text-center text-lg font-bold">Unshield</h1>
       <form
         className="w-full max-w-125 mx-auto mt-10 flex flex-col"
@@ -131,19 +138,9 @@ function UnshieldRoute() {
           </button>
         </div>
 
-        <input
-          name="amount"
-          type="text"
-          placeholder="0"
-          autoComplete="off"
-          className="mt-2 h-30 w-full text-center text-8xl leading-none font-medium outline-none placeholder:text-black focus:placeholder:text-transparent"
-          value={
-            isMax
-              ? maxAmount.data
-                ? zatoshiToZec(maxAmount.data)
-                : ""
-              : amountString
-          }
+        <AmountInput
+          className="mt-2"
+          value={amountInput}
           onFocus={() => setValidationMessage("")}
           onChange={(e) => {
             setIsMax(false);
