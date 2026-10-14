@@ -133,7 +133,7 @@ export const AppHeaderNavigation = ({
               className="items-center"
             >
               <a
-                href="https://zillions.app"
+                href="https://zillions.money"
                 target="_blank"
                 className="transition-colors hover:text-neutral-500"
                 rel="noreferrer nofollow"
