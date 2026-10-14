@@ -12,13 +12,13 @@ import {
   ProvingNotice,
   TransferForm,
 } from "../components/TransferForm";
+import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
 import { internalAddress, useInternalAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
 import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
-import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/unshield")({
   component: UnshieldRoute,

@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { PageLoader } from "../components/PageLoader";
 import { FormError, ProvingNotice } from "../components/TransferForm";
+import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useFreshAddress } from "../hooks/useAddresses";
@@ -12,7 +13,6 @@ import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { MIGRATION_MINIMUM } from "../lib/utils";
-import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/migrate")({
   component: MigrateRoute,

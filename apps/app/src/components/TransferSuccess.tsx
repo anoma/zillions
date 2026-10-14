@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { TransactionReceiptCard } from "../components/TransactionReceiptCard";
+import { TransactionReceiptCard } from "./TransactionReceiptCard";
 
 export function TransferSuccess({
   tx,

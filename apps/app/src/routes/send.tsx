@@ -12,6 +12,7 @@ import {
   ProvingNotice,
   TransferForm,
 } from "../components/TransferForm";
+import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
 import { placeholderClassName } from "../components/ui/utils";
 import { ZecValue } from "../components/ZecValue";
@@ -19,7 +20,6 @@ import { useAddressKind } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
-import { TransferSuccess } from "./TransferSuccess";
 
 export const Route = createFileRoute("/send")({
   component: SendRoute,

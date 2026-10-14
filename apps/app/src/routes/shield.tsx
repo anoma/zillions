@@ -9,6 +9,7 @@ import {
   ProvingNotice,
   TransferForm,
 } from "../components/TransferForm";
+import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
@@ -17,7 +18,6 @@ import { useWallet } from "../hooks/useWallet";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { fitFontSize, zatoshiToZec } from "../lib/utils";
-import { TransferSuccess } from "./TransferSuccess";
 
 /** Least a shielding may move: zcore's rule, as the fee would eat the rest. */
 const SHIELDING_THRESHOLD = 100_000n;
