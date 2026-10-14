@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { PageLoader } from "../components/PageLoader";
+import { FormError, ProvingNotice } from "../components/TransferForm";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useFreshAddress } from "../hooks/useAddresses";
@@ -287,15 +288,11 @@ function MigrateRoute() {
           {fee !== undefined ? <ZecValue zat={BigInt(fee)} /> : <Waiting />}
         </Row>
       </div>
-      {error && <div className="mt-4 text-red-500 text-center">{error}</div>}
+      {error && <FormError>{error}</FormError>}
       <Primary onClick={confirm} disabled={!amount || send.isPending}>
         {send.isPending ? "Sending..." : "Confirm"}
       </Primary>
-      {send.isPending && (
-        <div className="mt-2 text-center font-medium">
-          Proving takes up to a minute after you approve in the keychain.
-        </div>
-      )}
+      {send.isPending && <ProvingNotice />}
     </Page>
   );
 }

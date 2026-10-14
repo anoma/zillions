@@ -1,11 +1,19 @@
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { PageShell } from "../components/PageShell";
+import { FeeRow } from "../components/PlannedFee";
+import {
+  Field,
+  FormError,
+  PoolPill,
+  ProvingNotice,
+  TransferForm,
+} from "../components/TransferForm";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useWallet } from "../hooks/useWallet";
-import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { fitFontSize, zatoshiToZec } from "../lib/utils";
@@ -74,24 +82,11 @@ function ShieldRoute() {
   const tooLittle = available > 0n && available < SHIELDING_THRESHOLD;
 
   return (
-    <div className="p-10 max-sm:px-6">
-      <h1 className="text-center text-lg font-bold">Shield</h1>
-      <form
-        className="@container w-full max-w-125 mx-auto mt-10 flex flex-col"
-        onSubmit={(e) => {
-          e.preventDefault();
-          shield.mutate();
-        }}
-      >
-        <div>
-          <div className="text-xs font-medium mb-1">From</div>
-          <div
-            title={account.transparent.address}
-            className="h-11 w-full flex items-center justify-center rounded-full border border-gray-300 font-medium"
-          >
-            Transparent
-          </div>
-        </div>
+    <PageShell title="Shield">
+      <TransferForm className="@container" onSubmit={() => shield.mutate()}>
+        <Field label="From">
+          <PoolPill pool="transparent" title={account.transparent.address} />
+        </Field>
 
         <div className="mt-4 text-xs font-medium text-center">
           Shields all transparent funds
@@ -106,27 +101,11 @@ function ShieldRoute() {
           {zatoshiToZec(available)}
         </div>
 
-        <div className="mt-4">
-          <div className="text-xs font-medium mb-1">To</div>
-          <div className="h-11 w-full p-0.5 rounded-full border border-gray-300">
-            <div className="h-full w-full flex items-center justify-center rounded-full bg-gold font-medium">
-              Shielded
-            </div>
-          </div>
-        </div>
+        <Field label="To" className="mt-4">
+          <PoolPill pool="shielded" />
+        </Field>
 
-        <div className="mt-4 flex items-center justify-between text-xs font-medium">
-          <div>Transaction fee</div>
-          <div>
-            {proposal.data ? (
-              <ZecValue zat={proposal.data.fee} />
-            ) : proposal.isLoading ? (
-              <SpinnerIcon className="size-3" />
-            ) : (
-              "-"
-            )}
-          </div>
-        </div>
+        <FeeRow fee={proposal.data?.fee} pending={proposal.isLoading} />
 
         <ActionButton
           size="lg"
@@ -138,11 +117,7 @@ function ShieldRoute() {
           {shield.isPending ? "Shielding..." : "Shield"}
         </ActionButton>
 
-        {shield.isPending && (
-          <div className="mt-2 text-sm text-center font-medium">
-            Proving takes up to a minute after you approve in the keychain.
-          </div>
-        )}
+        {shield.isPending && <ProvingNotice />}
 
         {tooLittle && (
           <div className="mt-2 text-sm text-center font-medium">
@@ -150,10 +125,8 @@ function ShieldRoute() {
           </div>
         )}
 
-        {error && (
-          <div className="mt-4 text-red-500 text-center">{error.message}</div>
-        )}
-      </form>
-    </div>
+        {error && <FormError>{error.message}</FormError>}
+      </TransferForm>
+    </PageShell>
   );
 }
