@@ -498,6 +498,14 @@ export function try_decrypt_full(network, ufvk, pool, chunk, ciphertexts, memos,
     }
     return takeFromExternrefTable0(ret[0]);
 }
+
+/**
+ * Builds the Halo2 proving and verifying keys now, for this instance's
+ * proofs to skip; seconds of work, so call it off the UI thread.
+ */
+export function warm_prover() {
+    wasm.warm_prover();
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,

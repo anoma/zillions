@@ -8,6 +8,7 @@ import outputUrl from "@zillions/sapling-params/sapling-output.params?url";
 import spendUrl from "@zillions/sapling-params/sapling-spend.params?url";
 import initZcore, { needs_sapling_params } from "@zillions/zcore";
 import { sendTransaction } from "./lightwalletd";
+import type { ProveRequest, ProveResponse } from "./prove";
 import ProveWorker from "./prove.ts?worker";
 
 /** The files' published hashes; bad parameters would make bad proofs. */
@@ -66,22 +67,61 @@ export type ProveStage =
   | "verifying"
   | "broadcast";
 
-/** Proves a signed PCZT in a worker: it takes tens of seconds. */
+// ponytail: one prover for the page and one proof at a time, as one form
+// submits at a time; queue requests if that stops holding.
+let prover: Worker | undefined;
+
+const logWarmed = (ms: number) =>
+  console.log(`[prover] keys ready in ${(ms / 1000).toFixed(1)}s`);
+
+/** The page's prove worker, started on first use. */
+function proveWorker() {
+  if (!prover) {
+    prover = new ProveWorker();
+    prover.onmessage = ({ data }: MessageEvent<ProveResponse>) => {
+      if ("warmed" in data) logWarmed(data.warmed);
+    };
+  }
+  return prover;
+}
+
+/** Drops the worker so the next use starts fresh: a failed wasm instance isn't reused. */
+function resetProver() {
+  prover?.terminate();
+  prover = undefined;
+}
+
+/**
+ * Builds the proving keys in the prove worker now, for the next proof to skip
+ * (~16 s of a ~28 s proof in Chromium). Call it when a send form opens.
+ */
+export function warmProver() {
+  if (prover) return;
+  console.log("[prover] building keys…");
+  proveWorker().postMessage({ warm: true } satisfies ProveRequest);
+}
+
+/** Proves a signed PCZT in the prove worker: it takes tens of seconds. */
 function prove(
   pczt: Uint8Array,
   sapling: SaplingParams | undefined,
   onStage: (stage: ProveStage) => void,
 ) {
-  const worker = new ProveWorker();
+  const worker = proveWorker();
   return new Promise<Proved>((resolve, reject) => {
-    worker.onmessage = ({ data }) => {
-      if ("stage" in data) onStage(data.stage);
-      else if ("error" in data) reject(new Error(data.error));
-      else resolve(data.ok);
+    const fail = (message: string) => {
+      resetProver();
+      reject(new Error(message));
     };
-    worker.onerror = (e) => reject(new Error(e.message || "prover failed"));
-    worker.postMessage({ pczt, sapling });
-  }).finally(() => worker.terminate());
+    worker.onmessage = ({ data }: MessageEvent<ProveResponse>) => {
+      if ("stage" in data) onStage(data.stage);
+      else if ("error" in data) fail(data.error);
+      else if ("ok" in data) resolve(data.ok);
+      else logWarmed(data.warmed);
+    };
+    worker.onerror = (e) => fail(e.message || "prover failed");
+    worker.postMessage({ pczt, sapling } satisfies ProveRequest);
+  });
 }
 
 /**

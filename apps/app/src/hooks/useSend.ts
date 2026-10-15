@@ -4,9 +4,11 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
+import { warmProver } from "../lib/wallet/chain/submit";
 import type { SendRequest } from "../lib/wallet/send";
 import type { PendingActivity } from "../lib/wallet/types";
 import { useAccount } from "./useAccount";
@@ -98,6 +100,7 @@ export function useSend() {
   const account = useAccount();
   const queryClient = useQueryClient();
   const { stages, track } = useSubmitStage();
+  useEffect(warmProver, []);
 
   const mutation = useMutation({
     mutationFn: async ({
