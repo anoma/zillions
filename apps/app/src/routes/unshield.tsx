@@ -145,7 +145,7 @@ function UnshieldRoute() {
           className="mt-4 w-full"
           backgroundColor="black"
           textColor="white"
-          disabled={send.isPending || amount <= 0n}
+          disabled={send.isPending}
         >
           {send.isPending ? "Unshielding..." : "Unshield"}
         </ActionButton>

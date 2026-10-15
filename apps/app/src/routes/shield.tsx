@@ -1,6 +1,6 @@
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { PageShell } from "../components/PageShell";
 import { FeeRow } from "../components/PlannedFee";
 import {
@@ -52,6 +52,7 @@ function ShieldRoute() {
     }),
   );
 
+  const [validationMessage, setValidationMessage] = useState<ReactNode>(null);
   const { stages, track } = useSubmitStage();
   useEffect(warmProver, []);
   const shield = useMutation({
@@ -89,9 +90,24 @@ function ShieldRoute() {
   const error = shield.error ?? proposal.error;
   const tooLittle = available > 0n && available < SHIELDING_THRESHOLD;
 
+  const onSubmit = () => {
+    const problem =
+      available === 0n ? (
+        "No transparent funds to shield"
+      ) : tooLittle ? (
+        <>
+          Shielding needs at least <ZecValue zat={SHIELDING_THRESHOLD} />
+        </>
+      ) : !proposal.data && !proposal.error ? (
+        "Preparing the transaction, try again in a moment"
+      ) : null;
+    setValidationMessage(problem);
+    if (!problem && proposal.data) shield.mutate();
+  };
+
   return (
     <PageShell title="Shield">
-      <TransferForm className="@container" onSubmit={() => shield.mutate()}>
+      <TransferForm className="@container" onSubmit={onSubmit}>
         <Field label="From">
           <PoolPill pool="transparent" title={account.transparent.address} />
         </Field>
@@ -120,20 +136,22 @@ function ShieldRoute() {
           className="mt-4 w-full"
           backgroundColor="black"
           textColor="white"
-          disabled={shield.isPending || !proposal.data}
+          disabled={shield.isPending}
         >
           {shield.isPending ? "Shielding..." : "Shield"}
         </ActionButton>
 
         {shield.isPending && <SubmitProgress stages={stages} />}
 
-        {tooLittle && (
+        {tooLittle && !validationMessage && (
           <div className="mt-2 text-sm text-center font-medium">
             Shielding needs at least <ZecValue zat={SHIELDING_THRESHOLD} />
           </div>
         )}
 
-        {error && <FormError>{error.message}</FormError>}
+        {(validationMessage || error) && (
+          <FormError>{validationMessage || error?.message}</FormError>
+        )}
       </TransferForm>
     </PageShell>
   );
