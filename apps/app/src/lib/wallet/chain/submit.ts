@@ -25,13 +25,22 @@ const SAPLING_PARAMS = {
 
 export type SaplingParams = { spend: Uint8Array; output: Uint8Array };
 
+const hex = (bytes: Uint8Array) =>
+  Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
+/**
+ * Proves but never broadcasts, for testing sends with real notes. Dev builds
+ * only: `vite build` ignores it.
+ */
+const DRY_RUN = import.meta.env.DEV && import.meta.env.VITE_DRY_RUN === "true";
+
 async function fetchVerified({ url, sha256 }: { url: string; sha256: string }) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Sapling parameters: HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  const hex = [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (hex !== sha256) throw new Error("Sapling parameters failed their check");
+  if (hex(digest) !== sha256)
+    throw new Error("Sapling parameters failed their check");
   return bytes;
 }
 
@@ -172,6 +181,13 @@ export async function submitTransaction(
   }
   const { txid, raw, expiry_height } = await prove(signed, sapling, onStage);
   onStage("broadcast");
+  if (DRY_RUN) {
+    console.log(
+      `[submit] dry run, not broadcast: txid ${txid}, raw ${hex(raw)}`,
+    );
+    // Thrown, not returned: the wallet then holds no notes as spent.
+    throw new Error("Dry run: the transaction was proven but not broadcast");
+  }
   await sendTransaction(raw);
   return { txid, raw, expiryHeight: expiry_height };
 }
