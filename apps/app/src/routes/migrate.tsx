@@ -1,5 +1,5 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { PageLoader } from "../components/PageLoader";
@@ -12,9 +12,12 @@ import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
-import { MIGRATION_MINIMUM } from "../lib/utils";
+import { MIGRATION_ENABLED, MIGRATION_MINIMUM } from "../lib/utils";
 
 export const Route = createFileRoute("/migrate")({
+  beforeLoad: () => {
+    if (!MIGRATION_ENABLED) throw redirect({ to: "/" });
+  },
   component: MigrateRoute,
 });
 

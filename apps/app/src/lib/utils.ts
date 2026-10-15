@@ -9,6 +9,10 @@ const DECIMALS = 8;
  */
 export const MIGRATION_MINIMUM = ZATOSHI_PER_ZEC / 100n;
 
+/** Hides Move to Ironwood (2.9) until it has been tested: `VITE_MIGRATION_ENABLED=true` shows it. */
+export const MIGRATION_ENABLED =
+  import.meta.env.VITE_MIGRATION_ENABLED === "true";
+
 /**
  * CSS font size that fits `chars` characters in the nearest `@container`,
  * never above `max`. 0.65em is Montserrat's widest digit.
