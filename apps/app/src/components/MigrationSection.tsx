@@ -1,6 +1,6 @@
 import { useGetBalance } from "../hooks/useGetBalance";
 import { DatabaseArrowIcon } from "../icons/DatabaseArrowIcon";
-import { MIGRATION_MINIMUM } from "../lib/utils";
+import { MIGRATION_ENABLED, MIGRATION_MINIMUM } from "../lib/utils";
 import { ActionButton } from "./ui/ActionButton";
 import { ZecValue } from "./ZecValue";
 
@@ -8,7 +8,7 @@ import { ZecValue } from "./ZecValue";
 export function MigrationSection() {
   const balance = useGetBalance();
   const orchard = balance.data?.orchardBalance ?? 0n;
-  if (orchard < MIGRATION_MINIMUM) return null;
+  if (!MIGRATION_ENABLED || orchard < MIGRATION_MINIMUM) return null;
 
   return (
     <div className="px-10 max-sm:px-6 py-6 flex max-sm:flex-col sm:items-center gap-4 bg-neutral-800 text-white">
