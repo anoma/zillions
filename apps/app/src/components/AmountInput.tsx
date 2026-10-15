@@ -20,9 +20,9 @@ export function AmountInput({
         autoFocus={matchMedia("(pointer: fine)").matches}
         className={twMerge(
           "h-30 w-full text-center leading-none font-medium outline-none",
-          // Empty + focused: right-align so the caret sits after the "0"
+          // Empty + focused: left-align so the caret sits before the "0"
           // (1ch is exactly its width) instead of cutting through it.
-          "focus:placeholder-shown:text-right focus:placeholder-shown:pr-[calc(50%-0.5ch)]",
+          "focus:placeholder-shown:text-left focus:placeholder-shown:pl-[calc(50%-0.5ch)]",
           placeholderClassName,
           className,
         )}
