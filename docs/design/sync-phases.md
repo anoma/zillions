@@ -56,7 +56,8 @@ work.
   waiting for the chunks in flight, then the sync itself, ~10 s on 1 worker.
   So the one-minute re-sync (`RESYNC_MS`) holds off while phases 3–4 run,
   and new activity then shows once they end or on a refresh. The first sync
-  of a visit, and a tap on the indicator, still run at once.
+  of a visit, and a tap on the indicator, still run at once. Coming back to
+  the tab or back online also syncs at once, but holds off like the timer.
 
 ### `setupHeight`
 

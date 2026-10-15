@@ -530,11 +530,16 @@ test("holds the timed sync while history runs, and syncs once it ends", async ()
 
   await wallet.sync();
   await vi.advanceTimersByTimeAsync(3 * 60_000);
+  wallet.resync();
+  await vi.advanceTimersByTimeAsync(0);
   expect(tips).toHaveBeenCalledTimes(1);
 
   release();
   await vi.advanceTimersByTimeAsync(60_000);
   expect(tips).toHaveBeenCalledTimes(2);
+  wallet.resync();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(tips).toHaveBeenCalledTimes(3);
 
   wallet.free();
   vi.useRealTimers();

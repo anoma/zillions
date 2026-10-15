@@ -223,6 +223,12 @@ export class Wallet {
       this.#resync = setTimeout(this.#resyncTick, RESYNC_MS);
       return;
     }
+    this.resync();
+  };
+
+  /** A sync that, like the timed one, skips while history or the spam era runs. */
+  resync = () => {
+    if (this.#history) return;
     this.sync().catch((e) => console.error("[sync] failed", e));
   };
 
