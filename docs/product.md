@@ -122,15 +122,19 @@ Spending is _Built_: it awaits a first real transaction.
 - **To**: paste any Zcash address (transparent, Sapling or unified). The field
   shows at a glance whether the recipient is transparent or shielded. Without
   an address, the user can send a payment link instead (2.10). — _Planned_
-- **Memo**: not offered to the user. The wallet can still attach one to a
-  shielded payment itself (kept for app-set memos later).
+- **Message** (memo): optional, for shielded recipients only, behind an
+  "Add a message" link under To so the form stays short. Up to 512 bytes, with
+  a counter. Only the recipient can read it. A message typed before the
+  recipient becomes transparent stays, and blocks sending until it is removed
+  or the recipient changes; it is never dropped silently. — _Built_
 - **Fee preview** before confirming, updating as the form changes.
 - Checks before sending: amount set, recipient a valid address on this
-  network, enough balance.
+  network, enough balance, message within 512 bytes.
 - **Privacy notice** under the button: "This transfer is shielded",
   "partly shielded" or "transparent", depending on source and recipient.
 - Approval happens in the Keychain, which shows what is being signed.
-- **Receipt** after sending: amount, fee, from, to, time, and a link to the
+- **Receipt** after sending: amount, fee, from, to, time, the message when
+  there is one (plain text, links not clickable), and a link to the
   transaction on a block explorer; marked as awaiting confirmation.
 
 ### 2.4 Shield — Built

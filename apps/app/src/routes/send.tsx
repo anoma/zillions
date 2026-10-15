@@ -21,6 +21,8 @@ import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
 
+const MEMO_BYTES = 512;
+
 export const Route = createFileRoute("/send")({
   component: SendRoute,
 });
@@ -32,6 +34,8 @@ function SendRoute() {
   const [amountString, setAmountString] = useState("");
   const [isMax, setIsMax] = useState(false);
   const [to, setTo] = useState("");
+  const [showMemo, setShowMemo] = useState(false);
+  const [memoText, setMemoText] = useState("");
   const [validationMessage, setValidationMessage] = useState("");
 
   const from = isTransparentFrom ? "transparent" : "shielded";
@@ -46,8 +50,18 @@ function SendRoute() {
   const isTransparentTo = toKind === "transparent";
   const isShieldedTo = toKind === "shielded";
 
-  // No memo from the UI; `SendRequest.memo` stays for ones the app sets.
-  const planned = useSendPlan({ from, to, amount: typed }, isMax);
+  const memoBytes = new TextEncoder().encode(memoText).length;
+  const memoProblem = !memoText
+    ? undefined
+    : isTransparentTo
+      ? "Transparent addresses can't receive messages"
+      : memoBytes > MEMO_BYTES
+        ? "Message is too long"
+        : undefined;
+  // A memo doesn't change the fee, so one the send can't carry is left out of the plan.
+  const memo = memoText && !memoProblem ? memoText : undefined;
+
+  const planned = useSendPlan({ from, to, amount: typed, memo }, isMax);
   const { maxAmount, ceiling } = planned;
   // From transparent to a shielded recipient, upstream shields the change too:
   // the shielded side then holds payment and change together, hiding the amount.
@@ -76,9 +90,7 @@ function SendRoute() {
           ? "Set an amount"
           : amount > availableBalance
             ? "Insufficient balance"
-            : ceiling
-              ? planProblem(planned)
-              : undefined;
+            : (memoProblem ?? (ceiling ? planProblem(planned) : undefined));
     if (problem) {
       setValidationMessage(problem);
       return;
@@ -87,11 +99,13 @@ function SendRoute() {
       from,
       to,
       amount,
+      memo,
       shown: {
         tx_type: "Sent",
         value: -amount,
         from: { pool: from },
         to: { address: to },
+        memo,
       },
     });
   };
@@ -161,6 +175,64 @@ function SendRoute() {
             }}
           />
         </Field>
+
+        {!showMemo
+          ? !isTransparentTo && (
+              <button
+                type="button"
+                className="mt-2 self-start text-xs font-medium hover:underline"
+                onClick={() => setShowMemo(true)}
+              >
+                + Add a message
+              </button>
+            )
+          : (!isTransparentTo || memoText) && (
+              <div className="mt-4">
+                <div className="mb-1 flex justify-between text-xs font-medium">
+                  <label htmlFor="memo">Message</label>
+                  <button
+                    type="button"
+                    className="hover:underline"
+                    onClick={() => {
+                      setShowMemo(false);
+                      setMemoText("");
+                      setValidationMessage("");
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <textarea
+                  id="memo"
+                  name="memo"
+                  rows={3}
+                  autoFocus
+                  placeholder="Only the recipient can read this"
+                  className={twMerge(
+                    "w-full px-4 py-3 font-medium rounded-lg border border-gray-300 outline-none resize-none",
+                    placeholderClassName,
+                    memoProblem && "border-red-500",
+                  )}
+                  value={memoText}
+                  onFocus={() => setValidationMessage("")}
+                  onChange={(e) => {
+                    setMemoText(e.target.value);
+                    setValidationMessage("");
+                  }}
+                />
+                <div className="flex justify-between gap-2 text-xs">
+                  <span className="text-red-500">{memoProblem}</span>
+                  <span
+                    className={twMerge(
+                      "tabular-nums",
+                      memoBytes > MEMO_BYTES && "text-red-500",
+                    )}
+                  >
+                    {memoBytes}/{MEMO_BYTES}
+                  </span>
+                </div>
+              </div>
+            )}
 
         <PlannedFee {...planned} />
 

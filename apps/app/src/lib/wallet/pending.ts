@@ -43,6 +43,6 @@ export const pendingActivity = (
       status: "Pending",
       block_height: 0,
       confirmations: 0,
-      memo: undefined,
+      memo: receipt!.memo,
       pool: "mixed",
     }));
