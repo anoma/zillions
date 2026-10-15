@@ -29,6 +29,8 @@ type Entry = {
   height: number;
   shielded?: TxGroup;
   transparent?: TransparentTx;
+  /** What a transaction with no shielded side paid to others. */
+  paid?: Payment[];
 };
 
 const max0 = (n: bigint) => (n > 0n ? n : 0n);
@@ -108,7 +110,7 @@ function shieldedSide({ received, spent, sent, paid }: TxGroup) {
 
 function receipt(
   txid: string,
-  { height, shielded, transparent }: Entry,
+  { height, shielded, transparent, paid = [] }: Entry,
   ours: Set<string>,
   time?: number,
 ): Activity {
@@ -140,13 +142,16 @@ function receipt(
 
   const t = transparent.received - transparent.spent;
   if (!s || !side) {
+    // Our coins pay what went to others and the fee; what came back is change.
+    const value = paid.length ? -sum(paid) : t;
     return {
       ...base,
-      tx_type: t >= 0n ? "Received" : "Sent",
-      value: t,
+      tx_type: value >= 0n ? "Received" : "Sent",
+      value,
+      fee: paid.length ? max0(-t - sum(paid)) : 0n,
       memo: undefined,
       pool: "transparent",
-      from: party(transparent.from),
+      from: transparent.shielded ? SHIELDED : party(transparent.from),
       to: party(transparent.to),
     };
   }
@@ -241,7 +246,14 @@ export function buildActivity(
     entries.set(txid, { height, shielded: group });
   }
   for (const tx of transparent) {
-    const entry = entries.get(tx.txid) ?? { height: tx.height };
+    const index = txIndex(blocks, tx.height, tx.txid);
+    const entry = entries.get(tx.txid) ?? {
+      height: tx.height,
+      paid:
+        index === undefined
+          ? undefined
+          : paid.get(locatorId({ height: tx.height, tx_index: index })),
+    };
     entries.set(tx.txid, { ...entry, transparent: tx });
   }
 
@@ -251,6 +263,9 @@ export function buildActivity(
     )
     .sort((a, b) => b.block_height - a.block_height);
 }
+
+const txIndex = (blocks: Map<number, Block>, height: number, txid: string) =>
+  [...(blocks.get(height)?.txids ?? [])].find(([, id]) => id === txid)?.[0];
 
 /** Every height history names, so their blocks can be fetched. */
 export function activityHeights(
@@ -281,8 +296,7 @@ export function sendingTxs(
   }
   for (const { txid, height, spent } of transparent) {
     if (!spent) continue;
-    const txids = blocks.get(height)?.txids ?? [];
-    const tx_index = [...txids].find(([, id]) => id === txid)?.[0];
+    const tx_index = txIndex(blocks, height, txid);
     if (tx_index !== undefined) {
       txs.set(`${height}:${tx_index}`, { height, tx_index });
     }

@@ -87,8 +87,8 @@ Their sends are from the wallet that made them.
 | `t-xi` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
 | `t-xi-nc` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
 | `t-xi-tc` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
-| `t-xt` | **Sent −50,000 · fee 10,000** (today Sent −60,000 · fee 0) | Transparent → t1theirs | sent 60,000 · fee 10,000 | sent 50,000 · fee 10,000 | sent 50,000 · fee 10,000 | Sent −60,000 · fee 10,000 |
-| `t-xt-nc` | **Sent −50,000 · fee 10,000** (today Sent −60,000 · fee 0) | Transparent → t1theirs | sent 60,000 · fee 10,000 | sent 50,000 · fee 10,000 | sent 50,000 · fee 10,000 | Sent −60,000 · fee 10,000 |
+| `t-xt` | Sent −50,000 · fee 10,000 | Transparent → t1theirs | sent 60,000 · fee 10,000 | sent 50,000 · fee 10,000 | sent 50,000 · fee 10,000 | Sent −60,000 · fee 10,000 |
+| `t-xt-nc` | Sent −50,000 · fee 10,000 | Transparent → t1theirs | sent 60,000 · fee 10,000 | sent 50,000 · fee 10,000 | sent 50,000 · fee 10,000 | Sent −60,000 · fee 10,000 |
 | `t-i` | Shielded 85,000 · fee 15,000 | Transparent → Shielded | shield 100,000 · fee 15,000 | shield 85,000 · fee 15,000 | shielded 85,000 · fee 15,000 | Shield −15,000 · fee 15,000 |
 | `t-t` | **Sent −90,000 · fee 10,000** (today Sent −10,000 · fee 0) | Transparent → Transparent | sent 10,000 · fee 10,000 | send-to-self 90,000 · fee 10,000 | sent 90,000 · fee 10,000 + received 90,000 | T. Self Transfer −10,000 · fee 10,000 |
 
@@ -105,7 +105,7 @@ Their sends are from the wallet that made them.
 | ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
 | --- | --- | --- | --- | --- | --- | --- |
 | `xi-i` | Received 10,000 · fee 0 | Shielded → Shielded | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
-| `xi-t` | Received 10,000 · fee 0 | **Shielded → Transparent** (today Transparent → Transparent) | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
+| `xi-t` | Received 10,000 · fee 0 | Shielded → Transparent | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
 | `xo-s` | Received 10,000 · fee 0 | Shielded → Shielded | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
 
 - `xi-i` to our Ironwood: their Ironwood 100,000 → us Ironwood 10,000 · their change · fee 10,000. Receives show no fee: it isn't ours to pay.
@@ -125,10 +125,7 @@ Their sends are from the wallet that made them.
 ## Wrong today
 
 - `s-xo-lost` to someone's Orchard, change in Orchard, outgoing recovery failed
-- `t-xt` to someone's transparent address
-- `t-xt-nc` to someone's transparent address, no change
 - `t-t` to our own transparent address
-- `xi-t` to our transparent address
 
 ## Needs a decision
 

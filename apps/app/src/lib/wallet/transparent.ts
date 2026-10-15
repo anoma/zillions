@@ -78,6 +78,8 @@ export interface TransparentTx {
   from?: string;
   /** Where they went: ours if paid to us, else the outside address it paid. */
   to?: string;
+  /** It spent no transparent coin: its funds came from a shielded pool. */
+  shielded?: true;
 }
 
 /** A coinbase input spends nothing; its prevout txid is all zeros. */
@@ -282,6 +284,7 @@ async function transparentState(
         to: spent.length
           ? (paid?.address ?? received[0]?.address)
           : received[0]?.address,
+        ...(inputs.length ? {} : { shielded: true as const }),
       };
     }),
   );
