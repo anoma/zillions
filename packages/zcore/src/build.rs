@@ -73,19 +73,41 @@ impl PoolTree {
     fn tip<H: Node>(&self) -> Result<Tip<'_, H>, String> {
         Tip::new(&self.tip)
     }
+}
 
-    fn path<H: Node>(&self, position: u64) -> Result<Vec<H>, String> {
-        self.tip::<H>()?
-            .path(position, self.chunks.get(&(position >> 14)))
+/// Each pool's tree, and its tip read once: reading one hashes its whole upper tree.
+struct PoolTip<'a, H> {
+    tree: &'a PoolTree,
+    tip: Tip<'a, H>,
+}
+
+impl<'a, H: Node> PoolTip<'a, H> {
+    fn read(
+        trees: &'a HashMap<&'static str, PoolTree>,
+        pool: &str,
+    ) -> Result<Option<Self>, String> {
+        trees
+            .get(pool)
+            .map(|tree| {
+                Ok(PoolTip {
+                    tree,
+                    tip: tree.tip()?,
+                })
+            })
+            .transpose()
+    }
+
+    fn path(&self, position: u64) -> Result<Vec<H>, String> {
+        self.tip
+            .path(position, self.tree.chunks.get(&(position >> 14)))
     }
 }
 
-fn pool_tree<'a>(
-    trees: &'a HashMap<&'static str, PoolTree>,
-    pool: &'static str,
-) -> Result<&'a PoolTree, String> {
-    trees
-        .get(pool)
+fn spending_from<'a, 'b, H>(
+    tip: &'b Option<PoolTip<'a, H>>,
+    pool: &str,
+) -> Result<&'b PoolTip<'a, H>, String> {
+    tip.as_ref()
         .ok_or_else(|| format!("no {pool} tree data to spend from"))
 }
 
@@ -180,18 +202,21 @@ pub(crate) fn pczt<N>(
             return Err(format!("no {pool} tree data for this transaction"));
         }
     }
-    let orchard_root = |pool| -> Result<orchard::Anchor, String> {
-        trees
-            .get(pool)
-            .map(|t| Ok(orchard::Anchor::from(t.tip::<MerkleHashOrchard>()?.root())))
-            .unwrap_or_else(|| Ok(orchard::Anchor::empty_tree()))
+    let sapling_tip = PoolTip::<sapling::Node>::read(&trees, "sapling")?;
+    let orchard_tip = PoolTip::<MerkleHashOrchard>::read(&trees, "orchard")?;
+    let ironwood_tip = PoolTip::<MerkleHashOrchard>::read(&trees, "ironwood")?;
+    let orchard_root = |tip: &Option<PoolTip<MerkleHashOrchard>>| {
+        tip.as_ref().map_or(orchard::Anchor::empty_tree(), |t| {
+            orchard::Anchor::from(t.tip.root())
+        })
     };
-    let sapling_anchor = match trees.get("sapling") {
-        Some(t) => sapling::Anchor::from(t.tip::<sapling::Node>()?.root()),
-        None => sapling::Anchor::empty_tree(),
-    };
-    let orchard_anchor = orchard_root("orchard")?;
-    let ironwood_anchor = orchard_root("ironwood")?;
+    let sapling_anchor = sapling_tip
+        .as_ref()
+        .map_or(sapling::Anchor::empty_tree(), |t| {
+            sapling::Anchor::from(t.tip.root())
+        });
+    let orchard_anchor = orchard_root(&orchard_tip);
+    let ironwood_anchor = orchard_root(&ironwood_tip);
 
     let mut builder = Builder::new(
         network,
@@ -232,7 +257,7 @@ pub(crate) fn pczt<N>(
                     Scope::External => dfvk.fvk().clone(),
                     Scope::Internal => dfvk.to_internal_fvk(),
                 };
-                let path = pool_tree(&trees, "sapling")?.path::<sapling::Node>(position)?;
+                let path = spending_from(&sapling_tip, "sapling")?.path(position)?;
                 let path = sapling::MerklePath::from_parts(path, position.into())
                     .map_err(|_| "bad sapling path")?;
                 builder
@@ -247,12 +272,12 @@ pub(crate) fn pczt<N>(
                 let fvk = orchard_fvk
                     .ok_or("viewing key has no Orchard part")?
                     .clone();
-                let name = match pool {
-                    orchard::ValuePool::Orchard => "orchard",
-                    orchard::ValuePool::Ironwood => "ironwood",
+                let tip = match pool {
+                    orchard::ValuePool::Orchard => spending_from(&orchard_tip, "orchard")?,
+                    orchard::ValuePool::Ironwood => spending_from(&ironwood_tip, "ironwood")?,
                 };
-                let path: [MerkleHashOrchard; 32] = pool_tree(&trees, name)?
-                    .path::<MerkleHashOrchard>(position)?
+                let path: [MerkleHashOrchard; 32] = tip
+                    .path(position)?
                     .try_into()
                     .map_err(|_| "orchard path is not 32 long")?;
                 let path = orchard::tree::MerklePath::from_parts(position as u32, path);

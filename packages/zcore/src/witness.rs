@@ -105,25 +105,37 @@ impl Chunk<'_> {
     }
 }
 
-/// The upper tree over chunk roots: `leaves[i]` is chunk `i`'s root.
+/// The upper tree over chunk roots, every level hashed once: `levels[h][i]`
+/// is the subtree of `2^h` chunks starting at chunk `i << h`, and
+/// `levels[0][i]` is chunk `i`'s root.
 struct Upper<H> {
-    leaves: Vec<H>,
+    levels: Vec<Vec<H>>,
 }
 
 impl<H: Node> Upper<H> {
+    fn new(leaves: Vec<H>) -> Self {
+        let mut levels = vec![leaves];
+        for height in 1..=UPPER_DEPTH {
+            let below = Level::from(CHUNK_DEPTH + height - 1);
+            let next = levels[height as usize - 1]
+                .chunks(2)
+                .map(|pair| match pair {
+                    [left, right] => H::combine(below, left, right),
+                    [left] => H::combine(below, left, &H::empty_root(below)),
+                    _ => unreachable!("chunks(2) yields one or two"),
+                })
+                .collect();
+            levels.push(next);
+        }
+        Upper { levels }
+    }
+
     /// The subtree of `2^height` chunks starting at chunk `start`.
     fn node(&self, start: u64, height: u8) -> H {
-        let level = Level::from(CHUNK_DEPTH + height);
-        if start >= self.leaves.len() as u64 {
-            return H::empty_root(level);
-        }
-        if height == 0 {
-            return self.leaves[start as usize].clone();
-        }
-        let half = 1u64 << (height - 1);
-        let left = self.node(start, height - 1);
-        let right = self.node(start + half, height - 1);
-        H::combine(level - 1, &left, &right)
+        self.levels[height as usize]
+            .get((start >> height) as usize)
+            .cloned()
+            .unwrap_or_else(|| H::empty_root(Level::from(CHUNK_DEPTH + height)))
     }
 
     fn root(&self) -> H {
@@ -172,7 +184,7 @@ impl<'a, H: Node> Tip<'a, H> {
         Ok(Tip {
             tree_size: body.tree_size,
             active,
-            upper: Upper { leaves },
+            upper: Upper::new(leaves),
         })
     }
 
@@ -194,7 +206,7 @@ impl<'a, H: Node> Tip<'a, H> {
         }
         let chunk = position / CHUNK_LEAVES;
         let leaf = position % CHUNK_LEAVES;
-        let mut path = if chunk < self.upper.leaves.len() as u64
+        let mut path = if chunk < self.upper.levels[0].len() as u64
             && self.active.filled > 0
             && chunk == self.tree_size / CHUNK_LEAVES
         {
