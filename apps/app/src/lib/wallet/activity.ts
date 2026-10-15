@@ -162,7 +162,12 @@ function receipt(
       to: SHIELDED,
     };
   }
-  const value = s.value + t;
+  // A payment recovered on the shielded side was also paid for by the
+  // transparent coins spent: it's the whole amount, and what our inputs held
+  // beyond it and our change is the fee.
+  const recovered = shielded!.sent.length + shielded!.paid.length > 0;
+  const net = sum(shielded!.received) - sum(shielded!.spent);
+  const value = recovered ? s.value : s.value + t;
   return {
     ...base,
     ...side,
@@ -171,6 +176,7 @@ function receipt(
     pool: "mixed",
     tx_type: value < 0n ? "Sent" : "Received",
     value,
+    fee: recovered ? max0(s.value - t - net) : 0n,
   };
 }
 

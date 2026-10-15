@@ -162,3 +162,37 @@ test("a send's payment is what it paid to someone else's transparent address", (
     fee: 20_000n,
   });
 });
+
+test("a send from transparent coins to a shielded address counts its payment once", () => {
+  // Mainnet 61f4832b…: three coins (41,000) pay 16,000 to an Ironwood
+  // receiver, recovered with the transparent OVK, and a 25,000 fee.
+  const at = { height: 3_519_095, tx_index: 4 };
+  const sent = {
+    id: "a_ironwood_9",
+    pool: "ironwood" as const,
+    value: 16_000,
+    recipient: "u1theirs",
+    memo: "This is another memo",
+    position: 9,
+    ...at,
+  };
+  const spend = { txid: "tx", height: at.height, received: 0n, spent: 41_000n };
+  const blocks = new Map([
+    [at.height, block({ txids: new Map([[at.tx_index, "tx"]]) })],
+  ]);
+  const entry = (notes: Note[], spent = 41_000n) =>
+    buildActivity(notes, [sent], [{ ...spend, spent }], blocks)[0];
+
+  expect(entry([])).toMatchObject({
+    tx_type: "Sent",
+    value: -16_000n,
+    fee: 25_000n,
+    from: { pool: "transparent" },
+    to: { address: "u1theirs" },
+    memo: "This is another memo",
+  });
+  // With 5,000 of shielded change, the fee is what's left over.
+  expect(
+    entry([{ ...note(10, 5_000), pool: "ironwood", ...at }], 46_000n),
+  ).toMatchObject({ value: -16_000n, fee: 25_000n });
+});
