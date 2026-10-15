@@ -85,3 +85,12 @@ it("drops the worker after a warm-up fails with no proof waiting", () => {
   expect(FakeWorker.all[0].terminated).toBe(true);
   expect(console.warn).toHaveBeenCalledWith("[prover] warm-up failed: trap");
 });
+
+it("builds the keys before a proof that had no warm-up", async () => {
+  const stages: string[] = [];
+  void submit.submitTransaction(new Uint8Array([7]), (s) => stages.push(s));
+  await tick();
+  expect(FakeWorker.all).toHaveLength(1);
+  expect(FakeWorker.all[0].sent[0]).toEqual({ warm: true });
+  expect(stages).toEqual(["proving-key"]);
+});

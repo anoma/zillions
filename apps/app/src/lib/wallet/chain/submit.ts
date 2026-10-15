@@ -129,6 +129,8 @@ function prove(
   sapling: SaplingParams | undefined,
   onStage: (stage: ProveStage) => void,
 ) {
+  // A fresh worker (none yet, or one dropped after a failure) builds the keys first.
+  warmProver();
   const worker = proveWorker();
   if (warmingSince !== undefined) {
     // The worker runs messages in order: this proof starts once the keys are built.
