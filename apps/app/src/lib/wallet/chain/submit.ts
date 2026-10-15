@@ -132,10 +132,10 @@ function prove(
   const worker = proveWorker();
   if (warmingSince !== undefined) {
     // The worker runs messages in order: this proof starts once the keys are built.
+    onStage("proving-key");
     console.log(
       `[prover] waiting for the keys, ${secs(performance.now() - warmingSince)} in`,
     );
-    onStage("proving-key");
   }
   return new Promise<Proved>((resolve, reject) => {
     const fail = (message: string) => {
