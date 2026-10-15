@@ -38,10 +38,14 @@ export type Zip32Path = {
   index?: number;
 };
 
-export type AccountType = "mnemonic" | "private-key" | "shielded-keys";
+export type AccountType =
+  | "mnemonic"
+  | "private-key"
+  | "shielded-keys"
+  | "ledger";
 
 /** The flow that produced an account. */
-export type AccountFlow = "create" | "import";
+export type AccountFlow = "create" | "import" | "connect";
 
 /** Secret material the user supplies during onboarding. */
 export type AccountSecret =
@@ -58,7 +62,7 @@ export type AccountStore = {
   type: AccountType;
   path: Bip44Path;
   parentId?: string;
-  source: "imported" | "generated";
+  source: "imported" | "generated" | "ledger";
   timestamp: number;
 };
 
@@ -361,5 +365,5 @@ export type IpcResult<K extends IpcKind = IpcKind> =
 /** Helper to build a typed message envelope. */
 export const message = <K extends IpcKind>(
   kind: K,
-  payload: IpcRequest<K>
+  payload: IpcRequest<K>,
 ): IpcMessage<K> => ({ kind, payload });

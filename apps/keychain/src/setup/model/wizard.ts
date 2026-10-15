@@ -15,7 +15,7 @@ import type {
 import type { MnemonicLength, SecretKind } from "./secrets";
 
 /** Which onboarding branch the user is in. */
-export type Flow = "none" | "create" | "import";
+export type Flow = "none" | "create" | "import" | "connect";
 
 /** The discrete steps. `start` is the landing choice. */
 export type Step =
@@ -30,7 +30,11 @@ export type Step =
   // import branch
   | "import.secret"
   | "import.name"
-  | "import.complete";
+  | "import.complete"
+  // connect branch
+  | "connect.approve"
+  | "connect.name"
+  | "connect.complete";
 
 /** Async persistence status for the final "complete" step. */
 export type CompletionStatus = "idle" | "pending" | "done" | "failed";
@@ -62,6 +66,7 @@ export type WizardState = {
   completionInfo: string;
   parentAccount?: AccountStore;
   shieldedAccount?: DerivedAccount;
+  ledgerAccount?: AccountStore;
 };
 
 export const initialWizardState = (passwordRequired: boolean): WizardState => ({
@@ -85,7 +90,7 @@ export const initialWizardState = (passwordRequired: boolean): WizardState => ({
 /** Typed events. Steps dispatch these; no direct setter access. */
 export type WizardEvent =
   | { type: "passwordRequirementResolved"; required: boolean }
-  | { type: "chooseFlow"; flow: Extract<Flow, "create" | "import"> }
+  | { type: "chooseFlow"; flow: Extract<Flow, "create" | "import" | "connect"> }
   | { type: "goToStep"; step: Step }
   | { type: "setMnemonic"; mnemonic: string[] }
   | { type: "setMnemonicLength"; length: MnemonicLength }
@@ -109,7 +114,7 @@ export type WizardEvent =
 
 export const wizardReducer = (
   state: WizardState,
-  event: WizardEvent
+  event: WizardEvent,
 ): WizardState => {
   switch (event.type) {
     case "passwordRequirementResolved":
@@ -168,6 +173,7 @@ export const wizardReducer = (
         completionInfo: "Done!",
         parentAccount: event.parentAccount ?? state.parentAccount,
         shieldedAccount: event.shieldedAccount ?? state.shieldedAccount,
+        ledgerAccount: event.ledgerAccount ?? state.ledgerAccount,
       };
 
     case "completionFailed":

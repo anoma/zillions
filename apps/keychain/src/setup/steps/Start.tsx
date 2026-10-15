@@ -32,6 +32,19 @@ export const Start = () => {
         >
           Import existing keys
         </ActionButton>
+
+        {navigator.usb && (
+          <ActionButton
+            size="lg"
+            outlineColor="black"
+            backgroundHoverColor="black"
+            textHoverColor="primary"
+            data-testid="setup-import-keys-button"
+            onClick={() => dispatch({ type: "chooseFlow", flow: "connect" })}
+          >
+            Connect to Ledger
+          </ActionButton>
+        )}
       </Stack>
     </div>
   );
