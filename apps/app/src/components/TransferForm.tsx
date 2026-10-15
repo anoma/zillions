@@ -140,7 +140,6 @@ const DETAIL: Partial<Record<SubmitStage, string>> = {
   "ironwood-proof": "Ironwood",
 };
 
-/** A submission's steps: done, the current one with its time so far, and those to come. */
 export function SubmitProgress({ stages }: { stages: StageEntry[] }) {
   const current = stages.at(-1)?.stage;
   const steps = STEPS.filter(

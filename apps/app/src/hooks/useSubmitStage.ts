@@ -9,9 +9,9 @@ export type StageEntry = { stage: SubmitStage; at: number };
 const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
 /**
- * The stages a submission has reached, oldest first. `track(stage)` moves it
- * on, starting a new submission when none is running; `track(undefined,
- * error?)` ends it. Each step's time is logged to the console.
+ * The stages reached so far, oldest first: `track(stage)` advances, starting a
+ * new run when none is active, and `track(undefined, error?)` ends it. Logs
+ * each step's time to the console.
  */
 export function useSubmitStage() {
   const [stages, setStages] = useState<StageEntry[]>([]);

@@ -57,10 +57,7 @@ export interface Proved {
 }
 
 /** Proves a signed PCZT in a worker: it takes tens of seconds. */
-/**
- * The slow steps of a submission, in order; each is skipped when the
- * transaction doesn't need it.
- */
+/** The slow steps of a submission, in order; any the transaction doesn't need are skipped. */
 export type ProveStage =
   | "sapling-params"
   | "sapling-proofs"
