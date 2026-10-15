@@ -13,6 +13,7 @@ export type ProveRequest =
 
 export type ProveResponse =
   | { warmed: number }
+  | { warmFailed: string }
   | { ok: Proved }
   | { error: string }
   | { stage: ProveStage };
@@ -42,6 +43,9 @@ worker.onmessage = async ({ data }) => {
       ),
     });
   } catch (e) {
-    worker.postMessage({ error: e instanceof Error ? e.message : String(e) });
+    const message = e instanceof Error ? e.message : String(e);
+    worker.postMessage(
+      "warm" in data ? { warmFailed: message } : { error: message },
+    );
   }
 };

@@ -70,16 +70,36 @@ export type ProveStage =
 // ponytail: one prover for the page and one proof at a time, as one form
 // submits at a time; queue requests if that stops holding.
 let prover: Worker | undefined;
+/** When the running warm-up started; unset once it ends. */
+let warmingSince: number | undefined;
 
-const logWarmed = (ms: number) =>
-  console.log(`[prover] keys ready in ${(ms / 1000).toFixed(1)}s`);
+const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+
+/** Logs the end of a warm-up, if `data` is one. */
+function warmUpEnded(
+  data: ProveResponse,
+): data is { warmed: number } | { warmFailed: string } {
+  if ("warmed" in data) {
+    console.log(`[prover] keys ready in ${secs(data.warmed)}`);
+  } else if ("warmFailed" in data) {
+    console.warn(`[prover] warm-up failed: ${data.warmFailed}`);
+  } else {
+    return false;
+  }
+  warmingSince = undefined;
+  return true;
+}
 
 /** The page's prove worker, started on first use. */
 function proveWorker() {
   if (!prover) {
     prover = new ProveWorker();
     prover.onmessage = ({ data }: MessageEvent<ProveResponse>) => {
-      if ("warmed" in data) logWarmed(data.warmed);
+      if (warmUpEnded(data) && "warmFailed" in data) resetProver();
+    };
+    prover.onerror = (e) => {
+      console.warn(`[prover] worker failed: ${e.message}`);
+      resetProver();
     };
   }
   return prover;
@@ -89,6 +109,7 @@ function proveWorker() {
 function resetProver() {
   prover?.terminate();
   prover = undefined;
+  warmingSince = undefined;
 }
 
 /**
@@ -99,6 +120,7 @@ export function warmProver() {
   if (prover) return;
   console.log("[prover] building keys…");
   proveWorker().postMessage({ warm: true } satisfies ProveRequest);
+  warmingSince = performance.now();
 }
 
 /** Proves a signed PCZT in the prove worker: it takes tens of seconds. */
@@ -108,16 +130,24 @@ function prove(
   onStage: (stage: ProveStage) => void,
 ) {
   const worker = proveWorker();
+  if (warmingSince !== undefined) {
+    // The worker runs messages in order: this proof starts once the keys are built.
+    console.log(
+      `[prover] waiting for the keys, ${secs(performance.now() - warmingSince)} in`,
+    );
+    onStage("proving-key");
+  }
   return new Promise<Proved>((resolve, reject) => {
     const fail = (message: string) => {
       resetProver();
       reject(new Error(message));
     };
     worker.onmessage = ({ data }: MessageEvent<ProveResponse>) => {
-      if ("stage" in data) onStage(data.stage);
+      if (warmUpEnded(data)) {
+        if ("warmFailed" in data) fail(data.warmFailed);
+      } else if ("stage" in data) onStage(data.stage);
       else if ("error" in data) fail(data.error);
-      else if ("ok" in data) resolve(data.ok);
-      else logWarmed(data.warmed);
+      else resolve(data.ok);
     };
     worker.onerror = (e) => fail(e.message || "prover failed");
     worker.postMessage({ pczt, sapling } satisfies ProveRequest);
