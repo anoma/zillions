@@ -250,19 +250,23 @@ export function plan_shield(network, wallet) {
  * Proves a signed PCZT and extracts its transaction: `{ txid, raw, expiry_height }`. The
  * Sapling parameters are needed only when [`needs_sapling_params`] says so.
  * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
+ * `on_stage(name)` is called as each slow step starts: `sapling-proofs`,
+ * `proving-key`, `orchard-proof`, `ironwood-proof`, then `verifying`; each
+ * is skipped when the transaction doesn't need it.
  * @param {Uint8Array} pczt
  * @param {Uint8Array | null} [sapling_spend]
  * @param {Uint8Array | null} [sapling_output]
+ * @param {Function | null} [on_stage]
  * @returns {any}
  */
-export function prove_pczt(pczt, sapling_spend, sapling_output) {
+export function prove_pczt(pczt, sapling_spend, sapling_output, on_stage) {
     const ptr0 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     var ptr1 = isLikeNone(sapling_spend) ? 0 : passArray8ToWasm0(sapling_spend, wasm.__wbindgen_malloc);
     var len1 = WASM_VECTOR_LEN;
     var ptr2 = isLikeNone(sapling_output) ? 0 : passArray8ToWasm0(sapling_output, wasm.__wbindgen_malloc);
     var len2 = WASM_VECTOR_LEN;
-    const ret = wasm.prove_pczt(ptr0, len0, ptr1, len1, ptr2, len2);
+    const ret = wasm.prove_pczt(ptr0, len0, ptr1, len1, ptr2, len2, isLikeNone(on_stage) ? 0 : addToExternrefTable0(on_stage));
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }

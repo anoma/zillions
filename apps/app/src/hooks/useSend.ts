@@ -12,6 +12,7 @@ import type { PendingActivity } from "../lib/wallet/types";
 import { useAccount } from "./useAccount";
 import { internalAddress } from "./useAddresses";
 import { useDebouncedValue } from "./useDebouncedValue";
+import { useSubmitStage } from "./useSubmitStage";
 import { useWallet } from "./useWallet";
 
 /**
@@ -96,8 +97,9 @@ export function useSend() {
   const wallet = useWallet();
   const account = useAccount();
   const queryClient = useQueryClient();
+  const { stages, track } = useSubmitStage();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: async ({
       toSelf,
       shown,
@@ -106,10 +108,12 @@ export function useSend() {
       toSelf?: boolean;
       shown: Omit<PendingActivity, "fee" | "timestamp">;
     }) => {
+      track("building");
       const { pczt, plan, changeTo } = await wallet.sendPczt(
         send,
         account.shielded,
       );
+      track("approval");
       const signed = await keychain().sign({
         signer:
           send.from === "transparent"
@@ -129,6 +133,7 @@ export function useSend() {
         base64ToBytes(signed),
         change + (toSelf ? send.amount : 0n),
         receipt,
+        track,
       );
       if (changeTo !== undefined) {
         await wallet.internalAddressUsed(changeTo, expiryHeight);
@@ -136,5 +141,7 @@ export function useSend() {
       }
       return { ...receipt, txid, expiryHeight };
     },
+    onSettled: (_, error) => track(undefined, error),
   });
+  return { ...mutation, stages };
 }

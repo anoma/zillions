@@ -11,7 +11,7 @@ import {
 import { balances, spendable, walletData } from "./balance";
 import { fetchTreeSizes, type TreeSizes } from "./chain/indexer";
 import { fetchBlock, fetchLatestHeight } from "./chain/lightwalletd";
-import { submitTransaction } from "./chain/submit";
+import { type ProveStage, submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
 import { pendingActivity, prunePending } from "./pending";
 import {
@@ -521,14 +521,19 @@ export class Wallet {
    * Proves and broadcasts a signed PCZT, then holds the notes and coins it
    * spends out of the balance and of new plans until it's mined or expires.
    * `change` is what it returns to us, shown as pending meanwhile, and
-   * `receipt` what history lists for it.
+   * `receipt` what history lists for it. `onStage` follows proving and
+   * broadcasting.
    */
   submit = async (
     signed: Uint8Array,
     change: bigint,
     receipt: PendingActivity,
+    onStage?: (stage: ProveStage) => void,
   ) => {
-    const { txid, raw, expiryHeight } = await submitTransaction(signed);
+    const { txid, raw, expiryHeight } = await submitTransaction(
+      signed,
+      onStage,
+    );
     const tip = this.#tip;
     invariant(tip !== undefined, "The wallet is still syncing");
     await initZcore();

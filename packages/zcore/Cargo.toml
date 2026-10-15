@@ -60,6 +60,8 @@ incrementalmerkletree = "0.8"
 nonempty = { version = "0.11", default-features = false }
 # ziziphus bodies cross from JS as byte arrays.
 serde_bytes = "0.11"
+# prove_pczt's stage callback.
+js-sys = "0.3"
 
 [dev-dependencies]
 incrementalmerkletree = { version = "0.8", features = ["legacy-api"] }

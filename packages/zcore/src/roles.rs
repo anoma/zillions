@@ -481,29 +481,48 @@ pub(crate) fn prove(
     pczt: Pczt,
     sapling: Option<&SaplingParams>,
 ) -> Result<(String, Vec<u8>), String> {
+    prove_with(pczt, sapling, &mut |_| {})
+}
+
+/// [`prove`], calling `stage` as each slow step starts; see [`prove_pczt`].
+fn prove_with(
+    pczt: Pczt,
+    sapling: Option<&SaplingParams>,
+    stage: &mut dyn FnMut(&'static str),
+) -> Result<(String, Vec<u8>), String> {
     let circuit = OrchardCircuitVersion::PostNu6_3;
     let mut prover = Prover::new(pczt);
     if prover.requires_sapling_proofs() {
+        stage("sapling-proofs");
         let params = sapling.ok_or("Sapling proofs need the Sapling parameters")?;
         prover = prover
             .create_sapling_proofs(&params.spend, &params.output)
             .map_err(to_pczt_error)?;
     }
-    if prover.requires_orchard_proof() || prover.requires_ironwood_proof() {
+    let halo2 = prover.requires_orchard_proof() || prover.requires_ironwood_proof();
+    if halo2 {
+        stage("proving-key");
         let pk = ProvingKey::build(circuit);
         if prover.requires_orchard_proof() {
+            stage("orchard-proof");
             prover = prover.create_orchard_proof(&pk).map_err(to_pczt_error)?;
         }
         if prover.requires_ironwood_proof() {
+            stage("ironwood-proof");
             prover = prover.create_ironwood_proof(&pk).map_err(to_pczt_error)?;
         }
     }
+    stage("verifying");
     let pczt = SpendFinalizer::new(prover.finish())
         .finalize_spends()
         .map_err(to_pczt_error)?;
-    let vk = VerifyingKey::build(circuit);
+    // Building it takes seconds: only when there's a Halo2 proof to check.
+    let vk = halo2.then(|| VerifyingKey::build(circuit));
     let sapling_vks = sapling.map(|p| (p.spend.verifying_key(), p.output.verifying_key()));
-    let mut extractor = TransactionExtractor::new(pczt).with_orchard(&vk);
+    let mut extractor = TransactionExtractor::new(pczt);
+    if let Some(vk) = &vk {
+        extractor = extractor.with_orchard(vk);
+    }
     if let Some((spend_vk, output_vk)) = &sapling_vks {
         extractor = extractor.with_sapling(spend_vk, output_vk);
     }
@@ -556,11 +575,15 @@ pub fn needs_sapling_params(pczt: &[u8]) -> Result<bool, JsError> {
 /// Proves a signed PCZT and extracts its transaction: `{ txid, raw, expiry_height }`. The
 /// Sapling parameters are needed only when [`needs_sapling_params`] says so.
 /// Building the Halo2 proving key alone takes seconds; run it off the UI thread.
+/// `on_stage(name)` is called as each slow step starts: `sapling-proofs`,
+/// `proving-key`, `orchard-proof`, `ironwood-proof`, then `verifying`; each
+/// is skipped when the transaction doesn't need it.
 #[wasm_bindgen]
 pub fn prove_pczt(
     pczt: &[u8],
     sapling_spend: Option<Vec<u8>>,
     sapling_output: Option<Vec<u8>>,
+    on_stage: Option<js_sys::Function>,
 ) -> Result<JsValue, JsError> {
     let sapling = match (sapling_spend, sapling_output) {
         (Some(spend), Some(output)) => {
@@ -570,7 +593,13 @@ pub fn prove_pczt(
     };
     let pczt = parse(pczt)?;
     let expiry_height = *pczt.global().expiry_height();
-    let (txid, raw) = prove(pczt, sapling.as_ref()).map_err(|e| JsError::new(&e))?;
+    let mut stage = |name: &'static str| {
+        if let Some(f) = &on_stage {
+            let _ = f.call1(&JsValue::NULL, &JsValue::from_str(name));
+        }
+    };
+    let (txid, raw) =
+        prove_with(pczt, sapling.as_ref(), &mut stage).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&Extracted {
         txid,
         raw,

@@ -57,23 +57,49 @@ export interface Proved {
 }
 
 /** Proves a signed PCZT in a worker: it takes tens of seconds. */
-function prove(pczt: Uint8Array, sapling?: SaplingParams) {
+/** The slow steps of a submission, in order; any the transaction doesn't need are skipped. */
+export type ProveStage =
+  | "sapling-params"
+  | "sapling-proofs"
+  | "proving-key"
+  | "orchard-proof"
+  | "ironwood-proof"
+  | "verifying"
+  | "broadcast";
+
+function prove(
+  pczt: Uint8Array,
+  sapling: SaplingParams | undefined,
+  onStage: (stage: ProveStage) => void,
+) {
   const worker = new ProveWorker();
   return new Promise<Proved>((resolve, reject) => {
-    worker.onmessage = ({ data }) =>
-      "error" in data ? reject(new Error(data.error)) : resolve(data.ok);
+    worker.onmessage = ({ data }) => {
+      if ("stage" in data) onStage(data.stage);
+      else if ("error" in data) reject(new Error(data.error));
+      else resolve(data.ok);
+    };
     worker.onerror = (e) => reject(new Error(e.message || "prover failed"));
     worker.postMessage({ pczt, sapling });
   }).finally(() => worker.terminate());
 }
 
-/** Proves and broadcasts a signed PCZT; returns it raw, with its id and expiry height. */
-export async function submitTransaction(signed: Uint8Array) {
+/**
+ * Proves and broadcasts a signed PCZT; returns it raw, with its id and expiry
+ * height. `onStage` is called as each slow step starts.
+ */
+export async function submitTransaction(
+  signed: Uint8Array,
+  onStage: (stage: ProveStage) => void = () => {},
+) {
   await initZcore();
-  const sapling = needs_sapling_params(signed)
-    ? await loadSaplingParams()
-    : undefined;
-  const { txid, raw, expiry_height } = await prove(signed, sapling);
+  let sapling: SaplingParams | undefined;
+  if (needs_sapling_params(signed)) {
+    onStage("sapling-params");
+    sapling = await loadSaplingParams();
+  }
+  const { txid, raw, expiry_height } = await prove(signed, sapling, onStage);
+  onStage("broadcast");
   await sendTransaction(raw);
   return { txid, raw, expiryHeight: expiry_height };
 }
