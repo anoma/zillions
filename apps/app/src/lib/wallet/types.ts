@@ -84,7 +84,7 @@ export interface PendingTx {
 export type PendingActivity = Pick<
   Activity,
   "tx_type" | "value" | "fee" | "timestamp" | "from" | "to"
->;
+> & { memo?: string };
 
 /** An output this wallet created, recovered with its outgoing viewing key. */
 export type SentOutput = Output;

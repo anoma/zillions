@@ -36,7 +36,7 @@ use orchard::note_encryption::{
 use sapling::note::ExtractedNoteCommitment as SaplingCmu;
 use sapling::note_encryption::{CompactOutputDescription, SaplingDomain, Zip212Enforcement};
 use zcash_keys::address::{Address, UnifiedAddress};
-use zcash_keys::keys::UnifiedFullViewingKey;
+use zcash_keys::keys::{OutgoingViewingKey, UnifiedFullViewingKey};
 use zcash_note_encryption::{
     batch, try_output_recovery_with_ovk, BatchDomain, Domain, EphemeralKeyBytes, ShieldedOutput,
     COMPACT_NOTE_SIZE, ENC_CIPHERTEXT_SIZE, OUT_CIPHERTEXT_SIZE,
@@ -524,6 +524,7 @@ fn output_indices(notes: &[FullNote]) -> Vec<u16> {
 fn decrypt_full_orchard<V: DomainVersion>(
     network: &Network,
     fvk: &orchard::keys::FullViewingKey,
+    transparent_ovk: Option<OutgoingViewingKey>,
     pool: &'static str,
     notes: &[FullNote],
     wanted: &[usize],
@@ -596,7 +597,11 @@ where
         }
     }
 
-    let ovks: Vec<_> = SCOPES.iter().map(|(_, s)| fvk.to_ovk(*s)).collect();
+    let ovks: Vec<orchard::keys::OutgoingViewingKey> = SCOPES
+        .iter()
+        .map(|(_, s)| fvk.to_ovk(*s))
+        .chain(transparent_ovk.map(Into::into))
+        .collect();
     for (i, (domain, output)) in outputs.iter().enumerate() {
         if mine[i] {
             continue;
@@ -636,13 +641,32 @@ fn decrypt_full(
 ) -> Result<FullChunk, String> {
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+    // A send spending only transparent coins encrypts its outputs to the
+    // transparent account's OVK (upstream's `select_ovk`); upstream recovers
+    // those from its own records, which a fresh sync doesn't have.
+    let transparent_ovk = ufvk.select_ovk(
+        Scope::External,
+        &nonempty::NonEmpty::new(zcash_protocol::PoolType::Transparent),
+    );
     match (pool, ufvk.orchard()) {
         ("orchard", Some(fvk)) => {
-            return decrypt_full_orchard::<OrchardVersion>(&network, fvk, "orchard", notes, wanted)
+            return decrypt_full_orchard::<OrchardVersion>(
+                &network,
+                fvk,
+                transparent_ovk,
+                "orchard",
+                notes,
+                wanted,
+            )
         }
         ("ironwood", Some(fvk)) => {
             return decrypt_full_orchard::<IronwoodVersion>(
-                &network, fvk, "ironwood", notes, wanted,
+                &network,
+                fvk,
+                transparent_ovk,
+                "ironwood",
+                notes,
+                wanted,
             )
         }
         _ => {}
@@ -703,7 +727,11 @@ fn decrypt_full(
         // Outputs we created: the ock binds to our ovk, so only our own
         // transactions can be recovered. Both scopes, since a shielding tx
         // pays the internal one.
-        let ovks: Vec<_> = SCOPES.iter().map(|(_, s)| dfvk.to_ovk(*s)).collect();
+        let ovks: Vec<sapling::keys::OutgoingViewingKey> = SCOPES
+            .iter()
+            .map(|(_, s)| dfvk.to_ovk(*s))
+            .chain(transparent_ovk.map(Into::into))
+            .collect();
         for (i, (domain, output)) in outputs.iter().enumerate() {
             if mine[i] {
                 continue;
@@ -1144,6 +1172,28 @@ mod tests {
     /// Encrypt a sapling output to a stranger under our own OVK, exactly as a
     /// send does, and check `decrypt_full` recovers value, recipient and memo
     /// from `out_ciphertext` — the only way our own payments are visible.
+    /// The UFVK of the seed `[7; 32]` account, the transparent OVK upstream
+    /// seals a transparent-funded send with, and the UFVK encoded.
+    fn sender() -> (UnifiedFullViewingKey, OutgoingViewingKey, String) {
+        let ufvk = UnifiedSpendingKey::from_seed(
+            &Network::MainNetwork,
+            &[7u8; 32],
+            zip32::AccountId::ZERO,
+        )
+        .expect("usk")
+        .to_unified_full_viewing_key();
+        let transparent = ufvk
+            .select_ovk(
+                Scope::External,
+                &nonempty::NonEmpty::new(zcash_protocol::PoolType::Transparent),
+            )
+            .expect("transparent ovk");
+        let encoded = ufvk.encode(&Network::MainNetwork);
+        (ufvk, transparent, encoded)
+    }
+
+    // Sealed with our Sapling OVK (a shielded send) or our transparent one (a
+    // send spending only transparent coins), it's recovered either way.
     #[test]
     fn recovers_our_own_sapling_output() {
         use rand_core::OsRng;
@@ -1152,62 +1202,112 @@ mod tests {
         use sapling::{Note, Rseed};
         use zcash_note_encryption::Domain;
 
-        let dfvk = |seed: u8| {
-            UnifiedSpendingKey::from_seed(
-                &Network::MainNetwork,
-                &[seed; 32],
-                zip32::AccountId::ZERO,
-            )
-            .expect("usk")
-            .sapling()
-            .to_diversifiable_full_viewing_key()
-        };
-        let ours = dfvk(7);
-        let (_, theirs) = dfvk(9).default_address();
-
-        let value = NoteValue::from_raw(123_456);
-        let note = Note::from_parts(theirs, value, Rseed::AfterZip212([0u8; 32]));
-        let mut memo = [0u8; 512];
-        memo[..4].copy_from_slice(b"paid");
-
-        let cmu = note.cmu();
-        let encryptor =
-            sapling_note_encryption(Some(ours.to_ovk(Scope::External)), note, memo, &mut OsRng);
-        let cv = ValueCommitment::derive(value, ValueCommitTrapdoor::random(OsRng));
-
-        let full = vec![FullNote {
-            cm: cmu.to_bytes(),
-            enc_ciphertext: encryptor.encrypt_note_plaintext(),
-            eph_key: SaplingDomain::epk_bytes(encryptor.epk()).0,
-            height: 3_378_506,
-            position: 73_920_512,
-            tx_index: 3,
-            rho: [0; 32],
-            out_ciphertext: encryptor.encrypt_outgoing_plaintext(&cv, &cmu, &mut OsRng),
-            cv: cv.to_bytes(),
-        }];
-
-        let ufvk = UnifiedSpendingKey::from_seed(
+        let (ufvk, transparent, encoded) = sender();
+        let ours = ufvk.sapling().expect("sapling fvk").clone();
+        let (_, theirs) = UnifiedSpendingKey::from_seed(
             &Network::MainNetwork,
-            &[7u8; 32],
+            &[9u8; 32],
+            zip32::AccountId::ZERO,
+        )
+        .expect("usk")
+        .sapling()
+        .to_diversifiable_full_viewing_key()
+        .default_address();
+
+        for ovk in [ours.to_ovk(Scope::External), transparent.into()] {
+            let value = NoteValue::from_raw(123_456);
+            let note = Note::from_parts(theirs, value, Rseed::AfterZip212([0u8; 32]));
+            let mut memo = [0u8; 512];
+            memo[..4].copy_from_slice(b"paid");
+
+            let cmu = note.cmu();
+            let encryptor = sapling_note_encryption(Some(ovk), note, memo, &mut OsRng);
+            let cv = ValueCommitment::derive(value, ValueCommitTrapdoor::random(OsRng));
+
+            let full = vec![FullNote {
+                cm: cmu.to_bytes(),
+                enc_ciphertext: encryptor.encrypt_note_plaintext(),
+                eph_key: SaplingDomain::epk_bytes(encryptor.epk()).0,
+                height: 3_378_506,
+                position: 73_920_512,
+                tx_index: 3,
+                rho: [0; 32],
+                out_ciphertext: encryptor.encrypt_outgoing_plaintext(&cv, &cmu, &mut OsRng),
+                cv: cv.to_bytes(),
+            }];
+            let chunk = decrypt_full("main", &encoded, "sapling", &full, &[]).expect("runs");
+
+            // Not ours to receive — only to have sent.
+            assert_eq!(chunk.hits.len(), 0);
+            assert_eq!(chunk.sent.len(), 1);
+            assert_eq!(chunk.sent[0].value, 123_456);
+            // Encoded as a wallet shows it, not as raw diversified bytes.
+            assert_eq!(
+                chunk.sent[0].recipient,
+                Address::Sapling(theirs).encode(&Network::MainNetwork)
+            );
+            assert!(chunk.sent[0].recipient.starts_with("zs1"));
+            assert_eq!(chunk.sent[0].memo.as_deref(), Some("paid"));
+        }
+    }
+
+    // As for Sapling; Ironwood stands in for Orchard, which shares the code.
+    #[test]
+    fn recovers_our_own_ironwood_output() {
+        use orchard::note::{ExtractedNoteCommitment, RandomSeed, Rho};
+        use orchard::note_encryption::{IronwoodDomain, IronwoodNoteEncryption};
+        use orchard::value::{NoteValue, ValueCommitTrapdoor, ValueCommitment};
+        use orchard::NoteVersion;
+        use rand_core::OsRng;
+        use zcash_note_encryption::Domain;
+
+        let (ufvk, transparent, encoded) = sender();
+        let theirs = UnifiedSpendingKey::from_seed(
+            &Network::MainNetwork,
+            &[9u8; 32],
             zip32::AccountId::ZERO,
         )
         .expect("usk")
         .to_unified_full_viewing_key()
-        .encode(&Network::MainNetwork);
-        let chunk = decrypt_full("main", &ufvk, "sapling", &full, &[]).expect("runs");
+        .orchard()
+        .expect("orchard fvk")
+        .address_at(0u32, Scope::External);
+        let ours = ufvk.orchard().expect("orchard fvk").to_ovk(Scope::External);
 
-        // Not ours to receive — only to have sent.
-        assert_eq!(chunk.hits.len(), 0);
-        assert_eq!(chunk.sent.len(), 1);
-        assert_eq!(chunk.sent[0].value, 123_456);
-        // Encoded as a wallet shows it, not as raw diversified bytes.
-        assert_eq!(
-            chunk.sent[0].recipient,
-            Address::Sapling(theirs).encode(&Network::MainNetwork)
-        );
-        assert!(chunk.sent[0].recipient.starts_with("zs1"));
-        assert_eq!(chunk.sent[0].memo.as_deref(), Some("paid"));
+        let rho_bytes: [u8; 32] =
+            hex_n("08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39").unwrap();
+        let rho = Rho::from_bytes(&rho_bytes).unwrap();
+        for ovk in [ours, transparent.into()] {
+            let value = NoteValue::from_raw(123_456);
+            let rseed = RandomSeed::from_bytes([3u8; 32], &rho).unwrap();
+            let note =
+                orchard::Note::from_parts(theirs, value, rho, rseed, NoteVersion::V3).unwrap();
+            let mut memo = [0u8; 512];
+            memo[..4].copy_from_slice(b"paid");
+            let encryption = IronwoodNoteEncryption::new(Some(ovk), note, memo);
+            let cmx = ExtractedNoteCommitment::from(note.commitment());
+            // Recovery needs the cv the ock was derived with, not a balanced one.
+            let rcv = ValueCommitTrapdoor::from_bytes([1u8; 32]).unwrap();
+            let cv = ValueCommitment::derive(value - NoteValue::from_raw(0), rcv);
+
+            let full = vec![FullNote {
+                cm: cmx.to_bytes(),
+                enc_ciphertext: encryption.encrypt_note_plaintext(),
+                eph_key: IronwoodDomain::epk_bytes(encryption.epk()).0,
+                height: 3_430_000,
+                position: 1_234,
+                tx_index: 2,
+                rho: rho_bytes,
+                out_ciphertext: encryption.encrypt_outgoing_plaintext(&cv, &cmx, &mut OsRng),
+                cv: cv.to_bytes(),
+            }];
+            let chunk = decrypt_full("main", &encoded, "ironwood", &full, &[]).expect("runs");
+
+            assert_eq!(chunk.hits.len(), 0);
+            assert_eq!(chunk.sent.len(), 1);
+            assert_eq!(chunk.sent[0].value, 123_456);
+            assert_eq!(chunk.sent[0].memo.as_deref(), Some("paid"));
+        }
     }
 
     #[test]

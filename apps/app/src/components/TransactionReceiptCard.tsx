@@ -22,7 +22,7 @@ export type TransactionReceiptCardProps = {
     | "timestamp"
     | "from"
     | "to"
-  >;
+  > & { memo?: string };
 };
 
 export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
@@ -89,6 +89,22 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
             </div>
           ))}
         </div>
+
+        {tx.memo && (
+          <div className="mt-5 rounded-lg border border-gray-300">
+            <CopyToClipboardControl
+              value={tx.memo}
+              className="w-full justify-between p-3"
+            >
+              <div className="text-xs font-medium">
+                <div>Message:</div>
+                <div className="font-normal whitespace-pre-wrap wrap-anywhere">
+                  {tx.memo}
+                </div>
+              </div>
+            </CopyToClipboardControl>
+          </div>
+        )}
 
         <div className="mt-5 rounded-lg border border-gray-300">
           <CopyToClipboardControl
