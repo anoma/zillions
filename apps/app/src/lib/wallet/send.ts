@@ -90,6 +90,34 @@ export async function planMigration(wallet: WalletData) {
 
 const SHIELDED: Pool[] = ["sapling", "orchard", "ironwood"];
 
+// ponytail: a tip is reused for 5 minutes, as any recent root anchors a send;
+// shorten it if anchors that old start being refused.
+const TIP_TTL = 5 * 60_000;
+const tips = new Map<
+  Pool,
+  { at: number; tip: ReturnType<typeof fetchTreeTip> }
+>();
+
+/** The pool's tree tip, fetched again once older than `TIP_TTL` or short of `position`. */
+async function treeTip(pool: Pool, position: number) {
+  const cached = tips.get(pool);
+  if (cached && Date.now() - cached.at < TIP_TTL) {
+    const tip = await cached.tip.catch(() => undefined);
+    if (tip && tip.size > position) return tip;
+  }
+  const start = performance.now();
+  const entry = { at: Date.now(), tip: fetchTreeTip(pool) };
+  tips.set(pool, entry);
+  entry.tip.then(
+    () =>
+      console.log(
+        `[trees] ${pool} tip fetched in ${((performance.now() - start) / 1000).toFixed(1)}s`,
+      ),
+    () => tips.get(pool) === entry && tips.delete(pool),
+  );
+  return entry.tip;
+}
+
 /**
  * The tree tip of every shielded pool a plan spends from or pays into (each
  * anchors to its real root), plus the frozen chunks holding its notes.
@@ -104,10 +132,10 @@ async function fetchTrees(plan: SendPlan) {
   const pools = SHIELDED.filter((pool) => flows.some((f) => f.pool === pool));
   const trees = await Promise.all(
     pools.map(async (pool) => {
-      const tip = await fetchTreeTip(pool);
       const positions = notes
         .filter((n) => n.pool === pool)
         .map((n) => n.position);
+      const tip = await treeTip(pool, Math.max(-1, ...positions));
       if (positions.some((p) => p >= tip.size)) {
         throw new Error(
           `The ${pool} tree hasn't reached this wallet's notes yet`,
@@ -129,6 +157,15 @@ async function fetchTrees(plan: SendPlan) {
     }),
   );
   return Object.fromEntries(trees);
+}
+
+/**
+ * Fetches the tree data `plan` would need ahead of building it, so the build
+ * after the user confirms doesn't wait on ~1 MB tips. Failures are left for
+ * the build to meet.
+ */
+export function prefetchTrees(plan: SendPlan) {
+  fetchTrees(plan).catch(() => {});
 }
 
 /**

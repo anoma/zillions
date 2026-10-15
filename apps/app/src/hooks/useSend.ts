@@ -9,7 +9,7 @@ import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
 import { warmProver } from "../lib/wallet/chain/submit";
-import type { SendRequest } from "../lib/wallet/send";
+import { prefetchTrees, type SendRequest } from "../lib/wallet/send";
 import type { PendingActivity } from "../lib/wallet/types";
 import { useAccount } from "./useAccount";
 import { internalAddress } from "./useAddresses";
@@ -71,7 +71,11 @@ export function useSendPlan(
     short && maxAmount.data !== undefined && debouncedAmount > maxAmount.data
       ? { amount: maxAmount.data, fee: atMax.data?.fee }
       : undefined;
-  return { plan: max ? atMax : typed, maxAmount, ceiling };
+  const plan = max ? atMax : typed;
+  useEffect(() => {
+    if (plan.data) prefetchTrees(plan.data);
+  }, [plan.data]);
+  return { plan, maxAmount, ceiling };
 }
 
 /** Why a send form's plan fails, for the user: an amount the source can't cover, or the error itself. */
