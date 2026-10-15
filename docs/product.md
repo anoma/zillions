@@ -183,7 +183,9 @@ Moves shielded funds to one of the account's own transparent addresses.
   - **From** and **To**: someone else's address when it's known; the
     account's own addresses only as "Shielded" or "Transparent" (each unshield
     goes to a new address of its own, which nothing else shows), and a
-    shielded sender as "Shielded", since it's never revealed;
+    shielded sender as "Shielded", since it's never revealed. A payment to
+    one of the account's own shielded addresses in the same pool shows as
+    Sent, to "Shielded", its amount what it paid, the fee apart;
   - **Status**: "Processing" from the moment a send, shield or unshield is
     broadcast until it's mined, then "Completed" (a payment link: Unclaimed,
     Claimed or Cancelled); one that expires unmined drops off the list;

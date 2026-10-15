@@ -45,8 +45,19 @@ function shieldedSide({ received, spent, sent, paid }: TxGroup) {
   // ones read from the block. Without either, fall back to what the inputs
   // were worth net of change, fee included.
   const out = [...sent, ...paid];
+  // Recovery skips outputs that are ours, so a payment to our own address
+  // is a note at an external one: change goes to internal ones.
+  const self =
+    spent.length && !out.length
+      ? received.filter((n) => n.scope === "external")
+      : [];
+  const known = out.length > 0 || self.length > 0;
   const outgoing = out.length > 0 || spent.length > 0;
-  const outflow = out.length ? sum(out) : sum(spent) - sum(received);
+  const outflow = out.length
+    ? sum(out)
+    : self.length
+      ? sum(self)
+      : sum(spent) - sum(received);
   const pools = new Set([
     ...[...received, ...spent, ...sent].map((p) => p.pool),
     ...(paid.length ? (["transparent"] as const) : []),
@@ -82,7 +93,7 @@ function shieldedSide({ received, spent, sent, paid }: TxGroup) {
     // With every output accounted for, what our inputs held beyond them is
     // the fee; every shielded input is ours, since only we can spend them.
     // Below zero means an input was never found, so the fee is unknown.
-    fee: out.length ? max0(sum(spent) - sum(received) - sum(out)) : 0n,
+    fee: known ? max0(sum(spent) - sum(received) - sum(out)) : 0n,
     pool: pools.size === 1 ? [...pools][0] : ("mixed" as const),
     memo,
     // Only a send knows its counterparty: on the receiving side the

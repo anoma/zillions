@@ -96,6 +96,36 @@ test("a transaction moving our own funds between pools is a migration", () => {
   });
 });
 
+test("a payment to our own address in the same pool is a send of what it paid", () => {
+  const at = { height: 3_503_939, tx_index: 2 };
+  const history = (paid: Note[]) =>
+    buildActivity(
+      [
+        { ...note(1, 100_000), spend: { status: "spent", at } },
+        { ...note(2, 80_000), ...at },
+        ...paid,
+      ],
+      [],
+      [],
+      new Map(),
+    )[0];
+  // 10,000 to our own address, 80,000 change, a 10,000 fee.
+  expect(
+    history([{ ...note(3, 10_000), scope: "external", ...at }]),
+  ).toMatchObject({
+    tx_type: "Sent",
+    value: -10_000n,
+    fee: 10_000n,
+    to: { pool: "shielded" },
+  });
+  // Paying someone else whose output wasn't recovered: only the change is ours.
+  expect(history([])).toMatchObject({
+    tx_type: "Sent",
+    value: -20_000n,
+    fee: 0n,
+  });
+});
+
 const block = (overrides: Partial<Block>): Block => ({
   time: 0,
   txids: new Map(),
