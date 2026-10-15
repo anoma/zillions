@@ -4,6 +4,7 @@
  * the keychain signs. Submitting it is `submit.ts`'s.
  */
 
+import { queryOptions } from "@tanstack/react-query";
 import initZcore, {
   max_send,
   plan_migration,
@@ -12,6 +13,7 @@ import initZcore, {
   send_pczt,
   shield_pczt,
 } from "@zillions/zcore";
+import { queryClient } from "../queryClient";
 import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./chain/indexer";
 import { NETWORK } from "./config";
 import type { OwnUtxo } from "./transparent";
@@ -92,31 +94,36 @@ const SHIELDED: Pool[] = ["sapling", "orchard", "ironwood"];
 
 // ponytail: a tip is reused for 5 minutes, as any recent root anchors a send;
 // shorten it if anchors that old start being refused.
-const TIP_TTL = 5 * 60_000;
-const tips = new Map<
-  Pool,
-  { at: number; tip: ReturnType<typeof fetchTreeTip> }
->();
-
-/** The pool's tree tip, fetched again once older than `TIP_TTL` or short of `position`. */
-async function treeTip(pool: Pool, position: number) {
-  const cached = tips.get(pool);
-  if (cached && Date.now() - cached.at < TIP_TTL) {
-    const tip = await cached.tip.catch(() => undefined);
-    if (tip && tip.size > position) return tip;
-  }
-  const start = performance.now();
-  const entry = { at: Date.now(), tip: fetchTreeTip(pool) };
-  tips.set(pool, entry);
-  entry.tip.then(
-    () =>
+const tipQuery = (pool: Pool) =>
+  queryOptions({
+    queryKey: ["treeTip", pool],
+    queryFn: async () => {
+      const start = performance.now();
+      const tip = await fetchTreeTip(pool);
       console.log(
         `[trees] ${pool} tip fetched in ${((performance.now() - start) / 1000).toFixed(1)}s`,
-      ),
-    () => tips.get(pool) === entry && tips.delete(pool),
-  );
-  return entry.tip;
+      );
+      return tip;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
+/** The pool's tree tip, fetched again when the cached one is stale or short of `position`. */
+async function treeTip(pool: Pool, position: number) {
+  const tip = await queryClient.fetchQuery(tipQuery(pool));
+  if (tip.size > position) return tip;
+  return queryClient.fetchQuery({ ...tipQuery(pool), staleTime: 0 });
 }
+
+/** A frozen tree chunk: it never changes. */
+const treeChunk = (pool: Pool, chunk: number) =>
+  queryClient.fetchQuery({
+    queryKey: ["treeChunk", pool, chunk],
+    queryFn: () => fetchTreeChunk(pool, chunk),
+    staleTime: Infinity,
+    retry: false,
+  });
 
 /**
  * The tree tip of every shielded pool a plan spends from or pays into (each
@@ -148,9 +155,7 @@ async function fetchTrees(plan: SendPlan) {
       ].filter((c) => c < frozen);
       const chunks = new Map<number, Uint8Array>(
         await Promise.all(
-          chunkIds.map(
-            async (c) => [c, await fetchTreeChunk(pool, c)] as const,
-          ),
+          chunkIds.map(async (c) => [c, await treeChunk(pool, c)] as const),
         ),
       );
       return [pool, { tip: tip.body, chunks }] as const;
