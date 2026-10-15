@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.10.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.9.0...zillions-app-v1.10.0) (2026-10-15)
+
+
+### Features
+
+* Ironwood migration flag ([#97](https://github.com/heliaxdev/zillions-interface/issues/97)) ([9a0adfe](https://github.com/heliaxdev/zillions-interface/commit/9a0adfef10826b2105b3a8efb6ac6a7c4b234514))
+* mobile layout ([#87](https://github.com/heliaxdev/zillions-interface/issues/87)) ([1329013](https://github.com/heliaxdev/zillions-interface/commit/1329013afdd3fcfef5fee152a1666899a9f4e384))
+* send memos ([#98](https://github.com/heliaxdev/zillions-interface/issues/98)) ([c6494e8](https://github.com/heliaxdev/zillions-interface/commit/c6494e8c044ea83a385abffdfe45e1ec805c0afc))
+* send progress steps ([#91](https://github.com/heliaxdev/zillions-interface/issues/91)) ([878f04d](https://github.com/heliaxdev/zillions-interface/commit/878f04dc85e49048dc457a28389b8295711f4e1f))
+* sync on tab focus and reconnect ([#94](https://github.com/heliaxdev/zillions-interface/issues/94)) ([25482d0](https://github.com/heliaxdev/zillions-interface/commit/25482d02fa9e477252828e6f1399483680e7aed0))
+
+
+### Bug Fixes
+
+* left-align amount caret ([#96](https://github.com/heliaxdev/zillions-interface/issues/96)) ([043a37d](https://github.com/heliaxdev/zillions-interface/commit/043a37d2f5fa6aa668eed3db9d4520afc8f77a4f))
+* self-payment amount and fee ([#99](https://github.com/heliaxdev/zillions-interface/issues/99)) ([e198ff3](https://github.com/heliaxdev/zillions-interface/commit/e198ff321d5a5814fb7a7f2daa1e1e49e3b03a1e))
+* validate forms on submit ([#100](https://github.com/heliaxdev/zillions-interface/issues/100)) ([9455a08](https://github.com/heliaxdev/zillions-interface/commit/9455a084499972a9d454d34938793ad836b5bd8c))
+
+
+### Performance Improvements
+
+* faster send submission ([#92](https://github.com/heliaxdev/zillions-interface/issues/92)) ([5d53ffd](https://github.com/heliaxdev/zillions-interface/commit/5d53ffda95643294f7d86359825c92048b160540))
+
 ## [1.9.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.8.0...zillions-app-v1.9.0) (2026-10-13)
 
 
