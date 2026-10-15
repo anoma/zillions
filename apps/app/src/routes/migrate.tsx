@@ -37,6 +37,7 @@ function MigrateRoute() {
   const [mode, setMode] = useState<Mode>("private");
   const [step, setStep] = useState<Step>("choose");
   const [started, setStarted] = useState(false);
+  const [validationMessage, setValidationMessage] = useState("");
   const self = useFreshAddress() ?? "";
   const planned = useSendPlan(
     {
@@ -249,12 +250,7 @@ function MigrateRoute() {
             Nothing was sent.
           </Note>
         )}
-        <Primary
-          onClick={() => setStarted(true)}
-          disabled={!p?.transfers.length}
-        >
-          Start migration
-        </Primary>
+        <Primary onClick={() => setStarted(true)}>Start migration</Primary>
       </Page>
     );
   }
@@ -262,8 +258,9 @@ function MigrateRoute() {
   const amount = planned.maxAmount.data;
   const fee = planned.plan.data?.fee;
   const error = send.error?.message ?? planProblem(planned);
-  const confirm = () =>
-    amount &&
+  const confirm = () => {
+    setValidationMessage(amount ? "" : "Wait for the amount and fee");
+    if (!amount) return;
     send.mutate({
       from: "orchard",
       to: self,
@@ -276,6 +273,7 @@ function MigrateRoute() {
         to: { pool: "ironwood" },
       },
     });
+  };
 
   return (
     <Page title="Review transfer" onBack={back}>
@@ -291,8 +289,10 @@ function MigrateRoute() {
           {fee !== undefined ? <ZecValue zat={BigInt(fee)} /> : <Waiting />}
         </Row>
       </div>
-      {error && <FormError>{error}</FormError>}
-      <Primary onClick={confirm} disabled={!amount || send.isPending}>
+      {(error || validationMessage) && (
+        <FormError>{error || validationMessage}</FormError>
+      )}
+      <Primary onClick={confirm} disabled={send.isPending}>
         {send.isPending ? "Sending..." : "Confirm"}
       </Primary>
       {send.isPending && <SubmitProgress stages={send.stages} />}

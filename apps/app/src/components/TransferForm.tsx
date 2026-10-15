@@ -222,5 +222,9 @@ function CheckIcon(props: ComponentProps<"svg">) {
 }
 
 export function FormError({ children }: { children: ReactNode }) {
-  return <div className="mt-4 text-red-500 text-center">{children}</div>;
+  return (
+    <div role="alert" className="mt-4 text-red-500 text-center">
+      {children}
+    </div>
+  );
 }
