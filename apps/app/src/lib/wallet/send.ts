@@ -4,6 +4,7 @@
  * the keychain signs. Submitting it is `submit.ts`'s.
  */
 
+import { queryOptions } from "@tanstack/react-query";
 import initZcore, {
   max_send,
   plan_migration,
@@ -12,6 +13,7 @@ import initZcore, {
   send_pczt,
   shield_pczt,
 } from "@zillions/zcore";
+import { queryClient } from "../queryClient";
 import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./chain/indexer";
 import { NETWORK } from "./config";
 import type { OwnUtxo } from "./transparent";
@@ -90,6 +92,39 @@ export async function planMigration(wallet: WalletData) {
 
 const SHIELDED: Pool[] = ["sapling", "orchard", "ironwood"];
 
+// ponytail: a tip is reused for 5 minutes, as any recent root anchors a send;
+// shorten it if anchors that old start being refused.
+const tipQuery = (pool: Pool) =>
+  queryOptions({
+    queryKey: ["treeTip", pool],
+    queryFn: async () => {
+      const start = performance.now();
+      const tip = await fetchTreeTip(pool);
+      console.log(
+        `[trees] ${pool} tip fetched in ${((performance.now() - start) / 1000).toFixed(1)}s`,
+      );
+      return tip;
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
+/** The pool's tree tip, fetched again when the cached one is stale or short of `position`. */
+async function treeTip(pool: Pool, position: number) {
+  const tip = await queryClient.fetchQuery(tipQuery(pool));
+  if (tip.size > position) return tip;
+  return queryClient.fetchQuery({ ...tipQuery(pool), staleTime: 0 });
+}
+
+/** A frozen tree chunk: it never changes. */
+const treeChunk = (pool: Pool, chunk: number) =>
+  queryClient.fetchQuery({
+    queryKey: ["treeChunk", pool, chunk],
+    queryFn: () => fetchTreeChunk(pool, chunk),
+    staleTime: Infinity,
+    retry: false,
+  });
+
 /**
  * The tree tip of every shielded pool a plan spends from or pays into (each
  * anchors to its real root), plus the frozen chunks holding its notes.
@@ -104,10 +139,10 @@ async function fetchTrees(plan: SendPlan) {
   const pools = SHIELDED.filter((pool) => flows.some((f) => f.pool === pool));
   const trees = await Promise.all(
     pools.map(async (pool) => {
-      const tip = await fetchTreeTip(pool);
       const positions = notes
         .filter((n) => n.pool === pool)
         .map((n) => n.position);
+      const tip = await treeTip(pool, Math.max(-1, ...positions));
       if (positions.some((p) => p >= tip.size)) {
         throw new Error(
           `The ${pool} tree hasn't reached this wallet's notes yet`,
@@ -120,15 +155,22 @@ async function fetchTrees(plan: SendPlan) {
       ].filter((c) => c < frozen);
       const chunks = new Map<number, Uint8Array>(
         await Promise.all(
-          chunkIds.map(
-            async (c) => [c, await fetchTreeChunk(pool, c)] as const,
-          ),
+          chunkIds.map(async (c) => [c, await treeChunk(pool, c)] as const),
         ),
       );
       return [pool, { tip: tip.body, chunks }] as const;
     }),
   );
   return Object.fromEntries(trees);
+}
+
+/**
+ * Fetches the tree data `plan` would need ahead of building it, so the build
+ * after the user confirms doesn't wait on ~1 MB tips. Failures are left for
+ * the build to meet.
+ */
+export function prefetchTrees(plan: SendPlan) {
+  fetchTrees(plan).catch(() => {});
 }
 
 /**
@@ -143,8 +185,11 @@ export async function sendPczt(
   account: { seedFingerprint: string; hdIndex: number },
   changeIndex?: number,
 ) {
+  const start = performance.now();
   const plan = await planSend(wallet, send);
+  const planned = performance.now();
   const trees = await fetchTrees(plan);
+  const fetched = performance.now();
   const pczt: Uint8Array = send_pczt(
     NETWORK,
     ufvk,
@@ -154,6 +199,10 @@ export async function sendPczt(
     request(send),
     trees,
     changeIndex,
+  );
+  const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+  console.log(
+    `[submit] building: plan ${secs(planned - start)}, trees ${secs(fetched - planned)}, pczt ${secs(performance.now() - fetched)}`,
   );
   return { pczt, plan };
 }

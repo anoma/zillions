@@ -145,6 +145,12 @@ export function try_decrypt(network: string, ufvk: string, pool: string, chunk: 
  */
 export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array, memos: Uint8Array, outgoing: Uint8Array, hits: Uint32Array): any;
 
+/**
+ * Builds the Halo2 proving and verifying keys now, for this instance's
+ * proofs to skip; seconds of work, so call it off the UI thread.
+ */
+export function warm_prover(): void;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -170,6 +176,7 @@ export interface InitOutput {
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
+    readonly warm_prover: () => void;
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;

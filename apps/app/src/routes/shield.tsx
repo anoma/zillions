@@ -1,5 +1,6 @@
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { PageShell } from "../components/PageShell";
 import { FeeRow } from "../components/PlannedFee";
 import {
@@ -19,6 +20,7 @@ import { useWallet } from "../hooks/useWallet";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { fitFontSize, zatoshiToZec } from "../lib/utils";
+import { warmProver } from "../lib/wallet/chain/submit";
 
 /** Least a shielding may move: zcore's rule, as the fee would eat the rest. */
 const SHIELDING_THRESHOLD = 100_000n;
@@ -51,6 +53,7 @@ function ShieldRoute() {
   );
 
   const { stages, track } = useSubmitStage();
+  useEffect(warmProver, []);
   const shield = useMutation({
     mutationFn: async () => {
       const { pczt, value, fee } = proposal.data!;

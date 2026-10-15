@@ -8,6 +8,7 @@ import outputUrl from "@zillions/sapling-params/sapling-output.params?url";
 import spendUrl from "@zillions/sapling-params/sapling-spend.params?url";
 import initZcore, { needs_sapling_params } from "@zillions/zcore";
 import { sendTransaction } from "./lightwalletd";
+import type { ProveRequest, ProveResponse } from "./prove";
 import ProveWorker from "./prove.ts?worker";
 
 /** The files' published hashes; bad parameters would make bad proofs. */
@@ -24,13 +25,22 @@ const SAPLING_PARAMS = {
 
 export type SaplingParams = { spend: Uint8Array; output: Uint8Array };
 
+const hex = (bytes: Uint8Array) =>
+  Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
+/**
+ * Proves but never broadcasts, for testing sends with real notes. Dev builds
+ * only: `vite build` ignores it.
+ */
+const DRY_RUN = import.meta.env.DEV && import.meta.env.VITE_DRY_RUN === "true";
+
 async function fetchVerified({ url, sha256 }: { url: string; sha256: string }) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Sapling parameters: HTTP ${res.status}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  const hex = [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
-  if (hex !== sha256) throw new Error("Sapling parameters failed their check");
+  if (hex(digest) !== sha256)
+    throw new Error("Sapling parameters failed their check");
   return bytes;
 }
 
@@ -56,7 +66,6 @@ export interface Proved {
   expiry_height: number;
 }
 
-/** Proves a signed PCZT in a worker: it takes tens of seconds. */
 /** The slow steps of a submission, in order; any the transaction doesn't need are skipped. */
 export type ProveStage =
   | "sapling-params"
@@ -67,21 +76,93 @@ export type ProveStage =
   | "verifying"
   | "broadcast";
 
+// ponytail: one prover for the page and one proof at a time, as one form
+// submits at a time; queue requests if that stops holding.
+let prover: Worker | undefined;
+/** When the running warm-up started; unset once it ends. */
+let warmingSince: number | undefined;
+
+const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+
+/** Logs the end of a warm-up, if `data` is one. */
+function warmUpEnded(
+  data: ProveResponse,
+): data is { warmed: number } | { warmFailed: string } {
+  if ("warmed" in data) {
+    console.log(`[prover] keys ready in ${secs(data.warmed)}`);
+  } else if ("warmFailed" in data) {
+    console.warn(`[prover] warm-up failed: ${data.warmFailed}`);
+  } else {
+    return false;
+  }
+  warmingSince = undefined;
+  return true;
+}
+
+/** The page's prove worker, started on first use. */
+function proveWorker() {
+  if (!prover) {
+    prover = new ProveWorker();
+    prover.onmessage = ({ data }: MessageEvent<ProveResponse>) => {
+      if (warmUpEnded(data) && "warmFailed" in data) resetProver();
+    };
+    prover.onerror = (e) => {
+      console.warn(`[prover] worker failed: ${e.message}`);
+      resetProver();
+    };
+  }
+  return prover;
+}
+
+/** Drops the worker so the next use starts fresh: a failed wasm instance isn't reused. */
+function resetProver() {
+  prover?.terminate();
+  prover = undefined;
+  warmingSince = undefined;
+}
+
+/**
+ * Builds the proving keys in the prove worker now, for the next proof to skip
+ * (~16 s of a ~28 s proof in Chromium). Call it when a send form opens.
+ */
+export function warmProver() {
+  if (prover) return;
+  console.log("[prover] building keys…");
+  proveWorker().postMessage({ warm: true } satisfies ProveRequest);
+  warmingSince = performance.now();
+}
+
+/** Proves a signed PCZT in the prove worker: it takes tens of seconds. */
 function prove(
   pczt: Uint8Array,
   sapling: SaplingParams | undefined,
   onStage: (stage: ProveStage) => void,
 ) {
-  const worker = new ProveWorker();
+  // A fresh worker (none yet, or one dropped after a failure) builds the keys first.
+  warmProver();
+  const worker = proveWorker();
+  if (warmingSince !== undefined) {
+    // The worker runs messages in order: this proof starts once the keys are built.
+    onStage("proving-key");
+    console.log(
+      `[prover] waiting for the keys, ${secs(performance.now() - warmingSince)} in`,
+    );
+  }
   return new Promise<Proved>((resolve, reject) => {
-    worker.onmessage = ({ data }) => {
-      if ("stage" in data) onStage(data.stage);
-      else if ("error" in data) reject(new Error(data.error));
+    const fail = (message: string) => {
+      resetProver();
+      reject(new Error(message));
+    };
+    worker.onmessage = ({ data }: MessageEvent<ProveResponse>) => {
+      if (warmUpEnded(data)) {
+        if ("warmFailed" in data) fail(data.warmFailed);
+      } else if ("stage" in data) onStage(data.stage);
+      else if ("error" in data) fail(data.error);
       else resolve(data.ok);
     };
-    worker.onerror = (e) => reject(new Error(e.message || "prover failed"));
-    worker.postMessage({ pczt, sapling });
-  }).finally(() => worker.terminate());
+    worker.onerror = (e) => fail(e.message || "prover failed");
+    worker.postMessage({ pczt, sapling } satisfies ProveRequest);
+  });
 }
 
 /**
@@ -100,6 +181,13 @@ export async function submitTransaction(
   }
   const { txid, raw, expiry_height } = await prove(signed, sapling, onStage);
   onStage("broadcast");
+  if (DRY_RUN) {
+    console.log(
+      `[submit] dry run, not broadcast: txid ${txid}, raw ${hex(raw)}`,
+    );
+    // Thrown, not returned: the wallet then holds no notes as spent.
+    throw new Error("Dry run: the transaction was proven but not broadcast");
+  }
   await sendTransaction(raw);
   return { txid, raw, expiryHeight: expiry_height };
 }

@@ -3,6 +3,7 @@
 //! Creation is `build.rs`'s, from a plan.
 
 use std::convert::Infallible;
+use std::sync::OnceLock;
 
 use orchard::circuit::{OrchardCircuitVersion, ProvingKey, VerifyingKey};
 use pczt::roles::verifier::OrchardError;
@@ -484,13 +485,18 @@ pub(crate) fn prove(
     prove_with(pczt, sapling, &mut |_| {})
 }
 
+const CIRCUIT: OrchardCircuitVersion = OrchardCircuitVersion::PostNu6_3;
+
+// Building each takes seconds and they never change: kept for the instance's life.
+static PROVING_KEY: OnceLock<ProvingKey> = OnceLock::new();
+static VERIFYING_KEY: OnceLock<VerifyingKey> = OnceLock::new();
+
 /// [`prove`], calling `stage` as each slow step starts; see [`prove_pczt`].
 fn prove_with(
     pczt: Pczt,
     sapling: Option<&SaplingParams>,
     stage: &mut dyn FnMut(&'static str),
 ) -> Result<(String, Vec<u8>), String> {
-    let circuit = OrchardCircuitVersion::PostNu6_3;
     let mut prover = Prover::new(pczt);
     if prover.requires_sapling_proofs() {
         stage("sapling-proofs");
@@ -501,26 +507,28 @@ fn prove_with(
     }
     let halo2 = prover.requires_orchard_proof() || prover.requires_ironwood_proof();
     if halo2 {
-        stage("proving-key");
-        let pk = ProvingKey::build(circuit);
+        if PROVING_KEY.get().is_none() {
+            stage("proving-key");
+        }
+        let pk = PROVING_KEY.get_or_init(|| ProvingKey::build(CIRCUIT));
         if prover.requires_orchard_proof() {
             stage("orchard-proof");
-            prover = prover.create_orchard_proof(&pk).map_err(to_pczt_error)?;
+            prover = prover.create_orchard_proof(pk).map_err(to_pczt_error)?;
         }
         if prover.requires_ironwood_proof() {
             stage("ironwood-proof");
-            prover = prover.create_ironwood_proof(&pk).map_err(to_pczt_error)?;
+            prover = prover.create_ironwood_proof(pk).map_err(to_pczt_error)?;
         }
     }
     stage("verifying");
     let pczt = SpendFinalizer::new(prover.finish())
         .finalize_spends()
         .map_err(to_pczt_error)?;
-    // Building it takes seconds: only when there's a Halo2 proof to check.
-    let vk = halo2.then(|| VerifyingKey::build(circuit));
+    // Only when there's a Halo2 proof to check.
+    let vk = halo2.then(|| VERIFYING_KEY.get_or_init(|| VerifyingKey::build(CIRCUIT)));
     let sapling_vks = sapling.map(|p| (p.spend.verifying_key(), p.output.verifying_key()));
     let mut extractor = TransactionExtractor::new(pczt);
-    if let Some(vk) = &vk {
+    if let Some(vk) = vk {
         extractor = extractor.with_orchard(vk);
     }
     if let Some((spend_vk, output_vk)) = &sapling_vks {
@@ -606,4 +614,12 @@ pub fn prove_pczt(
         expiry_height,
     })
     .map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Builds the Halo2 proving and verifying keys now, for this instance's
+/// proofs to skip; seconds of work, so call it off the UI thread.
+#[wasm_bindgen]
+pub fn warm_prover() {
+    PROVING_KEY.get_or_init(|| ProvingKey::build(CIRCUIT));
+    VERIFYING_KEY.get_or_init(|| VerifyingKey::build(CIRCUIT));
 }

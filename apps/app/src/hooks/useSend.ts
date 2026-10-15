@@ -4,10 +4,12 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
-import type { SendRequest } from "../lib/wallet/send";
+import { warmProver } from "../lib/wallet/chain/submit";
+import { prefetchTrees, type SendRequest } from "../lib/wallet/send";
 import type { PendingActivity } from "../lib/wallet/types";
 import { useAccount } from "./useAccount";
 import { internalAddress } from "./useAddresses";
@@ -69,7 +71,11 @@ export function useSendPlan(
     short && maxAmount.data !== undefined && debouncedAmount > maxAmount.data
       ? { amount: maxAmount.data, fee: atMax.data?.fee }
       : undefined;
-  return { plan: max ? atMax : typed, maxAmount, ceiling };
+  const plan = max ? atMax : typed;
+  useEffect(() => {
+    if (plan.data) prefetchTrees(plan.data);
+  }, [plan.data]);
+  return { plan, maxAmount, ceiling };
 }
 
 /** Why a send form's plan fails, for the user: an amount the source can't cover, or the error itself. */
@@ -98,6 +104,7 @@ export function useSend() {
   const account = useAccount();
   const queryClient = useQueryClient();
   const { stages, track } = useSubmitStage();
+  useEffect(warmProver, []);
 
   const mutation = useMutation({
     mutationFn: async ({
