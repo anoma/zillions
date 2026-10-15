@@ -180,8 +180,11 @@ export async function sendPczt(
   account: { seedFingerprint: string; hdIndex: number },
   changeIndex?: number,
 ) {
+  const start = performance.now();
   const plan = await planSend(wallet, send);
+  const planned = performance.now();
   const trees = await fetchTrees(plan);
+  const fetched = performance.now();
   const pczt: Uint8Array = send_pczt(
     NETWORK,
     ufvk,
@@ -191,6 +194,10 @@ export async function sendPczt(
     request(send),
     trees,
     changeIndex,
+  );
+  const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+  console.log(
+    `[submit] building: plan ${secs(planned - start)}, trees ${secs(fetched - planned)}, pczt ${secs(performance.now() - fetched)}`,
   );
   return { pczt, plan };
 }
