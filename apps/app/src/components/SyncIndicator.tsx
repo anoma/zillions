@@ -1,3 +1,4 @@
+import { focusManager, onlineManager } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useWallet } from "../hooks/useWallet";
@@ -53,7 +54,15 @@ export function SyncIndicator() {
       }
     });
     sync(wallet);
-    return unsubscribe;
+    // Back on the tab or online: catch up now rather than at the next timed sync.
+    const onBack = (back: boolean) => back && wallet.resync();
+    const unsubscribeFocus = focusManager.subscribe(onBack);
+    const unsubscribeOnline = onlineManager.subscribe(onBack);
+    return () => {
+      unsubscribe();
+      unsubscribeFocus();
+      unsubscribeOnline();
+    };
   }, [wallet]);
 
   const { phase, backTo, spedUp, fry, syncing } = progress;
