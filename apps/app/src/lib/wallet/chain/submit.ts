@@ -56,7 +56,6 @@ export interface Proved {
   expiry_height: number;
 }
 
-/** Proves a signed PCZT in a worker: it takes tens of seconds. */
 /** The slow steps of a submission, in order; any the transaction doesn't need are skipped. */
 export type ProveStage =
   | "sapling-params"
@@ -67,6 +66,7 @@ export type ProveStage =
   | "verifying"
   | "broadcast";
 
+/** Proves a signed PCZT in a worker: it takes tens of seconds. */
 function prove(
   pczt: Uint8Array,
   sapling: SaplingParams | undefined,
