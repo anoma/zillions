@@ -14,6 +14,7 @@ export function AddressBadge({
   className?: string;
 }) {
   const address = "address" in party ? party.address : undefined;
+  const more = "more" in party && party.more ? ` +${party.more.length}` : "";
   const kind = useAddressKind(address);
   const pool = "pool" in party ? party.pool : kind;
   const classes = twMerge(
@@ -32,6 +33,7 @@ export function AddressBadge({
     return (
       <div title={address} className={classes}>
         {shortenAddress(address)}
+        {more}
       </div>
     );
   }
@@ -46,7 +48,10 @@ export function AddressBadge({
       )}
       iconClassName="size-4 [@media(hover:hover)]:opacity-0 group-hover:opacity-100"
     >
-      <span title={address}>{shortenAddress(address)}</span>
+      <span title={address} className="whitespace-nowrap">
+        {shortenAddress(address)}
+        {more}
+      </span>
     </CopyToClipboardControl>
   );
 }

@@ -11,7 +11,6 @@ import initZcore, {
 } from "@zillions/zcore";
 import {
   fetchAddressTransactions,
-  fetchTransaction,
   fetchUtxos,
   type RawTransaction,
   type Utxo,
@@ -34,10 +33,15 @@ export type OwnUtxo = Utxo & { scope: Scope; address_index: number };
 let ready: Promise<unknown> | undefined;
 
 /** `parse_transaction`'s result. Txids are in explorer byte order. */
-interface ParsedTx {
+export interface ParsedTx {
   txid: string;
-  inputs: { txid: string; index: number }[];
+  /** `address` is the sender's, when the input spends a P2PKH coin. */
+  inputs: { txid: string; index: number; address?: string }[];
   outputs: { index: number; value: number; address?: string }[];
+  /** What leaves the shielded pools, net: the fee is this plus the inputs' value less the outputs'. */
+  value_balance: number;
+  /** 0 for none. */
+  expiry_height: number;
 }
 
 export interface TransparentCache {
@@ -47,8 +51,6 @@ export interface TransparentCache {
   /** Per chain: the highest address index used, and how many were checked. */
   chains: Record<Scope, { lastUsed: number; checked: number }>;
   txs: (ParsedTx & { height: number })[];
-  /** The address an input spent from, by the `txid:index` it names. */
-  senders: Record<string, string>;
   utxos: Utxo[];
   /** Internal addresses paid by transactions not yet seen mined, until they expire. */
   reserved?: { index: number; expiryHeight: number }[];
@@ -62,7 +64,6 @@ const emptyCache = (): TransparentCache => ({
     internal: { lastUsed: -1, checked: 0 },
   },
   txs: [],
-  senders: {},
   utxos: [],
 });
 
@@ -72,25 +73,14 @@ export interface TransparentTx {
   height: number;
   /** Paid to our addresses. */
   received: bigint;
+  /** Of `received`, what our receiving (external) addresses got: not change. */
+  receiving: bigint;
   /** Our earlier outputs this transaction spent. */
   spent: bigint;
-  /** Where the funds came from: our address it spent from, else the sender's. */
-  from?: string;
   /** Where they went: ours if paid to us, else the outside address it paid. */
   to?: string;
   /** It spent no transparent coin: its funds came from a shielded pool. */
   shielded?: true;
-}
-
-/** A coinbase input spends nothing; its prevout txid is all zeros. */
-const COINBASE = "0".repeat(64);
-
-/** The address that received the output an input spends, from its transaction. */
-async function senderOf(input: ParsedTx["inputs"][number]) {
-  if (input.txid === COINBASE) return undefined;
-  const raw = await fetchTransaction(input.txid);
-  const tx: ParsedTx = parse_transaction(NETWORK, raw.height, raw.data);
-  return tx.outputs[input.index]?.address;
 }
 
 /**
@@ -167,21 +157,13 @@ export async function syncTransparent(
 
   const mine = ownAddresses(ufvk, chains);
   if (moved) utxos = await fetchUtxos([...mine.keys()]);
-  const { senders } = cache;
-  const state = await transparentState(
-    mine,
-    [...parsed.values()],
-    utxos,
-    senders,
-    true,
-  );
+  const state = transparentState(mine, [...parsed.values()], utxos);
 
   const synced: TransparentCache = {
     tip,
     final: tip - REORG_DEPTH,
     chains,
     txs: [...parsed.values()],
-    senders,
     utxos,
   };
   return { cache: synced, view: state };
@@ -206,8 +188,6 @@ export async function cachedTransparent(cache: TransparentCache, ufvk: string) {
     ownAddresses(ufvk, cache.chains),
     cache.txs,
     cache.utxos,
-    cache.senders,
-    false,
   );
 }
 
@@ -222,31 +202,16 @@ const ownAddresses = (ufvk: string, chains: TransparentCache["chains"]) =>
     ),
   );
 
-/**
- * Our coins, each transaction's effect on our transparent funds, and our
- * addresses. A sender not in `senders` is fetched and added to it when
- * `lookup`, and left unknown otherwise.
- */
-async function transparentState(
+/** Our coins, each transaction's effect on our transparent funds, and our addresses. */
+function transparentState(
   mine: ReturnType<typeof ownAddresses>,
   parsed: TransparentCache["txs"],
   utxos: Utxo[],
-  senders: TransparentCache["senders"],
-  lookup: boolean,
-): Promise<{
+): {
   utxos: OwnUtxo[];
   txs: TransparentTx[];
   addresses: Set<string>;
-}> {
-  const sender = async (input: ParsedTx["inputs"][number]) => {
-    const key = `${input.txid}:${input.index}`;
-    if (lookup && !(key in senders)) {
-      const address = await senderOf(input).catch(() => undefined);
-      if (address) senders[key] = address;
-    }
-    return senders[key];
-  };
-
+} {
   // Each of our outputs, so the input that later spends it can be priced
   // and placed: an input names only the output it consumes.
   const ours = new Map<string, { value: bigint; address: string }>();
@@ -261,33 +226,31 @@ async function transparentState(
     }
   }
 
-  const txs = await Promise.all(
-    parsed.map(async ({ txid, height, inputs, outputs }) => {
-      const received = outputs.flatMap((out) => {
-        const own = ours.get(`${txid}:${out.index}`);
-        return own ? [own] : [];
-      });
-      const spent = inputs.flatMap((input) => {
-        const own = ours.get(`${input.txid}:${input.index}`);
-        return own ? [own] : [];
-      });
-      const paid = outputs.find((out) => out.address && !mine.has(out.address));
-      return {
-        txid,
-        height,
-        received: received.reduce((sum, own) => sum + own.value, 0n),
-        spent: spent.reduce((sum, own) => sum + own.value, 0n),
-        // Funds from outside name their sender only in the transaction that
-        // paid it, so that one is fetched.
-        from: spent[0]?.address ?? (inputs[0] && (await sender(inputs[0]))),
-        // Only a payer names an outside recipient; paid to us, it's our address.
-        to: spent.length
-          ? (paid?.address ?? received[0]?.address)
-          : received[0]?.address,
-        ...(inputs.length ? {} : { shielded: true as const }),
-      };
-    }),
-  );
+  const txs = parsed.map(({ txid, height, inputs, outputs }) => {
+    const received = outputs.flatMap((out) => {
+      const own = ours.get(`${txid}:${out.index}`);
+      return own ? [own] : [];
+    });
+    const spent = inputs.flatMap((input) => {
+      const own = ours.get(`${input.txid}:${input.index}`);
+      return own ? [own] : [];
+    });
+    const paid = outputs.find((out) => out.address && !mine.has(out.address));
+    return {
+      txid,
+      height,
+      received: received.reduce((sum, own) => sum + own.value, 0n),
+      receiving: received
+        .filter((own) => mine.get(own.address)?.scope === "external")
+        .reduce((sum, own) => sum + own.value, 0n),
+      spent: spent.reduce((sum, own) => sum + own.value, 0n),
+      // Only a payer names an outside recipient; paid to us, it's our address.
+      to: spent.length
+        ? (paid?.address ?? received[0]?.address)
+        : received[0]?.address,
+      ...(inputs.length ? {} : { shielded: true as const }),
+    };
+  });
   return {
     utxos: utxos.map((utxo) => ({ ...utxo, ...mine.get(utxo.address)! })),
     txs,

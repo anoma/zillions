@@ -1,6 +1,14 @@
 import type { Block } from "./chain/lightwalletd";
-import type { TransparentTx } from "./transparent";
-import type { Activity, Note, Party, Pool, Sent, TxLocator } from "./types";
+import type { ParsedTx, TransparentTx } from "./transparent";
+import type {
+  Activity,
+  Counterparty,
+  Note,
+  Party,
+  Pool,
+  Sent,
+  TxLocator,
+} from "./types";
 
 /** A shielded transaction's identity until its block names it. */
 export const locatorId = ({ height, tx_index }: TxLocator) =>
@@ -15,23 +23,44 @@ type TxGroup = {
   sent: Sent[];
   /** What it paid to transparent addresses not ours. */
   paid: Payment[];
+  /** What it paid to shielded addresses that recovery didn't name. */
+  lost: bigint;
 };
 
-/** A transparent output a transaction of ours paid to someone else. */
+/** A transparent output a transaction of ours paid to someone else, or to no address. */
 export type Payment = {
   value: number;
   /** Absent for a script that pays no single address. */
   recipient?: string;
 };
 
-/** One transaction, from either side or both. */
+/** One transaction, from either side or both, and in full once fetched. */
 type Entry = {
   height: number;
   shielded?: TxGroup;
   transparent?: TransparentTx;
   /** What a transaction with no shielded side paid to others. */
   paid?: Payment[];
+  tx?: ParsedTx;
 };
+
+/** Whether it spent funds of ours, so we paid its fee: an output recovered with our viewing key is one we made. */
+const funded = ({ shielded, transparent }: Entry) =>
+  !!shielded?.spent.length || !!shielded?.sent.length || !!transparent?.spent;
+
+/**
+ * What a transaction we paid for paid in fees, exactly: what left the
+ * shielded pools and our coins, less its transparent outputs. Unknown until
+ * it's fetched, or when it spent a coin not ours.
+ */
+function exactFee(entry: Entry, ours: Set<string>) {
+  const { tx, transparent } = entry;
+  if (!tx || !funded(entry)) return undefined;
+  if (!tx.inputs.every((i) => i.address && ours.has(i.address))) return;
+  const fee =
+    (transparent?.spent ?? 0n) + BigInt(tx.value_balance) - sum(tx.outputs);
+  return fee >= 0n ? fee : undefined;
+}
 
 const max0 = (n: bigint) => (n > 0n ? n : 0n);
 
@@ -41,12 +70,37 @@ const sum = (of: { value: number }[]) =>
 const SHIELDED: Party = { pool: "shielded" };
 const TRANSPARENT: Party = { pool: "transparent" };
 
+/** The first of `all`, holding the rest; undefined when there are none. */
+const listed = ([first, ...more]: Counterparty[]): Party | undefined =>
+  first && (more.length ? { ...first, more } : first);
+
+/** Whom `out` paid, each address once with what it got in all. */
+function payees(out: Payment[]) {
+  const paid = new Map<string, bigint>();
+  for (const { recipient, value } of out) {
+    if (recipient) {
+      paid.set(recipient, (paid.get(recipient) ?? 0n) + BigInt(value));
+    }
+  }
+  return listed([...paid].map(([address, value]) => ({ address, value })));
+}
+
+/** The addresses not ours whose coins funded `tx`, read off its inputs. */
+const senders = (tx: ParsedTx | undefined, ours: Set<string>) =>
+  listed(
+    [
+      ...new Set(
+        tx?.inputs.flatMap(({ address }) =>
+          address && !ours.has(address) ? [address] : [],
+        ),
+      ),
+    ].map((address) => ({ address })),
+  );
+
 /** A shielded group's net effect, and what it shows as on its own. */
-function shieldedSide({ received, spent, sent, paid }: TxGroup) {
-  // What we know left the wallet: shielded outputs recovered, transparent
-  // ones read from the block. Without either, fall back to what the inputs
-  // were worth net of change, fee included.
-  const out = [...sent, ...paid];
+function shieldedSide({ received, spent, sent, paid, lost }: TxGroup) {
+  // With no output known, the inputs net of change stand in, fee included.
+  const out = [...sent, ...paid, ...(lost ? [{ value: Number(lost) }] : [])];
   // Recovery skips outputs that are ours, so a payment to our own address
   // is a note at an external one: change goes to internal ones.
   const self =
@@ -67,7 +121,6 @@ function shieldedSide({ received, spent, sent, paid }: TxGroup) {
   // A transaction can pay us several notes (padding, change, a payment):
   // its memo is whichever one has it.
   const memo = (sent.length ? sent : received).find((p) => p.memo)?.memo;
-  const [payee] = out;
   // Paying nobody else, what lands in a pool nothing was spent from moved
   // there: change stays in the pool it came from.
   const from = new Set(spent.map((n) => n.pool));
@@ -90,6 +143,7 @@ function shieldedSide({ received, spent, sent, paid }: TxGroup) {
   }
   return {
     migrated: false,
+    self: self.length > 0,
     from: SHIELDED,
     value: outgoing ? -outflow : sum(received),
     // With every output accounted for, what our inputs held beyond them is
@@ -98,19 +152,32 @@ function shieldedSide({ received, spent, sent, paid }: TxGroup) {
     fee: known ? max0(sum(spent) - sum(received) - sum(out)) : 0n,
     pool: pools.size === 1 ? [...pools][0] : ("mixed" as const),
     memo,
-    // Only a send knows its counterparty: on the receiving side the
-    // recipient is our own address, and the sender is never revealed.
-    to: payee?.recipient
-      ? { address: payee.recipient }
-      : paid.length
-        ? TRANSPARENT
-        : SHIELDED,
+    // Received, the recipient is our own address.
+    to: payees(out) ?? (paid.length ? TRANSPARENT : SHIELDED),
   };
 }
 
 function receipt(
   txid: string,
-  { height, shielded, transparent, paid = [] }: Entry,
+  entry: Entry,
+  ours: Set<string>,
+  time?: number,
+): Activity {
+  const activity = derived(txid, entry, ours, time);
+  const fee = exactFee(entry, ours);
+  // Transparent coins not ours name their sender, whatever else paid.
+  const from = !funded(entry) && senders(entry.tx, ours);
+  return {
+    ...activity,
+    ...(fee !== undefined && { fee }),
+    ...(from && { from }),
+  };
+}
+
+/** What history shows from our notes and coins alone. */
+function derived(
+  txid: string,
+  { height, shielded, transparent, paid = [], tx }: Entry,
   ours: Set<string>,
   time?: number,
 ): Activity {
@@ -137,11 +204,28 @@ function receipt(
       tx_type: s!.migrated ? "Migrated" : s!.value < 0n ? "Sent" : "Received",
       value: s!.value,
       fee: s!.fee,
+      ...(!s!.migrated && s!.self && { self: true as const }),
     };
   }
 
   const t = transparent.received - transparent.spent;
+  const from = transparent.shielded ? SHIELDED : TRANSPARENT;
   if (!s || !side) {
+    // Paying no one else, what reached a receiving address paid ourselves.
+    const self = !!tx && transparent.spent > 0n && !paid.length;
+    if (self && transparent.receiving > 0n) {
+      return {
+        ...base,
+        tx_type: "Sent",
+        value: -transparent.receiving,
+        fee: max0(-t),
+        memo: undefined,
+        pool: "transparent",
+        from,
+        to: TRANSPARENT,
+        self: true,
+      };
+    }
     // Our coins pay what went to others and the fee; what came back is change.
     const value = paid.length ? -sum(paid) : t;
     return {
@@ -151,8 +235,8 @@ function receipt(
       fee: paid.length ? max0(-t - sum(paid)) : 0n,
       memo: undefined,
       pool: "transparent",
-      from: transparent.shielded ? SHIELDED : party(transparent.from),
-      to: party(transparent.to),
+      from,
+      to: payees(paid) ?? party(transparent.to),
     };
   }
   // Both sides: whatever the two don't account for between them is the fee.
@@ -174,20 +258,21 @@ function receipt(
       tx_type: "Shielded",
       value: s.value,
       fee,
-      from: party(transparent.from),
+      from: TRANSPARENT,
       to: SHIELDED,
     };
   }
   // A payment recovered on the shielded side was also paid for by the
   // transparent coins spent: it's the whole amount, and what our inputs held
   // beyond it and our change is the fee.
-  const recovered = shielded!.sent.length + shielded!.paid.length > 0;
+  const recovered =
+    shielded!.sent.length + shielded!.paid.length > 0 || shielded!.lost > 0n;
   const net = sum(shielded!.received) - sum(shielded!.spent);
   const value = recovered ? s.value : s.value + t;
   return {
     ...base,
     ...side,
-    from: party(transparent.from),
+    from: transparent.spent > 0n ? TRANSPARENT : side.from,
     to: "address" in side.to ? side.to : party(transparent.to),
     pool: "mixed",
     tx_type: value < 0n ? "Sent" : "Received",
@@ -199,8 +284,8 @@ function receipt(
 /**
  * One entry per transaction, newest first, across both sides: a transaction
  * that moved funds between transparent and shielded shows once, as Shielded
- * or Unshielded, with its fee. `paid` holds what our sending transactions
- * paid to others' transparent addresses, by `locatorId`.
+ * or Unshielded, with its fee. `txs` holds the transactions fetched in full,
+ * by txid: what ours paid to others' transparent addresses, and their fees.
  *
  * Shielded transactions are named through `blocks`; one whose block isn't
  * there yet keeps a placeholder id and can't be matched with its
@@ -211,7 +296,7 @@ export function buildActivity(
   sent: Sent[],
   transparent: TransparentTx[],
   blocks: Map<number, Block>,
-  paid = new Map<string, Payment[]>(),
+  txs = new Map<string, ParsedTx>(),
   ours = new Set<string>(),
 ): Activity[] {
   const groups = new Map<string, TxGroup>();
@@ -224,7 +309,8 @@ export function buildActivity(
         received: [],
         spent: [],
         sent: [],
-        paid: paid.get(id) ?? [],
+        paid: [],
+        lost: 0n,
       };
       groups.set(id, group);
     }
@@ -246,15 +332,24 @@ export function buildActivity(
     entries.set(txid, { height, shielded: group });
   }
   for (const tx of transparent) {
-    const index = txIndex(blocks, tx.height, tx.txid);
-    const entry = entries.get(tx.txid) ?? {
-      height: tx.height,
-      paid:
-        index === undefined
-          ? undefined
-          : paid.get(locatorId({ height: tx.height, tx_index: index })),
-    };
+    const entry = entries.get(tx.txid) ?? { height: tx.height };
     entries.set(tx.txid, { ...entry, transparent: tx });
+  }
+  for (const [txid, entry] of entries) {
+    entry.tx = txs.get(txid);
+    if (!entry.tx || !funded(entry)) continue;
+    const paid = entry.tx.outputs.flatMap(({ value, address }) =>
+      address && ours.has(address) ? [] : [{ value, recipient: address }],
+    );
+    if (!entry.shielded) {
+      entry.paid = paid;
+      continue;
+    }
+    entry.shielded.paid = paid;
+    // Every shielded output is ours, recovered, or someone's we can't name.
+    const { spent, received, sent } = entry.shielded;
+    const outputs = sum(spent) - BigInt(entry.tx.value_balance);
+    entry.shielded.lost = max0(outputs - sum(received) - sum(sent));
   }
 
   return [...entries]
@@ -282,6 +377,31 @@ export function activityHeights(
   ]);
 }
 
+/**
+ * The txids history reads in full, once their blocks name them: those that
+ * spent our funds, for the exact fee and whom they paid, and those that
+ * spent transparent coins, for the sender. Reading one by its txid tells the
+ * server it's ours, so a shielded payment received is never read.
+ */
+export function txidsToRead(
+  notes: Note[],
+  sent: Sent[],
+  transparent: TransparentTx[],
+  blocks: Map<number, Block>,
+) {
+  const txid = ({ height, tx_index }: TxLocator) =>
+    blocks.get(height)?.txids.get(tx_index);
+  const coinsIn = ({ height, tx_index }: TxLocator) =>
+    !!blocks.get(height)?.transparentInputs?.includes(tx_index);
+  const ids = [
+    ...notes.flatMap((n) => (n.spend.status === "spent" ? [n.spend.at] : [])),
+    ...sent,
+    ...notes.filter(coinsIn),
+  ].map(txid);
+  for (const t of transparent) if (t.spent || !t.shielded) ids.push(t.txid);
+  return new Set(ids.filter((id) => id !== undefined));
+}
+
 /** Our transactions that spent notes or coins of ours, by `height:tx_index`. */
 export function sendingTxs(
   notes: Note[],
@@ -302,26 +422,4 @@ export function sendingTxs(
     }
   }
   return txs;
-}
-
-/**
- * What `txs` paid to transparent addresses not in `ours`, by `locatorId`,
- * from their blocks; `addressOf` reads an output script's address.
- */
-export function payments(
-  txs: Iterable<TxLocator>,
-  blocks: Map<number, Block>,
-  ours: Set<string>,
-  addressOf: (script: Uint8Array) => string | undefined,
-) {
-  const paid = new Map<string, Payment[]>();
-  for (const locator of txs) {
-    const vout = blocks.get(locator.height)?.vout.get(locator.tx_index);
-    const theirs = (vout ?? []).flatMap(({ value, script }) => {
-      const recipient = addressOf(script);
-      return recipient && ours.has(recipient) ? [] : [{ value, recipient }];
-    });
-    if (theirs.length) paid.set(locatorId(locator), theirs);
-  }
-  return paid;
 }

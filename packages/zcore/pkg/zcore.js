@@ -149,9 +149,9 @@ export function needs_sapling_params(pczt) {
 
 /**
  * The transparent side of a raw transaction mined at `height`, which fixes
- * the consensus rules it is read under, and the nullifiers it spends:
- * `{ txid, inputs: [{ txid, index }], outputs: [{ index, value, address }],
- * nullifiers }`.
+ * the consensus rules it is read under, and what it shows of its shielded
+ * one: `{ txid, inputs: [{ txid, index, address }], outputs: [{ index, value,
+ * address }], nullifiers, value_balance, expiry_height }`.
  * @param {string} network
  * @param {number} height
  * @param {Uint8Array} data
@@ -756,17 +756,22 @@ function __wbg_get_imports() {
             const ret = arg0;
             return ret;
         },
-        __wbindgen_generic_0000000000000002: function(arg0, arg1) {
+        __wbindgen_generic_0000000000000002: function(arg0) {
+            // Cast intrinsic for `I64 -> Externref`.
+            const ret = arg0;
+            return ret;
+        },
+        __wbindgen_generic_0000000000000003: function(arg0, arg1) {
             // Cast intrinsic for `Ref(Slice(U8)) -> NamedExternref("Uint8Array")`.
             const ret = getArrayU8FromWasm0(arg0, arg1);
             return ret;
         },
-        __wbindgen_generic_0000000000000003: function(arg0, arg1) {
+        __wbindgen_generic_0000000000000004: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
             return ret;
         },
-        __wbindgen_generic_0000000000000004: function(arg0) {
+        __wbindgen_generic_0000000000000005: function(arg0) {
             // Cast intrinsic for `U64 -> Externref`.
             const ret = BigInt.asUintN(64, arg0);
             return ret;

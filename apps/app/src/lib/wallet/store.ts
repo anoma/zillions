@@ -54,16 +54,13 @@ export async function storageKey(ufvk: string) {
 const replacer = (_key: string, value: unknown) =>
   value instanceof Map
     ? { $map: [...value] }
-    : value instanceof Uint8Array
-      ? { $bytes: [...value] }
-      : typeof value === "bigint"
-        ? { $bigint: value.toString() }
-        : value;
+    : typeof value === "bigint"
+      ? { $bigint: value.toString() }
+      : value;
 
 const reviver = (_key: string, value: unknown) => {
   if (typeof value !== "object" || value === null) return value;
   if ("$map" in value) return new Map(value.$map as [unknown, unknown][]);
-  if ("$bytes" in value) return Uint8Array.from(value.$bytes as number[]);
   if ("$bigint" in value) return BigInt(value.$bigint as string);
   return value;
 };
@@ -112,4 +109,5 @@ export const emptyState = (id: string): WalletState => ({
   scan: { scanned: {}, setupDone: false, sendsRead: [] },
   pending: [],
   blocks: new Map(),
+  txs: new Map(),
 });

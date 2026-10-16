@@ -5,7 +5,7 @@ import { ZecValue } from "./ZecValue";
 export function TransactionValue({
   tx,
 }: {
-  tx: Pick<Activity, "tx_type" | "value" | "fee">;
+  tx: Pick<Activity, "tx_type" | "value" | "fee" | "self">;
 }) {
   const { signal, value } = transactionValue(tx);
   return (

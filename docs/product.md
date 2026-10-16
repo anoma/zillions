@@ -179,20 +179,34 @@ Moves shielded funds to one of the account's own transparent addresses.
     is what moved, the fee apart) or Payment link (2.10: its amount is what
     the claimer receives; a claim or cancellation shows as Received, from
     "Payment link");
-  - **Amount**;
+  - **Amount**, signed by who it's with, never by the fee: "+" when it came
+    from someone else, "−" when it paid someone else, and no sign when the
+    account only moved its own funds (Shielded, Unshielded, Migrated, or a
+    payment to itself);
   - **From** and **To**: someone else's address when it's known; the
     account's own addresses only as "Shielded" or "Transparent" (each unshield
     goes to a new address of its own, which nothing else shows), and a
-    shielded sender as "Shielded", since it's never revealed. A payment to
-    one of the account's own shielded addresses in the same pool shows as
-    Sent, to "Shielded", its amount what it paid, the fee apart;
+    shielded sender as "Shielded", since it's never revealed. A transparent
+    sender is public on chain, so a payment funded by transparent coins
+    names the address they came from, even if shielded funds paid part of
+    it. Several senders or recipients show as the first and a count, e.g.
+    "t1Xur…icCN +2"; the detail page lists them all, each recipient with
+    what it was paid. A payment to one of the account's own addresses in the
+    same pool shows as Sent, to "Shielded" or "Transparent", its amount what
+    reached the receiving address (not change), the fee apart;
   - **Status**: "Processing" from the moment a send, shield or unshield is
     broadcast until it's mined, then "Completed" (a payment link: Unclaimed,
     Claimed or Cancelled); one that expires unmined drops off the list;
   - **Time**.
 - A **detail page** per transaction: type, status, amounts broken down (e.g.
   "Sent from Transparent" / "Received in Shielded"), fee, from, to, time,
-  memo when there is one, and a block-explorer link.
+  memo when there is one, and a block-explorer link. The fee is exact
+  whenever the account paid it.
+- A transaction is read in full from the server only where that shows
+  more: when it spent the account's funds (its exact fee and transparent
+  recipients) or transparent coins (its sender). A shielded payment received
+  is never asked for by its id, so the server doesn't learn it's the
+  account's. What's read is kept, so it's asked for once.
 
 ### 2.7 Sync — Working
 

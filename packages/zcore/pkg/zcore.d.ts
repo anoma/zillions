@@ -45,9 +45,9 @@ export function needs_sapling_params(pczt: Uint8Array): boolean;
 
 /**
  * The transparent side of a raw transaction mined at `height`, which fixes
- * the consensus rules it is read under, and the nullifiers it spends:
- * `{ txid, inputs: [{ txid, index }], outputs: [{ index, value, address }],
- * nullifiers }`.
+ * the consensus rules it is read under, and what it shows of its shielded
+ * one: `{ txid, inputs: [{ txid, index, address }], outputs: [{ index, value,
+ * address }], nullifiers, value_balance, expiry_height }`.
  */
 export function parse_transaction(network: string, height: number, data: Uint8Array): any;
 
