@@ -246,8 +246,8 @@ mod tests {
     // addresses match the outputs they spend.
     #[test]
     fn reads_the_sender_and_fee_of_a_transparent_funded_payment() {
-        let raw = hex::decode(include_str!("testdata/transparent_funded_tx.hex").trim())
-            .expect("hex");
+        let raw =
+            hex::decode(include_str!("testdata/transparent_funded_tx.hex").trim()).expect("hex");
         let tx = parse(&Network::MainNetwork, 3_519_095, &raw).expect("parses");
         assert_eq!(
             tx.txid,
@@ -319,4 +319,3 @@ mod tests {
         assert_eq!(external[0], expected.encode(&network));
     }
 }
-

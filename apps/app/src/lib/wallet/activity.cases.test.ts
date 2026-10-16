@@ -17,6 +17,8 @@ type Shown = {
   to: string;
   /** A payment to the account itself, which shows no sign. */
   self?: true;
+  /** Where history's data for it comes from. */
+  source: string;
 };
 
 type Case = {
@@ -120,6 +122,7 @@ const cases: [group: string, Case[]][] = [
           fee: 10_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 20,000 · fee 10,000",
         zingo: "sent 10,000 · fee 10,000",
@@ -139,6 +142,7 @@ const cases: [group: string, Case[]][] = [
           fee: 10_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 20,000 · fee 10,000",
         zingo: "sent 10,000 · fee 10,000",
@@ -158,6 +162,7 @@ const cases: [group: string, Case[]][] = [
           fee: 15_000,
           from: "Shielded",
           to: "u1theirs +1",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 30,000 · fee 15,000",
         zingo: "sent 10,000 + sent 5,000 · fee 15,000",
@@ -177,12 +182,13 @@ const cases: [group: string, Case[]][] = [
           fee: 10_000,
           from: "Shielded",
           to: "Shielded",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 10,000",
         zingo: "not checked",
         vizor: "not checked",
         zkool: "Sent −20,000 · fee 10,000",
-        note: "Read in full, the value balance gives the fee, and what the shielded outputs held beyond our change is the payment recovery missed. With no outgoing note, Zodl takes it for a transfer to itself and shows what came back.",
+        note: "With the transaction by txid, the value balance gives the fee, and what the shielded outputs held beyond our change is the payment recovery missed. With no outgoing note, Zodl takes it for a transfer to itself and shows what came back.",
       },
       {
         id: "i-xt",
@@ -196,6 +202,7 @@ const cases: [group: string, Case[]][] = [
           fee: 15_000,
           from: "Shielded",
           to: "t1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 25,000 · fee 15,000",
         zingo: "sent 10,000 · fee 15,000",
@@ -219,6 +226,7 @@ const cases: [group: string, Case[]][] = [
           from: "Shielded",
           to: "Shielded",
           self: true,
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 90,000 · fee 10,000",
         zingo: "send-to-self 90,000 · fee 10,000",
@@ -239,6 +247,7 @@ const cases: [group: string, Case[]][] = [
           fee: 15_000,
           from: "Shielded",
           to: "Transparent",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 15,000 · fee 15,000",
         zingo: "send-to-self 85,000 · fee 15,000",
@@ -263,6 +272,7 @@ const cases: [group: string, Case[]][] = [
           fee: 20_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 30,000 · fee 20,000",
         zingo: "sent 10,000 · fee 20,000",
@@ -282,6 +292,7 @@ const cases: [group: string, Case[]][] = [
           fee: 10_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 20,000 · fee 10,000",
         zingo: "sent 10,000 · fee 10,000",
@@ -301,6 +312,7 @@ const cases: [group: string, Case[]][] = [
           fee: 20_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 30,000 · fee 20,000",
         zingo: "sent 10,000 · fee 20,000",
@@ -319,6 +331,7 @@ const cases: [group: string, Case[]][] = [
           fee: 15_000,
           from: "Shielded",
           to: "t1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 25,000 · fee 15,000",
         zingo: "sent 10,000 · fee 15,000",
@@ -341,6 +354,7 @@ const cases: [group: string, Case[]][] = [
           fee: 20_000,
           from: "Orchard",
           to: "Ironwood",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "migration 30,000 · fee 20,000",
@@ -360,6 +374,7 @@ const cases: [group: string, Case[]][] = [
           fee: 20_000,
           from: "Orchard",
           to: "Ironwood",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "migration 80,000 · fee 20,000",
@@ -382,6 +397,7 @@ const cases: [group: string, Case[]][] = [
           fee: 20_000,
           from: "Orchard",
           to: "Sapling",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "send-to-self 80,000 · fee 20,000",
@@ -402,6 +418,7 @@ const cases: [group: string, Case[]][] = [
           fee: 15_000,
           from: "Shielded",
           to: "Transparent",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 15,000 · fee 15,000",
         zingo: "send-to-self 85,000 · fee 15,000",
@@ -427,6 +444,7 @@ const cases: [group: string, Case[]][] = [
           fee: 20_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 30,000 · fee 20,000",
         zingo: "sent 10,000 · fee 20,000",
@@ -446,6 +464,7 @@ const cases: [group: string, Case[]][] = [
           fee: 20_000,
           from: "Shielded",
           to: "Shielded",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 70,000 · fee 20,000",
         zingo: "not checked",
@@ -466,6 +485,7 @@ const cases: [group: string, Case[]][] = [
           fee: 10_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 20,000 · fee 10,000",
         zingo: "sent 10,000 · fee 10,000",
@@ -484,6 +504,7 @@ const cases: [group: string, Case[]][] = [
           fee: 20_000,
           from: "Sapling",
           to: "Ironwood",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "send-to-self 80,000 · fee 20,000",
@@ -507,6 +528,7 @@ const cases: [group: string, Case[]][] = [
           fee: 20_000,
           from: "Sapling",
           to: "Orchard",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "send-to-self 80,000 · fee 20,000",
@@ -526,6 +548,7 @@ const cases: [group: string, Case[]][] = [
           fee: 15_000,
           from: "Shielded",
           to: "Transparent",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 15,000 · fee 15,000",
         zingo: "send-to-self 85,000 · fee 15,000",
@@ -551,6 +574,7 @@ const cases: [group: string, Case[]][] = [
           fee: 25_000,
           from: "Transparent",
           to: "u1theirs",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 41,000 · fee 25,000",
         zingo: "sent 16,000 · fee 25,000",
@@ -570,6 +594,7 @@ const cases: [group: string, Case[]][] = [
           fee: 25_000,
           from: "Transparent",
           to: "u1theirs",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 41,000 · fee 25,000",
         zingo: "sent 16,000 · fee 25,000",
@@ -596,6 +621,7 @@ const cases: [group: string, Case[]][] = [
           fee: 25_000,
           from: "Transparent",
           to: "u1theirs",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 41,000 · fee 25,000",
         zingo: "sent 16,000 · fee 25,000",
@@ -621,6 +647,7 @@ const cases: [group: string, Case[]][] = [
           fee: 10_000,
           from: "Transparent",
           to: "t1theirs",
+          source: "RPC by address",
         },
         zodl: "sent 60,000 · fee 10,000",
         zingo: "sent 50,000 · fee 10,000",
@@ -642,6 +669,7 @@ const cases: [group: string, Case[]][] = [
           fee: 10_000,
           from: "Transparent",
           to: "t1theirs",
+          source: "RPC by address",
         },
         zodl: "sent 60,000 · fee 10,000",
         zingo: "sent 50,000 · fee 10,000",
@@ -661,6 +689,7 @@ const cases: [group: string, Case[]][] = [
           fee: 15_000,
           from: "Transparent",
           to: "Shielded",
+          source: "Indexer + RPC by address",
         },
         zodl: "shield 100,000 · fee 15,000",
         zingo: "shield 85,000 · fee 15,000",
@@ -689,6 +718,7 @@ const cases: [group: string, Case[]][] = [
           from: "Transparent",
           to: "Transparent",
           self: true,
+          source: "RPC by address",
         },
         zodl: "sent 10,000 · fee 10,000",
         zingo: "send-to-self 90,000 · fee 10,000",
@@ -712,6 +742,7 @@ const cases: [group: string, Case[]][] = [
           fee: 0,
           from: "Shielded",
           to: "Shielded",
+          source: "Indexer",
         },
         zodl: "received 10,000",
         zingo: "received 10,000",
@@ -730,6 +761,7 @@ const cases: [group: string, Case[]][] = [
           fee: 0,
           from: "Shielded",
           to: "Transparent",
+          source: "RPC by address",
         },
         zodl: "received 10,000",
         zingo: "received 10,000",
@@ -748,6 +780,7 @@ const cases: [group: string, Case[]][] = [
           fee: 0,
           from: "Shielded",
           to: "Shielded",
+          source: "Indexer",
         },
         zodl: "received 10,000",
         zingo: "received 10,000",
@@ -771,6 +804,7 @@ const cases: [group: string, Case[]][] = [
           fee: 0,
           from: "t1sender",
           to: "Shielded",
+          source: "Indexer + RPC by txid",
         },
         zodl: "received 16,000",
         zingo: "received 16,000",
@@ -791,6 +825,7 @@ const cases: [group: string, Case[]][] = [
           fee: 0,
           from: "t1XurB +2",
           to: "Shielded",
+          source: "Indexer + RPC by txid",
         },
         zodl: "received 16,000",
         zingo: "received 16,000",
@@ -813,6 +848,7 @@ const cases: [group: string, Case[]][] = [
           fee: 0,
           from: "t1sender",
           to: "Transparent",
+          source: "RPC by address",
         },
         zodl: "received 50,000",
         zingo: "received 50,000",
@@ -829,14 +865,19 @@ const label = (party: Party) =>
     : party.pool[0].toUpperCase() + party.pool.slice(1);
 
 /**
- * How history gets the transaction in full: fetched by its txid, already
- * parsed by the transparent sync, or not at all.
+ * Where history's data comes from: the indexer for shielded notes, and
+ * lightwalletd's RPC for the transparent sync's address history or the
+ * transaction asked for by its txid.
  */
-function reading(c: Case) {
-  const blocks = blocksOf(c);
-  const txids = txidsToRead(c.notes ?? [], c.sent ?? [], txsOf(c), blocks);
-  if (c.transparent) return "sync";
-  return txids.has("tx") ? "fetched" : "no";
+function source(c: Case) {
+  const txids = txidsToRead(c.notes ?? [], c.sent ?? [], txsOf(c), blocksOf(c));
+  const rpc = c.transparent
+    ? "RPC by address"
+    : txids.has("tx")
+      ? "RPC by txid"
+      : undefined;
+  const indexer = c.notes?.length || c.sent?.length ? "Indexer" : undefined;
+  return [indexer, rpc].filter(Boolean).join(" + ");
 }
 
 const blocksOf = (c: Case) =>
@@ -878,7 +919,7 @@ function show(c: Case): Shown {
     c.sent ?? [],
     txsOf(c),
     blocksOf(c),
-    new Map(c.full && reading(c) !== "no" ? [["tx", full]] : []),
+    new Map(c.full && source(c).includes("RPC") ? [["tx", full]] : []),
     ours,
   ).find((entry) => entry.txid === "tx")!;
   return {
@@ -888,6 +929,7 @@ function show(c: Case): Shown {
     from: label(a.from),
     to: label(a.to),
     ...(a.self && { self: true as const }),
+    source: source(c),
   };
 }
 
@@ -946,10 +988,12 @@ function markdown() {
     "Vizor (`rust/src/wallet/sync/transactions.rs`) and Zkool (`rust/src/memo.rs`).",
     "Their sends are from the wallet that made them.",
     "",
-    "**Read in full** is how history gets the whole transaction, for exact fees,",
-    "whom it paid and a transparent sender: `fetched` by its txid, which tells",
-    "the server it's ours; `sync`, already parsed by the transparent sync; or",
-    "`no`, a shielded payment received, never asked for.",
+    "**Data source** is where history's data for it comes from. The **indexer**",
+    "(zcrawler) holds the shielded notes found for the account. **RPC** is",
+    "lightwalletd: **by address**, the transparent sync's history of our",
+    "addresses; **by txid**, the whole transaction asked for by its id, for exact",
+    "fees, whom it paid and a transparent sender, which tells lightwalletd the",
+    "transaction is ours. A shielded payment received is never asked for.",
     "",
   ];
   for (const [group, list] of cases) {
@@ -961,7 +1005,7 @@ function markdown() {
         `ID${"&nbsp;".repeat(16)}`,
         "Zillions",
         "From → To",
-        "Read in full",
+        "Data source",
         "Zodl",
         "Zingo",
         "Vizor",
@@ -973,7 +1017,7 @@ function markdown() {
           `\`${c.id}\``,
           cell(c, shows),
           cell(c, parties),
-          reading(c),
+          c.shows.source,
           c.zodl,
           c.zingo,
           c.vizor,
