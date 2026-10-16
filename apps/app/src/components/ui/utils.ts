@@ -1,3 +1,4 @@
+import { twMerge } from "tailwind-merge";
 import type { Color } from "./types";
 
 /**
@@ -16,3 +17,10 @@ export const placeholderClassName =
  */
 export const getDefaultColorString = (color: Color): string =>
   `var(--color-${color})`;
+
+/** A form section's heading, and the flat card the section sits in. */
+export const sectionLabelClassName = "text-sm font-semibold";
+export const cardClassName = twMerge(
+  "flex flex-col gap-3 p-5 rounded-3xl border border-line bg-card",
+  "transition-colors duration-300 focus-within:border-line-strong",
+);

@@ -24,6 +24,24 @@ export function PlannedFee({
   );
 }
 
+/** A summary's closing line: what it all comes to. */
+export function TotalRow({
+  label = "Total",
+  value,
+}: {
+  label?: string;
+  value?: bigint;
+}) {
+  return (
+    <div className="!mt-3 pt-3 border-t border-line flex items-center justify-between text-sm font-semibold">
+      <span>{label}</span>
+      <span aria-live="polite">
+        {value !== undefined ? <ZecValue zat={value} /> : "-"}
+      </span>
+    </div>
+  );
+}
+
 export function FeeRow({
   fee,
   pending,

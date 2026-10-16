@@ -6,7 +6,7 @@
 import type colors from "tailwindcss/colors";
 
 /** Custom colors defined in this project's `@theme` block (`index.css`). */
-type AppColor = "gold" | "surface";
+type AppColor = "gold" | "gold-button" | "surface";
 
 /** Tailwind's built-in single-value color keywords (no numbered steps). */
 type FlatColor = "inherit" | "current" | "transparent" | "black" | "white";

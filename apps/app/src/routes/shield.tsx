@@ -1,17 +1,18 @@
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useState } from "react";
+import { twMerge } from "tailwind-merge";
 import { PageShell } from "../components/PageShell";
-import { FeeRow } from "../components/PlannedFee";
+import { FeeRow, TotalRow } from "../components/PlannedFee";
 import {
-  Field,
   FormError,
-  PoolPill,
+  PoolRoute,
   SubmitProgress,
   TransferForm,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
+import { cardClassName, sectionLabelClassName } from "../components/ui/utils";
 import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
 import { useGetBalance } from "../hooks/useGetBalance";
@@ -107,51 +108,79 @@ function ShieldRoute() {
 
   return (
     <PageShell title="Shield">
-      <TransferForm className="@container" onSubmit={onSubmit}>
-        <Field label="From">
-          <PoolPill pool="transparent" title={account.transparent.address} />
-        </Field>
-
-        <div className="mt-4 text-xs font-medium text-center">
-          Shields all transparent funds
-        </div>
-
-        <div
-          className="mt-2 h-30 w-full flex items-center justify-center text-center leading-none font-medium"
-          style={{
-            fontSize: fitFontSize(zatoshiToZec(available).length, "6rem"),
-          }}
-        >
-          {zatoshiToZec(available)}
-        </div>
-
-        <Field label="To" className="mt-4">
-          <PoolPill pool="shielded" />
-        </Field>
-
-        <FeeRow fee={proposal.data?.fee} pending={proposal.isLoading} />
-
-        <ActionButton
-          size="lg"
-          className="mt-4 w-full"
-          backgroundColor="black"
-          textColor="white"
-          disabled={shield.isPending}
-        >
-          {shield.isPending ? "Shielding..." : "Shield"}
-        </ActionButton>
-
-        {shield.isPending && <SubmitProgress stages={stages} />}
-
-        {tooLittle && !validationMessage && (
-          <div className="mt-2 text-sm text-center font-medium">
-            Shielding needs at least <ZecValue zat={SHIELDING_THRESHOLD} />
+      <TransferForm onSubmit={onSubmit} className="mt-6 gap-4">
+        <section aria-labelledby="shield-amount" className={cardClassName}>
+          <h2 id="shield-amount" className={sectionLabelClassName}>
+            Move
+          </h2>
+          <PoolRoute
+            from="transparent"
+            to="shielded"
+            fromTitle={account.transparent.address}
+          />
+          <div className="@container px-6 py-2">
+            <div
+              className="h-24 flex items-center justify-center leading-none font-medium"
+              style={{
+                fontSize: fitFontSize(zatoshiToZec(available).length, "4.5rem"),
+              }}
+            >
+              {zatoshiToZec(available)}
+            </div>
           </div>
-        )}
+          <p
+            role={tooLittle ? "alert" : undefined}
+            className={twMerge(
+              "-mt-2 text-sm text-center font-medium",
+              tooLittle ? "text-red-700" : "text-gray-600",
+            )}
+          >
+            {tooLittle ? (
+              <>
+                Shielding needs at least <ZecValue zat={SHIELDING_THRESHOLD} />
+              </>
+            ) : (
+              "All your transparent funds"
+            )}
+          </p>
+        </section>
 
-        {(validationMessage || error) && (
-          <FormError>{validationMessage || error?.message}</FormError>
-        )}
+        <section
+          aria-labelledby="shield-summary"
+          className={twMerge(cardClassName, "gap-0 [&>div]:mt-2")}
+        >
+          <h2
+            id="shield-summary"
+            className={twMerge(sectionLabelClassName, "mb-1")}
+          >
+            Summary
+          </h2>
+          <FeeRow
+            label="Transparent funds"
+            fee={available > 0n ? available : undefined}
+            pending={false}
+          />
+          <FeeRow fee={proposal.data?.fee} pending={proposal.isLoading} />
+          <TotalRow label="You'll have shielded" value={proposal.data?.value} />
+        </section>
+
+        <div>
+          <ActionButton
+            size="lg"
+            className="w-full"
+            backgroundColor="black"
+            textColor="white"
+            disabled={shield.isPending}
+          >
+            {shield.isPending ? "Shielding..." : "Shield"}
+          </ActionButton>
+
+          {shield.isPending && <SubmitProgress stages={stages} />}
+
+          {(validationMessage || error) && !tooLittle && (
+            <FormError>{validationMessage || error?.message}</FormError>
+          )}
+        </div>
       </TransferForm>
     </PageShell>
   );

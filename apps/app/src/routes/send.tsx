@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { AmountInput } from "../components/AmountInput";
 import { PageShell } from "../components/PageShell";
-import { FeeRow, PlannedFee } from "../components/PlannedFee";
+import { FeeRow, PlannedFee, TotalRow } from "../components/PlannedFee";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { Toggle } from "../components/Toggle";
 import {
@@ -14,7 +14,11 @@ import {
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
-import { placeholderClassName } from "../components/ui/utils";
+import {
+  cardClassName,
+  placeholderClassName,
+  sectionLabelClassName,
+} from "../components/ui/utils";
 import { ZecValue } from "../components/ZecValue";
 import { useAddressKind, useFreshAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
@@ -33,11 +37,6 @@ const CLAIM_FEE = 10_000n;
 /** A submit-time problem, shown next to the field it's about. */
 type Problem = { field: "amount" | "to" | "form"; message: string };
 
-const sectionLabelClassName = "text-sm font-semibold";
-const cardClassName = twMerge(
-  "flex flex-col gap-3 p-5 rounded-3xl border border-line bg-card",
-  "transition-colors duration-300 focus-within:border-line-strong",
-);
 const focusClassName =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black";
 const inputClassName = twMerge(
@@ -301,7 +300,7 @@ function SendRoute() {
                 className={twMerge(
                   "transition-colors duration-300",
                   isPaymentLink
-                    ? "gold-gloss bg-gold border-gold"
+                    ? "bg-gold border-gold"
                     : "group-hover/link:border-line-strong",
                 )}
                 toggleClassname={twMerge(
@@ -325,7 +324,7 @@ function SendRoute() {
                 role="note"
                 className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gold/25 motion-safe:animate-fade-in"
               >
-                <span className="gold-gloss shrink-0 grid place-items-center size-8 rounded-md bg-gold motion-safe:animate-pop-in">
+                <span className="shrink-0 grid place-items-center size-8 rounded-md bg-gold motion-safe:animate-pop-in">
                   <LinkIcon className="size-4" />
                 </span>
                 <p className="text-xs font-medium">
@@ -549,25 +548,14 @@ function SendRoute() {
           {isPaymentLink && (
             <FeeRow label="Claim fee" fee={CLAIM_FEE} pending={false} />
           )}
-          <div className="!mt-3 pt-3 border-t border-line flex items-center justify-between text-sm font-semibold">
-            <span>Total</span>
-            <span aria-live="polite">
-              {total !== undefined ? <ZecValue zat={total} /> : "-"}
-            </span>
-          </div>
+          <TotalRow value={total} />
         </section>
 
         <div>
           <ActionButton
             size="lg"
-            className={twMerge(
-              "w-full",
-              // The gloss sits over the button's gold fill, not its black hover.
-              !isTransparentTransfer &&
-                !send.isPending &&
-                "gold-gloss hover:bg-none",
-            )}
-            backgroundColor={isTransparentTransfer ? "black" : undefined}
+            className="w-full"
+            backgroundColor={isTransparentTransfer ? "black" : "gold-button"}
             textColor={isTransparentTransfer ? "white" : undefined}
             disabled={send.isPending}
           >

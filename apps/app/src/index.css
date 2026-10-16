@@ -47,17 +47,13 @@
   }
 }
 
-body {
-  @apply bg-surface;
+/* Outside @theme: no utility class uses it, so Tailwind wouldn't emit it. */
+:root {
+  --color-gold-button: oklch(0.8 0.11 92.18 / 1);
 }
 
-/* A soft light falling from the top of a gold surface. */
-@utility gold-gloss {
-  background-image: linear-gradient(
-    to bottom,
-    rgb(255 255 255 / 0.2),
-    transparent 65%
-  );
+body {
+  @apply bg-surface;
 }
 
 /* Registered so ActionButton's colors (set as custom properties) can transition. */

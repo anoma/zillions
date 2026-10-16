@@ -39,7 +39,7 @@ export function ShieldedTransparentToggle({
         className={twMerge(
           "absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full",
           "transition-[translate,background-color] duration-300 ease-out",
-          isTransparent ? "translate-x-full bg-black" : "gold-gloss bg-gold",
+          isTransparent ? "translate-x-full bg-black" : "bg-gold",
         )}
       />
       {OPTIONS.map((option) => {

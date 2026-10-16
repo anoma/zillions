@@ -51,33 +51,53 @@ export function Field({
   );
 }
 
-/** A fixed From/To pool, drawn like the pool toggle's selected or unselected side. */
-export function PoolPill({
-  pool,
-  title,
+const POOL_LABEL = { shielded: "Shielded", transparent: "Transparent" };
+
+/** A transfer's fixed source and destination pools, as one row. */
+export function PoolRoute({
+  from,
+  to,
+  fromTitle,
 }: {
-  pool: "shielded" | "transparent";
-  title?: string;
+  from: "shielded" | "transparent";
+  to: "shielded" | "transparent";
+  fromTitle?: string;
 }) {
-  if (pool === "transparent") {
-    return (
-      <div
-        title={title}
-        className="h-11 w-full flex items-center justify-center rounded-full border border-gray-300 font-medium"
-      >
-        Transparent
-      </div>
-    );
-  }
-  return (
-    <div
+  const pill = (pool: "shielded" | "transparent", title?: string) => (
+    <span
       title={title}
-      className="h-11 w-full p-0.5 rounded-full border border-gray-300"
+      className={twMerge(
+        "h-9 flex items-center justify-center rounded-full text-sm font-medium",
+        pool === "shielded" ? "bg-gold" : "border border-line bg-surface",
+      )}
     >
-      <div className="h-full w-full flex items-center justify-center rounded-full bg-gold font-medium">
-        Shielded
-      </div>
-    </div>
+      {POOL_LABEL[pool]}
+    </span>
+  );
+  return (
+    <p className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <span className="sr-only">From</span>
+      {pill(from, fromTitle)}
+      <span className="sr-only">to</span>
+      <ArrowRightIcon aria-hidden="true" className="size-4 text-black/50" />
+      {pill(to)}
+    </p>
+  );
+}
+
+function ArrowRightIcon(props: ComponentProps<"svg">) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M3 8h10M9 4l4 4-4 4" />
+    </svg>
   );
 }
 
