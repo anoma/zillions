@@ -95,7 +95,7 @@ Their sends are from the wallet that made them.
 - `t-xi` to someone's Ironwood, shielded change: t1ours 46,000 → them Ironwood 16,000 · change Ironwood 5,000 · fee 25,000.
 - `t-xi-nc` to someone's Ironwood, no change (mainnet 61f4832b…): t1ours 41,000 (3 coins) → them Ironwood 16,000 · fee 25,000.
 - `t-xi-tc` to someone's Ironwood, transparent change: t1ours 50,000 → them Ironwood 16,000 · change t1change 9,000 · fee 25,000.
-- `t-xt` to someone's transparent address: t1ours 100,000 → them t1theirs 50,000 · change t1change 40,000 · fee 10,000. What it paid is read from the block, but only a transaction with a shielded side uses it.
+- `t-xt` to someone's transparent address: t1ours 100,000 → them t1theirs 50,000 · change t1change 40,000 · fee 10,000.
 - `t-xt-nc` to someone's transparent address, no change: t1ours 60,000 → them t1theirs 50,000 · fee 10,000.
 - `t-i` to our own Ironwood (Shield): t1ours 100,000 → own Ironwood 85,000 · fee 15,000. zcash_client_sqlite: is_shielding. Zodl shows what the coins held, fee included.
 - `t-t` to our own transparent address: t1ours 100,000 → own t1ours 90,000 · fee 10,000. **Decide:** Shows the fee as the amount, as the shielded self-payment did before #99. Expected follows 2.6's self-payment rule; a payment and change can't be told apart here.

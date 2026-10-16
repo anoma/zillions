@@ -584,7 +584,6 @@ const cases: [group: string, Case[]][] = [
         zingo: "sent 50,000 · fee 10,000",
         vizor: "sent 50,000 · fee 10,000",
         zkool: "Sent −60,000 · fee 10,000",
-        note: "What it paid is read from the block, but only a transaction with a shielded side uses it.",
       },
       {
         id: "t-xt-nc",
