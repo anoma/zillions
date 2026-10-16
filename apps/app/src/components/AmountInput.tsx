@@ -5,7 +5,7 @@ import { placeholderClassName } from "./ui/utils";
 
 /** "ZEC" after a hero amount, sized relative to it. */
 export function AmountUnit() {
-  return <span className="ml-[0.2em] text-[0.4em] text-gray-600">ZEC</span>;
+  return <span className="ml-[0.4em] text-[0.4em] text-gray-600">ZEC</span>;
 }
 
 /**
@@ -25,8 +25,10 @@ export function AmountInput({
         className,
       )}
     >
+      {/* Chrome won't set an input's line-height below normal; the sizer and
+          unit match it so all three share a baseline. */}
       <div
-        className="flex items-baseline leading-none font-medium"
+        className="flex items-baseline leading-[normal] font-medium"
         // +2 leaves room for the unit.
         style={{ fontSize: fitFontSize(value.length + 2, maxFontSize) }}
       >
@@ -41,8 +43,6 @@ export function AmountInput({
           <input
             name="amount"
             type="text"
-            // Else the input's own 20-character width would widen the cell.
-            size={1}
             inputMode="decimal"
             aria-label="Amount in ZEC"
             placeholder="0"
@@ -50,7 +50,8 @@ export function AmountInput({
             // Desktop only: on touch screens it would pop the keyboard over the form.
             autoFocus={matchMedia("(pointer: fine)").matches}
             className={twMerge(
-              "col-start-1 row-start-1 w-full min-w-[1ch] bg-transparent outline-none",
+              // Zero intrinsic width, so the sizer alone sets the cell's width.
+              "col-start-1 row-start-1 w-0 min-w-full bg-transparent outline-none",
               // A hair of padding keeps the caret off the placeholder's edge.
               "placeholder-shown:pl-[0.06em]",
               placeholderClassName,

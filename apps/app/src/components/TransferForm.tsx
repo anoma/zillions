@@ -14,7 +14,7 @@ import { ActionButton } from "./ui/ActionButton";
 import type { Color } from "./ui/types";
 import {
   cardClassName,
-  focusRingClassName,
+  pillButtonClassName,
   sectionLabelClassName,
 } from "./ui/utils";
 import { ZecValue } from "./ZecValue";
@@ -30,10 +30,7 @@ export function TransferForm({
 }) {
   return (
     <form
-      className={twMerge(
-        "w-full max-w-125 mx-auto mt-5 flex flex-col gap-4",
-        className,
-      )}
+      className={twMerge(cardClassName, "w-full mt-8 p-0 gap-0", className)}
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit();
@@ -111,9 +108,9 @@ export function AvailableWithMax({
       <button
         type="button"
         className={twMerge(
-          "px-2 py-0.5 rounded-full border border-line cursor-pointer transition-colors duration-300 hover:border-line-strong hover:bg-black/5",
-          focusRingClassName,
-          isMax && "bg-black text-white border-black",
+          pillButtonClassName,
+          isMax &&
+            "bg-black text-white border-black hover:bg-black hover:border-black",
         )}
         aria-pressed={isMax}
         onClick={onToggleMax}
@@ -250,7 +247,7 @@ export type Problem<Field extends string = "amount"> = {
   message: string;
 };
 
-/** A card of the form, with a heading row and room for a control beside it. */
+/** A section of the form's card, with a heading row and room for a control beside it. */
 export function FormCard({
   heading,
   headingId,
@@ -267,7 +264,10 @@ export function FormCard({
   return (
     <section
       aria-labelledby={headingId}
-      className={twMerge(cardClassName, className)}
+      className={twMerge(
+        "flex flex-col gap-4 p-6 border-b border-line",
+        className,
+      )}
     >
       <div className="flex items-center justify-between gap-4">
         <h2 id={headingId} className={sectionLabelClassName}>
@@ -325,7 +325,9 @@ export function AmountField({
 
 /** A caption over a control at the foot of the amount card: "Pay from", "Moving". */
 export function Caption({ children }: { children: ReactNode }) {
-  return <p className="-mb-1 text-xs font-medium text-gray-600">{children}</p>;
+  return (
+    <p className="mt-2 -mb-2 text-xs font-medium text-gray-600">{children}</p>
+  );
 }
 
 /** The fee breakdown: `rows` then the total line. */
@@ -339,7 +341,7 @@ export function Breakdown({
   children: ReactNode;
 }) {
   return (
-    <section aria-label="Summary" className={twMerge(cardClassName, "gap-2")}>
+    <section aria-label="Summary" className="flex flex-col gap-3 p-6">
       {children}
       <TotalRow label={label} value={total} />
     </section>
@@ -365,7 +367,7 @@ export function SubmitBlock({
   children?: ReactNode;
 }) {
   return (
-    <div>
+    <div className="px-6 pb-6">
       <ActionButton
         size="lg"
         className="w-full"

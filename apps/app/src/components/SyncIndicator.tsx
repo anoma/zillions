@@ -32,7 +32,7 @@ function formatPercentage(previous: number, current: number): string {
 }
 
 const actionClass =
-  "w-full rounded-full border border-gray-300 py-1 font-medium cursor-pointer hover:bg-gray-100";
+  "w-full rounded-full border border-line-strong py-1 font-medium cursor-pointer hover:bg-black/5";
 
 const sync = (wallet: Wallet) =>
   wallet.sync().catch((e) => console.error("Sync failed", e));

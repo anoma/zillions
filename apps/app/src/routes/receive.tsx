@@ -25,10 +25,7 @@ function ReceiveRoute() {
     <PageShell title="Receive">
       <section
         aria-labelledby="receive-address"
-        className={twMerge(
-          cardClassName,
-          "w-full max-w-125 mx-auto mt-6 gap-5",
-        )}
+        className={twMerge(cardClassName, "mt-8 gap-5")}
       >
         <div className="flex flex-col gap-3">
           <h2 id="receive-address" className={sectionLabelClassName}>
@@ -41,7 +38,7 @@ function ReceiveRoute() {
           />
         </div>
 
-        <div className="mx-auto p-4 rounded-2xl border border-line bg-white">
+        <div className="mx-auto p-4 rounded-xl border border-line bg-white">
           {address ? (
             <QRCode
               key={address}

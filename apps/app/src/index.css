@@ -12,6 +12,11 @@
   --color-line: #e6e4df;
   --color-line-strong: #cdcac2;
 
+  /* Tailwind's stone: greys warm enough to sit on the cream surfaces. */
+  --color-gray-400: oklch(70.9% 0.01 56.259);
+  --color-gray-500: oklch(55.3% 0.013 58.071);
+  --color-gray-600: oklch(44.4% 0.011 73.639);
+
   --ease-out-circ: cubic-bezier(0.075, 0.82, 0.165, 1);
 
   --animate-loading-spinner: loading 1s ease infinite;
@@ -45,11 +50,6 @@
       transform: scale(1);
     }
   }
-}
-
-/* 15px at the browser default, still scaling with the user's font setting. */
-html {
-  font-size: 93.75%;
 }
 
 /* Outside @theme: no utility class uses it, so Tailwind wouldn't emit it. */

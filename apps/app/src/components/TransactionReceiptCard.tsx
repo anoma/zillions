@@ -63,7 +63,7 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
 
   return (
     <PageShell title="Transaction receipt">
-      <div className="@container w-full max-w-125 mx-auto mt-6 flex flex-col gap-4">
+      <div className="@container mt-8 flex flex-col gap-5">
         <section
           aria-label="Transaction"
           className={twMerge(cardClassName, "items-center gap-2 text-center")}
@@ -79,7 +79,10 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
           </div>
           {tx.timestamp && (
             <time className="text-xs text-gray-600">
-              {new Date(Number(tx.timestamp) * 1000).toLocaleString()}
+              {new Date(Number(tx.timestamp) * 1000).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
             </time>
           )}
           <p className="mt-3 w-full grid grid-cols-[1fr_auto_1fr] items-center gap-3">
@@ -87,7 +90,7 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
             <AddressBadge
               party={tx.from}
               copyable
-              className="h-9 w-full text-sm"
+              className="h-9 justify-center"
             />
             <span className="sr-only">to</span>
             <span aria-hidden="true" className="text-black/50">
@@ -96,7 +99,7 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
             <AddressBadge
               party={tx.to}
               copyable
-              className="h-9 w-full text-sm"
+              className="h-9 justify-center"
             />
           </p>
         </section>

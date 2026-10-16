@@ -1,7 +1,7 @@
 import { type Ref, useRef } from "react";
 import { twMerge } from "tailwind-merge";
 import type { useAddressKind } from "../../hooks/useAddresses";
-import { focusRingClassName, inputClassName } from "../ui/utils";
+import { inputClassName, pillButtonClassName } from "../ui/utils";
 
 type Kind = ReturnType<typeof useAddressKind>;
 
@@ -70,9 +70,8 @@ export function RecipientField({
             type="button"
             onClick={paste}
             className={twMerge(
-              "absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs font-medium rounded-full",
-              "border border-line bg-surface cursor-pointer transition-colors duration-300 hover:border-line-strong hover:bg-black/5",
-              focusRingClassName,
+              pillButtonClassName,
+              "absolute right-2 top-1/2 -translate-y-1/2",
             )}
           >
             Paste

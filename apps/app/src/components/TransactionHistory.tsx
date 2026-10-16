@@ -6,17 +6,16 @@ import type { Activity } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
-import {
-  TransactionTypeAndStatus,
-  TransactionTypeIcon,
-} from "./TransactionTypeAndStatus";
+import { TransactionTypeIcon } from "./TransactionTypeAndStatus";
 import { TransactionValue } from "./TransactionValue";
 import { cardClassName, focusRingClassName } from "./ui/utils";
 
-// Phones: icon | type over time | amount. Tablets: type | time | amount.
-// Desktops add the From → To route between type and time.
+// icon | type over time | amount; desktops add the From → To route before the
+// amount. The card owns the columns and each row subgrids into them, so the
+// header and every row line up.
 const gridClassName =
-  "grid items-center gap-x-3 grid-cols-[auto_1fr_auto] sm:grid-cols-[1fr_auto_auto] lg:grid-cols-[minmax(8rem,1fr)_minmax(0,2fr)_auto_auto]";
+  "grid gap-x-4 grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_minmax(8rem,1fr)_minmax(0,2fr)_auto]";
+const rowClassName = "col-span-full grid grid-cols-subgrid items-center";
 const routeClassName = "max-lg:hidden";
 
 /**
@@ -46,7 +45,10 @@ export function TransactionHistory({
   return (
     <section
       aria-labelledby="transactions-title"
-      className="p-10 max-sm:px-6 overflow-auto"
+      className={twMerge(
+        "p-10 max-sm:px-6 overflow-auto",
+        limit ? "pt-14" : "pt-8",
+      )}
     >
       <div className="flex items-baseline justify-between gap-4">
         <h2
@@ -71,22 +73,28 @@ export function TransactionHistory({
         )}
       </div>
       <div
-        className={twMerge(cardClassName, "mt-4 gap-0 p-2 font-medium text-sm")}
+        className={twMerge(
+          cardClassName,
+          gridClassName,
+          "gap-y-0 p-0 overflow-hidden font-medium text-sm",
+          limit ? "mt-5" : "mt-6",
+        )}
       >
-        <div
-          className={twMerge(
-            "max-sm:hidden px-4 pt-2 pb-3 text-xs text-gray-600",
-            gridClassName,
-          )}
-        >
-          <div>Type</div>
-          <div className={routeClassName}>From → To</div>
-          <div>Time</div>
-          <div className="text-right">Amount</div>
-        </div>
-        <div className="flex flex-col divide-y divide-line">
+        {!limit && (
+          <div
+            className={twMerge(
+              rowClassName,
+              "max-sm:hidden px-6 pt-5 pb-3 border-b border-line text-xs text-gray-600",
+            )}
+          >
+            <div className="col-span-2">Transaction</div>
+            <div className={routeClassName}>From → To</div>
+            <div className="text-right">Amount</div>
+          </div>
+        )}
+        <div className={twMerge(rowClassName, "divide-y divide-line")}>
           {shown.length === 0 && (
-            <p className="px-4 py-8 text-center text-gray-600">
+            <p className="col-span-full px-6 py-10 text-center text-gray-600">
               No transactions yet
             </p>
           )}
@@ -105,35 +113,33 @@ function Row({ tx }: { tx: Activity }) {
       to="/tx/$id"
       params={{ id: tx.txid }}
       className={twMerge(
-        "py-3 px-4 -mx-0 rounded-2xl transition-colors duration-300 hover:bg-white",
+        rowClassName,
+        "py-4 px-6 transition-colors duration-300 hover:bg-black/[0.025]",
         "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black",
-        gridClassName,
       )}
     >
-      <TransactionTypeIcon
-        tx_type={tx.tx_type}
-        className="size-6 row-span-2 sm:hidden"
-      />
-      <TransactionTypeAndStatus
-        tx={{ tx_type: tx.tx_type }}
-        iconClassName="max-sm:hidden text-gray-600"
-      />
+      <span className="size-9 grid place-items-center rounded-full bg-surface text-gray-600">
+        <TransactionTypeIcon tx_type={tx.tx_type} />
+      </span>
+      <div>
+        <div>{tx.tx_type}</div>
+        <div className="mt-0.5 text-xs text-gray-600">
+          <When tx={tx} />
+        </div>
+      </div>
       <div
         className={twMerge(
-          "flex items-center gap-2 min-w-0 [&>*]:w-32 [&>*]:shrink",
+          "grid grid-cols-[9rem_auto_minmax(0,1fr)] items-center gap-3 text-gray-600",
           routeClassName,
         )}
       >
         <AddressBadge party={tx.from} />
-        <span aria-hidden="true" className="!w-auto shrink-0 text-black/40">
+        <span aria-hidden="true" className="text-black/30">
           →
         </span>
         <AddressBadge party={tx.to} />
       </div>
-      <div className="max-sm:col-start-2 text-xs text-gray-600 sm:text-sm sm:text-black">
-        <When tx={tx} />
-      </div>
-      <div className="max-sm:col-start-3 max-sm:row-start-1 max-sm:row-span-2 text-right font-semibold">
+      <div className="text-right text-base font-semibold">
         <TransactionValue tx={tx} />
       </div>
     </Link>
@@ -143,7 +149,7 @@ function Row({ tx }: { tx: Activity }) {
 function When({ tx }: { tx: Activity }) {
   if (tx.status === "Pending") {
     return (
-      <span className="flex items-center gap-1 text-gray-600">
+      <span className="flex items-center gap-1">
         <SpinnerIcon className="size-3" />
         Processing
       </span>

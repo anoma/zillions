@@ -51,11 +51,11 @@ export function MainNav() {
   const { pathname } = useLocation();
 
   return (
-    <aside className="h-full flex flex-col justify-between border-r border-gray-300 px-6 overflow-auto">
+    <aside className="h-full flex flex-col justify-between border-r border-line-strong px-6 overflow-auto">
       <nav>
-        <div className="h-20 flex items-center">
+        <div className="h-16 flex items-center">
           <Link to="/" className="hover:text-gold transition-all">
-            <ZillionsIcon className="h-11" />
+            <ZillionsIcon className="h-9" />
           </Link>
         </div>
         <ul className="mt-6">
@@ -93,7 +93,7 @@ export function BottomNav() {
   const { pathname } = useLocation();
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-10 grid grid-cols-4 border-t border-gray-300 bg-surface">
+    <nav className="fixed bottom-0 inset-x-0 z-10 grid grid-cols-4 border-t border-line-strong bg-surface">
       {navItems.map((item) => (
         <Link
           key={item.to}

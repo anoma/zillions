@@ -16,14 +16,26 @@ export function AddressBadge({
   const address = "address" in party ? party.address : undefined;
   const kind = useAddressKind(address);
   const pool = "pool" in party ? party.pool : kind;
+  // The same dots as the balance card's pool legend.
+  const dot = (
+    <span
+      aria-hidden="true"
+      className={twMerge(
+        "size-2 shrink-0 rounded-full",
+        pool === "transparent"
+          ? "border border-black/40 bg-black/10"
+          : "bg-gold",
+      )}
+    />
+  );
   const classes = twMerge(
-    "h-5 w-35 flex items-center justify-center text-xs font-medium rounded-full",
-    pool === "transparent" ? "outline outline-gray-300" : "bg-gold",
+    "flex items-center gap-2 text-sm font-medium whitespace-nowrap",
     className,
   );
   if (!address) {
     return (
       <div className={classes}>
+        {dot}
         {pool && pool[0].toUpperCase() + pool.slice(1)}
       </div>
     );
@@ -31,21 +43,18 @@ export function AddressBadge({
   if (!copyable) {
     return (
       <div title={address} className={classes}>
+        {dot}
         {shortenAddress(address)}
       </div>
     );
   }
-  // Touch screens can't hover, so the icon only hides where hovering works;
-  // there a blank as wide as the icon keeps the address centered.
   return (
     <CopyToClipboardControl
       value={address}
-      className={twMerge(
-        "group gap-1 [@media(hover:hover)]:before:size-4 [@media(hover:hover)]:before:shrink-0",
-        classes,
-      )}
+      className={twMerge("group", classes)}
       iconClassName="size-4 [@media(hover:hover)]:opacity-0 group-hover:opacity-100"
     >
+      {dot}
       <span title={address}>{shortenAddress(address)}</span>
     </CopyToClipboardControl>
   );

@@ -28,6 +28,13 @@ export const inputClassName = twMerge(
   placeholderClassName,
 );
 
+/** A small pill button in a card, like "Max" or "Paste". */
+export const pillButtonClassName = twMerge(
+  "px-3 py-1 text-xs font-medium rounded-full border border-line bg-surface cursor-pointer",
+  "transition-colors duration-300 hover:border-line-strong hover:bg-black/5",
+  focusRingClassName,
+);
+
 /** Inline text that acts as a button, like "Add a message" or "Remove". */
 export const textButtonClassName = twMerge(
   "rounded-sm cursor-pointer underline decoration-transparent underline-offset-4",
@@ -36,9 +43,9 @@ export const textButtonClassName = twMerge(
 );
 
 /** A form section's heading, and the flat card the section sits in. */
-export const sectionLabelClassName = "text-sm font-semibold";
+export const sectionLabelClassName = "text-sm font-medium text-gray-600";
 export const cardClassName = twMerge(
   // Isolated so ActionButton's fill, painted at z-index -1, stays above the card.
-  "isolate flex flex-col gap-3 p-5 rounded-3xl border border-line bg-card",
+  "isolate flex flex-col gap-4 p-6 rounded-3xl border border-line bg-card",
   "transition-colors duration-300 focus-within:border-line-strong",
 );
