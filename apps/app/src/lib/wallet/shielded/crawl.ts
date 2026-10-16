@@ -10,6 +10,7 @@ import type {
   Pool,
   Tried,
 } from "../types";
+import { gpuSecrets } from "./gpu";
 import DecryptWorker from "./worker.ts?worker";
 
 /** Wraps a worker as a request/response channel: one chunk in flight at a time. */
@@ -18,8 +19,19 @@ export function workerChannel() {
   return {
     run: (request: ChunkRequest) =>
       new Promise<ChunkWorkerSuccess>((resolve, reject) => {
-        worker.onmessage = ({ data }: MessageEvent<ChunkWorkerResponse>) =>
-          "error" in data ? reject(new Error(data.error)) : resolve(data);
+        worker.onmessage = ({ data }: MessageEvent<ChunkWorkerResponse>) => {
+          if ("gpuInputs" in data) {
+            gpuSecrets(data.pool, data.gpuInputs).then(
+              (secrets) =>
+                worker.postMessage(
+                  { secrets: secrets ?? null },
+                  secrets ? [secrets.buffer] : [],
+                ),
+              (err) => worker.postMessage({ gpuError: String(err) }),
+            );
+          } else if ("error" in data) reject(new Error(data.error));
+          else resolve(data);
+        };
         worker.onerror = (e) => reject(new Error(e.message || "worker error"));
         worker.postMessage(request);
       }),
@@ -45,6 +57,9 @@ function orderedBuffer<T>(firstIndex: number) {
 }
 
 export const CORES = navigator.hardwareConcurrency ?? 4;
+
+/** `?gpu=off` keeps trial decryption on the CPU, to compare. */
+const GPU = new URLSearchParams(location.search).get("gpu") !== "off";
 
 export async function crawlChunks(options: {
   ufvk: string;
@@ -87,7 +102,7 @@ export async function crawlChunks(options: {
           const chunk = nextChunk--;
           release(
             chunk,
-            await channel.run({ ufvk, chunk, pool, tried }),
+            await channel.run({ ufvk, chunk, pool, tried, gpu: GPU }),
           ).forEach(onChunk);
         }
       }),

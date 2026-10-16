@@ -57,6 +57,8 @@ export interface ChunkRequest {
   sends?: true;
   /** The notes an earlier read tried, skipped when it was this chunk and they're unchanged. */
   tried?: Tried;
+  /** Trial-decrypts on the GPU when there is one, else on the CPU. */
+  gpu?: boolean;
 }
 
 /** How many of a chunk's notes a read tried, and a fingerprint of their bytes. */
@@ -111,8 +113,17 @@ export type ChunkWorkerError = {
   error: string;
 };
 
-/** Worker → main: a chunk's result, or the error that chunk hit. */
-export type ChunkWorkerResponse = ChunkWorkerSuccess | ChunkWorkerError;
+/** Worker → main: a chunk's key agreement, for the page's GPU to run. */
+export type GpuRequest = { pool: Pool; gpuInputs: Uint8Array };
+
+/** Main → worker: its secrets, `null` when there's no usable GPU. */
+export type GpuReply = { secrets: Uint32Array | null } | { gpuError: string };
+
+/** Worker → main: a chunk's result, the error that chunk hit, or a GPU request. */
+export type ChunkWorkerResponse =
+  | ChunkWorkerSuccess
+  | ChunkWorkerError
+  | GpuRequest;
 
 /** Chunks read newest-first: `from` to `to` are read (none when `from > to`), `floor` to `from - 1` are left. */
 export interface Segment {

@@ -1,236 +1,127 @@
 # GPU trial decryption (WebGPU)
 
-Status: research, 2026-10-14. Nothing here is wired into sync. The prototype
-is in `packages/zcore/research/webgpu-decrypt/`.
+Status: built, 2026-10-16. Chrome and Firefox only; Safari and phones are out
+of scope. The CPU path stays, as the fallback everywhere.
 
 ## Summary
 
-- **Verdict:** worth building, unlike GPU proving, but only after the open
-  algorithmic work and a phone measurement (see [Plan](#plan)).
-- **Speedup on Harrison's M1:** a WGSL kernel does one chunk's Orchard key
-  agreement (16,384 outputs × 2 viewing keys) in **176 ms**. The 8 wasm workers
-  sync uses today spend about **0.74 s** on the same step, so the GPU is about
-  **4×** faster on the step that costs 82% of trial decryption.
-- **Effect on a whole chunk:** with the CPU workers doing the rest at the same
-  time, compact decrypt goes from about **0.90 s to about 0.2 s, roughly 4–5×**.
-  Sapling is estimated to gain about the same.
-- **Correctness:** all 32,768 products are bit-exact against orchard.
-- **Cost:** about 2–3 weeks to production, with the CPU path kept as fallback.
+- Sync's compact trial decryption runs its key agreement, `[ivk]·epk`, on the
+  GPU. That step is 80% of `try_decrypt`'s time.
+- **Fresh setup sync of the test wallet (85 chunks, M1, 8 workers):**
 
-Proving gained nothing from the GPU because its MSMs are tiny (about 2k
-points). Trial decryption is a different workload: 32k independent scalar
-multiplications per chunk, all with the same scalar. The GPU gets plenty of
-parallel work, and its threads never branch apart.
+  | | GPU | CPU (`?gpu=off`) | speedup |
+  |---|---|---|---|
+  | Chrome 155 | 25.8 s | 82.5 s | 3.2× |
+  | Firefox 157 | 29.9 s | 90.1 s | 3.0× |
 
-## Plan
+  Balance and history are identical across all four runs.
+- **Once warm, per chunk:** about 0.2 s on the GPU against about 0.78 s on 8
+  wasm workers, so long syncs gain about 4×. A short sync gains less because of
+  V8 warm-up, which affects both paths (see [Warm-up](#warm-up)).
+- **Correctness doesn't rest on the GPU.** The GPU only rules outputs out.
+  Every possible hit is decrypted again by upstream's own
+  `try_compact_note_decryption`, and spot checks fail any chunk where the GPU
+  disagrees with the CPU.
 
-### Phase 0: measure phones (about an hour)
+## How it works
 
-Open the bench page on an iPhone (Safari 26) and on an Android phone (Chrome).
-The page needs HTTPS when served from anywhere but localhost. Phone GPUs have
-their own integer-multiply rates, so the 4× could shrink to 1–2×.
+1. **Prepare (worker, wasm).** `gpu_inputs` returns the pool's two ivk scalars
+   (external, internal), then each ephemeral key decompressed to affine
+   coordinates. It starts from the first note `try_decrypt` would try, so the
+   tried-notes resume still applies.
+2. **Agree (page, WebGPU).** The worker hands its inputs to the page, which
+   owns the one GPU device. Each chunk runs as 2,048-output command buffers,
+   one chunk at a time, and returns X, Y, Z and a flag per (output, ivk).
+   - **Orchard / Ironwood:** Pallas, using pasta_curves' own algorithm: a GLV
+     split, a width-4 wNAF ladder over {1,3,5,7}·P, and φ applied on the fly.
+     JS computes the GLV split of the ivk from pasta's lattice basis and checks
+     it.
+   - **Sapling:** Jubjub, using extended twisted-Edwards coordinates and a
+     width-4 wNAF ladder over 256 digits, then [8] to clear the cofactor. With
+     a = −1 and d a non-square the addition law is complete, so no case is
+     exceptional.
+3. **Finish (worker, wasm).** `try_decrypt_gpu` checks and uses the secrets:
+   - normalizes them to affine (batched inversion) and checks they lie on the
+     curve;
+   - runs the KDF (BLAKE2b) and the first ChaCha20 byte;
+   - sends only plaintexts whose lead byte the pool accepts (about 1 in 256)
+     to upstream `try_compact_note_decryption`.
 
-The same session should also confirm `WorkerNavigator.gpu` in Safari 26: sync
-would call the GPU from a worker.
+   It returns exactly what `try_decrypt` returns.
 
-**Gate:** if phones gain under about 2×, the GPU path is desktop-only. That
-lowers its priority further.
+**Field arithmetic.** 20 limbs of 13 bits, Montgomery with R = 2^260, so a row
+of limb products sums in a u32 with no carries. This is the representation the
+ZPrize 2023 WebGPU entry found fastest. All the code is generated unrolled,
+with constant indices: Firefox's shader compiler ran the looped version 5–10×
+slower. Products by Pallas's zero limbs are left out.
 
-### Phase 1: do the cheaper levers first
+## Fallback and safety
 
-These help every device, including phones and Firefox users that WebGPU can't
-reach:
-
-- **Spam-era shape filter:** could cut the 15 GB of spam-era ciphertexts to
-  0.2–0.5 GB.
-- **Internal-ivk skipping:** saves 40–45% of decrypt.
-
-**Gate:** build Phase 2 only if decryption is still the bottleneck afterwards.
-Download time is the other limit: a chunk takes 0.25 s from the CDN and 2.2 s
-on a miss.
-
-### Phase 2: build the GPU path as an optional accelerator (about 2–3 weeks)
-
-1. **zcore split (3–4 days).** `try_decrypt` becomes two calls:
-   - **prepare:** parse and decompress, then return the epks' affine
-     coordinates and the ivks' GLV digits;
-   - **finish:** take the GPU's Jacobian results, batch-normalize, run the KDF
-     and ChaCha20, parse via `Domain::parse_note_plaintext_without_memo_ivk`,
-     and check cmx and epk.
-
-   All of this uses public `zcash_note_encryption` / `orchard` / `sapling`
-   trait methods. It does reimplement the compact path's ~60 lines, so add a
-   test that its hits equal `batch::try_compact_note_decryption` on real chunks
-   from zcrawler.dev.heliax.app.
-2. **Kernels (3–5 days).**
-   - Harden Pallas with complete formulas (RCB, about +25%), or with an
-     exceptional-case flag plus CPU fallback. An unhandled exceptional case
-     means a missed note, not just a slow path.
-   - Add a Jubjub kernel for Sapling: Fr constants, Edwards formulas, cofactor.
-   - Optional: decompress epks on the GPU, which takes another 7% off the CPU.
-3. **Sync orchestration (4–5 days).**
-   - One GPU worker shared by the decrypt workers, with batches pipelined so
-     the CPU and GPU overlap.
-   - Handle `device.lost`, hidden tabs, and phones' thermal limits.
-   - A start-up self-test against wasm vectors that turns the GPU path off on
-     any mismatch, since GPU drivers differ.
-   - Keep the CPU fallback on every path.
-4. **Testing (3–4 days).**
-   - Run on Apple, NVIDIA, AMD, Intel, Adreno and Mali GPUs.
-   - CI can check correctness with headless Chrome on Dawn's SwiftShader. It
-     can't measure speed.
-
-**Done when:**
-- sync finds the same hits with and without the GPU on real chunks;
-- the self-test and fallback hold on every vendor above;
-- the 4–5× shows up in an app sync on the M1.
-
-## Risks
-
-- **The ivk enters GPU memory.** That memory belongs to the browser's GPU
-  process, which is already shared and isolated, and an ivk can view notes but
-  not spend them.
-- **The ladder is variable-time in the ivk.** Pasta's CPU path is too.
-- **Thermals:** running CPU and GPU together on a fanless M1 Air may throttle
-  both.
-- **Drivers:** GPU drivers differ in correctness. The self-test exists to catch
-  this.
-
-## Open questions
-
-- Phone speedups and Safari's worker support (Phase 0).
-- Intel iGPUs: not measured.
-- Discrete NVIDIA or AMD GPUs likely have 10× or more of the M1 GPU's integer
-  throughput, with about the same CPU core count, so the gain should be larger.
-  Not measured.
-- Sapling is estimated, not prototyped.
-
-## Evidence
-
-### Where the CPU time goes
-
-Orchard's `batch::try_compact_note_decryption` over one chunk: 16,384 random
-actions, external and internal ivk, V8 in Chrome 152, one thread, with zcore's
-patched field multiply (#53).
-
-| step | ms | share |
-|---|---|---|
-| full batch decrypt | 4,000 | 100% |
-| key agreement: GLV tables (per epk, batched inversion) | 122 | 3% |
-| key agreement: `[ivk]·epk` ladder, 2 ivks | 3,180 | 79% |
-| epk decompression (sqrt) | 265 | 7% |
-| shared secret → affine (batched inversion) | 17 | 0.4% |
-| KDF (BLAKE2b) + ChaCha20, 52 bytes | 13 | 0.3% |
-| the rest (domains, parsing, allocation) | ~400 | 10% |
-
-The KDF and ChaCha20 cost almost nothing; only the curve arithmetic is worth
-moving. The CPU path is already well optimised. Orchard 0.15.5 / pasta 0.5.2
-use GLV with a width-4 wNAF Straus ladder, so each product costs about 127
-doublings and about 51 additions.
-
-**All cores:** `node cores.mjs` runs 8 workers × 16,384 outputs on the same
-wasm and gets **55 µs per output**, or 0.90 s per chunk-equivalent. That
-matches the browser run (57.6 µs) and the app's ~4.2 s single-core chunk.
-
-### Prototype kernel
-
-`shader.js` holds the WGSL kernel. Each thread takes one ephemeral key and
-produces both ivk products.
-
-- **Field:** Fp in 20 limbs of 13 bits, Montgomery with R = 2^260. A limb
-  product is 26 bits, so a whole row accumulates in a u32 without carries.
-  The ZPrize 2023 WebGPU entry (Derei & Koh) found this layout fastest on M1
-  and M3.
-- **Algorithm:** the same as pasta's, so the comparison is like for like.
-  - GLV split, width-4 wNAF, a table of {1,3,5,7}·P;
-  - the endomorphism applied on the fly (ζ·X);
-  - Jacobian coordinates with dbl-2009-l and add-2007-bl.
-- **No divergence:** the digits come from the ivk, so every thread gets the
-  same ones. Control flow never diverges and table lookups are uniform.
-- **Check:** the GPU returns Jacobian (X, Y, Z). The page checks X = x·Z² and
-  Y = y·Z³ against wasm's affine output.
-
-Results on the M1 (8-core GPU), Chrome 152:
-
-| | ms per chunk (32,768 products) | µs / output |
-|---|---|---|
-| wasm, 1 thread (tables + ladder) | 3,300 | 201 |
-| wasm, 8 workers (82% of 55 µs) | ~740 | ~45 |
-| **WebGPU** | **176** | **10.7** |
-| WebGPU incl. upload + readback | 182 | 11.1 |
-| WebGPU, 4 chunks in one dispatch | 679 / 4 | 10.4 |
-
-- The pipeline compiles once, in about 400 ms.
-- Workgroup size 64 is best (32: 185 ms, 128: 197 ms).
-- One chunk already saturates the GPU; 4 chunks scale linearly.
-- 0 mismatches out of 32,768.
-
-**Kernel headroom is small.** A product takes about 1,800 field
-multiplications of roughly 800 32-bit multiply-adds each. The kernel therefore
-sustains about 0.27 T IMAD/s, against a peak of 0.33 T/s on the M1 GPU
-(1,024 lanes × 1.278 GHz ÷ 4 cycles per IMAD32, per
-[metal-benchmarks](https://github.com/philipturner/metal-benchmarks)). That is
-about 80% of peak. Specialised squaring might add 10–15%; there is no 2× left
-in the kernel. The 4× comes from the hardware.
-
-### Estimates
-
-- **Orchard / Ironwood, per chunk on M1:**
-  - the GPU runs the ladder (176 ms);
-  - the 8 workers keep parsing, decompression, normalisation, KDF/ChaCha and
-    hit handling: the other ~18%, about 10 µs/output or 0.16 s per chunk;
-  - pipelined, the two overlap: **about 0.2 s per chunk against 0.9 s today
-    (4–5×)**.
-- **Sapling:** Jubjub has no GLV, so a product needs about 252 doublings.
-  Extended twisted-Edwards formulas make them cheap (dbl 8M, add 9M). That
-  gives about 1.4× Pallas's field-mul count, **about 15 µs/output on the GPU**.
-  Today's CPU cost is 6.8/4.2 × 55 ≈ 89 µs, so the gain is also **about 5×**.
-- **Whole sync:** after this change, decryption takes less time than
-  downloading, so downloads and the indexer set sync speed.
-
-### Browser availability
-
-From the gpuweb wiki, as edited 2026-10-02:
-
-| browser | WebGPU |
+| what happens | result |
 |---|---|
-| Chrome / Edge, desktop | Mac, Windows, ChromeOS since 113; Linux on Intel Gen12+ (144) and NVIDIA under Wayland (147), others behind a flag |
-| Chrome, Android | Android 12+ on ARM / Qualcomm / Intel GPUs (121), Imagination on Android 16+ (139), others not yet |
-| Safari | macOS / iOS / iPadOS 26 |
-| Firefox | Windows (141), macOS (145 on 26+, 147 on all versions); Linux Nightly only; Android behind a flag |
+| No WebGPU (Firefox Linux/Android, headless, blocklisted GPU) | CPU path, with no extra work once the first chunk finds no adapter |
+| A pair's secret flagged (Pallas P = ±Q) or off the curve | that pair decrypted by upstream on the CPU |
+| Over ~1% of pairs off the curve (a killed or garbled dispatch) | chunk fails; the worker turns its GPU path off and redoes the chunk on the CPU |
+| A spot-checked secret (4 outputs × 2 ivks per chunk) differs from the CPU's | same |
+| Device lost | page stops offering the GPU; workers carry on with the CPU |
+| `?gpu=off` in the URL | CPU only, to compare |
 
-Sync would call the GPU from a dedicated worker. `WorkerNavigator.gpu` works in
-Chrome, and Safari 26 is unconfirmed (Phase 0). Everyone else stays on the CPU
-path: old iOS, Firefox on Android and Linux, and older Android GPUs.
+Under concurrency Firefox's GPU returned zeroed and half-written buffers for
+long command buffers. The off-curve check caught every one of them. Short
+command buffers, one chunk at a time, fixed it. The browser pane (Chromium)
+also turned WebGPU off for a session after repeated device losses, and sync
+carried on correctly on the CPU.
 
-### Prior art
+## Measurements (M1, 8-core GPU)
+
+| kernel, one full chunk (16,384 outputs × 2 ivks) | Chrome 155 | Firefox 157 |
+|---|---|---|
+| Pallas | 193 ms | 289 ms |
+| 8 chunks submitted at once | 1.70 s | 1.93 s |
+| first call (pipeline compile) | ~1.6 s | ~0.1 s |
+
+- Sapling's kernel took about 1.6× Pallas's (304 ms in Chrome, before the unrolling).
+- On the CPU side, a warm worker spends about 0.33 s on prepare and 0.43 s on
+  finish per Orchard chunk, so 8 workers keep the GPU busy.
+- Steady state is GPU-bound.
+
+**Where `try_decrypt`'s time goes** (one chunk, one thread, V8, 4.0 s total):
+
+| step | share |
+|---|---|
+| key agreement ladder | 79% |
+| GLV tables | 3% |
+| epk decompression | 7% |
+| affine + KDF + ChaCha20 | under 1% |
+| parsing, domains, allocation | 10% |
+
+The GPU takes the first two rows.
+
+## Warm-up
+
+On a fresh page, V8 runs wasm on its baseline compiler until optimized code is
+ready. Wasm has no on-stack replacement, so one long `try_decrypt` call stays
+slow until it returns. Measured on the CPU path, a worker's first chunk takes
+**28.7 s, against 6.2 s once warm**, which costs about 22 s of a 105 s sync. The
+GPU path's shorter calls warm up sooner, but its first ~35 chunks still run
+5–6× slower on the CPU side. Firefox shows no such warm-up (about 5–7 s per
+CPU chunk from the start). This is separate from the GPU work: splitting
+`try_decrypt` into shorter calls would likely fix it for both paths.
+
+## Prior art
 
 - **ZPrize 2023, WASM/WebGPU MSM:** Tal Derei & Koh Wei Jie won the
-  best-WebGPU mention, on BLS12-377 and twisted Edwards. Their
-  [write-up](https://hackmd.io/HNH0DcSqSka4hAaIfJNHEA) benchmarks limb widths
-  of 12–16 bits on M1 and M3, and 13-bit limbs win. ICME Lab's `msm-webgpu`
-  builds on it for BN254.
-- **No public WebGPU code covers Pasta or Jubjub.** Pasta has CUDA MSMs
-  (Supranational's `pasta-msm`) but no WGSL. The field code here is new but
-  small: about 100 lines of WGSL for Fp, and the same code with Fr constants
-  for Jubjub.
-- **MSM techniques don't carry over:** Pippenger buckets solve a different
-  problem. Trial decryption is many independent single-scalar products, which
-  is simpler.
+  best-WebGPU mention, on BLS12-377. Their
+  [write-up](https://hackmd.io/HNH0DcSqSka4hAaIfJNHEA) is where the 13-bit-limb
+  choice comes from.
+- **No public WebGPU code covers Pasta or Jubjub.** The kernels here are new.
+- **The research prototype,** a bench page comparing the kernel with
+  orchard's wasm, is in this branch's history at e619cd31
+  (`packages/zcore/research/webgpu-decrypt/`).
 
-## Reproduce
+## Open
 
-```bash
-packages/zcore/research/webgpu-decrypt/build.sh
-```
-
-```bash
-python3 -m http.server 8766 -d packages/zcore/research/webgpu-decrypt
-```
-
-Open `http://localhost:8766/?n=16384` in Chrome or Safari 26.
-
-- `&cpu=0` skips the all-core run. The browser throttles workers while the tab
-  is hidden, so take the all-core baseline from `node cores.mjs` in that folder
-  instead.
-- `&wg=` sets the workgroup size.
+- No phone, Intel, AMD or NVIDIA measurements yet. Teammates can compare
+  through the Netlify preview with and without `?gpu=off`.
+- Kernel headroom is small (about 80% of the M1's IMAD32 peak). Specialised
+  squaring might add 10–15%.

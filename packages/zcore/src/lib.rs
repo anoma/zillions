@@ -14,6 +14,7 @@
 //! record layout, but V3 note plaintexts, so it decrypts in `IronwoodDomain`.
 
 mod build;
+mod gpu;
 mod keys;
 mod migration;
 mod notes;
@@ -245,6 +246,24 @@ fn orchard_ivks(fvk: &orchard::keys::FullViewingKey) -> Vec<OrchardIvk> {
         .collect()
 }
 
+/// [`sapling_ivks`] as the GPU multiplies by them: each scope's scalar, little-endian.
+fn sapling_scalars(dfvk: &sapling::zip32::DiversifiableFullViewingKey) -> Vec<[u8; 32]> {
+    use ff::PrimeField;
+    SCOPES
+        .iter()
+        .map(|(_, scope)| dfvk.to_ivk(*scope).0.to_repr())
+        .collect()
+}
+
+/// [`orchard_ivks`] as the GPU multiplies by them. Orchard's ivk is a base
+/// field element; as an integer it is already below the scalar modulus.
+fn orchard_scalars(fvk: &orchard::keys::FullViewingKey) -> Vec<[u8; 32]> {
+    SCOPES
+        .iter()
+        .map(|(_, scope)| fvk.to_ivk(*scope).to_bytes()[32..].try_into().unwrap())
+        .collect()
+}
+
 /// A `/ciphertexts` chunk body, split open. Postcard lays it out as
 /// `varint(min_height) ‖ varint(median_height) ‖ varint(max_height) ‖
 /// varint(count)`, then `count` records of `record_len` bytes each.
@@ -371,6 +390,7 @@ fn decrypt_sapling(
     chunk: u32,
     body: &[u8],
     (from, tried): (u32, &[u8]),
+    secrets: Option<&[u32]>,
 ) -> Result<Compact, String> {
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
@@ -410,11 +430,22 @@ fn decrypt_sapling(
         })
         .collect::<Result<Vec<_>, String>>()?;
 
+    let results = match secrets {
+        None => batch::try_compact_note_decryption(&ivks, &outputs),
+        Some(words) => {
+            let scalars = sapling_scalars(dfvk);
+            gpu::finish(
+                &ivks,
+                &outputs,
+                &gpu::sapling_secrets(words),
+                sapling::note_encryption::KDF_SAPLING_PERSONALIZATION,
+                |lead| sapling::note_encryption::plaintext_version_is_valid(enforcement, lead),
+                |i, j| gpu::sapling_secret(&outputs[i].1.ephemeral_key.0, &scalars[j]),
+            )?
+        }
+    };
     let mut hits = Vec::new();
-    for (i, res) in batch::try_compact_note_decryption(&ivks, &outputs)
-        .into_iter()
-        .enumerate()
-    {
+    for (i, res) in results.into_iter().enumerate() {
         if let Some(((note, _addr), scope_idx)) = res {
             let index = from + i;
             let position = u64::from(chunk) * CHUNK_SIZE + index as u64;
@@ -444,6 +475,7 @@ fn decrypt_orchard<V: DomainVersion>(
     pool: &'static str,
     body: &[u8],
     (from, tried): (u32, &[u8]),
+    secrets: Option<&[u32]>,
 ) -> Result<Compact, String>
 where
     NoteEncryptionDomain<V>: BatchDomain<IncomingViewingKey = OrchardIvk, Note = orchard::Note>,
@@ -487,11 +519,23 @@ where
         })
         .collect::<Result<Vec<_>, String>>()?;
 
+    let results = match secrets {
+        None => batch::try_compact_note_decryption(&ivks, &outputs),
+        Some(words) => {
+            let scalars = orchard_scalars(fvk);
+            let version = if pool == "ironwood" { 0x03 } else { 0x02 };
+            gpu::finish(
+                &ivks,
+                &outputs,
+                &gpu::orchard_secrets(words),
+                gpu::ORCHARD_KDF,
+                |lead| lead == version,
+                |i, j| gpu::orchard_secret(&outputs[i].1.ephemeral_key().0, &scalars[j]),
+            )?
+        }
+    };
     let mut hits = Vec::new();
-    for (i, res) in batch::try_compact_note_decryption(&ivks, &outputs)
-        .into_iter()
-        .enumerate()
-    {
+    for (i, res) in results.into_iter().enumerate() {
         if let Some(((note, _addr), scope_idx)) = res {
             hits.push(Hit {
                 pool,
@@ -783,15 +827,91 @@ pub fn try_decrypt(
     from: u32,
     tried: &[u8],
 ) -> Result<JsValue, JsError> {
-    let resume = (from, tried);
+    decrypt_compact(network, ufvk, pool, chunk, body, (from, tried), None)
+}
+
+fn decrypt_compact(
+    network: &str,
+    ufvk: &str,
+    pool: &str,
+    chunk: u32,
+    body: &[u8],
+    resume: (u32, &[u8]),
+    secrets: Option<&[u32]>,
+) -> Result<JsValue, JsError> {
     let compact = match pool {
-        "sapling" => decrypt_sapling(network, ufvk, chunk, body, resume),
-        "orchard" => decrypt_orchard::<OrchardVersion>(network, ufvk, "orchard", body, resume),
-        "ironwood" => decrypt_orchard::<IronwoodVersion>(network, ufvk, "ironwood", body, resume),
+        "sapling" => decrypt_sapling(network, ufvk, chunk, body, resume, secrets),
+        "orchard" => {
+            decrypt_orchard::<OrchardVersion>(network, ufvk, "orchard", body, resume, secrets)
+        }
+        "ironwood" => {
+            decrypt_orchard::<IronwoodVersion>(network, ufvk, "ironwood", body, resume, secrets)
+        }
         _ => return Err(JsError::new("unknown pool")),
     }
     .map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&compact).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// What the app's GPU shader reads to do [`try_decrypt`]'s key agreement for
+/// the same arguments: the pool's two ivk scalars (external, internal; 32
+/// little-endian bytes each), then each note's ephemeral key as affine
+/// coordinates, 64 bytes, from the first note `try_decrypt` would try. Empty
+/// when the UFVK has no key for the pool.
+#[wasm_bindgen]
+pub fn gpu_inputs(
+    network: &str,
+    ufvk: &str,
+    pool: &str,
+    body: &[u8],
+    from: u32,
+    tried: &[u8],
+) -> Result<Vec<u8>, JsError> {
+    let inputs = || -> Result<Vec<u8>, String> {
+        let network = parse_network(network)?;
+        let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+        let (scalars, record_len) = match pool {
+            "sapling" => (ufvk.sapling().map(sapling_scalars), SAPLING_RECORD_LEN),
+            "orchard" | "ironwood" => (ufvk.orchard().map(orchard_scalars), ORCHARD_RECORD_LEN),
+            _ => return Err("unknown pool".into()),
+        };
+        let Some(scalars) = scalars else {
+            return Ok(Vec::new());
+        };
+        let (from, _) = resume(chunk_records(body)?.1, record_len, from, tried);
+        let mut out = scalars.concat();
+        for r in chunk_body(body, record_len)?.records.skip(from) {
+            out.extend(gpu::epk_coordinates(pool, r[..32].try_into().unwrap()));
+        }
+        Ok(out)
+    };
+    inputs().map_err(|e| JsError::new(&e))
+}
+
+/// [`try_decrypt`] with its key agreement already done: `secrets` is the GPU
+/// shader's output for [`gpu_inputs`] of the same arguments. Fails when a
+/// spot check finds the GPU wrong; [`try_decrypt`] then answers instead.
+#[wasm_bindgen]
+#[allow(clippy::too_many_arguments)]
+pub fn try_decrypt_gpu(
+    network: &str,
+    ufvk: &str,
+    pool: &str,
+    chunk: u32,
+    body: &[u8],
+    from: u32,
+    tried: &[u8],
+    secrets: &[u32],
+) -> Result<JsValue, JsError> {
+    decrypt_compact(
+        network,
+        ufvk,
+        pool,
+        chunk,
+        body,
+        (from, tried),
+        Some(secrets),
+    )
 }
 
 /// Trial-decrypt one pool's chunk in full against `ufvk`: the raw
@@ -870,14 +990,14 @@ mod tests {
         );
 
         assert_eq!(
-            decrypt_sapling(network, &ufvk, 4511, &sapling, (0, &[]))
+            decrypt_sapling(network, &ufvk, 4511, &sapling, (0, &[]), None)
                 .expect("sapling runs")
                 .hits
                 .len(),
             0
         );
         assert_eq!(
-            decrypt_orchard::<OrchardVersion>(network, &ufvk, "orchard", &orchard, (0, &[]))
+            decrypt_orchard::<OrchardVersion>(network, &ufvk, "orchard", &orchard, (0, &[]), None)
                 .expect("orchard runs")
                 .hits
                 .len(),
@@ -1026,7 +1146,7 @@ mod tests {
 
         let ufvk = ufvk.encode(&Network::MainNetwork);
         let compact =
-            decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body, (0, &[]))
+            decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body, (0, &[]), None)
                 .expect("runs");
         assert_eq!((compact.count, compact.min_height), (1, 3_430_000));
         let hits = compact.hits;
@@ -1036,7 +1156,7 @@ mod tests {
             ("ironwood", "external", 123_456)
         );
         assert!(
-            decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body, (0, &[]))
+            decrypt_orchard::<OrchardVersion>("main", &ufvk, "orchard", &body, (0, &[]), None)
                 .expect("runs")
                 .hits
                 .is_empty()
@@ -1048,8 +1168,15 @@ mod tests {
         let grown = ciphertexts(3_430_000, &[&hex::encode(&record), &hex::encode(&record)]);
         let tried = hex::decode(&compact.digest).unwrap();
         let ironwood = |from, tried: &[u8]| {
-            decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &grown, (from, tried))
-                .expect("runs")
+            decrypt_orchard::<IronwoodVersion>(
+                "main",
+                &ufvk,
+                "ironwood",
+                &grown,
+                (from, tried),
+                None,
+            )
+            .expect("runs")
         };
         let resumed = ironwood(1, &tried);
         assert_eq!(resumed.from, 1);
@@ -1098,6 +1225,196 @@ mod tests {
             .expect("runs")
             .hits
             .is_empty());
+    }
+
+    /// The words the GPU shader would return for `inputs` (from
+    /// [`gpu_inputs`]), derived on the CPU instead: each secret affine, Z = 1.
+    fn cpu_words(pool: &str, inputs: &[u8]) -> Vec<u32> {
+        let (scalars, epks) = inputs.split_at(64);
+        let mut words = Vec::new();
+        for xy in epks.chunks_exact(64) {
+            for k in scalars.chunks_exact(32) {
+                let k: [u8; 32] = k.try_into().unwrap();
+                let (x, y) = if pool == "sapling" {
+                    use ff::PrimeField;
+                    let (u, v) = (
+                        jubjub::Fq::from_repr(xy[..32].try_into().unwrap()).unwrap(),
+                        jubjub::Fq::from_repr(xy[32..].try_into().unwrap()).unwrap(),
+                    );
+                    let k = jubjub::Fr::from_repr(k).unwrap();
+                    let p =
+                        jubjub::ExtendedPoint::from(jubjub::AffinePoint::from_raw_unchecked(u, v));
+                    let s = jubjub::AffinePoint::from((p * k).mul_by_cofactor());
+                    (s.get_u().to_repr(), s.get_v().to_repr())
+                } else {
+                    use ff::PrimeField;
+                    use group::Curve;
+                    use pasta_curves::arithmetic::CurveAffine;
+                    use pasta_curves::pallas;
+                    let p = pallas::Affine::from_xy(
+                        pallas::Base::from_repr(xy[..32].try_into().unwrap()).unwrap(),
+                        pallas::Base::from_repr(xy[32..].try_into().unwrap()).unwrap(),
+                    )
+                    .unwrap();
+                    let s = (p * pallas::Scalar::from_repr(k).unwrap()).to_affine();
+                    let c = s.coordinates().unwrap();
+                    (c.x().to_repr(), c.y().to_repr())
+                };
+                let mut one = [0u8; 32];
+                one[0] = 1;
+                for b in [x, y, one] {
+                    words.extend(
+                        b.chunks_exact(4)
+                            .map(|w| u32::from_le_bytes(w.try_into().unwrap())),
+                    );
+                }
+                words.push(0);
+            }
+        }
+        words
+    }
+
+    // The GPU path finds exactly what the CPU path finds, external and
+    // internal notes alike, and a secret the GPU got wrong fails the chunk.
+    #[test]
+    fn gpu_secrets_find_the_same_notes() {
+        use orchard::note::{ExtractedNoteCommitment, RandomSeed, Rho};
+        use orchard::note_encryption::{IronwoodNoteEncryption, OrchardNoteEncryption};
+        use orchard::value::NoteValue;
+        use orchard::NoteVersion;
+        use sapling::note_encryption::{sapling_note_encryption, SaplingDomain};
+        use zcash_note_encryption::Domain;
+
+        let ufvk = UnifiedSpendingKey::from_seed(
+            &Network::MainNetwork,
+            &[7u8; 32],
+            zip32::AccountId::ZERO,
+        )
+        .expect("usk")
+        .to_unified_full_viewing_key();
+        let fvk = ufvk.orchard().expect("orchard fvk");
+        let rho_bytes: [u8; 32] =
+            hex_n("08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39").unwrap();
+        let rho = Rho::from_bytes(&rho_bytes).unwrap();
+        let stranger = "8c03e7196525e7c5370766dcddf8be8592be5a12bdef5de0e0852189a4ceb23387d64a0108dec58c38e80bda117b779a8677477347ebe720b5fccb09d188c1632faa0d30abea7f23223df164cdcf3c0a7e5f344d44ba39dbcf4e55c2b2c308eed761a4ffce3f6ae32ec7f01554bb3b2c61eb293608df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39";
+        let orchard_record = |scope, version, value| {
+            let rseed = RandomSeed::from_bytes([3u8; 32], &rho).unwrap();
+            let note = orchard::Note::from_parts(
+                fvk.address_at(0u32, scope),
+                NoteValue::from_raw(value),
+                rho,
+                rseed,
+                version,
+            )
+            .unwrap();
+            let (epk, enc) = if version == NoteVersion::V3 {
+                let e = IronwoodNoteEncryption::new(None, note, [0u8; 512]);
+                (
+                    orchard::note_encryption::IronwoodDomain::epk_bytes(e.epk()).0,
+                    e.encrypt_note_plaintext(),
+                )
+            } else {
+                let e = OrchardNoteEncryption::new(None, note, [0u8; 512]);
+                (
+                    orchard::note_encryption::OrchardDomain::epk_bytes(e.epk()).0,
+                    e.encrypt_note_plaintext(),
+                )
+            };
+            let mut record = epk.to_vec();
+            record.extend(&enc[..COMPACT_NOTE_SIZE]);
+            record.extend(ExtractedNoteCommitment::from(note.commitment()).to_bytes());
+            record.extend(rho_bytes);
+            hex::encode(record)
+        };
+        let ironwood = ciphertexts(
+            3_430_000,
+            &[
+                stranger.to_string(),
+                orchard_record(Scope::Internal, NoteVersion::V3, 7),
+                stranger.to_string(),
+                orchard_record(Scope::External, NoteVersion::V3, 9),
+                orchard_record(Scope::External, NoteVersion::V2, 11),
+            ],
+        );
+
+        let dfvk = ufvk.sapling().expect("sapling fvk");
+        let note = sapling::Note::from_parts(
+            dfvk.default_address().1,
+            sapling::value::NoteValue::from_raw(5),
+            sapling::Rseed::AfterZip212([5u8; 32]),
+        );
+        let e = sapling_note_encryption(None, note.clone(), [0u8; 512], &mut rand_core::OsRng);
+        let mut ours = SaplingDomain::epk_bytes(e.epk()).0.to_vec();
+        ours.extend(&e.encrypt_note_plaintext()[..COMPACT_NOTE_SIZE]);
+        ours.extend(note.cmu().to_bytes());
+        let sapling_stranger = "cb476002450613bae9a8fa4240a80f459ca338ab4ac9d0ccd69507d0a4bef98567294ab5a43ac6750a760eb171df88bf67d5847fe3bd1d7ac9f4d2bd3e1e69da31868f810a478d3d5b39366f43e11a8b88ddf3841e184cee50a61ef8bad79f28a360ae0383b4c2a563723744abb8994145e5d109";
+        let sapling = ciphertexts(
+            3_400_000,
+            &[
+                sapling_stranger.to_string(),
+                hex::encode(&ours),
+                sapling_stranger.to_string(),
+            ],
+        );
+
+        let ufvk = ufvk.encode(&Network::MainNetwork);
+        let hits = |c: Compact| {
+            c.hits
+                .iter()
+                .map(|h| (h.index, h.scope, h.value, h.nf_mine.clone()))
+                .collect::<Vec<_>>()
+        };
+        for (pool, body) in [
+            ("ironwood", &ironwood),
+            ("orchard", &ironwood),
+            ("sapling", &sapling),
+        ] {
+            let words = cpu_words(
+                pool,
+                &gpu_inputs("main", &ufvk, pool, body, 0, &[]).unwrap(),
+            );
+            let run = |secrets| match pool {
+                "sapling" => decrypt_sapling("main", &ufvk, 9, body, (0, &[]), secrets),
+                "orchard" => {
+                    decrypt_orchard::<OrchardVersion>("main", &ufvk, pool, body, (0, &[]), secrets)
+                }
+                _ => {
+                    decrypt_orchard::<IronwoodVersion>("main", &ufvk, pool, body, (0, &[]), secrets)
+                }
+            };
+            let cpu = hits(run(None).unwrap());
+            assert!(!cpu.is_empty(), "{pool} has notes of ours");
+            assert_eq!(hits(run(Some(&words)).unwrap()), cpu, "{pool}");
+
+            // Another key's secret on a spot-checked output: the chunk fails.
+            let mut wrong = words.clone();
+            for w in 0..16 {
+                wrong.swap(w, gpu::WORDS + w);
+            }
+            assert!(run(Some(&wrong)).is_err(), "{pool}");
+            // Garbage is left to the CPU, which still finds every note.
+            let mut garbage = words.clone();
+            garbage[gpu::WORDS + 3] ^= 1;
+            assert_eq!(hits(run(Some(&garbage)).unwrap()), cpu, "{pool}");
+        }
+        let ironwood_hits = hits(
+            decrypt_orchard::<IronwoodVersion>(
+                "main",
+                &ufvk,
+                "ironwood",
+                &ironwood,
+                (0, &[]),
+                None,
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            ironwood_hits
+                .iter()
+                .map(|h| (h.0, h.1, h.2))
+                .collect::<Vec<_>>(),
+            [(1, "internal", 7), (3, "external", 9)]
+        );
     }
 
     #[test]

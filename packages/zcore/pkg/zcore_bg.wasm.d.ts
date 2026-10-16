@@ -6,6 +6,7 @@ export const derive_account: (a: number, b: number, c: number, d: number, e: num
 export const derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const gap_limits: () => [number, number, number];
+export const gpu_inputs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number, number, number];
 export const max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
 export const needs_sapling_params: (a: number, b: number) => [number, number, number];
 export const parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -22,6 +23,7 @@ export const sign_pczt: (a: number, b: number, c: number, d: number, e: number, 
 export const spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
 export const try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
+export const try_decrypt_gpu: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number, number];
 export const warm_prover: () => void;
 export const rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
 export const rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
