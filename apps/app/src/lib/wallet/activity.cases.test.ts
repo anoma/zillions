@@ -870,7 +870,16 @@ function markdown() {
     lines.push(
       `## ${group}`,
       "",
-      row(["ID", "Zillions", "From → To", "Zodl", "Zingo", "Vizor", "Zkool"]),
+      // GitHub tables take no widths: unbreakable padding keeps the IDs whole.
+      row([
+        `ID${"&nbsp;".repeat(16)}`,
+        "Zillions",
+        "From → To",
+        "Zodl",
+        "Zingo",
+        "Vizor",
+        "Zkool",
+      ]),
       row(Array(7).fill("---")),
       ...list.map((c) =>
         row([

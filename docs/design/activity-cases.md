@@ -22,7 +22,7 @@ Their sends are from the wallet that made them.
 
 ## From our Ironwood
 
-| ID | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
 | --- | --- | --- | --- | --- | --- | --- |
 | `i-xi` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
 | `i-xt` | Sent −10,000 · fee 15,000 | Shielded → t1theirs | sent 25,000 · fee 15,000 | sent 10,000 · fee 15,000 | sent 10,000 · fee 15,000 | Sent −25,000 · fee 15,000 |
@@ -34,7 +34,7 @@ Their sends are from the wallet that made them.
 
 ## From our Orchard
 
-| ID | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
 | --- | --- | --- | --- | --- | --- | --- |
 | `o-xi` | Sent −10,000 · fee 20,000 | Shielded → u1theirs | sent 30,000 · fee 20,000 | sent 10,000 · fee 20,000 | sent 10,000 · fee 20,000 | Sent −30,000 · fee 20,000 |
 | `o-xo` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
@@ -64,7 +64,7 @@ Their sends are from the wallet that made them.
 
 ## From our Sapling
 
-| ID | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
 | --- | --- | --- | --- | --- | --- | --- |
 | `s-xo` | Sent −10,000 · fee 20,000 | Shielded → u1theirs | sent 30,000 · fee 20,000 | sent 10,000 · fee 20,000 | sent 10,000 · fee 20,000 | Sent −30,000 · fee 20,000 |
 | `s-xo-lost` | **Sent −30,000 · fee 0** (today Migrated 70,000 · fee 30,000) | **Shielded → Shielded** (today Sapling → Orchard) | sent 70,000 · fee 20,000 | not checked | not checked | Sent −30,000 · fee 20,000 |
@@ -82,7 +82,7 @@ Their sends are from the wallet that made them.
 
 ## From our transparent coins
 
-| ID | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
 | --- | --- | --- | --- | --- | --- | --- |
 | `t-xi` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
 | `t-xi-nc` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
@@ -102,7 +102,7 @@ Their sends are from the wallet that made them.
 
 ## From someone's shielded funds
 
-| ID | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
 | --- | --- | --- | --- | --- | --- | --- |
 | `xo-o` | Received 10,000 · fee 0 | Shielded → Shielded | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
 | `xo-s` | Received 10,000 · fee 0 | Shielded → Shielded | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
@@ -114,7 +114,7 @@ Their sends are from the wallet that made them.
 
 ## From someone's transparent coins
 
-| ID | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
 | --- | --- | --- | --- | --- | --- | --- |
 | `xt-i` | Received 16,000 · fee 0 | Shielded → Shielded | received 16,000 | received 16,000 | received 16,000 | Receive 16,000 |
 | `xt-t` | Received 50,000 · fee 0 | t1sender → Transparent | received 50,000 | received 50,000 | received 50,000 | Receive 50,000 |
