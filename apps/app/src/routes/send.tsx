@@ -12,7 +12,6 @@ import {
   AmountField,
   AvailableWithMax,
   Breakdown,
-  Caption,
   FormCard,
   type Problem,
   SubmitBlock,
@@ -155,6 +154,17 @@ function SendRoute() {
   return (
     <PageShell title="Send">
       <TransferForm onSubmit={onSubmit}>
+        <FormCard heading="Pay from">
+          <ShieldedTransparentToggle
+            label="Pay from"
+            isTransparent={transparentFrom}
+            setIsTransparent={(value) => {
+              setTransparentFrom(value);
+              clear();
+            }}
+          />
+        </FormCard>
+
         <FormCard
           heading="Amount"
           aside={
@@ -178,15 +188,6 @@ function SendRoute() {
             error={amountError}
             onChange={(value) => {
               amountField.type(value);
-              clear();
-            }}
-          />
-          <Caption>Pay from</Caption>
-          <ShieldedTransparentToggle
-            label="Pay from"
-            isTransparent={transparentFrom}
-            setIsTransparent={(value) => {
-              setTransparentFrom(value);
               clear();
             }}
           />

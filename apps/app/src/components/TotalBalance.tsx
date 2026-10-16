@@ -1,15 +1,10 @@
-import { Link } from "@tanstack/react-router";
 import { twMerge } from "tailwind-merge";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { fitFontSize, zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { ActionButton } from "./ui/ActionButton";
-import {
-  cardClassName,
-  sectionLabelClassName,
-  textButtonClassName,
-} from "./ui/utils";
+import { cardClassName, sectionLabelClassName } from "./ui/utils";
 import { ZecValue } from "./ZecValue";
 
 export function TotalBalance() {
@@ -123,15 +118,12 @@ function PoolBalance({
         />
         {label}
       </h3>
-      <div className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-2">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
         <ZecValue zat={zat} className="text-xl xl:text-2xl" />
         {zat > 0n && (
-          <Link
-            to={action.href}
-            className={twMerge(textButtonClassName, "text-sm")}
-          >
-            {action.label} →
-          </Link>
+          <ActionButton href={action.href} size="xs" outlineColor="black">
+            {action.label}
+          </ActionButton>
         )}
       </div>
     </div>
