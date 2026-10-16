@@ -6,5 +6,5 @@ export const Route = createFileRoute("/transactions")({
 });
 
 function TransactionsRoute() {
-  return <TransactionHistory />;
+  return <TransactionHistory title="Transactions" />;
 }

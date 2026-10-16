@@ -1,25 +1,26 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { twMerge } from "tailwind-merge";
-import { AmountInput } from "../components/AmountInput";
 import { PageShell } from "../components/PageShell";
-import { FeeRow, PlannedFee, TotalRow } from "../components/PlannedFee";
+import { FeeRow, PlannedFee } from "../components/PlannedFee";
 import {
+  AmountField,
   AvailableWithMax,
-  FormError,
+  Breakdown,
+  Caption,
+  FormCard,
+  Notice,
   PoolRoute,
-  SubmitProgress,
+  SubmitBlock,
   TransferForm,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
-import { ActionButton } from "../components/ui/ActionButton";
-import { cardClassName, sectionLabelClassName } from "../components/ui/utils";
 import { internalAddress, useInternalAddress } from "../hooks/useAddresses";
+import { useAmountField } from "../hooks/useAmountField";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
-import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
+import { zatoshiToZec } from "../lib/utils";
 
 export const Route = createFileRoute("/unshield")({
   component: UnshieldRoute,
@@ -31,37 +32,32 @@ export const Route = createFileRoute("/unshield")({
  */
 function UnshieldRoute() {
   const balance = useGetBalance();
-
-  const [amountString, setAmountString] = useState("");
-  const [isMax, setIsMax] = useState(false);
-  const [validationMessage, setValidationMessage] = useState("");
+  const amountField = useAmountField();
   const [amountProblem, setAmountProblem] = useState("");
+  const [formProblem, setFormProblem] = useState("");
   const amountRef = useRef<HTMLInputElement>(null);
 
   const wallet = useWallet();
   const queryClient = useQueryClient();
   const next = useInternalAddress().data;
   const to = next?.address ?? "";
-  const typed = (() => {
-    try {
-      return zecToZatoshi(amountString);
-    } catch {
-      return 0n;
-    }
-  })();
+  const { typed, isMax } = amountField;
   const planned = useSendPlan({ from: "shielded", to, amount: typed }, isMax);
   const { maxAmount, ceiling } = planned;
   const amount = isMax ? (maxAmount.data ?? 0n) : typed;
   const send = useSend();
-  const availableBalance = balance.data?.shieldedBalance ?? 0n;
+  const available = balance.data?.shieldedBalance ?? 0n;
+  const overBalance = Boolean(balance.data) && amount > available;
 
-  const overBalance = Boolean(balance.data) && amount > availableBalance;
+  const clear = () => {
+    setAmountProblem("");
+    setFormProblem("");
+  };
 
   const onSubmit = () => {
-    setValidationMessage("");
-    setAmountProblem("");
+    clear();
     if (!next) {
-      setValidationMessage(
+      setFormProblem(
         "Wait for the wallet to sync, or for earlier unshields to confirm",
       );
       return;
@@ -69,7 +65,7 @@ function UnshieldRoute() {
     const problem =
       amount <= 0n
         ? "Set an amount"
-        : amount > availableBalance
+        : overBalance
           ? "Insufficient balance"
           : ceiling
             ? planProblem(planned)
@@ -114,107 +110,69 @@ function UnshieldRoute() {
         ? planProblem(planned)
         : undefined);
   const formError =
-    validationMessage ||
+    formProblem ||
     send.error?.message ||
     (ceiling || overBalance ? undefined : planProblem(planned));
   const planFee = planned.plan.data?.fee;
   const total =
     amount > 0n && planFee !== undefined ? amount + BigInt(planFee) : undefined;
 
-  const amountInput = isMax
-    ? maxAmount.data
-      ? zatoshiToZec(maxAmount.data)
-      : ""
-    : amountString;
-
   return (
     <PageShell title="Unshield">
-      <TransferForm onSubmit={onSubmit} className="mt-6 gap-4">
-        <section aria-label="Amount" className={cardClassName}>
-          <div className="flex items-center justify-between gap-4">
-            <h2 className={sectionLabelClassName}>Move</h2>
-            <div id="unshield-available" className="[&>*]:mt-0">
+      <TransferForm onSubmit={onSubmit}>
+        <FormCard
+          heading="Amount"
+          aside={
+            <div id="unshield-available">
               <AvailableWithMax
-                available={availableBalance}
+                available={available}
                 isMax={isMax}
                 onToggleMax={() => {
-                  setIsMax(!isMax);
-                  setAmountProblem("");
-                  setValidationMessage("");
+                  amountField.toggleMax();
+                  clear();
                 }}
               />
             </div>
-          </div>
-          <PoolRoute from="shielded" to="transparent" />
-          <div className="px-6 py-2">
-            <AmountInput
-              ref={amountRef}
-              value={amountInput}
-              className={twMerge("h-24", amountError && "text-red-700")}
-              maxFontSize="4.5rem"
-              aria-invalid={Boolean(amountError)}
-              aria-describedby={
-                amountError
-                  ? "unshield-amount-error unshield-available"
-                  : "unshield-available"
-              }
-              onChange={(e) => {
-                setIsMax(false);
-                setAmountString(e.target.value);
-                setAmountProblem("");
-                setValidationMessage("");
-              }}
-            />
-          </div>
-          {amountError && (
-            <p
-              id="unshield-amount-error"
-              role="alert"
-              className="-mt-2 text-sm text-center font-medium text-red-700 motion-safe:animate-fade-in"
-            >
-              {amountError}
-            </p>
-          )}
-        </section>
-
-        <section
-          aria-labelledby="unshield-summary"
-          className={twMerge(cardClassName, "gap-0 [&>div]:mt-2")}
+          }
         >
-          <h2
-            id="unshield-summary"
-            className={twMerge(sectionLabelClassName, "mb-1")}
-          >
-            Summary
-          </h2>
+          <AmountField
+            id="unshield-amount"
+            ref={amountRef}
+            value={amountField.shown(amount)}
+            describedBy="unshield-available"
+            error={amountError}
+            onChange={(value) => {
+              amountField.type(value);
+              clear();
+            }}
+          />
+          <Caption>Moving</Caption>
+          <PoolRoute from="shielded" to="transparent" />
+        </FormCard>
+
+        <Breakdown total={total}>
           <FeeRow
             label="Amount"
             fee={amount > 0n ? amount : undefined}
             pending={isMax && maxAmount.isLoading}
           />
           <PlannedFee {...planned} />
-          <TotalRow value={total} />
-        </section>
+        </Breakdown>
 
-        <div>
-          <ActionButton
-            size="lg"
-            className="w-full"
-            backgroundColor="black"
-            textColor="white"
-            disabled={send.isPending}
-          >
-            {send.isPending ? "Unshielding..." : "Unshield"}
-          </ActionButton>
-
-          <p className="mt-3 text-sm text-center font-medium text-gray-600">
+        <SubmitBlock
+          label={
+            amount > 0n ? `Unshield ${zatoshiToZec(amount)} ZEC` : "Unshield"
+          }
+          pending={send.isPending}
+          pendingLabel="Unshielding..."
+          color="black"
+          stages={send.stages}
+          error={formError}
+        >
+          <Notice className="text-gray-600">
             Goes to a new transparent address of yours, visible on-chain
-          </p>
-
-          {send.isPending && <SubmitProgress stages={send.stages} />}
-
-          {formError && <FormError>{formError}</FormError>}
-        </div>
+          </Notice>
+        </SubmitBlock>
       </TransferForm>
     </PageShell>
   );

@@ -118,8 +118,14 @@ const Button = <HtmlTag extends keyof HTMLElementTagNameMap = "button">({
   // Default hover for solid (non-outlined) buttons inverts to a black
   // background with primary (gold) text; outlined buttons keep filling with
   // their outline color. Explicit props always win.
+  // A black button would barely change on the usual near-black hover.
   const backgroundHoverColor =
-    backgroundHoverColorProp || (outlined ? outlineColor : "neutral-800");
+    backgroundHoverColorProp ||
+    (outlined
+      ? outlineColor
+      : backgroundColor === "black"
+        ? "neutral-700"
+        : "neutral-800");
   const textHoverColor = textHoverColorProp || (outlined ? "white" : "white");
 
   // Resolve each CSS-var string with one getDefaultColorString call.

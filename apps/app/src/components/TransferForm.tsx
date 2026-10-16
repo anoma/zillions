@@ -1,12 +1,22 @@
 import {
   type ComponentProps,
   type ReactNode,
+  type Ref,
   useEffect,
   useState,
 } from "react";
 import { twMerge } from "tailwind-merge";
 import type { StageEntry, SubmitStage } from "../hooks/useSubmitStage";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
+import { AmountInput } from "./AmountInput";
+import { TotalRow } from "./PlannedFee";
+import { ActionButton } from "./ui/ActionButton";
+import type { Color } from "./ui/types";
+import {
+  cardClassName,
+  focusRingClassName,
+  sectionLabelClassName,
+} from "./ui/utils";
 import { ZecValue } from "./ZecValue";
 
 export function TransferForm({
@@ -21,7 +31,7 @@ export function TransferForm({
   return (
     <form
       className={twMerge(
-        "w-full max-w-125 mx-auto mt-10 flex flex-col",
+        "w-full max-w-125 mx-auto mt-5 flex flex-col gap-4",
         className,
       )}
       onSubmit={(e) => {
@@ -31,23 +41,6 @@ export function TransferForm({
     >
       {children}
     </form>
-  );
-}
-
-export function Field({
-  label,
-  className,
-  children,
-}: {
-  label: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className={className}>
-      <div className="text-xs font-medium mb-1">{label}</div>
-      {children}
-    </label>
   );
 }
 
@@ -105,15 +98,13 @@ export function AvailableWithMax({
   available,
   isMax,
   onToggleMax,
-  maxTitle,
 }: {
   available: bigint;
   isMax: boolean;
   onToggleMax: () => void;
-  maxTitle?: string;
 }) {
   return (
-    <div className="mt-4 flex items-center justify-center gap-2 text-xs font-medium">
+    <div className="flex items-center justify-center gap-2 text-xs font-medium">
       <span>
         Available: <ZecValue zat={available} />
       </span>
@@ -121,10 +112,9 @@ export function AvailableWithMax({
         type="button"
         className={twMerge(
           "px-2 py-0.5 rounded-full border border-line cursor-pointer transition-colors duration-300 hover:border-line-strong hover:bg-black/5",
-          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
+          focusRingClassName,
           isMax && "bg-black text-white border-black",
         )}
-        title={maxTitle}
         aria-pressed={isMax}
         onClick={onToggleMax}
       >
@@ -251,5 +241,166 @@ export function FormError({ children }: { children: ReactNode }) {
     >
       {children}
     </div>
+  );
+}
+
+/** A submit-time problem, shown by the field it's about. */
+export type Problem<Field extends string = "amount"> = {
+  field: Field | "form";
+  message: string;
+};
+
+/** A card of the form, with a heading row and room for a control beside it. */
+export function FormCard({
+  heading,
+  headingId,
+  aside,
+  className,
+  children,
+}: {
+  heading: ReactNode;
+  headingId?: string;
+  aside?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-labelledby={headingId}
+      className={twMerge(cardClassName, className)}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <h2 id={headingId} className={sectionLabelClassName}>
+          {heading}
+        </h2>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** The hero amount field with its error line. `id` prefixes the ids it exposes. */
+export function AmountField({
+  id,
+  value,
+  onChange,
+  error,
+  describedBy,
+  ref,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+  describedBy?: string;
+  ref?: Ref<HTMLInputElement>;
+}) {
+  const errorId = `${id}-error`;
+  return (
+    <>
+      <AmountInput
+        ref={ref}
+        value={value}
+        className={twMerge("h-20", error && "text-red-700")}
+        maxFontSize="4.5rem"
+        aria-invalid={Boolean(error)}
+        aria-describedby={
+          [error && errorId, describedBy].filter(Boolean).join(" ") || undefined
+        }
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error && (
+        <p
+          id={errorId}
+          role="alert"
+          className="-mt-1 text-sm text-center font-medium text-red-700 motion-safe:animate-fade-in"
+        >
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** A caption over a control at the foot of the amount card: "Pay from", "Moving". */
+export function Caption({ children }: { children: ReactNode }) {
+  return <p className="-mb-1 text-xs font-medium text-gray-600">{children}</p>;
+}
+
+/** The fee breakdown: `rows` then the total line. */
+export function Breakdown({
+  label,
+  total,
+  children,
+}: {
+  label?: string;
+  total?: bigint;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-label="Summary" className={twMerge(cardClassName, "gap-2")}>
+      {children}
+      <TotalRow label={label} value={total} />
+    </section>
+  );
+}
+
+/** The submit button, with whatever stands under it: notices, progress, errors. */
+export function SubmitBlock({
+  label,
+  pending,
+  pendingLabel,
+  color = "gold-button",
+  stages,
+  error,
+  children,
+}: {
+  label: string;
+  pending: boolean;
+  pendingLabel: string;
+  color?: Extract<Color, "gold-button" | "black">;
+  stages: StageEntry[];
+  error?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div>
+      <ActionButton
+        size="lg"
+        className="w-full"
+        backgroundColor={color}
+        textColor={color === "black" ? "white" : undefined}
+        disabled={pending}
+      >
+        {pending ? pendingLabel : label}
+      </ActionButton>
+      {children}
+      {pending && <SubmitProgress stages={stages} />}
+      {error && <FormError>{error}</FormError>}
+    </div>
+  );
+}
+
+/** A line under the submit button. */
+export function Notice({
+  icon,
+  className,
+  children,
+}: {
+  icon?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <p
+      className={twMerge(
+        "mt-3 flex items-center justify-center gap-1.5 text-sm text-center font-medium",
+        className,
+      )}
+    >
+      {icon}
+      {children}
+    </p>
   );
 }

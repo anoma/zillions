@@ -58,27 +58,25 @@ export function MainNav() {
             <ZillionsIcon className="h-11" />
           </Link>
         </div>
-        <ul className="mt-8">
+        <ul className="mt-6">
           {navItems.map((item) => (
-            <li key={item.to} className="my-4">
+            <li key={item.to} className="my-1 -mx-3">
               <Link
                 to={item.to}
-                className="group inline-flex items-center gap-3"
+                aria-current={item.to === pathname ? "page" : undefined}
+                className={twMerge(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-full text-sm transition-colors duration-300",
+                  "hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
+                  item.to === pathname && "bg-white font-semibold",
+                )}
               >
                 <item.icon
                   className={twMerge(
-                    "size-5 transition-all",
+                    "size-5 transition-colors duration-300",
                     item.to === pathname && "text-gold",
                   )}
                 />
-                <span
-                  className={twMerge(
-                    "text-sm group-hover:font-semibold transition-all",
-                    item.to === pathname && "font-semibold",
-                  )}
-                >
-                  {item.label}
-                </span>
+                {item.label}
               </Link>
             </li>
           ))}

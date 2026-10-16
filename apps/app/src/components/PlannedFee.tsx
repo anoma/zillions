@@ -33,10 +33,14 @@ export function TotalRow({
   value?: bigint;
 }) {
   return (
-    <div className="!mt-3 pt-3 border-t border-line flex items-center justify-between text-sm font-semibold">
+    <div className="mt-1 pt-3 border-t border-line flex items-center justify-between text-sm font-semibold">
       <span>{label}</span>
       <span aria-live="polite">
-        {value !== undefined ? <ZecValue zat={value} /> : "-"}
+        {value !== undefined ? (
+          <ZecValue zat={value} />
+        ) : (
+          <span className="text-gray-500">–</span>
+        )}
       </span>
     </div>
   );
@@ -52,7 +56,7 @@ export function FeeRow({
   label?: string;
 }) {
   return (
-    <div className="mt-4 flex items-center justify-between text-xs font-medium">
+    <div className="flex items-center justify-between text-xs font-medium">
       <div>{label}</div>
       <div>
         {fee !== undefined ? (
@@ -60,7 +64,7 @@ export function FeeRow({
         ) : pending ? (
           <SpinnerIcon className="size-3" />
         ) : (
-          "-"
+          <span className="text-gray-500">–</span>
         )}
       </div>
     </div>

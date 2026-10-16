@@ -103,11 +103,10 @@ export function transactionValue(
     value += tx.fee;
   }
 
-  let signal = "";
-  // Prefix received amounts with + to show the balance increase.
-  if (tx.tx_type === "Received") {
-    signal = "+";
-  }
+  // Received and sent are the balance's ups and downs; the rest moves money
+  // between the account's own pools, so they carry no sign.
+  const signal =
+    tx.tx_type === "Received" ? "+" : tx.tx_type === "Sent" ? "−" : "";
 
   return { signal, value };
 }
