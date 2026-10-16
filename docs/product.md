@@ -454,3 +454,11 @@ Zashi) is the Zcash reference wallet; its address rotation is the model for
 - Zodl Android SDK: https://github.com/zodl-inc/zodl-android-wallet-sdk
 - Zodl iOS: https://github.com/zodl-inc/zodl-ios
 - Zodl iOS (Swift) SDK: https://github.com/zodl-inc/zodl-swift-wallet-sdk
+- Zingo (zingolib): https://github.com/zingolabs/zingolib — history as value
+  transfers, `zingolib/src/perspective.rs`
+- Vizor (Chainapsis; Flutter + Rust on zcash_client_sqlite, with Ironwood):
+  https://github.com/chainapsis/vizor-wallet
+- Zkool (successor to YWallet; its own Rust and SQLite):
+  https://github.com/hhanh00/zkool2
+- zcash_client_sqlite's history view, `v_transactions` (what Zodl's SDK
+  reads): https://github.com/zcash/librustzcash/blob/main/zcash_client_sqlite/src/wallet/db.rs
