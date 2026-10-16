@@ -23,6 +23,8 @@ function AccountProfile() {
   return (
     <Tooltip
       position="bottom"
+      // Right-aligned: centred under a label this close to the edge, it would overflow the page.
+      className="left-auto right-0 translate-x-0"
       onClose={() => setShown((n) => n + 1)}
       content={
         <div className="p-4 space-y-3 w-55">

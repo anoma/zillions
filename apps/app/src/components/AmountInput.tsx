@@ -7,13 +7,16 @@ import { placeholderClassName } from "./ui/utils";
 export function AmountInput({
   value,
   className,
+  maxFontSize = "6rem",
   ...props
-}: ComponentProps<"input"> & { value: string }) {
+}: ComponentProps<"input"> & { value: string; maxFontSize?: string }) {
   return (
     <div className="@container">
       <input
         name="amount"
         type="text"
+        inputMode="decimal"
+        aria-label="Amount in ZEC"
         placeholder="0"
         autoComplete="off"
         // Desktop only: on touch screens it would pop the keyboard over the form.
@@ -26,7 +29,7 @@ export function AmountInput({
           placeholderClassName,
           className,
         )}
-        style={{ fontSize: fitFontSize(value.length, "6rem") }}
+        style={{ fontSize: fitFontSize(value.length, maxFontSize) }}
         value={value}
         {...props}
       />

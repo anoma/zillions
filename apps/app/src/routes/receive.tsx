@@ -22,6 +22,7 @@ function ReceiveRoute() {
     <PageShell title="Receive" className="w-full max-w-120 mx-auto">
       <div className="mt-10">
         <ShieldedTransparentToggle
+          label="Address type"
           isTransparent={isTransparent}
           setIsTransparent={setIsTransparent}
         />

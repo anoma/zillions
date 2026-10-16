@@ -1,8 +1,12 @@
 import type { Color } from "./types";
 
-/** Grey placeholder that fades on hover/focus, so empty inputs read as fields. */
+/**
+ * Grey placeholder that darkens on hover, so empty inputs read as fields.
+ * Browsers don't transition `::placeholder`, so the input's own color fades
+ * while it's empty and the placeholder inherits it.
+ */
 export const placeholderClassName =
-  "placeholder:text-current placeholder:opacity-30 placeholder:transition-opacity placeholder:duration-300 placeholder:ease-out-circ hover:placeholder:opacity-100 focus:placeholder:opacity-30";
+  "placeholder:text-current caret-black transition-colors duration-300 ease-out-circ placeholder-shown:text-black/35 placeholder-shown:hover:text-black/60 placeholder-shown:focus:text-black/35";
 
 /**
  * Resolve a design-token color name to a CSS custom property reference. The

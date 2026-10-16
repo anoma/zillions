@@ -12,6 +12,8 @@ const actionButtonShape = tv({
     `text-[var(--text-color)] hover:text-[var(--text-hover-color)]`,
     `before:border before:border-transparent`,
     `border-none outline-0 active:top-px`,
+    `transition-[--color,--text-color] duration-500 ease-out`,
+    `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black`,
   ),
   variants: {
     size: {

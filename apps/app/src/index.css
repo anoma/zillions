@@ -8,6 +8,9 @@
 
   --color-surface: #ecebe7;
   --color-gold: #ceb462;
+  --color-card: #f6f5f2;
+  --color-line: #e6e4df;
+  --color-line-strong: #cdcac2;
 
   --ease-out-circ: cubic-bezier(0.075, 0.82, 0.165, 1);
 
@@ -20,6 +23,14 @@
     to {
       transform: rotate(1turn);
       transform-origin: center;
+    }
+  }
+
+  --animate-fade-in: fade-in 0.3s ease-out;
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
     }
   }
 
@@ -38,4 +49,25 @@
 
 body {
   @apply bg-surface;
+}
+
+/* A soft light falling from the top of a gold surface. */
+@utility gold-gloss {
+  background-image: linear-gradient(
+    to bottom,
+    rgb(255 255 255 / 0.2),
+    transparent 65%
+  );
+}
+
+/* Registered so ActionButton's colors (set as custom properties) can transition. */
+@property --color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --text-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: black;
 }

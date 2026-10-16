@@ -24,10 +24,18 @@ export function PlannedFee({
   );
 }
 
-export function FeeRow({ fee, pending }: { fee?: bigint; pending: boolean }) {
+export function FeeRow({
+  fee,
+  pending,
+  label = "Transaction fee",
+}: {
+  fee?: bigint;
+  pending: boolean;
+  label?: string;
+}) {
   return (
     <div className="mt-4 flex items-center justify-between text-xs font-medium">
-      <div>Transaction fee</div>
+      <div>{label}</div>
       <div>
         {fee !== undefined ? (
           <ZecValue zat={fee} />

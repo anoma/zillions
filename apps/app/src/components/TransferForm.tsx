@@ -100,10 +100,12 @@ export function AvailableWithMax({
       <button
         type="button"
         className={twMerge(
-          "px-2 py-0.5 rounded-full border border-gray-300",
+          "px-2 py-0.5 rounded-full border border-line cursor-pointer transition-colors duration-300 hover:border-line-strong hover:bg-black/5",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
           isMax && "bg-black text-white border-black",
         )}
         title={maxTitle}
+        aria-pressed={isMax}
         onClick={onToggleMax}
       >
         Max
@@ -223,7 +225,10 @@ function CheckIcon(props: ComponentProps<"svg">) {
 
 export function FormError({ children }: { children: ReactNode }) {
   return (
-    <div role="alert" className="mt-4 text-red-500 text-center">
+    <div
+      role="alert"
+      className="mt-4 text-red-700 text-center motion-safe:animate-fade-in"
+    >
       {children}
     </div>
   );
