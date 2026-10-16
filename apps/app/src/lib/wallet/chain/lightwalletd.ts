@@ -202,8 +202,7 @@ export async function fetchAddressTransactions(
 
 /**
  * What history needs from a block: when it was mined, its txids by index,
- * which transaction revealed each Sapling nullifier, and where each
- * transaction's new notes sit.
+ * and where each transaction's new notes sit.
  */
 export interface Block {
   /** Unix seconds. */
@@ -214,8 +213,8 @@ export interface Block {
   treeSizes: Record<Pool, number>;
   /** How many notes each transaction, by index, adds to each pool. */
   outputs: Map<number, Record<Pool, number>>;
-  /** Each transaction's transparent outputs, by index. */
-  vout: Map<number, { value: number; script: Uint8Array }[]>;
+  /** Its transactions that spend transparent coins, by index. */
+  transparentInputs: number[];
 }
 
 /** CompactTx fields listing each pool's new notes, and ChainMetadata's tree sizes. */
@@ -242,21 +241,13 @@ export async function fetchBlock(height: number): Promise<Block> {
   const block = fields(compact);
   const txids = new Map<number, string>();
   const outputs = new Map<number, Record<Pool, number>>();
-  const vout = new Map<number, { value: number; script: Uint8Array }[]>();
+  const transparentInputs: number[] = [];
   for (const raw of block.get(7) ?? []) {
     const tx = fields(raw as Uint8Array);
     const index = num(tx, 1);
     txids.set(index, displayTxid(bytes(tx, 2)));
-    const transparent = tx.get(8) ?? [];
-    if (transparent.length) {
-      vout.set(
-        index,
-        transparent.map((out) => {
-          const txOut = fields(out as Uint8Array);
-          return { value: num(txOut, 1), script: bytes(txOut, 2) };
-        }),
-      );
-    }
+    // CompactTx field 7 lists the transparent coins it spends.
+    if (tx.get(7)?.length) transparentInputs.push(index);
     outputs.set(
       index,
       Object.fromEntries(
@@ -273,7 +264,7 @@ export async function fetchBlock(height: number): Promise<Block> {
     txids,
     treeSizes,
     outputs,
-    vout,
+    transparentInputs,
   };
 }
 

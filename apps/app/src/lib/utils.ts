@@ -91,7 +91,7 @@ export const shortenAddress = (
 };
 
 export function transactionValue(
-  tx: Pick<Activity, "tx_type" | "value" | "fee">,
+  tx: Pick<Activity, "tx_type" | "value" | "fee" | "self">,
 ) {
   let value = tx.value;
   // Sent values come back negative; flip to positive for display.
@@ -103,11 +103,13 @@ export function transactionValue(
     value += tx.fee;
   }
 
-  let signal = "";
-  // Prefix received amounts with + to show the balance increase.
-  if (tx.tx_type === "Received") {
-    signal = "+";
-  }
+  // Never by the fee: a self-payment smaller than its fee would read as a loss.
+  const signal =
+    tx.tx_type === "Received"
+      ? "+"
+      : tx.tx_type === "Sent" && !tx.self
+        ? "−"
+        : "";
 
   return { signal, value };
 }

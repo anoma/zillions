@@ -1,5 +1,5 @@
 import type { Block } from "./chain/lightwalletd";
-import type { TransparentCache } from "./transparent";
+import type { ParsedTx, TransparentCache } from "./transparent";
 
 export type Pool = "sapling" | "orchard" | "ironwood";
 
@@ -151,7 +151,7 @@ export interface ShieldedScan {
 /** Everything the wallet keeps for one account, stored as a whole. */
 export interface WalletState {
   /** Bumped when the shape changes: an older state is dropped and synced again. */
-  version: 3;
+  version: 4;
   id: string;
   notes: Note[];
   sent: Sent[];
@@ -159,8 +159,10 @@ export interface WalletState {
   pending: PendingTx[];
   /** Absent before the first transparent sync. */
   transparent?: TransparentCache;
-  /** The blocks history names, for their txids, times and transparent outputs. */
+  /** The blocks history names, for their txids and times. */
   blocks: Map<number, Block>;
+  /** History's transactions read in full, by txid. */
+  txs: Map<string, ParsedTx>;
 }
 
 /** One transaction as history shows it. */
@@ -178,13 +180,19 @@ export type Activity = {
   pool: "ironwood" | "orchard" | "sapling" | "transparent" | "mixed";
   from: Party;
   to: Party;
+  /** A payment to the account itself: it shows no sign. */
+  self?: true;
 };
 
+/** Someone else's address, with what it was paid when it's a recipient. */
+export type Counterparty = { address: string; value?: bigint };
+
 /**
- * One side of a transaction: someone else's address, or just the pool when
- * the address isn't shown — our own, or a shielded sender, never revealed. A
- * migration names the shielded pools it moved between.
+ * One side of a transaction: someone else's address, the first of several
+ * when `more` holds the rest, or just the pool when the address isn't shown
+ * — our own, or a shielded sender, never revealed. A migration names the
+ * shielded pools it moved between.
  */
 export type Party =
-  | { address: string }
+  | (Counterparty & { more?: Counterparty[] })
   | { pool: "shielded" | "transparent" | "sapling" | "orchard" | "ironwood" };

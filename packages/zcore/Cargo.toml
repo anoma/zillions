@@ -36,6 +36,9 @@ zcash_keys = { version = "0.16", default-features = false, features = ["orchard"
 transparent = { package = "zcash_transparent", version = "0.10", default-features = false, features = ["transparent-inputs"] }
 # Script bytes → address, as `zcash_transparent` reads them.
 zcash_script = { version = "0.4", default-features = false }
+# Hash160 of the public key a P2PKH input reveals: its sender's address.
+sha2 = "0.10"
+ripemd = "0.1"
 zcash_protocol = "0.10"
 zcash_primitives = { version = "0.30", default-features = false, features = ["transparent-inputs"] }
 # Shielding's PCZT roles: the app creates and proves, the keychain signs.

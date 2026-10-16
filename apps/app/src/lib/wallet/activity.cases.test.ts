@@ -4,9 +4,9 @@
  */
 import { expect, test } from "vitest";
 
-import { buildActivity, type Payment } from "./activity";
+import { buildActivity, txidsToRead } from "./activity";
 import type { Block } from "./chain/lightwalletd";
-import type { TransparentTx } from "./transparent";
+import type { ParsedTx, TransparentTx } from "./transparent";
 import type { Activity, Note, Party, Pool, Sent } from "./types";
 
 type Shown = {
@@ -15,6 +15,10 @@ type Shown = {
   fee: number;
   from: string;
   to: string;
+  /** A payment to the account itself, which shows no sign. */
+  self?: true;
+  /** Where history's data for it comes from. */
+  source: string;
 };
 
 type Case = {
@@ -27,7 +31,8 @@ type Case = {
   notes?: Note[];
   sent?: Sent[];
   transparent?: Partial<TransparentTx>;
-  paid?: Payment[];
+  /** The transaction as fetched in full, once it is. */
+  full?: Partial<ParsedTx>;
   shows: Shown;
   /** What history shows instead, while it's wrong. */
   today?: Shown;
@@ -62,6 +67,26 @@ const note = (pool: Pool, value: number, rest: Partial<Note>): Note => {
     ...rest,
   };
 };
+/** A transparent input of the transaction, spending a coin at `address`. */
+const input = (address: string) => ({ txid: "prev", index: 0, address });
+/** Its transparent outputs, in order. */
+const outputs = (...paid: [value: number, address: string][]) =>
+  paid.map(([value, address], index) => ({ index, value, address }));
+/**
+ * The transaction as read in full, paying `fee` from `coins` of transparent
+ * inputs and the shielded pools: its value balance is whatever the coins
+ * leave of the fee and the transparent outputs.
+ */
+const read = (
+  fee: number,
+  coins = 0,
+  rest: Partial<ParsedTx> = {},
+): Partial<ParsedTx> => ({
+  ...rest,
+  value_balance:
+    fee + (rest.outputs ?? []).reduce((all, o) => all + o.value, 0) - coins,
+});
+
 /** A note this transaction paid us; change unless `external`. */
 const got = (pool: Pool, value: number, scope: Note["scope"] = "internal") =>
   note(pool, value, { scope });
@@ -90,12 +115,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Ironwood 100,000 → them Ironwood 10,000 · change Ironwood 80,000 · fee 10,000",
         notes: [spent("ironwood", 100_000), got("ironwood", 80_000)],
         sent: [sent("ironwood", 10_000)],
+        full: read(10_000),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 10_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 20,000 · fee 10,000",
         zingo: "sent 10,000 · fee 10,000",
@@ -108,12 +135,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Ironwood 20,000 → them Ironwood 10,000 · fee 10,000",
         notes: [spent("ironwood", 20_000)],
         sent: [sent("ironwood", 10_000)],
+        full: read(10_000),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 10_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 20,000 · fee 10,000",
         zingo: "sent 10,000 · fee 10,000",
@@ -126,50 +155,54 @@ const cases: [group: string, Case[]][] = [
         tx: "Ironwood 100,000 → them Ironwood 10,000 · another Ironwood 5,000 · change Ironwood 70,000 · fee 15,000",
         notes: [spent("ironwood", 100_000), got("ironwood", 70_000)],
         sent: [sent("ironwood", 10_000), sent("ironwood", 5_000, "u1another")],
+        full: read(15_000),
         shows: {
           type: "Sent",
           amount: -15_000,
           fee: 15_000,
           from: "Shielded",
-          to: "u1theirs",
+          to: "u1theirs +1",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 30,000 · fee 15,000",
         zingo: "sent 10,000 + sent 5,000 · fee 15,000",
         vizor: "sent 15,000 · fee 15,000",
         zkool: "Sent −30,000 · fee 15,000",
-        decide:
-          "To names only the first recipient; Zingo lists one row per recipient.",
+        note: "To names the first recipient and counts the rest; the detail page lists each with what it was paid.",
       },
       {
         id: "i-xi-lost",
         name: "to someone's Ironwood, outgoing recovery failed",
         tx: "Ironwood 100,000 → them Ironwood 10,000 (not recovered) · change Ironwood 80,000 · fee 10,000",
         notes: [spent("ironwood", 100_000), got("ironwood", 80_000)],
+        full: read(10_000),
         shows: {
           type: "Sent",
-          amount: -20_000,
-          fee: 0,
+          amount: -10_000,
+          fee: 10_000,
           from: "Shielded",
           to: "Shielded",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 10,000",
         zingo: "not checked",
         vizor: "not checked",
         zkool: "Sent −20,000 · fee 10,000",
-        note: "Amount is inputs − change, fee included; fee unknown. The others read the fee from the transaction's value balances. With no outgoing note, Zodl takes it for a transfer to itself and shows what came back.",
+        note: "With the transaction by txid, the value balance gives the fee, and what the shielded outputs held beyond our change is the payment recovery missed. With no outgoing note, Zodl takes it for a transfer to itself and shows what came back.",
       },
       {
         id: "i-xt",
         name: "to someone's transparent address",
         tx: "Ironwood 100,000 → them t1theirs 10,000 · change Ironwood 75,000 · fee 15,000",
         notes: [spent("ironwood", 100_000), got("ironwood", 75_000)],
-        paid: [{ value: 10_000, recipient: "t1theirs" }],
+        full: read(15_000, 0, { outputs: outputs([10_000, "t1theirs"]) }),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 15_000,
           from: "Shielded",
           to: "t1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 25,000 · fee 15,000",
         zingo: "sent 10,000 · fee 15,000",
@@ -185,12 +218,15 @@ const cases: [group: string, Case[]][] = [
           got("ironwood", 80_000),
           got("ironwood", 10_000, "external"),
         ],
+        full: read(10_000),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 10_000,
           from: "Shielded",
           to: "Shielded",
+          self: true,
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 90,000 · fee 10,000",
         zingo: "send-to-self 90,000 · fee 10,000",
@@ -204,12 +240,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Ironwood 100,000 → own t1internal 10,000 · change Ironwood 75,000 · fee 15,000",
         notes: [spent("ironwood", 100_000), got("ironwood", 75_000)],
         transparent: { received: 10_000n, to: "t1internal" },
+        full: read(15_000, 0, { outputs: outputs([10_000, "t1internal"]) }),
         shows: {
           type: "Unshielded",
           amount: 10_000,
           fee: 15_000,
           from: "Shielded",
           to: "Transparent",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 15,000 · fee 15,000",
         zingo: "send-to-self 85,000 · fee 15,000",
@@ -227,12 +265,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Orchard 100,000 → them Ironwood 10,000 · change Orchard 70,000 · fee 20,000",
         notes: [spent("orchard", 100_000), got("orchard", 70_000)],
         sent: [sent("ironwood", 10_000)],
+        full: read(20_000),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 20_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 30,000 · fee 20,000",
         zingo: "sent 10,000 · fee 20,000",
@@ -245,12 +285,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Orchard 100,000 → them Orchard 10,000 · change Orchard 80,000 · fee 10,000",
         notes: [spent("orchard", 100_000), got("orchard", 80_000)],
         sent: [sent("orchard", 10_000)],
+        full: read(10_000),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 10_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 20,000 · fee 10,000",
         zingo: "sent 10,000 · fee 10,000",
@@ -263,12 +305,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Orchard 100,000 → them Sapling 10,000 · change Orchard 70,000 · fee 20,000",
         notes: [spent("orchard", 100_000), got("orchard", 70_000)],
         sent: [sent("sapling", 10_000)],
+        full: read(20_000),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 20_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 30,000 · fee 20,000",
         zingo: "sent 10,000 · fee 20,000",
@@ -280,13 +324,14 @@ const cases: [group: string, Case[]][] = [
         name: "to someone's transparent address",
         tx: "Orchard 100,000 → them t1theirs 10,000 · change Orchard 75,000 · fee 15,000",
         notes: [spent("orchard", 100_000), got("orchard", 75_000)],
-        paid: [{ value: 10_000, recipient: "t1theirs" }],
+        full: read(15_000, 0, { outputs: outputs([10_000, "t1theirs"]) }),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 15_000,
           from: "Shielded",
           to: "t1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 25,000 · fee 15,000",
         zingo: "sent 10,000 · fee 15,000",
@@ -302,12 +347,14 @@ const cases: [group: string, Case[]][] = [
           got("orchard", 50_000),
           got("ironwood", 30_000),
         ],
+        full: read(20_000),
         shows: {
           type: "Migrated",
           amount: 30_000,
           fee: 20_000,
           from: "Orchard",
           to: "Ironwood",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "migration 30,000 · fee 20,000",
@@ -320,12 +367,14 @@ const cases: [group: string, Case[]][] = [
         name: "all of it to our own Ironwood (Move to Ironwood)",
         tx: "Orchard 100,000 → own Ironwood 80,000 · fee 20,000",
         notes: [spent("orchard", 100_000), got("ironwood", 80_000)],
+        full: read(20_000),
         shows: {
           type: "Migrated",
           amount: 80_000,
           fee: 20_000,
           from: "Orchard",
           to: "Ironwood",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "migration 80,000 · fee 20,000",
@@ -341,12 +390,14 @@ const cases: [group: string, Case[]][] = [
           got("orchard", 70_000),
           got("sapling", 10_000, "external"),
         ],
+        full: read(20_000),
         shows: {
           type: "Migrated",
           amount: 10_000,
           fee: 20_000,
           from: "Orchard",
           to: "Sapling",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "send-to-self 80,000 · fee 20,000",
@@ -360,12 +411,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Orchard 100,000 → own t1internal 10,000 · change Orchard 75,000 · fee 15,000",
         notes: [spent("orchard", 100_000), got("orchard", 75_000)],
         transparent: { received: 10_000n, to: "t1internal" },
+        full: read(15_000, 0, { outputs: outputs([10_000, "t1internal"]) }),
         shows: {
           type: "Unshielded",
           amount: 10_000,
           fee: 15_000,
           from: "Shielded",
           to: "Transparent",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 15,000 · fee 15,000",
         zingo: "send-to-self 85,000 · fee 15,000",
@@ -384,12 +437,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Sapling 100,000 → them Orchard 10,000 · change Orchard 70,000 · fee 20,000",
         notes: [spent("sapling", 100_000), got("orchard", 70_000)],
         sent: [sent("orchard", 10_000)],
+        full: read(20_000),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 20_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 30,000 · fee 20,000",
         zingo: "sent 10,000 · fee 20,000",
@@ -402,25 +457,20 @@ const cases: [group: string, Case[]][] = [
         name: "to someone's Orchard, change in Orchard, outgoing recovery failed",
         tx: "Sapling 100,000 → them Orchard 10,000 (not recovered) · change Orchard 70,000 · fee 20,000",
         notes: [spent("sapling", 100_000), got("orchard", 70_000)],
+        full: read(20_000),
         shows: {
           type: "Sent",
-          amount: -30_000,
-          fee: 0,
+          amount: -10_000,
+          fee: 20_000,
           from: "Shielded",
           to: "Shielded",
-        },
-        today: {
-          type: "Migrated",
-          amount: 70_000,
-          fee: 30_000,
-          from: "Sapling",
-          to: "Orchard",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 70,000 · fee 20,000",
         zingo: "not checked",
         vizor: "not checked",
         zkool: "Sent −30,000 · fee 20,000",
-        note: "Change in a pool nothing was spent from reads as funds moved there. zcash_client_sqlite makes the same call (pool_crossing_value 70,000); Zkool doesn't, since it goes by the balance change.",
+        note: "Change in a pool nothing was spent from would read as funds moved there, but the value balance shows 10,000 more left than change and fee. zcash_client_sqlite calls it a pool crossing (pool_crossing_value 70,000); Zkool doesn't, since it goes by the balance change.",
       },
       {
         id: "s-xs",
@@ -428,12 +478,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Sapling 100,000 → them Sapling 10,000 · change Sapling 80,000 · fee 10,000",
         notes: [spent("sapling", 100_000), got("sapling", 80_000)],
         sent: [sent("sapling", 10_000)],
+        full: read(10_000),
         shows: {
           type: "Sent",
           amount: -10_000,
           fee: 10_000,
           from: "Shielded",
           to: "u1theirs",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 20,000 · fee 10,000",
         zingo: "sent 10,000 · fee 10,000",
@@ -445,12 +497,14 @@ const cases: [group: string, Case[]][] = [
         name: "all of it to our own Ironwood (Move to Ironwood)",
         tx: "Sapling 100,000 → own Ironwood 80,000 · fee 20,000",
         notes: [spent("sapling", 100_000), got("ironwood", 80_000)],
+        full: read(20_000),
         shows: {
           type: "Migrated",
           amount: 80_000,
           fee: 20_000,
           from: "Sapling",
           to: "Ironwood",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "send-to-self 80,000 · fee 20,000",
@@ -467,12 +521,14 @@ const cases: [group: string, Case[]][] = [
           got("sapling", 70_000),
           got("orchard", 10_000, "external"),
         ],
+        full: read(20_000),
         shows: {
           type: "Migrated",
           amount: 10_000,
           fee: 20_000,
           from: "Sapling",
           to: "Orchard",
+          source: "Indexer + RPC by txid",
         },
         zodl: "sent 80,000 · fee 20,000",
         zingo: "send-to-self 80,000 · fee 20,000",
@@ -485,12 +541,14 @@ const cases: [group: string, Case[]][] = [
         tx: "Sapling 100,000 → own t1internal 10,000 · change Sapling 75,000 · fee 15,000",
         notes: [spent("sapling", 100_000), got("sapling", 75_000)],
         transparent: { received: 10_000n, to: "t1internal" },
+        full: read(15_000, 0, { outputs: outputs([10_000, "t1internal"]) }),
         shows: {
           type: "Unshielded",
           amount: 10_000,
           fee: 15_000,
           from: "Shielded",
           to: "Transparent",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 15,000 · fee 15,000",
         zingo: "send-to-self 85,000 · fee 15,000",
@@ -508,13 +566,15 @@ const cases: [group: string, Case[]][] = [
         tx: "t1ours 46,000 → them Ironwood 16,000 · change Ironwood 5,000 · fee 25,000",
         notes: [got("ironwood", 5_000)],
         sent: [sent("ironwood", 16_000)],
-        transparent: { spent: 46_000n, from: "t1ours" },
+        transparent: { spent: 46_000n },
+        full: read(25_000, 46_000, { inputs: [input("t1ours")] }),
         shows: {
           type: "Sent",
           amount: -16_000,
           fee: 25_000,
           from: "Transparent",
           to: "u1theirs",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 41,000 · fee 25,000",
         zingo: "sent 16,000 · fee 25,000",
@@ -526,13 +586,15 @@ const cases: [group: string, Case[]][] = [
         name: "to someone's Ironwood, no change (mainnet 61f4832b…)",
         tx: "t1ours 41,000 (3 coins) → them Ironwood 16,000 · fee 25,000",
         sent: [sent("ironwood", 16_000)],
-        transparent: { spent: 41_000n, from: "t1ours" },
+        transparent: { spent: 41_000n },
+        full: read(25_000, 41_000, { inputs: Array(3).fill(input("t1ours")) }),
         shows: {
           type: "Sent",
           amount: -16_000,
           fee: 25_000,
           from: "Transparent",
           to: "u1theirs",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 41,000 · fee 25,000",
         zingo: "sent 16,000 · fee 25,000",
@@ -547,15 +609,19 @@ const cases: [group: string, Case[]][] = [
         transparent: {
           spent: 50_000n,
           received: 9_000n,
-          from: "t1ours",
           to: "t1change",
         },
+        full: read(25_000, 50_000, {
+          inputs: [input("t1ours")],
+          outputs: outputs([9_000, "t1change"]),
+        }),
         shows: {
           type: "Sent",
           amount: -16_000,
           fee: 25_000,
           from: "Transparent",
           to: "u1theirs",
+          source: "Indexer + RPC by address",
         },
         zodl: "sent 41,000 · fee 25,000",
         zingo: "sent 16,000 · fee 25,000",
@@ -569,49 +635,41 @@ const cases: [group: string, Case[]][] = [
         transparent: {
           spent: 100_000n,
           received: 40_000n,
-          from: "t1ours",
           to: "t1theirs",
         },
-        paid: [{ value: 50_000, recipient: "t1theirs" }],
+        full: read(10_000, 100_000, {
+          inputs: [input("t1ours")],
+          outputs: outputs([50_000, "t1theirs"], [40_000, "t1change"]),
+        }),
         shows: {
           type: "Sent",
           amount: -50_000,
           fee: 10_000,
           from: "Transparent",
           to: "t1theirs",
-        },
-        today: {
-          type: "Sent",
-          amount: -60_000,
-          fee: 0,
-          from: "Transparent",
-          to: "t1theirs",
+          source: "RPC by address",
         },
         zodl: "sent 60,000 · fee 10,000",
         zingo: "sent 50,000 · fee 10,000",
         vizor: "sent 50,000 · fee 10,000",
         zkool: "Sent −60,000 · fee 10,000",
-        note: "What it paid is read from the block, but only a transaction with a shielded side uses it.",
       },
       {
         id: "t-xt-nc",
         name: "to someone's transparent address, no change",
         tx: "t1ours 60,000 → them t1theirs 50,000 · fee 10,000",
-        transparent: { spent: 60_000n, from: "t1ours", to: "t1theirs" },
-        paid: [{ value: 50_000, recipient: "t1theirs" }],
+        transparent: { spent: 60_000n, to: "t1theirs" },
+        full: read(10_000, 60_000, {
+          inputs: [input("t1ours")],
+          outputs: outputs([50_000, "t1theirs"]),
+        }),
         shows: {
           type: "Sent",
           amount: -50_000,
           fee: 10_000,
           from: "Transparent",
           to: "t1theirs",
-        },
-        today: {
-          type: "Sent",
-          amount: -60_000,
-          fee: 0,
-          from: "Transparent",
-          to: "t1theirs",
+          source: "RPC by address",
         },
         zodl: "sent 60,000 · fee 10,000",
         zingo: "sent 50,000 · fee 10,000",
@@ -623,13 +681,15 @@ const cases: [group: string, Case[]][] = [
         name: "to our own Ironwood (Shield)",
         tx: "t1ours 100,000 → own Ironwood 85,000 · fee 15,000",
         notes: [got("ironwood", 85_000)],
-        transparent: { spent: 100_000n, from: "t1ours" },
+        transparent: { spent: 100_000n },
+        full: read(15_000, 100_000, { inputs: [input("t1ours")] }),
         shows: {
           type: "Shielded",
           amount: 85_000,
           fee: 15_000,
           from: "Transparent",
           to: "Shielded",
+          source: "Indexer + RPC by address",
         },
         zodl: "shield 100,000 · fee 15,000",
         zingo: "shield 85,000 · fee 15,000",
@@ -644,29 +704,27 @@ const cases: [group: string, Case[]][] = [
         transparent: {
           spent: 100_000n,
           received: 90_000n,
-          from: "t1ours",
+          receiving: 90_000n,
           to: "t1ours",
         },
+        full: read(10_000, 100_000, {
+          inputs: [input("t1ours")],
+          outputs: outputs([90_000, "t1ours"]),
+        }),
         shows: {
           type: "Sent",
           amount: -90_000,
           fee: 10_000,
           from: "Transparent",
           to: "Transparent",
-        },
-        today: {
-          type: "Sent",
-          amount: -10_000,
-          fee: 0,
-          from: "Transparent",
-          to: "Transparent",
+          self: true,
+          source: "RPC by address",
         },
         zodl: "sent 10,000 · fee 10,000",
         zingo: "send-to-self 90,000 · fee 10,000",
         vizor: "sent 90,000 · fee 10,000 + received 90,000",
         zkool: "T. Self Transfer −10,000 · fee 10,000",
-        decide:
-          "Shows the fee as the amount, as the shielded self-payment did before #99. Expected follows 2.6's self-payment rule; a payment and change can't be told apart here.",
+        note: "product.md 2.6: what reached a receiving address is the payment, the fee apart; change goes to internal addresses.",
       },
     ],
   ],
@@ -684,6 +742,7 @@ const cases: [group: string, Case[]][] = [
           fee: 0,
           from: "Shielded",
           to: "Shielded",
+          source: "Indexer",
         },
         zodl: "received 10,000",
         zingo: "received 10,000",
@@ -695,20 +754,14 @@ const cases: [group: string, Case[]][] = [
         id: "xi-t",
         name: "to our transparent address",
         tx: "their Ironwood 100,000 → us t1ours 10,000 · their change · fee 15,000",
-        transparent: { received: 10_000n, to: "t1ours" },
+        transparent: { received: 10_000n, to: "t1ours", shielded: true },
         shows: {
           type: "Received",
           amount: 10_000,
           fee: 0,
           from: "Shielded",
           to: "Transparent",
-        },
-        today: {
-          type: "Received",
-          amount: 10_000,
-          fee: 0,
-          from: "Transparent",
-          to: "Transparent",
+          source: "RPC by address",
         },
         zodl: "received 10,000",
         zingo: "received 10,000",
@@ -727,6 +780,7 @@ const cases: [group: string, Case[]][] = [
           fee: 0,
           from: "Shielded",
           to: "Shielded",
+          source: "Indexer",
         },
         zodl: "received 10,000",
         zingo: "received 10,000",
@@ -743,31 +797,58 @@ const cases: [group: string, Case[]][] = [
         name: "to our Ironwood",
         tx: "t1sender 41,000 → us Ironwood 16,000 · fee 25,000",
         notes: [got("ironwood", 16_000, "external")],
+        full: read(25_000, 41_000, { inputs: [input("t1sender")] }),
         shows: {
           type: "Received",
           amount: 16_000,
           fee: 0,
-          from: "Shielded",
+          from: "t1sender",
           to: "Shielded",
+          source: "Indexer + RPC by txid",
         },
         zodl: "received 16,000",
         zingo: "received 16,000",
         vizor: "received 16,000",
         zkool: "Receive 16,000",
-        decide:
-          "The sender's transparent address is public on chain. Show it as From, or keep \"Shielded\"? We don't read it today.",
+      },
+      {
+        id: "xt-i3",
+        name: "to our Ironwood, from three addresses (mainnet 61f4832b…)",
+        tx: "t1XurB… 20,000 + t1Y5bT… 11,000 + t1SLrP… 10,000 → us Ironwood 16,000 · fee 25,000",
+        notes: [got("ironwood", 16_000, "external")],
+        full: read(25_000, 41_000, {
+          inputs: [input("t1XurB"), input("t1Y5bT"), input("t1SLrP")],
+        }),
+        shows: {
+          type: "Received",
+          amount: 16_000,
+          fee: 0,
+          from: "t1XurB +2",
+          to: "Shielded",
+          source: "Indexer + RPC by txid",
+        },
+        zodl: "received 16,000",
+        zingo: "received 16,000",
+        vizor: "received 16,000",
+        zkool: "Receive 16,000",
+        note: "From names the first sender and counts the rest; the detail page lists them all.",
       },
       {
         id: "xt-t",
         name: "to our transparent address",
         tx: "t1sender 60,000 → us t1ours 50,000 · fee 10,000",
-        transparent: { received: 50_000n, from: "t1sender", to: "t1ours" },
+        transparent: { received: 50_000n, receiving: 50_000n, to: "t1ours" },
+        full: read(10_000, 60_000, {
+          inputs: [input("t1sender")],
+          outputs: outputs([50_000, "t1ours"]),
+        }),
         shows: {
           type: "Received",
           amount: 50_000,
           fee: 0,
           from: "t1sender",
           to: "Transparent",
+          source: "RPC by address",
         },
         zodl: "received 50,000",
         zingo: "received 50,000",
@@ -780,26 +861,65 @@ const cases: [group: string, Case[]][] = [
 
 const label = (party: Party) =>
   "address" in party
-    ? party.address
+    ? party.address + (party.more ? ` +${party.more.length}` : "")
     : party.pool[0].toUpperCase() + party.pool.slice(1);
 
-function show(c: Case): Shown {
-  const blocks = new Map([
-    [at.height, { txids: new Map([[at.tx_index, "tx"]]) } as Block],
+/**
+ * Where history's data comes from: the indexer for shielded notes, and
+ * lightwalletd's RPC for the transparent sync's address history or the
+ * transaction asked for by its txid.
+ */
+function source(c: Case) {
+  const txids = txidsToRead(c.notes ?? [], c.sent ?? [], txsOf(c), blocksOf(c));
+  const rpc = c.transparent
+    ? "RPC by address"
+    : txids.has("tx")
+      ? "RPC by txid"
+      : undefined;
+  const indexer = c.notes?.length || c.sent?.length ? "Indexer" : undefined;
+  return [indexer, rpc].filter(Boolean).join(" + ");
+}
+
+const blocksOf = (c: Case) =>
+  new Map<number, Block>([
+    [
+      at.height,
+      {
+        txids: new Map([[at.tx_index, "tx"]]),
+        transparentInputs: c.full?.inputs?.length ? [at.tx_index] : [],
+      } as Block,
+    ],
   ]);
-  const transparent = c.transparent && {
+
+const txsOf = (c: Case): TransparentTx[] =>
+  c.transparent
+    ? [
+        {
+          txid: "tx",
+          height: at.height,
+          received: 0n,
+          receiving: 0n,
+          spent: 0n,
+          ...c.transparent,
+        },
+      ]
+    : [];
+
+function show(c: Case): Shown {
+  const full: ParsedTx = {
     txid: "tx",
-    height: at.height,
-    received: 0n,
-    spent: 0n,
-    ...c.transparent,
+    inputs: [],
+    outputs: [],
+    value_balance: 0,
+    expiry_height: 0,
+    ...c.full,
   };
   const a = buildActivity(
     c.notes ?? [],
     c.sent ?? [],
-    transparent ? [transparent] : [],
-    blocks,
-    new Map(c.paid ? [[`${at.height}_${at.tx_index}`, c.paid]] : []),
+    txsOf(c),
+    blocksOf(c),
+    new Map(c.full && source(c).includes("RPC") ? [["tx", full]] : []),
     ours,
   ).find((entry) => entry.txid === "tx")!;
   return {
@@ -808,6 +928,8 @@ function show(c: Case): Shown {
     fee: Number(a.fee),
     from: label(a.from),
     to: label(a.to),
+    ...(a.self && { self: true as const }),
+    source: source(c),
   };
 }
 
@@ -830,7 +952,8 @@ test("case ids are unique", () => {
 });
 
 const zec = (n: number) => n.toLocaleString("en-US").replace("-", "−");
-const shows = (s: Shown) => `${s.type} ${zec(s.amount)} · fee ${zec(s.fee)}`;
+const shows = (s: Shown) =>
+  `${s.type} ${zec(s.amount)} · fee ${zec(s.fee)}${s.self ? " · to itself" : ""}`;
 const parties = (s: Shown) => `${s.from} → ${s.to}`;
 /** Today's value beside the expected one, where they differ. */
 const cell = (c: Case, of: (s: Shown) => string) =>
@@ -865,6 +988,13 @@ function markdown() {
     "Vizor (`rust/src/wallet/sync/transactions.rs`) and Zkool (`rust/src/memo.rs`).",
     "Their sends are from the wallet that made them.",
     "",
+    "**Data source** is where history's data for it comes from. The **indexer**",
+    "(zcrawler) holds the shielded notes found for the account. **RPC** is",
+    "lightwalletd: **by address**, the transparent sync's history of our",
+    "addresses; **by txid**, the whole transaction asked for by its id, for exact",
+    "fees, whom it paid and a transparent sender, which tells lightwalletd the",
+    "transaction is ours. A shielded payment received is never asked for.",
+    "",
   ];
   for (const [group, list] of cases) {
     lines.push(
@@ -875,17 +1005,19 @@ function markdown() {
         `ID${"&nbsp;".repeat(16)}`,
         "Zillions",
         "From → To",
+        "Data source",
         "Zodl",
         "Zingo",
         "Vizor",
         "Zkool",
       ]),
-      row(Array(7).fill("---")),
+      row(Array(8).fill("---")),
       ...list.map((c) =>
         row([
           `\`${c.id}\``,
           cell(c, shows),
           cell(c, parties),
+          c.shows.source,
           c.zodl,
           c.zingo,
           c.vizor,
@@ -905,16 +1037,24 @@ function markdown() {
       "",
     );
   }
-  lines.push(
-    "## Wrong today",
-    "",
-    ...all.filter((c) => c.today).map((c) => `- \`${c.id}\` ${c.name}`),
-    "",
-    "## Needs a decision",
-    "",
-    ...all.filter((c) => c.decide).map((c) => `- \`${c.id}\`: ${c.decide}`),
-    "",
-  );
+  const wrong = all.filter((c) => c.today);
+  const open = all.filter((c) => c.decide);
+  if (wrong.length) {
+    lines.push(
+      "## Wrong today",
+      "",
+      ...wrong.map((c) => `- \`${c.id}\` ${c.name}`),
+      "",
+    );
+  }
+  if (open.length) {
+    lines.push(
+      "## Needs a decision",
+      "",
+      ...open.map((c) => `- \`${c.id}\`: ${c.decide}`),
+      "",
+    );
+  }
   return lines.join("\n");
 }
 

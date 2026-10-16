@@ -20,38 +20,45 @@ zcash_client_sqlite's `v_transactions`), Zingo (zingolib `perspective.rs`),
 Vizor (`rust/src/wallet/sync/transactions.rs`) and Zkool (`rust/src/memo.rs`).
 Their sends are from the wallet that made them.
 
+**Data source** is where history's data for it comes from. The **indexer**
+(zcrawler) holds the shielded notes found for the account. **RPC** is
+lightwalletd: **by address**, the transparent sync's history of our
+addresses; **by txid**, the whole transaction asked for by its id, for exact
+fees, whom it paid and a transparent sender, which tells lightwalletd the
+transaction is ours. A shielded payment received is never asked for.
+
 ## From our Ironwood
 
-| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
-| --- | --- | --- | --- | --- | --- | --- |
-| `i-xi` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
-| `i-xi-nc` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
-| `i-xi2` | Sent −15,000 · fee 15,000 | Shielded → u1theirs | sent 30,000 · fee 15,000 | sent 10,000 + sent 5,000 · fee 15,000 | sent 15,000 · fee 15,000 | Sent −30,000 · fee 15,000 |
-| `i-xi-lost` | Sent −20,000 · fee 0 | Shielded → Shielded | sent 80,000 · fee 10,000 | not checked | not checked | Sent −20,000 · fee 10,000 |
-| `i-xt` | Sent −10,000 · fee 15,000 | Shielded → t1theirs | sent 25,000 · fee 15,000 | sent 10,000 · fee 15,000 | sent 10,000 · fee 15,000 | Sent −25,000 · fee 15,000 |
-| `i-i` | Sent −10,000 · fee 10,000 | Shielded → Shielded | sent 90,000 · fee 10,000 | send-to-self 90,000 · fee 10,000 | sent 10,000 · fee 10,000 + received 10,000 | Self Transfer −10,000 · fee 10,000 |
-| `i-t` | Unshielded 10,000 · fee 15,000 | Shielded → Transparent | sent 15,000 · fee 15,000 | send-to-self 85,000 · fee 15,000 | no row | Unshield −15,000 · fee 15,000 |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Data source | Zodl | Zingo | Vizor | Zkool |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `i-xi` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | Indexer + RPC by txid | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
+| `i-xi-nc` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | Indexer + RPC by txid | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
+| `i-xi2` | Sent −15,000 · fee 15,000 | Shielded → u1theirs +1 | Indexer + RPC by txid | sent 30,000 · fee 15,000 | sent 10,000 + sent 5,000 · fee 15,000 | sent 15,000 · fee 15,000 | Sent −30,000 · fee 15,000 |
+| `i-xi-lost` | Sent −10,000 · fee 10,000 | Shielded → Shielded | Indexer + RPC by txid | sent 80,000 · fee 10,000 | not checked | not checked | Sent −20,000 · fee 10,000 |
+| `i-xt` | Sent −10,000 · fee 15,000 | Shielded → t1theirs | Indexer + RPC by txid | sent 25,000 · fee 15,000 | sent 10,000 · fee 15,000 | sent 10,000 · fee 15,000 | Sent −25,000 · fee 15,000 |
+| `i-i` | Sent −10,000 · fee 10,000 · to itself | Shielded → Shielded | Indexer + RPC by txid | sent 90,000 · fee 10,000 | send-to-self 90,000 · fee 10,000 | sent 10,000 · fee 10,000 + received 10,000 | Self Transfer −10,000 · fee 10,000 |
+| `i-t` | Unshielded 10,000 · fee 15,000 | Shielded → Transparent | Indexer + RPC by address | sent 15,000 · fee 15,000 | send-to-self 85,000 · fee 15,000 | no row | Unshield −15,000 · fee 15,000 |
 
 - `i-xi` to someone's Ironwood: Ironwood 100,000 → them Ironwood 10,000 · change Ironwood 80,000 · fee 10,000.
 - `i-xi-nc` to someone's Ironwood, no change: Ironwood 20,000 → them Ironwood 10,000 · fee 10,000.
-- `i-xi2` to two people's Ironwood: Ironwood 100,000 → them Ironwood 10,000 · another Ironwood 5,000 · change Ironwood 70,000 · fee 15,000. **Decide:** To names only the first recipient; Zingo lists one row per recipient.
-- `i-xi-lost` to someone's Ironwood, outgoing recovery failed: Ironwood 100,000 → them Ironwood 10,000 (not recovered) · change Ironwood 80,000 · fee 10,000. Amount is inputs − change, fee included; fee unknown. The others read the fee from the transaction's value balances. With no outgoing note, Zodl takes it for a transfer to itself and shows what came back.
+- `i-xi2` to two people's Ironwood: Ironwood 100,000 → them Ironwood 10,000 · another Ironwood 5,000 · change Ironwood 70,000 · fee 15,000. To names the first recipient and counts the rest; the detail page lists each with what it was paid.
+- `i-xi-lost` to someone's Ironwood, outgoing recovery failed: Ironwood 100,000 → them Ironwood 10,000 (not recovered) · change Ironwood 80,000 · fee 10,000. With the transaction by txid, the value balance gives the fee, and what the shielded outputs held beyond our change is the payment recovery missed. With no outgoing note, Zodl takes it for a transfer to itself and shows what came back.
 - `i-xt` to someone's transparent address: Ironwood 100,000 → them t1theirs 10,000 · change Ironwood 75,000 · fee 15,000.
 - `i-i` to our own Ironwood address (self-payment): Ironwood 100,000 → own Ironwood 10,000 · change Ironwood 80,000 · fee 10,000. product.md 2.6: amount is what it paid, the fee apart.
 - `i-t` to a new transparent address of our own (Unshield): Ironwood 100,000 → own t1internal 10,000 · change Ironwood 75,000 · fee 15,000.
 
 ## From our Orchard
 
-| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
-| --- | --- | --- | --- | --- | --- | --- |
-| `o-xi` | Sent −10,000 · fee 20,000 | Shielded → u1theirs | sent 30,000 · fee 20,000 | sent 10,000 · fee 20,000 | sent 10,000 · fee 20,000 | Sent −30,000 · fee 20,000 |
-| `o-xo` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
-| `o-xs` | Sent −10,000 · fee 20,000 | Shielded → u1theirs | sent 30,000 · fee 20,000 | sent 10,000 · fee 20,000 | sent 10,000 · fee 20,000 | Sent −30,000 · fee 20,000 |
-| `o-xt` | Sent −10,000 · fee 15,000 | Shielded → t1theirs | sent 25,000 · fee 15,000 | sent 10,000 · fee 15,000 | sent 10,000 · fee 15,000 | Sent −25,000 · fee 15,000 |
-| `o-i` | Migrated 30,000 · fee 20,000 | Orchard → Ironwood | sent 80,000 · fee 20,000 | migration 30,000 · fee 20,000 | migration 30,000 · fee 20,000 | Migration −20,000 · fee 20,000 |
-| `o-i-nc` | Migrated 80,000 · fee 20,000 | Orchard → Ironwood | sent 80,000 · fee 20,000 | migration 80,000 · fee 20,000 | migration 80,000 · fee 20,000 | Migration −20,000 · fee 20,000 |
-| `o-s` | Migrated 10,000 · fee 20,000 | Orchard → Sapling | sent 80,000 · fee 20,000 | send-to-self 80,000 · fee 20,000 | sent 10,000 · fee 20,000 + received 10,000 | Self Transfer −20,000 · fee 20,000 |
-| `o-t` | Unshielded 10,000 · fee 15,000 | Shielded → Transparent | sent 15,000 · fee 15,000 | send-to-self 85,000 · fee 15,000 | no row | Unshield −15,000 · fee 15,000 |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Data source | Zodl | Zingo | Vizor | Zkool |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `o-xi` | Sent −10,000 · fee 20,000 | Shielded → u1theirs | Indexer + RPC by txid | sent 30,000 · fee 20,000 | sent 10,000 · fee 20,000 | sent 10,000 · fee 20,000 | Sent −30,000 · fee 20,000 |
+| `o-xo` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | Indexer + RPC by txid | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
+| `o-xs` | Sent −10,000 · fee 20,000 | Shielded → u1theirs | Indexer + RPC by txid | sent 30,000 · fee 20,000 | sent 10,000 · fee 20,000 | sent 10,000 · fee 20,000 | Sent −30,000 · fee 20,000 |
+| `o-xt` | Sent −10,000 · fee 15,000 | Shielded → t1theirs | Indexer + RPC by txid | sent 25,000 · fee 15,000 | sent 10,000 · fee 15,000 | sent 10,000 · fee 15,000 | Sent −25,000 · fee 15,000 |
+| `o-i` | Migrated 30,000 · fee 20,000 | Orchard → Ironwood | Indexer + RPC by txid | sent 80,000 · fee 20,000 | migration 30,000 · fee 20,000 | migration 30,000 · fee 20,000 | Migration −20,000 · fee 20,000 |
+| `o-i-nc` | Migrated 80,000 · fee 20,000 | Orchard → Ironwood | Indexer + RPC by txid | sent 80,000 · fee 20,000 | migration 80,000 · fee 20,000 | migration 80,000 · fee 20,000 | Migration −20,000 · fee 20,000 |
+| `o-s` | Migrated 10,000 · fee 20,000 | Orchard → Sapling | Indexer + RPC by txid | sent 80,000 · fee 20,000 | send-to-self 80,000 · fee 20,000 | sent 10,000 · fee 20,000 + received 10,000 | Self Transfer −20,000 · fee 20,000 |
+| `o-t` | Unshielded 10,000 · fee 15,000 | Shielded → Transparent | Indexer + RPC by address | sent 15,000 · fee 15,000 | send-to-self 85,000 · fee 15,000 | no row | Unshield −15,000 · fee 15,000 |
 
 - `o-xi` to someone's Ironwood: Orchard 100,000 → them Ironwood 10,000 · change Orchard 70,000 · fee 20,000.
 - `o-xo` to someone's Orchard: Orchard 100,000 → them Orchard 10,000 · change Orchard 80,000 · fee 10,000.
@@ -64,17 +71,17 @@ Their sends are from the wallet that made them.
 
 ## From our Sapling
 
-| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
-| --- | --- | --- | --- | --- | --- | --- |
-| `s-xo` | Sent −10,000 · fee 20,000 | Shielded → u1theirs | sent 30,000 · fee 20,000 | sent 10,000 · fee 20,000 | sent 10,000 · fee 20,000 | Sent −30,000 · fee 20,000 |
-| `s-xo-lost` | **Sent −30,000 · fee 0** (today Migrated 70,000 · fee 30,000) | **Shielded → Shielded** (today Sapling → Orchard) | sent 70,000 · fee 20,000 | not checked | not checked | Sent −30,000 · fee 20,000 |
-| `s-xs` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
-| `s-i` | Migrated 80,000 · fee 20,000 | Sapling → Ironwood | sent 80,000 · fee 20,000 | send-to-self 80,000 · fee 20,000 | not checked | Self Transfer −20,000 · fee 20,000 |
-| `s-o` | Migrated 10,000 · fee 20,000 | Sapling → Orchard | sent 80,000 · fee 20,000 | send-to-self 80,000 · fee 20,000 | sent 10,000 · fee 20,000 + received 10,000 | Self Transfer −20,000 · fee 20,000 |
-| `s-t` | Unshielded 10,000 · fee 15,000 | Shielded → Transparent | sent 15,000 · fee 15,000 | send-to-self 85,000 · fee 15,000 | no row | Unshield −15,000 · fee 15,000 |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Data source | Zodl | Zingo | Vizor | Zkool |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `s-xo` | Sent −10,000 · fee 20,000 | Shielded → u1theirs | Indexer + RPC by txid | sent 30,000 · fee 20,000 | sent 10,000 · fee 20,000 | sent 10,000 · fee 20,000 | Sent −30,000 · fee 20,000 |
+| `s-xo-lost` | Sent −10,000 · fee 20,000 | Shielded → Shielded | Indexer + RPC by txid | sent 70,000 · fee 20,000 | not checked | not checked | Sent −30,000 · fee 20,000 |
+| `s-xs` | Sent −10,000 · fee 10,000 | Shielded → u1theirs | Indexer + RPC by txid | sent 20,000 · fee 10,000 | sent 10,000 · fee 10,000 | sent 10,000 · fee 10,000 | Sent −20,000 · fee 10,000 |
+| `s-i` | Migrated 80,000 · fee 20,000 | Sapling → Ironwood | Indexer + RPC by txid | sent 80,000 · fee 20,000 | send-to-self 80,000 · fee 20,000 | not checked | Self Transfer −20,000 · fee 20,000 |
+| `s-o` | Migrated 10,000 · fee 20,000 | Sapling → Orchard | Indexer + RPC by txid | sent 80,000 · fee 20,000 | send-to-self 80,000 · fee 20,000 | sent 10,000 · fee 20,000 + received 10,000 | Self Transfer −20,000 · fee 20,000 |
+| `s-t` | Unshielded 10,000 · fee 15,000 | Shielded → Transparent | Indexer + RPC by address | sent 15,000 · fee 15,000 | send-to-self 85,000 · fee 15,000 | no row | Unshield −15,000 · fee 15,000 |
 
 - `s-xo` to someone's Orchard, change in Orchard: Sapling 100,000 → them Orchard 10,000 · change Orchard 70,000 · fee 20,000. Change goes to the pool paid into, as upstream's change strategy does.
-- `s-xo-lost` to someone's Orchard, change in Orchard, outgoing recovery failed: Sapling 100,000 → them Orchard 10,000 (not recovered) · change Orchard 70,000 · fee 20,000. Change in a pool nothing was spent from reads as funds moved there. zcash_client_sqlite makes the same call (pool_crossing_value 70,000); Zkool doesn't, since it goes by the balance change.
+- `s-xo-lost` to someone's Orchard, change in Orchard, outgoing recovery failed: Sapling 100,000 → them Orchard 10,000 (not recovered) · change Orchard 70,000 · fee 20,000. Change in a pool nothing was spent from would read as funds moved there, but the value balance shows 10,000 more left than change and fee. zcash_client_sqlite calls it a pool crossing (pool_crossing_value 70,000); Zkool doesn't, since it goes by the balance change.
 - `s-xs` to someone's Sapling: Sapling 100,000 → them Sapling 10,000 · change Sapling 80,000 · fee 10,000.
 - `s-i` all of it to our own Ironwood (Move to Ironwood): Sapling 100,000 → own Ironwood 80,000 · fee 20,000. Zingo, Vizor and Zkool name only Orchard → Ironwood a migration.
 - `s-o` to our own Orchard address: Sapling 100,000 → own Orchard 10,000 · change Sapling 70,000 · fee 20,000.
@@ -82,31 +89,31 @@ Their sends are from the wallet that made them.
 
 ## From our transparent coins
 
-| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
-| --- | --- | --- | --- | --- | --- | --- |
-| `t-xi` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
-| `t-xi-nc` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
-| `t-xi-tc` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
-| `t-xt` | **Sent −50,000 · fee 10,000** (today Sent −60,000 · fee 0) | Transparent → t1theirs | sent 60,000 · fee 10,000 | sent 50,000 · fee 10,000 | sent 50,000 · fee 10,000 | Sent −60,000 · fee 10,000 |
-| `t-xt-nc` | **Sent −50,000 · fee 10,000** (today Sent −60,000 · fee 0) | Transparent → t1theirs | sent 60,000 · fee 10,000 | sent 50,000 · fee 10,000 | sent 50,000 · fee 10,000 | Sent −60,000 · fee 10,000 |
-| `t-i` | Shielded 85,000 · fee 15,000 | Transparent → Shielded | shield 100,000 · fee 15,000 | shield 85,000 · fee 15,000 | shielded 85,000 · fee 15,000 | Shield −15,000 · fee 15,000 |
-| `t-t` | **Sent −90,000 · fee 10,000** (today Sent −10,000 · fee 0) | Transparent → Transparent | sent 10,000 · fee 10,000 | send-to-self 90,000 · fee 10,000 | sent 90,000 · fee 10,000 + received 90,000 | T. Self Transfer −10,000 · fee 10,000 |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Data source | Zodl | Zingo | Vizor | Zkool |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `t-xi` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | Indexer + RPC by address | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
+| `t-xi-nc` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | Indexer + RPC by address | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
+| `t-xi-tc` | Sent −16,000 · fee 25,000 | Transparent → u1theirs | Indexer + RPC by address | sent 41,000 · fee 25,000 | sent 16,000 · fee 25,000 | sent 16,000 · fee 25,000 | Sent −41,000 · fee 25,000 |
+| `t-xt` | Sent −50,000 · fee 10,000 | Transparent → t1theirs | RPC by address | sent 60,000 · fee 10,000 | sent 50,000 · fee 10,000 | sent 50,000 · fee 10,000 | Sent −60,000 · fee 10,000 |
+| `t-xt-nc` | Sent −50,000 · fee 10,000 | Transparent → t1theirs | RPC by address | sent 60,000 · fee 10,000 | sent 50,000 · fee 10,000 | sent 50,000 · fee 10,000 | Sent −60,000 · fee 10,000 |
+| `t-i` | Shielded 85,000 · fee 15,000 | Transparent → Shielded | Indexer + RPC by address | shield 100,000 · fee 15,000 | shield 85,000 · fee 15,000 | shielded 85,000 · fee 15,000 | Shield −15,000 · fee 15,000 |
+| `t-t` | Sent −90,000 · fee 10,000 · to itself | Transparent → Transparent | RPC by address | sent 10,000 · fee 10,000 | send-to-self 90,000 · fee 10,000 | sent 90,000 · fee 10,000 + received 90,000 | T. Self Transfer −10,000 · fee 10,000 |
 
 - `t-xi` to someone's Ironwood, shielded change: t1ours 46,000 → them Ironwood 16,000 · change Ironwood 5,000 · fee 25,000.
 - `t-xi-nc` to someone's Ironwood, no change (mainnet 61f4832b…): t1ours 41,000 (3 coins) → them Ironwood 16,000 · fee 25,000.
 - `t-xi-tc` to someone's Ironwood, transparent change: t1ours 50,000 → them Ironwood 16,000 · change t1change 9,000 · fee 25,000.
-- `t-xt` to someone's transparent address: t1ours 100,000 → them t1theirs 50,000 · change t1change 40,000 · fee 10,000. What it paid is read from the block, but only a transaction with a shielded side uses it.
+- `t-xt` to someone's transparent address: t1ours 100,000 → them t1theirs 50,000 · change t1change 40,000 · fee 10,000.
 - `t-xt-nc` to someone's transparent address, no change: t1ours 60,000 → them t1theirs 50,000 · fee 10,000.
 - `t-i` to our own Ironwood (Shield): t1ours 100,000 → own Ironwood 85,000 · fee 15,000. zcash_client_sqlite: is_shielding. Zodl shows what the coins held, fee included.
-- `t-t` to our own transparent address: t1ours 100,000 → own t1ours 90,000 · fee 10,000. **Decide:** Shows the fee as the amount, as the shielded self-payment did before #99. Expected follows 2.6's self-payment rule; a payment and change can't be told apart here.
+- `t-t` to our own transparent address: t1ours 100,000 → own t1ours 90,000 · fee 10,000. product.md 2.6: what reached a receiving address is the payment, the fee apart; change goes to internal addresses.
 
 ## From someone's shielded funds
 
-| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
-| --- | --- | --- | --- | --- | --- | --- |
-| `xi-i` | Received 10,000 · fee 0 | Shielded → Shielded | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
-| `xi-t` | Received 10,000 · fee 0 | **Shielded → Transparent** (today Transparent → Transparent) | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
-| `xo-s` | Received 10,000 · fee 0 | Shielded → Shielded | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Data source | Zodl | Zingo | Vizor | Zkool |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `xi-i` | Received 10,000 · fee 0 | Shielded → Shielded | Indexer | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
+| `xi-t` | Received 10,000 · fee 0 | Shielded → Transparent | RPC by address | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
+| `xo-s` | Received 10,000 · fee 0 | Shielded → Shielded | Indexer | received 10,000 | received 10,000 | received 10,000 | Receive 10,000 |
 
 - `xi-i` to our Ironwood: their Ironwood 100,000 → us Ironwood 10,000 · their change · fee 10,000. Receives show no fee: it isn't ours to pay.
 - `xi-t` to our transparent address: their Ironwood 100,000 → us t1ours 10,000 · their change · fee 15,000. No transparent input means no transparent sender: the funds came from a shielded pool.
@@ -114,24 +121,12 @@ Their sends are from the wallet that made them.
 
 ## From someone's transparent coins
 
-| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Zodl | Zingo | Vizor | Zkool |
-| --- | --- | --- | --- | --- | --- | --- |
-| `xt-i` | Received 16,000 · fee 0 | Shielded → Shielded | received 16,000 | received 16,000 | received 16,000 | Receive 16,000 |
-| `xt-t` | Received 50,000 · fee 0 | t1sender → Transparent | received 50,000 | received 50,000 | received 50,000 | Receive 50,000 |
+| ID&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Zillions | From → To | Data source | Zodl | Zingo | Vizor | Zkool |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `xt-i` | Received 16,000 · fee 0 | t1sender → Shielded | Indexer + RPC by txid | received 16,000 | received 16,000 | received 16,000 | Receive 16,000 |
+| `xt-i3` | Received 16,000 · fee 0 | t1XurB +2 → Shielded | Indexer + RPC by txid | received 16,000 | received 16,000 | received 16,000 | Receive 16,000 |
+| `xt-t` | Received 50,000 · fee 0 | t1sender → Transparent | RPC by address | received 50,000 | received 50,000 | received 50,000 | Receive 50,000 |
 
-- `xt-i` to our Ironwood: t1sender 41,000 → us Ironwood 16,000 · fee 25,000. **Decide:** The sender's transparent address is public on chain. Show it as From, or keep "Shielded"? We don't read it today.
+- `xt-i` to our Ironwood: t1sender 41,000 → us Ironwood 16,000 · fee 25,000.
+- `xt-i3` to our Ironwood, from three addresses (mainnet 61f4832b…): t1XurB… 20,000 + t1Y5bT… 11,000 + t1SLrP… 10,000 → us Ironwood 16,000 · fee 25,000. From names the first sender and counts the rest; the detail page lists them all.
 - `xt-t` to our transparent address: t1sender 60,000 → us t1ours 50,000 · fee 10,000.
-
-## Wrong today
-
-- `s-xo-lost` to someone's Orchard, change in Orchard, outgoing recovery failed
-- `t-xt` to someone's transparent address
-- `t-xt-nc` to someone's transparent address, no change
-- `t-t` to our own transparent address
-- `xi-t` to our transparent address
-
-## Needs a decision
-
-- `i-xi2`: To names only the first recipient; Zingo lists one row per recipient.
-- `t-t`: Shows the fee as the amount, as the shielded self-payment did before #99. Expected follows 2.6's self-payment rule; a payment and change can't be told apart here.
-- `xt-i`: The sender's transparent address is public on chain. Show it as From, or keep "Shielded"? We don't read it today.

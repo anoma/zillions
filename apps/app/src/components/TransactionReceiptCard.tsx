@@ -1,6 +1,6 @@
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
-import type { Activity } from "../lib/wallet/types";
+import type { Activity, Party } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
 import { PageShell } from "./PageShell";
@@ -22,8 +22,35 @@ export type TransactionReceiptCardProps = {
     | "timestamp"
     | "from"
     | "to"
+    | "self"
   > & { memo?: string };
 };
+
+/** Every address on a side that has several, each recipient with what it got. */
+function PartyList({ label, party }: { label: string; party: Party }) {
+  if (!("address" in party) || !party.more) return null;
+  return (
+    <div className="mt-5 rounded-lg border border-gray-300 p-3 text-xs font-medium">
+      <div>{label}:</div>
+      {[party, ...party.more].map(({ address, value }) => (
+        <div
+          key={address}
+          className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2"
+        >
+          <CopyToClipboardControl
+            value={address}
+            className="justify-between gap-2"
+          >
+            <span className="font-normal tracking-tight wrap-anywhere">
+              {address}
+            </span>
+          </CopyToClipboardControl>
+          {value !== undefined && <ZecValue zat={value} />}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
   const { signal, value } = transactionValue(tx);
@@ -89,6 +116,9 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
             </div>
           ))}
         </div>
+
+        <PartyList label="Senders" party={tx.from} />
+        <PartyList label="Recipients" party={tx.to} />
 
         {tx.memo && (
           <div className="mt-5 rounded-lg border border-gray-300">

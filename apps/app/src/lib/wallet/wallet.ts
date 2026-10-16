@@ -1,16 +1,20 @@
-import initZcore, { parse_transaction, script_address } from "@zillions/zcore";
+import initZcore, { parse_transaction } from "@zillions/zcore";
 
 import { invariant } from "../invariant";
 import { dedupe, singleton } from "../utils";
 import {
   activityHeights,
   buildActivity,
-  payments,
   sendingTxs,
+  txidsToRead,
 } from "./activity";
 import { balances, spendable, walletData } from "./balance";
 import { fetchTreeSizes, type TreeSizes } from "./chain/indexer";
-import { fetchBlock, fetchLatestHeight } from "./chain/lightwalletd";
+import {
+  fetchBlock,
+  fetchLatestHeight,
+  fetchTransaction,
+} from "./chain/lightwalletd";
 import { type ProveStage, submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
 import { pendingActivity, prunePending } from "./pending";
@@ -40,6 +44,7 @@ import {
   cachedTransparent,
   keepReserved,
   nextInternalAddress,
+  type ParsedTx,
   REORG_DEPTH,
   reserveInternalAddress,
   syncTransparent,
@@ -413,7 +418,45 @@ export class Wallet {
         console.error("[sync] block lookup failed", heights[i], block.reason);
     });
     if (heights.length) this.#save();
+    await this.#fetchTxs();
     this.#emitProgress();
+  };
+
+  /** History's transactions in full: those fetched, and those the transparent sync read. */
+  #fullTxs = () =>
+    new Map<string, ParsedTx>([
+      ...(this.#state.transparent?.txs ?? []).map(
+        (tx) => [tx.txid, tx] as const,
+      ),
+      ...this.#state.txs,
+    ]);
+
+  /**
+   * Fetches in full each transaction history reads that way, once: a txid
+   * fixes its contents, so it's kept for good. One that fails is asked for
+   * next sync.
+   */
+  #fetchTxs = async () => {
+    const { notes, sent, blocks } = this.#state;
+    const known = this.#fullTxs();
+    const txids = txidsToRead(
+      notes,
+      sent,
+      this.#transparent?.txs ?? [],
+      blocks,
+    );
+    const missing = [...txids].filter((txid) => !known.has(txid));
+    if (!missing.length) return;
+    await initZcore();
+    const { txs } = this.#state;
+    const fetched = await Promise.allSettled(missing.map(fetchTransaction));
+    fetched.forEach((raw, i) => {
+      if (raw.status === "fulfilled") {
+        const { data, height } = raw.value;
+        txs.set(missing[i], parse_transaction(NETWORK, height, data));
+      } else console.error("[sync] tx lookup failed", missing[i], raw.reason);
+    });
+    this.#save();
   };
 
   /**
@@ -443,17 +486,17 @@ export class Wallet {
   async getTransactionHistory(): Promise<Activity[]> {
     await this.#seed();
     const { notes, sent, blocks, pending } = this.#state;
-    const txs = this.#transparent?.txs ?? [];
-    const addresses = this.#transparent?.addresses;
-    await initZcore();
     // Until the transparent side names our addresses, an unshield to one of
     // them would read as a payment.
-    const paid = addresses
-      ? payments(this.#sendingTxs().values(), blocks, addresses, (script) =>
-          script_address(NETWORK, script),
-        )
-      : undefined;
-    const history = buildActivity(notes, sent, txs, blocks, paid, addresses);
+    const addresses = this.#transparent?.addresses;
+    const history = buildActivity(
+      notes,
+      sent,
+      this.#transparent?.txs ?? [],
+      blocks,
+      addresses && this.#fullTxs(),
+      addresses,
+    );
     const mined = new Set(history.map((tx) => tx.txid));
     return [...pendingActivity(pending, mined), ...history];
   }
