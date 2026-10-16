@@ -213,8 +213,8 @@ export interface Block {
   treeSizes: Record<Pool, number>;
   /** How many notes each transaction, by index, adds to each pool. */
   outputs: Map<number, Record<Pool, number>>;
-  /** Its transactions that spend transparent coins, by index; absent in blocks stored before. */
-  transparentInputs?: number[];
+  /** Its transactions that spend transparent coins, by index. */
+  transparentInputs: number[];
 }
 
 /** CompactTx fields listing each pool's new notes, and ChainMetadata's tree sizes. */

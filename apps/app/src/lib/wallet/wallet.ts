@@ -397,10 +397,7 @@ export class Wallet {
     const history = [
       ...activityHeights(notes, sent, this.#transparent?.txs ?? []),
     ];
-    // One stored before blocks named their transparent spends is fetched again.
-    const missing = history.filter(
-      (height) => !blocks.get(height)?.transparentInputs,
-    );
+    const missing = history.filter((height) => !blocks.has(height));
     // A block a reorg can still replace is stored, so history shows it on
     // load, but fetched again once per sync.
     const unsettled =
@@ -428,11 +425,10 @@ export class Wallet {
   /** History's transactions in full: those fetched, and those the transparent sync read. */
   #fullTxs = () =>
     new Map<string, ParsedTx>([
-      // Parsed before fees and senders were read: fetched again.
-      ...(this.#state.transparent?.txs ?? [])
-        .filter((tx) => tx.value_balance !== undefined)
-        .map((tx) => [tx.txid, tx] as const),
-      ...(this.#state.txs ?? []),
+      ...(this.#state.transparent?.txs ?? []).map(
+        (tx) => [tx.txid, tx] as const,
+      ),
+      ...this.#state.txs,
     ]);
 
   /**
@@ -452,7 +448,7 @@ export class Wallet {
     const missing = [...txids].filter((txid) => !known.has(txid));
     if (!missing.length) return;
     await initZcore();
-    const txs = (this.#state.txs ??= new Map());
+    const { txs } = this.#state;
     const fetched = await Promise.allSettled(missing.map(fetchTransaction));
     fetched.forEach((raw, i) => {
       if (raw.status === "fulfilled") {

@@ -141,6 +141,7 @@ const block = (overrides: Partial<Block>): Block => ({
   txids: new Map(),
   treeSizes: { sapling: 0, orchard: 0, ironwood: 0 },
   outputs: new Map(),
+  transparentInputs: [],
   ...overrides,
 });
 

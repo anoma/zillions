@@ -392,7 +392,7 @@ export function txidsToRead(
   const txid = ({ height, tx_index }: TxLocator) =>
     blocks.get(height)?.txids.get(tx_index);
   const coinsIn = ({ height, tx_index }: TxLocator) =>
-    !!blocks.get(height)?.transparentInputs?.includes(tx_index);
+    !!blocks.get(height)?.transparentInputs.includes(tx_index);
   const ids = [
     ...notes.flatMap((n) => (n.spend.status === "spent" ? [n.spend.at] : [])),
     ...sent,

@@ -29,6 +29,7 @@ const state = (): WalletState => ({
         txids: new Map([[2, "tx2"]]),
         treeSizes: { sapling: 1, orchard: 2, ironwood: 3 },
         outputs: new Map(),
+        transparentInputs: [4],
       },
     ],
   ]),

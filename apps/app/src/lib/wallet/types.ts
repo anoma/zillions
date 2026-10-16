@@ -151,7 +151,7 @@ export interface ShieldedScan {
 /** Everything the wallet keeps for one account, stored as a whole. */
 export interface WalletState {
   /** Bumped when the shape changes: an older state is dropped and synced again. */
-  version: 3;
+  version: 4;
   id: string;
   notes: Note[];
   sent: Sent[];
@@ -161,8 +161,8 @@ export interface WalletState {
   transparent?: TransparentCache;
   /** The blocks history names, for their txids and times. */
   blocks: Map<number, Block>;
-  /** History's transactions read in full, by txid; absent in states stored before. */
-  txs?: Map<string, ParsedTx>;
+  /** History's transactions read in full, by txid. */
+  txs: Map<string, ParsedTx>;
 }
 
 /** One transaction as history shows it. */
