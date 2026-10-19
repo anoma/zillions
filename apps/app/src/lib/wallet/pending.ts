@@ -79,7 +79,7 @@ export const confirmedAt = (history: Activity[], tip: number | undefined) =>
 export const BLOCK_SECONDS = 75;
 
 /** About how long a broadcast takes to show mined: a block, the indexer, the next sync, with room. */
-export const PROCESSING_ESTIMATE_MIN = 5;
+export const PROCESSING_ESTIMATE_MIN = 3;
 
 /** Whole minutes left of the usual wait for a broadcast at `timestamp` (Unix seconds) as of `now` (ms); 0 once it's late. */
 export const minutesLeft = (timestamp: number, now: number) =>

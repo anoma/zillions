@@ -199,8 +199,8 @@ Moves shielded funds to one of the account's own transparent addresses.
     one segment per block, then "Completed" (a payment link: Unclaimed,
     Claimed or Cancelled). k is zcash_client_backend's default: 3 for the
     account's own transactions, 10 for a payment received from someone else.
-    Processing counts down the usual 5 minutes live ("Processing · ~3
-    min", and "About 3 min left" on its detail page); past them it reads
+    Processing counts down the usual 3 minutes live ("Processing · ~2
+    min", and "About 2 min left" on its detail page); past them it reads
     "Still processing", and the detail page says how many blocks are left
     before it expires. Hovering or tapping the status explains what it's
     waiting for. One that expires unmined drops off the list;

@@ -114,14 +114,14 @@ test("a mined transaction stays pending until it has the default confirmations",
   expect(at(undefined)).toEqual(["Sent Confirmed 0", "Received Confirmed 0"]);
 });
 
-test("a broadcast counts down the usual 5 minutes, then reads as late", () => {
+test("a broadcast counts down the usual 3 minutes, then reads as late", () => {
   const sent = 1_000;
   const at = (seconds: number) => minutesLeft(sent, (sent + seconds) * 1000);
 
-  expect(at(0)).toBe(5);
-  expect(at(30)).toBe(5);
-  expect(at(60)).toBe(4);
-  expect(at(4 * 60 + 59)).toBe(1);
-  expect(at(5 * 60)).toBe(0);
+  expect(at(0)).toBe(3);
+  expect(at(30)).toBe(3);
+  expect(at(60)).toBe(2);
+  expect(at(2 * 60 + 59)).toBe(1);
+  expect(at(3 * 60)).toBe(0);
   expect(at(60 * 60)).toBe(0);
 });
