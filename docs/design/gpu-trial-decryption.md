@@ -16,8 +16,7 @@ of scope. The CPU path stays, as the fallback everywhere.
 
   Balance and history are identical across all four runs.
 - **Once warm, per chunk:** about 0.2 s on the GPU against about 0.78 s on 8
-  wasm workers, so long syncs gain about 4×. A short sync gains less because of
-  V8 warm-up, which affects both paths (see [Warm-up](#warm-up)).
+  wasm workers, so long syncs gain about 4×.
 - **Correctness doesn't rest on the GPU.** The GPU only rules outputs out.
   Every possible hit is decrypted again by upstream's own
   `try_compact_note_decryption`, and spot checks fail any chunk where the GPU
@@ -99,14 +98,18 @@ The GPU takes the first two rows.
 
 ## Warm-up
 
-On a fresh page, V8 runs wasm on its baseline compiler until optimized code is
-ready. Wasm has no on-stack replacement, so one long `try_decrypt` call stays
-slow until it returns. Measured on the CPU path, a worker's first chunk takes
-**28.7 s, against 6.2 s once warm**, which costs about 22 s of a 105 s sync. The
-GPU path's shorter calls warm up sooner, but its first ~35 chunks still run
-5–6× slower on the CPU side. Firefox shows no such warm-up (about 5–7 s per
-CPU chunk from the start). This is separate from the GPU work: splitting
-`try_decrypt` into shorter calls would likely fix it for both paths.
+A worker's first `try_decrypt` call is no slower than later ones. On an M1 in
+Chrome 155, with a throwaway profile and a fresh setup sync of 86 chunks:
+
+| path | sync | first call per worker | later calls |
+|---|---|---|---|
+| CPU | 92.1 s, 92.7 s | 5.9–6.8 s (Sapling about 9.3 s) | about 6.6 s |
+| GPU | 31.3 s | 0.8–2.3 s | 1.1–1.6 s |
+
+V8 runs Liftoff code until TurboFan's is ready, but here Liftoff is only about
+1.5× slower (Node, `--liftoff-only`: about 10 s per chunk against 6.8 s), and
+tier-up finishes well inside the first call. Open DevTools does slow every
+call, the first one most (19 s, then 15 s), so timings need it closed.
 
 ## Prior art
 
