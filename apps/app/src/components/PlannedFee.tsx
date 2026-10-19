@@ -56,7 +56,7 @@ export function FeeRow({
   label?: string;
 }) {
   return (
-    <div className="flex items-center justify-between text-sm font-medium text-gray-600">
+    <div className="flex items-center justify-between text-sm font-medium">
       <div>{label}</div>
       <div>
         {fee !== undefined ? (

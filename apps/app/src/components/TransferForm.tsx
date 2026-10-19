@@ -12,34 +12,8 @@ import { AmountInput } from "./AmountInput";
 import { TotalRow } from "./PlannedFee";
 import { ActionButton } from "./ui/ActionButton";
 import type { Color } from "./ui/types";
-import {
-  cardClassName,
-  pillButtonClassName,
-  sectionLabelClassName,
-} from "./ui/utils";
+import { pillButtonClassName } from "./ui/utils";
 import { ZecValue } from "./ZecValue";
-
-export function TransferForm({
-  onSubmit,
-  className,
-  children,
-}: {
-  onSubmit: () => void;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <form
-      className={twMerge(cardClassName, "w-full mt-8 p-0 gap-0", className)}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit();
-      }}
-    >
-      {children}
-    </form>
-  );
-}
 
 const POOL_LABEL = { shielded: "Shielded", transparent: "Transparent" };
 
@@ -57,8 +31,8 @@ export function PoolRoute({
     <span
       title={title}
       className={twMerge(
-        "h-9 flex items-center justify-center rounded-full text-sm font-medium",
-        pool === "shielded" ? "bg-gold" : "border border-line bg-surface",
+        "h-12 flex items-center justify-center rounded-full text-base font-medium",
+        pool === "shielded" ? "bg-gold" : "border border-line bg-card",
       )}
     >
       {POOL_LABEL[pool]}
@@ -264,13 +238,10 @@ export function FormCard({
   return (
     <section
       aria-labelledby={headingId}
-      className={twMerge(
-        "flex flex-col gap-4 p-6 border-b border-line",
-        className,
-      )}
+      className={twMerge("flex flex-col gap-2", className)}
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 id={headingId} className={sectionLabelClassName}>
+        <h2 id={headingId} className="text-xs font-medium">
           {heading}
         </h2>
         {aside}
@@ -302,8 +273,8 @@ export function AmountField({
       <AmountInput
         ref={ref}
         value={value}
-        className={twMerge("h-20", error && "text-red-700")}
-        maxFontSize="4.5rem"
+        className={twMerge("h-28", error && "text-red-700")}
+        maxFontSize="6rem"
         aria-invalid={Boolean(error)}
         aria-describedby={
           [error && errorId, describedBy].filter(Boolean).join(" ") || undefined
@@ -323,13 +294,6 @@ export function AmountField({
   );
 }
 
-/** A caption over a control at the foot of the amount card: "Pay from", "Moving". */
-export function Caption({ children }: { children: ReactNode }) {
-  return (
-    <p className="mt-2 -mb-2 text-xs font-medium text-gray-600">{children}</p>
-  );
-}
-
 /** The fee breakdown: `rows` then the total line. */
 export function Breakdown({
   label,
@@ -341,7 +305,10 @@ export function Breakdown({
   children: ReactNode;
 }) {
   return (
-    <section aria-label="Summary" className="flex flex-col gap-3 p-6">
+    <section
+      aria-label="Summary"
+      className="flex flex-col gap-2 p-4 rounded-lg bg-card"
+    >
       {children}
       <TotalRow label={label} value={total} />
     </section>
@@ -367,10 +334,11 @@ export function SubmitBlock({
   children?: ReactNode;
 }) {
   return (
-    <div className="px-6 pb-6">
+    // Pulled toward the summary: the button acts on what it adds up.
+    <div className="-mt-4">
       <ActionButton
-        size="lg"
-        className="w-full"
+        size="md"
+        className="w-full h-14"
         backgroundColor={color}
         textColor={color === "black" ? "white" : undefined}
         disabled={pending}

@@ -1,11 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import QRCode from "react-qr-code";
-import { twMerge } from "tailwind-merge";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
-import { PageShell } from "../components/PageShell";
+import { FormPage } from "../components/FormPage";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
-import { cardClassName, sectionLabelClassName } from "../components/ui/utils";
+import { FormCard } from "../components/TransferForm";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
@@ -22,23 +21,17 @@ function ReceiveRoute() {
   const address = isTransparent ? account.transparent.address : shielded;
 
   return (
-    <PageShell title="Receive">
-      <section
-        aria-labelledby="receive-address"
-        className={twMerge(cardClassName, "mt-8 gap-5")}
-      >
-        <div className="flex flex-col gap-3">
-          <h2 id="receive-address" className={sectionLabelClassName}>
-            Your address
-          </h2>
-          <ShieldedTransparentToggle
-            label="Address type"
-            isTransparent={isTransparent}
-            setIsTransparent={setIsTransparent}
-          />
-        </div>
+    <FormPage title="Receive">
+      <FormCard heading="Address type">
+        <ShieldedTransparentToggle
+          label="Address type"
+          isTransparent={isTransparent}
+          setIsTransparent={setIsTransparent}
+        />
+      </FormCard>
 
-        <div className="mx-auto p-4 rounded-xl border border-line bg-white">
+      <FormCard heading="Your address" className="gap-5">
+        <div className="mx-auto p-4 rounded-xl border border-line bg-card">
           {address ? (
             <QRCode
               key={address}
@@ -60,7 +53,7 @@ function ReceiveRoute() {
         {address && (
           <CopyToClipboardControl
             value={address}
-            className="justify-between gap-4 px-4 py-3 rounded-xl border border-line bg-white transition-colors duration-300 hover:border-line-strong"
+            className="justify-between gap-4 px-4 py-3 rounded-xl border border-line bg-card transition-colors duration-300 hover:border-line-strong"
           >
             <span className="text-sm font-medium wrap-anywhere">{address}</span>
           </CopyToClipboardControl>
@@ -71,7 +64,7 @@ function ReceiveRoute() {
             ? "Your one transparent address, for exchanges and wallets that can't pay shielded addresses. Payments to it are visible on-chain."
             : "A new address each time you open this page, so payers can't link their payments to you. Earlier ones keep working."}
         </p>
-      </section>
-    </PageShell>
+      </FormCard>
+    </FormPage>
   );
 }

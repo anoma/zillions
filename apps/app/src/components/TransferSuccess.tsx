@@ -10,7 +10,7 @@ export function TransferSuccess({
       <div className="px-10 max-sm:px-6 mt-10">
         <div
           role="status"
-          className="max-w-135 mx-auto px-5 py-4 flex items-center gap-3 rounded-3xl border border-gold/40 bg-gold/15"
+          className="max-w-150 mx-auto px-5 py-4 flex items-center gap-3 rounded-lg bg-gold/15"
         >
           <SpinnerIcon
             aria-hidden="true"

@@ -12,6 +12,7 @@ function HomeRoute() {
     <>
       <TotalBalance />
       <MigrationSection />
+      <hr className="border-line-strong" />
       <TransactionHistory title="Recent transactions" limit={5} />
     </>
   );

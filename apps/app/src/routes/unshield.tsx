@@ -1,18 +1,16 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { PageShell } from "../components/PageShell";
+import { FormPage } from "../components/FormPage";
 import { FeeRow, PlannedFee } from "../components/PlannedFee";
 import {
   AmountField,
   AvailableWithMax,
   Breakdown,
-  Caption,
   FormCard,
   Notice,
   PoolRoute,
   SubmitBlock,
-  TransferForm,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
 import { internalAddress, useInternalAddress } from "../hooks/useAddresses";
@@ -118,62 +116,62 @@ function UnshieldRoute() {
     amount > 0n && planFee !== undefined ? amount + BigInt(planFee) : undefined;
 
   return (
-    <PageShell title="Unshield">
-      <TransferForm onSubmit={onSubmit}>
-        <FormCard
-          heading="Amount"
-          aside={
-            <div id="unshield-available">
-              <AvailableWithMax
-                available={available}
-                isMax={isMax}
-                onToggleMax={() => {
-                  amountField.toggleMax();
-                  clear();
-                }}
-              />
-            </div>
-          }
-        >
-          <AmountField
-            id="unshield-amount"
-            ref={amountRef}
-            value={amountField.shown(amount)}
-            describedBy="unshield-available"
-            error={amountError}
-            onChange={(value) => {
-              amountField.type(value);
-              clear();
-            }}
-          />
-          <Caption>Moving</Caption>
-          <PoolRoute from="shielded" to="transparent" />
-        </FormCard>
+    <FormPage title="Unshield" onSubmit={onSubmit}>
+      <FormCard heading="Moving">
+        <PoolRoute from="shielded" to="transparent" />
+      </FormCard>
 
-        <Breakdown total={total}>
-          <FeeRow
-            label="Amount"
-            fee={amount > 0n ? amount : undefined}
-            pending={isMax && maxAmount.isLoading}
-          />
-          <PlannedFee {...planned} />
-        </Breakdown>
+      <FormCard
+        heading="Amount"
+        aside={
+          <div id="unshield-available">
+            <AvailableWithMax
+              available={available}
+              isMax={isMax}
+              onToggleMax={() => {
+                amountField.toggleMax();
+                clear();
+              }}
+            />
+          </div>
+        }
+      >
+        <AmountField
+          id="unshield-amount"
+          ref={amountRef}
+          value={amountField.shown(amount)}
+          describedBy="unshield-available"
+          error={amountError}
+          onChange={(value) => {
+            amountField.type(value);
+            clear();
+          }}
+        />
+      </FormCard>
 
-        <SubmitBlock
-          label={
-            amount > 0n ? `Unshield ${zatoshiToZec(amount)} ZEC` : "Unshield"
-          }
-          pending={send.isPending}
-          pendingLabel="Unshielding..."
-          color="black"
-          stages={send.stages}
-          error={formError}
-        >
-          <Notice className="text-gray-600">
-            Goes to a new transparent address of yours, visible on-chain
-          </Notice>
-        </SubmitBlock>
-      </TransferForm>
-    </PageShell>
+      <Breakdown total={total}>
+        <FeeRow
+          label="Amount"
+          fee={amount > 0n ? amount : undefined}
+          pending={isMax && maxAmount.isLoading}
+        />
+        <PlannedFee {...planned} />
+      </Breakdown>
+
+      <SubmitBlock
+        label={
+          amount > 0n ? `Unshield ${zatoshiToZec(amount)} ZEC` : "Unshield"
+        }
+        pending={send.isPending}
+        pendingLabel="Unshielding..."
+        color="black"
+        stages={send.stages}
+        error={formError}
+      >
+        <Notice className="text-gray-600">
+          Goes to a new transparent address of yours, visible on-chain
+        </Notice>
+      </SubmitBlock>
+    </FormPage>
   );
 }

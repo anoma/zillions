@@ -7,29 +7,35 @@ import { CopyToClipboardControl } from "./CopyToClipboardControl";
 export function AddressBadge({
   party,
   copyable,
+  pill,
   className,
 }: {
   party: Party;
   copyable?: boolean;
+  /** Filled like the Shielded/Transparent toggle, instead of a dot and label. */
+  pill?: boolean;
   className?: string;
 }) {
   const address = "address" in party ? party.address : undefined;
   const kind = useAddressKind(address);
   const pool = "pool" in party ? party.pool : kind;
   // The same dots as the balance card's pool legend.
-  const dot = (
+  const dot = !pill && (
     <span
       aria-hidden="true"
       className={twMerge(
         "size-2 shrink-0 rounded-full",
-        pool === "transparent"
-          ? "border border-black/40 bg-black/10"
-          : "bg-gold",
+        pool === "transparent" ? "bg-black/10" : "bg-gold",
       )}
     />
   );
   const classes = twMerge(
     "flex items-center gap-2 text-sm font-medium whitespace-nowrap",
+    pill &&
+      twMerge(
+        "h-12 justify-center rounded-full text-base",
+        pool === "transparent" ? "border border-line bg-card" : "bg-gold",
+      ),
     className,
   );
   if (!address) {
@@ -51,7 +57,14 @@ export function AddressBadge({
   return (
     <CopyToClipboardControl
       value={address}
-      className={twMerge("group", classes)}
+      className={twMerge(
+        "group",
+        // Hover devices hide the copy icon until hover; a blank as wide as it
+        // keeps the address centered in the pill.
+        pill &&
+          "gap-1 [@media(hover:hover)]:before:size-4 [@media(hover:hover)]:before:shrink-0",
+        classes,
+      )}
       iconClassName="size-4 [@media(hover:hover)]:opacity-0 group-hover:opacity-100"
     >
       {dot}

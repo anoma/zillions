@@ -66,8 +66,8 @@ export function MainNav() {
                 aria-current={item.to === pathname ? "page" : undefined}
                 className={twMerge(
                   "flex items-center gap-3 px-3 py-2.5 rounded-full text-sm transition-colors duration-300",
-                  "hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
-                  item.to === pathname && "bg-white font-semibold",
+                  "hover:bg-card/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
+                  item.to === pathname && "bg-card font-semibold",
                 )}
               >
                 <item.icon
@@ -93,7 +93,7 @@ export function BottomNav() {
   const { pathname } = useLocation();
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-10 grid grid-cols-4 border-t border-line-strong bg-surface">
+    <nav className="fixed bottom-0 inset-x-0 z-10 grid grid-cols-4 border-t border-line bg-surface">
       {navItems.map((item) => (
         <Link
           key={item.to}

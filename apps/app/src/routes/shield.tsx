@@ -3,15 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { AmountDisplay } from "../components/AmountInput";
-import { PageShell } from "../components/PageShell";
+import { FormPage } from "../components/FormPage";
 import { FeeRow } from "../components/PlannedFee";
 import {
   Breakdown,
-  Caption,
   FormCard,
   PoolRoute,
   SubmitBlock,
-  TransferForm,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
 import { useAccount } from "../hooks/useAccount";
@@ -112,47 +110,47 @@ function ShieldRoute() {
       : validationMessage || error?.message;
 
   return (
-    <PageShell title="Shield">
-      <TransferForm onSubmit={onSubmit}>
-        <FormCard heading="Amount">
-          <AmountDisplay zat={available} />
-          <p
-            role={tooLittle ? "alert" : undefined}
-            className={twMerge(
-              "-mt-1 text-sm text-center font-medium",
-              tooLittle ? "text-red-700" : "text-gray-600",
-            )}
-          >
-            {tooLittle ? tooLittleMessage : "All your transparent funds"}
-          </p>
-          <Caption>Moving</Caption>
-          <PoolRoute
-            from="transparent"
-            to="shielded"
-            fromTitle={account.transparent.address}
-          />
-        </FormCard>
-
-        <Breakdown label="You'll have shielded" total={proposal.data?.value}>
-          <FeeRow
-            label="Transparent funds"
-            fee={available > 0n ? available : undefined}
-            pending={false}
-          />
-          <FeeRow fee={proposal.data?.fee} pending={proposal.isLoading} />
-        </Breakdown>
-
-        <SubmitBlock
-          label={
-            proposal.data ? `Shield ${zatoshiToZec(available)} ZEC` : "Shield"
-          }
-          pending={shield.isPending}
-          pendingLabel="Shielding..."
-          color="black"
-          stages={stages}
-          error={formError}
+    <FormPage title="Shield" onSubmit={onSubmit}>
+      <FormCard heading="Moving">
+        <PoolRoute
+          from="transparent"
+          to="shielded"
+          fromTitle={account.transparent.address}
         />
-      </TransferForm>
-    </PageShell>
+      </FormCard>
+
+      <FormCard heading="Amount">
+        <AmountDisplay zat={available} />
+        <p
+          role={tooLittle ? "alert" : undefined}
+          className={twMerge(
+            "-mt-1 text-sm text-center font-medium",
+            tooLittle ? "text-red-700" : "text-gray-600",
+          )}
+        >
+          {tooLittle ? tooLittleMessage : "All your transparent funds"}
+        </p>
+      </FormCard>
+
+      <Breakdown label="You'll have shielded" total={proposal.data?.value}>
+        <FeeRow
+          label="Transparent funds"
+          fee={available > 0n ? available : undefined}
+          pending={false}
+        />
+        <FeeRow fee={proposal.data?.fee} pending={proposal.isLoading} />
+      </Breakdown>
+
+      <SubmitBlock
+        label={
+          proposal.data ? `Shield ${zatoshiToZec(available)} ZEC` : "Shield"
+        }
+        pending={shield.isPending}
+        pendingLabel="Shielding..."
+        color="black"
+        stages={stages}
+        error={formError}
+      />
+    </FormPage>
   );
 }

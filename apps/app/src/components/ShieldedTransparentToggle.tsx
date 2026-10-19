@@ -32,12 +32,12 @@ export function ShieldedTransparentToggle({
       role="radiogroup"
       aria-label={label}
       onKeyDown={onKeyDown}
-      className="relative h-10 w-full p-0.5 grid grid-cols-2 rounded-full border border-line bg-surface"
+      className="relative h-12 w-full p-1 grid grid-cols-2 rounded-full border border-line bg-card"
     >
       <span
         aria-hidden="true"
         className={twMerge(
-          "absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full",
+          "absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full",
           "transition-[translate,background-color] duration-300 ease-out",
           isTransparent ? "translate-x-full bg-black" : "bg-gold",
         )}
@@ -53,14 +53,14 @@ export function ShieldedTransparentToggle({
             tabIndex={selected ? 0 : -1}
             onClick={() => setIsTransparent(option.isTransparent)}
             className={twMerge(
-              "relative rounded-full text-sm font-medium transition-colors duration-300",
+              "relative rounded-full text-base font-medium transition-colors duration-300",
               "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
               selected
                 ? twMerge(
                     "cursor-default",
                     option.isTransparent && "text-white",
                   )
-                : "cursor-pointer text-black/60 hover:text-black hover:bg-black/5",
+                : "cursor-pointer hover:bg-black/5",
             )}
           >
             {option.label}

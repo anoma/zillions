@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { PageShell } from "../components/PageShell";
+import { FormPage } from "../components/FormPage";
 import { FeeRow, PlannedFee } from "../components/PlannedFee";
 import { MemoField } from "../components/send/MemoField";
 import { PaymentLinkFields } from "../components/send/PaymentLinkFields";
@@ -15,7 +15,6 @@ import {
   FormCard,
   type Problem,
   SubmitBlock,
-  TransferForm,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
 import { useAddressKind, useFreshAddress } from "../hooks/useAddresses";
@@ -152,133 +151,131 @@ function SendRoute() {
   const transparent = transparentFrom || transparentTo;
 
   return (
-    <PageShell title="Send">
-      <TransferForm onSubmit={onSubmit}>
-        <FormCard heading="Pay from">
-          <ShieldedTransparentToggle
-            label="Pay from"
-            isTransparent={transparentFrom}
-            setIsTransparent={(value) => {
-              setTransparentFrom(value);
-              clear();
-            }}
-          />
-        </FormCard>
+    <FormPage title="Send" onSubmit={onSubmit}>
+      <FormCard heading="Pay from">
+        <ShieldedTransparentToggle
+          label="Pay from"
+          isTransparent={transparentFrom}
+          setIsTransparent={(value) => {
+            setTransparentFrom(value);
+            clear();
+          }}
+        />
+      </FormCard>
 
-        <FormCard
-          heading="Amount"
-          aside={
-            <div id="send-available">
-              <AvailableWithMax
-                available={available}
-                isMax={isMax}
-                onToggleMax={() => {
-                  amountField.toggleMax();
-                  clear();
-                }}
-              />
-            </div>
-          }
-        >
-          <AmountField
-            id="send-amount"
-            ref={amountRef}
-            value={amountField.shown(amount)}
-            describedBy="send-available"
-            error={amountError}
+      <FormCard
+        heading="Amount"
+        aside={
+          <div id="send-available">
+            <AvailableWithMax
+              available={available}
+              isMax={isMax}
+              onToggleMax={() => {
+                amountField.toggleMax();
+                clear();
+              }}
+            />
+          </div>
+        }
+      >
+        <AmountField
+          id="send-amount"
+          ref={amountRef}
+          value={amountField.shown(amount)}
+          describedBy="send-available"
+          error={amountError}
+          onChange={(value) => {
+            amountField.type(value);
+            clear();
+          }}
+        />
+      </FormCard>
+
+      <FormCard
+        headingId="send-to"
+        heading={
+          isPaymentLink ? "To" : <label htmlFor="send-to-address">To</label>
+        }
+        aside={
+          <PaymentLinkToggle
+            active={isPaymentLink}
             onChange={(value) => {
-              amountField.type(value);
+              setIsPaymentLink(value);
+              amountField.setIsMax(false);
               clear();
             }}
           />
-        </FormCard>
-
-        <FormCard
-          headingId="send-to"
-          heading={
-            isPaymentLink ? "To" : <label htmlFor="send-to-address">To</label>
-          }
-          aside={
-            <PaymentLinkToggle
-              active={isPaymentLink}
+        }
+        className="gap-3"
+      >
+        {isPaymentLink ? (
+          <PaymentLinkFields
+            description={description}
+            onChange={(value) => {
+              setDescription(value);
+              clear();
+            }}
+          />
+        ) : (
+          <>
+            <RecipientField
+              ref={toRef}
+              value={to}
+              kind={toKind}
+              error={toError}
               onChange={(value) => {
-                setIsPaymentLink(value);
-                amountField.setIsMax(false);
+                setTo(value);
                 clear();
               }}
             />
-          }
-          className="gap-5"
-        >
-          {isPaymentLink ? (
-            <PaymentLinkFields
-              description={description}
+            <MemoField
+              open={memoOpen}
+              onOpenChange={setMemoOpen}
+              memo={memoText}
               onChange={(value) => {
-                setDescription(value);
+                setMemoText(value);
                 clear();
               }}
+              toTransparent={transparentTo}
             />
-          ) : (
-            <>
-              <RecipientField
-                ref={toRef}
-                value={to}
-                kind={toKind}
-                error={toError}
-                onChange={(value) => {
-                  setTo(value);
-                  clear();
-                }}
-              />
-              <MemoField
-                open={memoOpen}
-                onOpenChange={setMemoOpen}
-                memo={memoText}
-                onChange={(value) => {
-                  setMemoText(value);
-                  clear();
-                }}
-                toTransparent={transparentTo}
-              />
-            </>
-          )}
-        </FormCard>
+          </>
+        )}
+      </FormCard>
 
-        <Breakdown total={total}>
-          <FeeRow
-            label={isPaymentLink ? "Link amount" : "Amount"}
-            fee={amount > 0n ? amount : undefined}
-            pending={isMax && maxAmount.isLoading}
-          />
-          <PlannedFee {...planned} />
-          {isPaymentLink && (
-            <FeeRow label="Claim fee" fee={CLAIM_FEE} pending={false} />
-          )}
-        </Breakdown>
+      <Breakdown total={total}>
+        <FeeRow
+          label={isPaymentLink ? "Link amount" : "Amount"}
+          fee={amount > 0n ? amount : undefined}
+          pending={isMax && maxAmount.isLoading}
+        />
+        <PlannedFee {...planned} />
+        {isPaymentLink && (
+          <FeeRow label="Claim fee" fee={CLAIM_FEE} pending={false} />
+        )}
+      </Breakdown>
 
-        <SubmitBlock
-          label={
-            isPaymentLink
-              ? "Create payment link"
-              : amount > 0n
-                ? `Send ${zatoshiToZec(amount)} ZEC`
-                : "Send"
+      <SubmitBlock
+        label={
+          isPaymentLink
+            ? "Create payment link"
+            : amount > 0n
+              ? `Send ${zatoshiToZec(amount)} ZEC`
+              : "Send"
+        }
+        pending={send.isPending}
+        pendingLabel={isPaymentLink ? "Creating link..." : "Sending..."}
+        color={transparent ? "black" : "gold-button"}
+        stages={send.stages}
+        error={formError}
+      >
+        <PrivacyNotice
+          transparentFrom={transparentFrom}
+          transparentTo={transparentTo}
+          shieldedChange={
+            transparentFrom ? shieldedChangeOf(planned.plan.data) : 0n
           }
-          pending={send.isPending}
-          pendingLabel={isPaymentLink ? "Creating link..." : "Sending..."}
-          color={transparent ? "black" : "gold-button"}
-          stages={send.stages}
-          error={formError}
-        >
-          <PrivacyNotice
-            transparentFrom={transparentFrom}
-            transparentTo={transparentTo}
-            shieldedChange={
-              transparentFrom ? shieldedChangeOf(planned.plan.data) : 0n
-            }
-          />
-        </SubmitBlock>
-      </TransferForm>
-    </PageShell>
+        />
+      </SubmitBlock>
+    </FormPage>
   );
 }

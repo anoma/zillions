@@ -120,7 +120,7 @@ function MoreMenu() {
 
 export function AppHeader() {
   return (
-    <header className="h-full flex items-center justify-end bg-surface px-6">
+    <header className="h-full flex items-center justify-end border-b border-line-strong bg-surface px-6">
       <Link to="/" className="mr-auto lg:hidden">
         <ZillionsIcon className="h-8" />
       </Link>

@@ -214,7 +214,7 @@ function MigrateRoute() {
               privacy. Approve once; the wallet sends each transfer while it's
               open.
             </p>
-            <div className="mt-8 rounded-2xl border border-line-strong divide-y divide-line-strong text-sm">
+            <div className="mt-8 rounded-2xl border border-line divide-y divide-line text-sm">
               {p.preparations.map((height, i) => (
                 <Row
                   key={`p${i}`}
@@ -281,7 +281,7 @@ function MigrateRoute() {
         Your full Orchard balance will move to Ironwood in a single transfer.
         Once sent, it can't be cancelled.
       </p>
-      <div className="mt-8 rounded-2xl border border-line-strong divide-y divide-line-strong text-sm">
+      <div className="mt-8 rounded-2xl border border-line divide-y divide-line text-sm">
         <Row label="Amount">
           {amount !== undefined ? <ZecValue zat={amount} /> : <Waiting />}
         </Row>
@@ -356,7 +356,7 @@ function Option({
     <label
       className={twMerge(
         "flex gap-3 p-4 rounded-2xl border cursor-pointer",
-        selected ? "border-black" : "border-line-strong",
+        selected ? "border-black" : "border-line",
       )}
     >
       <input

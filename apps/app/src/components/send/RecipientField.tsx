@@ -53,7 +53,7 @@ export function RecipientField({
           aria-describedby="send-to-kind"
           className={twMerge(
             inputClassName,
-            "h-11 text-ellipsis",
+            "h-14 text-base text-ellipsis",
             !value && canPaste && "pr-20",
             tone === "transparent" &&
               "border-black hover:border-black focus:border-black",

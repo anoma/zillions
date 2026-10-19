@@ -33,10 +33,13 @@ export function AmountInput({
         style={{ fontSize: fitFontSize(value.length + 2, maxFontSize) }}
       >
         <span className="grid">
-          {/* Sizes the cell to the number; the input fills it. */}
+          {/* Sizes the cell to the number, plus the input's placeholder padding; the input fills it. */}
           <span
             aria-hidden="true"
-            className="col-start-1 row-start-1 invisible whitespace-pre"
+            className={twMerge(
+              "col-start-1 row-start-1 invisible whitespace-pre",
+              !value && "pl-[0.06em]",
+            )}
           >
             {value || "0"}
           </span>

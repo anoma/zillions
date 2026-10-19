@@ -15,10 +15,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <AppHeader />
         </div>
       </div>
-      <main className="lg:pl-50 pt-16 max-lg:pb-16">
-        {/* Wide screens: the balance and its buttons stay within reach of each other. */}
-        <div className="mx-auto max-w-5xl">{children}</div>
-      </main>
+      <main className="lg:pl-50 pt-16 max-lg:pb-16">{children}</main>
       <div className="lg:hidden">
         <BottomNav />
       </div>

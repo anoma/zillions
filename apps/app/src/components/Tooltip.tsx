@@ -50,7 +50,7 @@ export function Tooltip({
         className={twMerge(
           "flex bg-surface text-xs absolute opacity-0 pointer-events-none",
           "text-black",
-          "border border-line-strong rounded-2xl",
+          "border border-line rounded-2xl",
           "transition-all",
           open && "visible opacity-100 pointer-events-auto",
           "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",

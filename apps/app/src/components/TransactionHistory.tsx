@@ -8,11 +8,11 @@ import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { TransactionTypeIcon } from "./TransactionTypeAndStatus";
 import { TransactionValue } from "./TransactionValue";
-import { cardClassName, focusRingClassName } from "./ui/utils";
+import { focusRingClassName } from "./ui/utils";
 
 // icon | type over time | amount; desktops add the From → To route before the
-// amount. The card owns the columns and each row subgrids into them, so the
-// header and every row line up.
+// amount. The list owns the columns and each row subgrids into them, so the
+// routes line up from row to row.
 const gridClassName =
   "grid gap-x-4 grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_minmax(8rem,1fr)_minmax(0,2fr)_auto]";
 const rowClassName = "col-span-full grid grid-cols-subgrid items-center";
@@ -47,7 +47,7 @@ export function TransactionHistory({
       aria-labelledby="transactions-title"
       className={twMerge(
         "p-10 max-sm:px-6 overflow-auto",
-        limit ? "pt-14" : "pt-8",
+        limit ? "pt-10" : "pt-8",
       )}
     >
       <div className="flex items-baseline justify-between gap-4">
@@ -72,36 +72,22 @@ export function TransactionHistory({
           </Link>
         )}
       </div>
+      {/* Rows bleed past the title by their padding, so their text lines up with it. */}
       <div
         className={twMerge(
-          cardClassName,
           gridClassName,
-          "gap-y-0 p-0 overflow-hidden font-medium text-sm",
-          limit ? "mt-5" : "mt-6",
+          "-mx-4 divide-y divide-line font-medium text-sm",
+          limit ? "mt-4" : "mt-6",
         )}
       >
-        {!limit && (
-          <div
-            className={twMerge(
-              rowClassName,
-              "max-sm:hidden px-6 pt-5 pb-3 border-b border-line text-xs text-gray-600",
-            )}
-          >
-            <div className="col-span-2">Transaction</div>
-            <div className={routeClassName}>From → To</div>
-            <div className="text-right">Amount</div>
-          </div>
+        {shown.length === 0 && (
+          <p className="col-span-full px-4 py-10 text-center text-gray-600">
+            No transactions yet
+          </p>
         )}
-        <div className={twMerge(rowClassName, "divide-y divide-line")}>
-          {shown.length === 0 && (
-            <p className="col-span-full px-6 py-10 text-center text-gray-600">
-              No transactions yet
-            </p>
-          )}
-          {shown.map((tx) => (
-            <Row key={tx.txid} tx={tx} />
-          ))}
-        </div>
+        {shown.map((tx) => (
+          <Row key={tx.txid} tx={tx} />
+        ))}
       </div>
     </section>
   );
@@ -114,11 +100,11 @@ function Row({ tx }: { tx: Activity }) {
       params={{ id: tx.txid }}
       className={twMerge(
         rowClassName,
-        "py-4 px-6 transition-colors duration-300 hover:bg-black/[0.025]",
+        "py-4 px-4 transition-colors duration-300 hover:bg-card",
         "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black",
       )}
     >
-      <span className="size-9 grid place-items-center rounded-full bg-surface text-gray-600">
+      <span className="size-9 grid place-items-center rounded-full bg-black/5 text-gray-600">
         <TransactionTypeIcon tx_type={tx.tx_type} />
       </span>
       <div>
@@ -140,7 +126,7 @@ function Row({ tx }: { tx: Activity }) {
         <AddressBadge party={tx.to} />
       </div>
       <div className="text-right text-base font-semibold">
-        <TransactionValue tx={tx} />
+        <TransactionValue tx={tx} className="proportional-nums" />
       </div>
     </Link>
   );
