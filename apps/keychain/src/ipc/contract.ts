@@ -45,13 +45,14 @@ export type AccountType =
   | "ledger";
 
 /** The flow that produced an account. */
-export type AccountFlow = "create" | "import";
+export type AccountFlow = "create" | "import" | "keystone";
 
 /** Secret material the user supplies during onboarding. */
 export type AccountSecret =
   | { t: "Mnemonic"; seedPhrase: string[]; passphrase: string }
   | { t: "PrivateKey"; privateKey: string }
-  | { t: "ShieldedKeys"; spendingKey: string };
+  | { t: "ShieldedKeys"; spendingKey: string }
+  | { t: "ViewingKey"; viewingKey: string };
 
 /**
  * A Ledger's signatures over a PCZT, hex, in the order the signer kit returns

@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.2.8",
+    "@keystonehq/animated-qr": "^0.10.0",
+    "@keystonehq/bc-ur-registry-zcash": "^0.1.2",
     "@ledgerhq/device-management-kit": "^1.11.0",
     "@ledgerhq/device-signer-kit-zcash": "^0.8.0",
     "@ledgerhq/device-transport-kit-web-hid": "^1.2.4",

@@ -20,11 +20,18 @@ const IMPORT_ORDER: Step[] = [
 
 const LEDGER_ORDER: Step[] = ["ledger.password", "ledger.complete"];
 
+const KEYSTONE_ORDER: Step[] = [
+  "keystone.import",
+  "keystone.name",
+  "keystone.complete",
+];
+
 const ORDERS: Record<Flow, Step[]> = {
   none: [],
   create: CREATE_ORDER,
   import: IMPORT_ORDER,
   ledger: LEDGER_ORDER,
+  keystone: KEYSTONE_ORDER,
 };
 
 const orderFor = (flow: Flow): Step[] => ORDERS[flow];

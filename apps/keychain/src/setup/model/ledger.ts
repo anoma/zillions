@@ -57,7 +57,7 @@ export type LedgerKeys = {
 };
 
 /** Whether this browser can reach a Ledger at all: WebHID, Chromium only. */
-export const canUseLedger = (): boolean => "hid" in navigator;
+export const canUseHID = (): boolean => "hid" in navigator;
 
 const MESSAGE_OF: Record<string, string> = {
   // Chrome reports an unplugged Ledger and one whose access was revoked alike.

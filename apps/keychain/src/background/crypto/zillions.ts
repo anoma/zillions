@@ -6,6 +6,7 @@
 import initZcore, {
   apply_ledger_signatures,
   derive_account,
+  derive_account_from_ufvk,
   fresh_address,
   pczt_ledger_transaction,
   pczt_summary,
@@ -51,10 +52,18 @@ export type DerivedKeys = {
 /** The account at ZIP-32 index `hdIndex` of `seed`. */
 export const deriveAccount = async (
   seed: Uint8Array,
-  hdIndex: number
+  hdIndex: number,
 ): Promise<DerivedKeys> => {
   await initZillionsSdk();
   return derive_account(getNetwork(), seed, hdIndex);
+};
+
+/** The account at ZIP-32 index `hdIndex` of `seed`. */
+export const deriveAccountFromUfvk = async (
+  ufvk: string,
+): Promise<DerivedKeys> => {
+  await initZillionsSdk();
+  return derive_account_from_ufvk(getNetwork(), ufvk);
 };
 
 /**
@@ -119,7 +128,7 @@ const base64ToBytes = (s: string): Uint8Array =>
 export const signPczt = (
   pczt: string,
   seed: Uint8Array,
-  hdIndex: number
+  hdIndex: number,
 ): string =>
   bytesToBase64(sign_pczt(getNetwork(), base64ToBytes(pczt), seed, hdIndex));
 
@@ -130,7 +139,7 @@ export const signPczt = (
  */
 export const buildPcztSummary = async (
   pczt: string,
-  ufvk: string
+  ufvk: string,
 ): Promise<PcztSummary> => {
   await initZillionsSdk();
   const summary = pczt_summary(getNetwork(), base64ToBytes(pczt), ufvk);
@@ -143,12 +152,12 @@ export const buildPcztSummary = async (
  */
 export const ledgerTransaction = (
   pczt: string,
-  hdIndex: number
+  hdIndex: number,
 ): PcztTransaction =>
   pczt_ledger_transaction(
     getNetwork(),
     base64ToBytes(pczt),
-    hdIndex
+    hdIndex,
   ) as PcztTransaction;
 
 /**
@@ -157,6 +166,6 @@ export const ledgerTransaction = (
  */
 export const applyLedgerSignatures = (
   pczt: string,
-  signatures: LedgerSignatures
+  signatures: LedgerSignatures,
 ): string =>
   bytesToBase64(apply_ledger_signatures(base64ToBytes(pczt), signatures));

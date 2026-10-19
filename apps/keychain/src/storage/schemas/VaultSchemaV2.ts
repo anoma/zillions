@@ -38,6 +38,7 @@ enum AccountType {
   Mnemonic = "mnemonic",
   PrivateKey = "private-key",
   ShieldedKeys = "shielded-keys",
+  ViewingKey = "viewing-key",
   Ledger = "ledger",
   Disposable = "disposable",
 }
@@ -64,6 +65,7 @@ export const KeyStore = t.exact(
         [AccountType.ShieldedKeys]: null,
         [AccountType.Ledger]: null,
         [AccountType.Disposable]: null,
+        [AccountType.ViewingKey]: null,
       }),
       source: t.keyof({
         imported: null,

@@ -28,4 +28,8 @@ export const STEP_META: Record<Step, StepMeta> = {
 
   "ledger.password": { title: "Set Up Your Ledger", index: 1, total: 2 },
   "ledger.complete": { title: "Ledger Connected", index: 2, total: 2 },
+
+  "keystone.import": { title: "Import Keystone Key", index: 1, total: 3 },
+  "keystone.name": { title: "Set Up Your Imported Keys", index: 2, total: 3 },
+  "keystone.complete": { title: "Keys Imported", index: 3, total: 3 },
 };

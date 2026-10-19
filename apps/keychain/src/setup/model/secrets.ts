@@ -5,7 +5,7 @@
 import type { AccountSecret } from "../../ipc/contract";
 
 /** What kind of secret the user is importing/creating. */
-export type SecretKind = "mnemonic" | "private-key" | "spending-key";
+export type SecretKind = "mnemonic" | "private-key" | "spending-key" | "viewing-key";
 
 export type MnemonicLength = 12 | 24;
 
@@ -50,6 +50,7 @@ export const toAccountSecret = (input: {
   privateKey: string;
   spendingKey: string;
   passphrase: string;
+  viewingKey: string;
 }): AccountSecret => {
   switch (input.kind) {
     case "mnemonic":
@@ -65,5 +66,7 @@ export const toAccountSecret = (input: {
       };
     case "spending-key":
       return { t: "ShieldedKeys", spendingKey: input.spendingKey };
+    case "viewing-key":
+      return { t: "ViewingKey", viewingKey: input.viewingKey };
   }
 };

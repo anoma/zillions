@@ -191,6 +191,7 @@ export default defineConfig({
   vite: ({ browser }) => ({
     define: {
       "process.env": JSON.stringify(buildProcessEnv(browser)),
+      "process.version": JSON.stringify(""),
     },
     plugins: [
       tailwindcss(),

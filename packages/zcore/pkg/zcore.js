@@ -26,23 +26,23 @@ export function address_kind(network, address) {
 }
 
 /**
- * `pczt` with a Ledger's `signatures` applied: `{ orchard, ironwood,
- * transparent }`, each a list of hex signatures in the order the kit returns
- * them. Throws if one doesn't sign this PCZT.
- * @param {Uint8Array} pczt
- * @param {any} signatures
+ * Combine the two given PCZTs.
+ * @param {Uint8Array} pczt0
+ * @param {Uint8Array} pczt1
  * @returns {Uint8Array}
  */
-export function apply_ledger_signatures(pczt, signatures) {
-    const ptr0 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
+export function combine_pczts(pczt0, pczt1) {
+    const ptr0 = passArray8ToWasm0(pczt0, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.apply_ledger_signatures(ptr0, len0, signatures);
+    const ptr1 = passArray8ToWasm0(pczt1, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.combine_pczts(ptr0, len0, ptr1, len1);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
+    return v3;
 }
 
 /**
@@ -58,6 +58,24 @@ export function derive_account(network, seed, hd_index) {
     const ptr1 = passArray8ToWasm0(seed, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
     const ret = wasm.derive_account(ptr0, len0, ptr1, len1, hd_index);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * The account at unified full viewing key `ufvk`: `{ ufvk, transparent, unified }`.
+ * @param {string} network
+ * @param {string} ufvk
+ * @returns {any}
+ */
+export function derive_account_from_ufvk(network, ufvk) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.derive_account_from_ufvk(ptr0, len0, ptr1, len1);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -87,6 +105,30 @@ export function derive_transparent(network, ufvk, scope, from, count) {
         throw takeFromExternrefTable0(ret[2]);
     }
     var v4 = getArrayJsValueFromWasm0(ret[0], ret[1]);
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v4;
+}
+
+/**
+ * The records of an Orchard or Ironwood `/ciphertexts` chunk that spend one
+ * of `nullifiers` (each 32 bytes, concatenated), by index in the chunk.
+ * @param {string} pool
+ * @param {Uint8Array} ciphertexts
+ * @param {Uint8Array} nullifiers
+ * @returns {Uint32Array}
+ */
+export function find_spends(pool, ciphertexts, nullifiers) {
+    const ptr0 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(ciphertexts, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(nullifiers, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.find_spends(ptr0, len0, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU32FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
     return v4;
 }
@@ -136,40 +178,6 @@ export function gap_limits() {
 }
 
 /**
- * What the app's GPU shader reads to do [`try_decrypt`]'s key agreement for
- * the same arguments: the pool's two ivk scalars (external, internal; 32
- * little-endian bytes each), then each note's ephemeral key as affine
- * coordinates, 64 bytes, from the first note `try_decrypt` would try. Empty
- * when the UFVK has no key for the pool.
- * @param {string} network
- * @param {string} ufvk
- * @param {string} pool
- * @param {Uint8Array} body
- * @param {number} from
- * @param {Uint8Array} tried
- * @returns {Uint8Array}
- */
-export function gpu_inputs(network, ufvk, pool, body, from, tried) {
-    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ptr3 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
-    const len3 = WASM_VECTOR_LEN;
-    const ptr4 = passArray8ToWasm0(tried, wasm.__wbindgen_malloc);
-    const len4 = WASM_VECTOR_LEN;
-    const ret = wasm.gpu_inputs(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, from, ptr4, len4);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v6 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v6;
-}
-
-/**
  * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
  * @param {string} network
  * @param {any} wallet
@@ -202,10 +210,30 @@ export function needs_sapling_params(pczt) {
 }
 
 /**
+ * Which of `nullifiers` (each 32 bytes, concatenated) a `/nullifiers` chunk
+ * holds, matched on the 10 bytes it serves. Returns `{ spent, frozen }`:
+ * `spent` indexes into `nullifiers`; a chunk that isn't `frozen` is the tail.
+ * @param {Uint8Array} body
+ * @param {Uint8Array} nullifiers
+ * @returns {any}
+ */
+export function nullifiers_spent(body, nullifiers) {
+    const ptr0 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(nullifiers, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.nullifiers_spent(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * The transparent side of a raw transaction mined at `height`, which fixes
- * the consensus rules it is read under, and what it shows of its shielded
- * one: `{ txid, inputs: [{ txid, index, address }], outputs: [{ index, value,
- * address }], nullifiers, value_balance, expiry_height }`.
+ * the consensus rules it is read under, and the nullifiers it spends:
+ * `{ txid, inputs: [{ txid, index }], outputs: [{ index, value, address }],
+ * nullifiers }`.
  * @param {string} network
  * @param {number} height
  * @param {Uint8Array} data
@@ -217,28 +245,6 @@ export function parse_transaction(network, height, data) {
     const ptr1 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
     const ret = wasm.parse_transaction(ptr0, len0, height, ptr1, len1);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
-
-/**
- * The PCZT `pczt` as `@ledgerhq/device-signer-kit-zcash`'s
- * `signPcztTransaction` takes it, for the account at ZIP 32 index `hd_index`:
- * byte fields as `Uint8Array`s, amounts as `bigint`s. Throws on a Sapling
- * spend or output, which a Ledger can't sign.
- * @param {string} network
- * @param {Uint8Array} pczt
- * @param {number} hd_index
- * @returns {any}
- */
-export function pczt_ledger_transaction(network, pczt, hd_index) {
-    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.pczt_ledger_transaction(ptr0, len0, ptr1, len1, hd_index);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -326,23 +332,19 @@ export function plan_shield(network, wallet) {
  * Proves a signed PCZT and extracts its transaction: `{ txid, raw, expiry_height }`. The
  * Sapling parameters are needed only when [`needs_sapling_params`] says so.
  * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
- * `on_stage(name)` is called as each slow step starts: `sapling-proofs`,
- * `proving-key`, `orchard-proof`, `ironwood-proof`, then `verifying`; each
- * is skipped when the transaction doesn't need it.
  * @param {Uint8Array} pczt
  * @param {Uint8Array | null} [sapling_spend]
  * @param {Uint8Array | null} [sapling_output]
- * @param {Function | null} [on_stage]
  * @returns {any}
  */
-export function prove_pczt(pczt, sapling_spend, sapling_output, on_stage) {
+export function prove_pczt(pczt, sapling_spend, sapling_output) {
     const ptr0 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     var ptr1 = isLikeNone(sapling_spend) ? 0 : passArray8ToWasm0(sapling_spend, wasm.__wbindgen_malloc);
     var len1 = WASM_VECTOR_LEN;
     var ptr2 = isLikeNone(sapling_output) ? 0 : passArray8ToWasm0(sapling_output, wasm.__wbindgen_malloc);
     var len2 = WASM_VECTOR_LEN;
-    const ret = wasm.prove_pczt(ptr0, len0, ptr1, len1, ptr2, len2, isLikeNone(on_stage) ? 0 : addToExternrefTable0(on_stage));
+    const ret = wasm.prove_pczt(ptr0, len0, ptr1, len1, ptr2, len2);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -484,27 +486,6 @@ export function sign_pczt(network, pczt, seed, hd_index) {
 }
 
 /**
- * What `from` (`"shielded"` or `"transparent"`) can spend before fees, in
- * zatoshis: `{ now, later }`, `later` once every note is confirmed. Dust,
- * which [`plan_send`] never picks, counts in neither.
- * @param {string} network
- * @param {any} wallet
- * @param {string} from
- * @returns {any}
- */
-export function spendable(network, wallet, from) {
-    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(from, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.spendable(ptr0, len0, wallet, ptr1, len1);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
-
-/**
  * The account's spending secret in both encodings: `{ orchard, sapling }`.
  * @param {string} network
  * @param {Uint8Array} seed
@@ -526,21 +507,16 @@ export function spending_keys(network, seed, hd_index) {
 /**
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
  * against `ufvk`. `chunk` is its number, which fixes each note's position.
- * Notes before `from` are skipped while their records still fingerprint as
- * `tried`, the `digest` an earlier read returned; else all are tried.
  *
- * Returns `{ count, min_height, from, digest, hits: [{ pool, scope, value, nf_mine, index }] }`:
- * `from` is where it started, `digest` fingerprints all `count` notes.
+ * Returns `{ count, min_height, hits: [{ pool, scope, value, nf_mine, index }] }`.
  * @param {string} network
  * @param {string} ufvk
  * @param {string} pool
  * @param {number} chunk
  * @param {Uint8Array} body
- * @param {number} from
- * @param {Uint8Array} tried
  * @returns {any}
  */
-export function try_decrypt(network, ufvk, pool, chunk, body, from, tried) {
+export function try_decrypt(network, ufvk, pool, chunk, body) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -549,9 +525,7 @@ export function try_decrypt(network, ufvk, pool, chunk, body, from, tried) {
     const len2 = WASM_VECTOR_LEN;
     const ptr3 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
     const len3 = WASM_VECTOR_LEN;
-    const ptr4 = passArray8ToWasm0(tried, wasm.__wbindgen_malloc);
-    const len4 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, from, ptr4, len4);
+    const ret = wasm.try_decrypt(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -561,9 +535,11 @@ export function try_decrypt(network, ufvk, pool, chunk, body, from, tried) {
 /**
  * Trial-decrypt one pool's chunk in full against `ufvk`: the raw
  * `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
- * and the `index` of each hit [`try_decrypt`] found in it. Returns
+ * the `index` of each hit [`try_decrypt`] found in it, and of each spend
+ * [`spends::find_spends`] found. Returns
  * `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
- *    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
+ *    sent: [{ pool, value, recipient, memo, height, tx_index, position }],
+ *    spends: [{ nf, height, tx_index }] }`.
  * @param {string} network
  * @param {string} ufvk
  * @param {string} pool
@@ -572,9 +548,10 @@ export function try_decrypt(network, ufvk, pool, chunk, body, from, tried) {
  * @param {Uint8Array} memos
  * @param {Uint8Array} outgoing
  * @param {Uint32Array} hits
+ * @param {Uint32Array} spends
  * @returns {any}
  */
-export function try_decrypt_full(network, ufvk, pool, chunk, ciphertexts, memos, outgoing, hits) {
+export function try_decrypt_full(network, ufvk, pool, chunk, ciphertexts, memos, outgoing, hits, spends) {
     const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len0 = WASM_VECTOR_LEN;
     const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -589,74 +566,13 @@ export function try_decrypt_full(network, ufvk, pool, chunk, ciphertexts, memos,
     const len5 = WASM_VECTOR_LEN;
     const ptr6 = passArray32ToWasm0(hits, wasm.__wbindgen_malloc);
     const len6 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt_full(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6);
+    const ptr7 = passArray32ToWasm0(spends, wasm.__wbindgen_malloc);
+    const len7 = WASM_VECTOR_LEN;
+    const ret = wasm.try_decrypt_full(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6, ptr7, len7);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
-}
-
-/**
- * [`try_decrypt`] with its key agreement already done: `secrets` is the GPU
- * shader's output for [`gpu_inputs`] of the same arguments. Fails when a
- * spot check finds the GPU wrong; [`try_decrypt`] then answers instead.
- * @param {string} network
- * @param {string} ufvk
- * @param {string} pool
- * @param {number} chunk
- * @param {Uint8Array} body
- * @param {number} from
- * @param {Uint8Array} tried
- * @param {Uint32Array} secrets
- * @returns {any}
- */
-export function try_decrypt_gpu(network, ufvk, pool, chunk, body, from, tried, secrets) {
-    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len2 = WASM_VECTOR_LEN;
-    const ptr3 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
-    const len3 = WASM_VECTOR_LEN;
-    const ptr4 = passArray8ToWasm0(tried, wasm.__wbindgen_malloc);
-    const len4 = WASM_VECTOR_LEN;
-    const ptr5 = passArray32ToWasm0(secrets, wasm.__wbindgen_malloc);
-    const len5 = WASM_VECTOR_LEN;
-    const ret = wasm.try_decrypt_gpu(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, from, ptr4, len4, ptr5, len5);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
-
-/**
- * The shielded pools `ufvk` has a key for, newest first: Ironwood uses the
- * Orchard key. A Ledger's viewing key has no Sapling key.
- * @param {string} network
- * @param {string} ufvk
- * @returns {string[]}
- */
-export function ufvk_pools(network, ufvk) {
-    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    const ret = wasm.ufvk_pools(ptr0, len0, ptr1, len1);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v3 = getArrayJsValueFromWasm0(ret[0], ret[1]);
-    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-    return v3;
-}
-
-/**
- * Builds the Halo2 proving and verifying keys now, for this instance's
- * proofs to skip; seconds of work, so call it off the UI thread.
- */
-export function warm_prover() {
-    wasm.warm_prover();
 }
 function __wbg_get_imports() {
     const import0 = {
@@ -762,10 +678,6 @@ function __wbg_get_imports() {
         },
         __wbg_entries_fb6397112b1de25f: function(arg0) {
             const ret = Object.entries(arg0);
-            return ret;
-        },
-        __wbg_from_296ca31f8d0f1c52: function(arg0) {
-            const ret = Array.from(arg0);
             return ret;
         },
         __wbg_getRandomValues_c44a50d8cfdaebeb: function() { return handleError(function (arg0, arg1) {
@@ -912,22 +824,17 @@ function __wbg_get_imports() {
             const ret = arg0;
             return ret;
         },
-        __wbindgen_generic_0000000000000002: function(arg0) {
-            // Cast intrinsic for `I64 -> Externref`.
-            const ret = arg0;
-            return ret;
-        },
-        __wbindgen_generic_0000000000000003: function(arg0, arg1) {
+        __wbindgen_generic_0000000000000002: function(arg0, arg1) {
             // Cast intrinsic for `Ref(Slice(U8)) -> NamedExternref("Uint8Array")`.
             const ret = getArrayU8FromWasm0(arg0, arg1);
             return ret;
         },
-        __wbindgen_generic_0000000000000004: function(arg0, arg1) {
+        __wbindgen_generic_0000000000000003: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
             return ret;
         },
-        __wbindgen_generic_0000000000000005: function(arg0) {
+        __wbindgen_generic_0000000000000004: function(arg0) {
             // Cast intrinsic for `U64 -> Externref`.
             const ret = BigInt.asUintN(64, arg0);
             return ret;
@@ -1028,6 +935,11 @@ function getArrayJsValueFromWasm0(ptr, len) {
     }
     wasm.__externref_drop_slice(ptr, len);
     return result;
+}
+
+function getArrayU32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
 }
 
 function getArrayU8FromWasm0(ptr, len) {

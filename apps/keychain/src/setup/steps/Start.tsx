@@ -6,7 +6,7 @@ import { Logo } from "@zillions/components/assets/Logo";
 import { useRef, useState } from "react";
 
 import {
-  canUseLedger,
+  canUseHID,
   connectLedger,
   ledgerErrorMessage,
   type LedgerStep,
@@ -54,7 +54,7 @@ export const Start = () => {
       <div className="w-[320px] mx-auto mb-18 text-center">
         <Logo className="w-full" />
       </div>
-      {step ?
+      {step ? (
         <LedgerProgress
           steps={STEPS}
           current={step}
@@ -62,7 +62,8 @@ export const Start = () => {
           onCancel={onCancel}
           onRetry={() => void onConnectLedger()}
         />
-      : <Stack as="div" direction="vertical" gap={2}>
+      ) : (
+        <Stack as="div" direction="vertical" gap={2}>
           <ActionButton
             size="lg"
             backgroundHoverColor="black"
@@ -82,20 +83,34 @@ export const Start = () => {
           >
             Import existing keys
           </ActionButton>
-          {canUseLedger() && (
-            <ActionButton
-              size="lg"
-              outlineColor="black"
-              backgroundHoverColor="black"
-              textHoverColor="primary"
-              data-testid="setup-connect-ledger-button"
-              onClick={() => void onConnectLedger()}
-            >
-              Connect to hardware wallet
-            </ActionButton>
+          {canUseHID() && (
+            <>
+              <ActionButton
+                size="lg"
+                outlineColor="black"
+                backgroundHoverColor="black"
+                textHoverColor="primary"
+                data-testid="setup-connect-ledger-button"
+                onClick={() => void onConnectLedger()}
+              >
+                Connect to hardware wallet
+              </ActionButton>
+              <ActionButton
+                size="lg"
+                outlineColor="black"
+                backgroundHoverColor="black"
+                textHoverColor="primary"
+                data-testid="setup-import-keystone-key-button"
+                onClick={() =>
+                  dispatch({ type: "chooseFlow", flow: "keystone" })
+                }
+              >
+                Import Keystone key
+              </ActionButton>
+            </>
           )}
         </Stack>
-      }
+      )}
     </div>
   );
 };

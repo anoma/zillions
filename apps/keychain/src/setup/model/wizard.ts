@@ -16,7 +16,7 @@ import type { LedgerKeys } from "./ledger";
 import type { MnemonicLength, SecretKind } from "./secrets";
 
 /** Which onboarding branch the user is in. */
-export type Flow = "none" | "create" | "import" | "ledger";
+export type Flow = "none" | "create" | "import" | "ledger" | "keystone";
 
 /** The discrete steps. `start` is the landing choice. */
 export type Step =
@@ -34,7 +34,12 @@ export type Step =
   | "import.complete"
   // ledger branch (entered from start once the device is read)
   | "ledger.password"
-  | "ledger.complete";
+  | "ledger.complete"
+
+  // keystone branch
+  | "keystone.import"
+  | "keystone.name"
+  | "keystone.complete";
 
 /** Async persistence status for the final "complete" step. */
 export type CompletionStatus = "idle" | "pending" | "done" | "failed";
@@ -100,6 +105,8 @@ export type WizardEvent =
   | { type: "setSecretKind"; kind: SecretKind }
   | { type: "setPrivateKey"; value: string }
   | { type: "setSpendingKey"; value: string }
+  | { type: "setViewingKey"; value: string }
+  | { type: "setBirthday"; birthday: number | undefined }
   | { type: "setBip39Passphrase"; value: string }
   | { type: "setBip44Path"; path: Bip44Path }
   | { type: "setZip32Path"; path: Zip32Path }
@@ -117,7 +124,7 @@ export type WizardEvent =
 
 export const wizardReducer = (
   state: WizardState,
-  event: WizardEvent
+  event: WizardEvent,
 ): WizardState => {
   switch (event.type) {
     case "passwordRequirementResolved":
@@ -127,7 +134,18 @@ export const wizardReducer = (
       return {
         ...state,
         flow: event.flow,
-        step: event.flow === "create" ? "create.warning" : "import.secret",
+        // step: event.flow === "create" ? "create.warning" : "import.secret",
+        step:
+          event.flow === "create"
+            ? "create.warning"
+            : event.flow === "keystone"
+              ? "keystone.import"
+              : "import.secret",
+        // Create: auto-fetch chain tip (new account has no prior history).
+        // Import: default to 0; the SDK clamps any height at or below Sapling
+        // activation to an empty tree, so this scans from the start of the
+        // shielded chain without a server round-trip.
+        birthday: event.flow === "create" ? undefined : 0,
       };
 
     case "goToStep":
@@ -167,6 +185,9 @@ export const wizardReducer = (
 
     case "setAlias":
       return { ...state, alias: event.alias };
+
+    case "setViewingKey":
+      return { ...state, viewingKey: event.viewingKey };
 
     case "setPassword":
       return { ...state, password: event.password };

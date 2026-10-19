@@ -9,11 +9,9 @@
 export function address_kind(network: string, address: string): string | undefined;
 
 /**
- * `pczt` with a Ledger's `signatures` applied: `{ orchard, ironwood,
- * transparent }`, each a list of hex signatures in the order the kit returns
- * them. Throws if one doesn't sign this PCZT.
+ * Combine the two given PCZTs.
  */
-export function apply_ledger_signatures(pczt: Uint8Array, signatures: any): Uint8Array;
+export function combine_pczts(pczt0: Uint8Array, pczt1: Uint8Array): Uint8Array;
 
 /**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
@@ -21,11 +19,22 @@ export function apply_ledger_signatures(pczt: Uint8Array, signatures: any): Uint
 export function derive_account(network: string, seed: Uint8Array, hd_index: number): any;
 
 /**
+ * The account at unified full viewing key `ufvk`: `{ ufvk, transparent, unified }`.
+ */
+export function derive_account_from_ufvk(network: string, ufvk: string): any;
+
+/**
  * Transparent addresses `from..from + count` on one BIP-44 chain of the
  * viewing key's account: `"external"` (receiving) or `"internal"` (change).
  * Empty when the viewing key has no transparent part.
  */
 export function derive_transparent(network: string, ufvk: string, scope: string, from: number, count: number): string[];
+
+/**
+ * The records of an Orchard or Ironwood `/ciphertexts` chunk that spend one
+ * of `nullifiers` (each 32 bytes, concatenated), by index in the chunk.
+ */
+export function find_spends(pool: string, ciphertexts: Uint8Array, nullifiers: Uint8Array): Uint32Array;
 
 /**
  * A new shielded address of the account `ufvk` names, unlinkable to its
@@ -41,15 +50,6 @@ export function fresh_address(network: string, ufvk: string): string;
 export function gap_limits(): any;
 
 /**
- * What the app's GPU shader reads to do [`try_decrypt`]'s key agreement for
- * the same arguments: the pool's two ivk scalars (external, internal; 32
- * little-endian bytes each), then each note's ephemeral key as affine
- * coordinates, 64 bytes, from the first note `try_decrypt` would try. Empty
- * when the UFVK has no key for the pool.
- */
-export function gpu_inputs(network: string, ufvk: string, pool: string, body: Uint8Array, from: number, tried: Uint8Array): Uint8Array;
-
-/**
  * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
  */
 export function max_send(network: string, wallet: any, send: any): bigint;
@@ -60,20 +60,19 @@ export function max_send(network: string, wallet: any, send: any): bigint;
 export function needs_sapling_params(pczt: Uint8Array): boolean;
 
 /**
- * The transparent side of a raw transaction mined at `height`, which fixes
- * the consensus rules it is read under, and what it shows of its shielded
- * one: `{ txid, inputs: [{ txid, index, address }], outputs: [{ index, value,
- * address }], nullifiers, value_balance, expiry_height }`.
+ * Which of `nullifiers` (each 32 bytes, concatenated) a `/nullifiers` chunk
+ * holds, matched on the 10 bytes it serves. Returns `{ spent, frozen }`:
+ * `spent` indexes into `nullifiers`; a chunk that isn't `frozen` is the tail.
  */
-export function parse_transaction(network: string, height: number, data: Uint8Array): any;
+export function nullifiers_spent(body: Uint8Array, nullifiers: Uint8Array): any;
 
 /**
- * The PCZT `pczt` as `@ledgerhq/device-signer-kit-zcash`'s
- * `signPcztTransaction` takes it, for the account at ZIP 32 index `hd_index`:
- * byte fields as `Uint8Array`s, amounts as `bigint`s. Throws on a Sapling
- * spend or output, which a Ledger can't sign.
+ * The transparent side of a raw transaction mined at `height`, which fixes
+ * the consensus rules it is read under, and the nullifiers it spends:
+ * `{ txid, inputs: [{ txid, index }], outputs: [{ index, value, address }],
+ * nullifiers }`.
  */
-export function pczt_ledger_transaction(network: string, pczt: Uint8Array, hd_index: number): any;
+export function parse_transaction(network: string, height: number, data: Uint8Array): any;
 
 /**
  * What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
@@ -106,11 +105,8 @@ export function plan_shield(network: string, wallet: any): any;
  * Proves a signed PCZT and extracts its transaction: `{ txid, raw, expiry_height }`. The
  * Sapling parameters are needed only when [`needs_sapling_params`] says so.
  * Building the Halo2 proving key alone takes seconds; run it off the UI thread.
- * `on_stage(name)` is called as each slow step starts: `sapling-proofs`,
- * `proving-key`, `orchard-proof`, `ironwood-proof`, then `verifying`; each
- * is skipped when the transaction doesn't need it.
  */
-export function prove_pczt(pczt: Uint8Array, sapling_spend?: Uint8Array | null, sapling_output?: Uint8Array | null, on_stage?: Function | null): any;
+export function prove_pczt(pczt: Uint8Array, sapling_spend?: Uint8Array | null, sapling_output?: Uint8Array | null): any;
 
 /**
  * The address a transparent output's `script` pays; `undefined` unless it's
@@ -145,13 +141,6 @@ export function shield_pczt(network: string, ufvk: string, seed_fingerprint: str
 export function sign_pczt(network: string, pczt: Uint8Array, seed: Uint8Array, hd_index: number): Uint8Array;
 
 /**
- * What `from` (`"shielded"` or `"transparent"`) can spend before fees, in
- * zatoshis: `{ now, later }`, `later` once every note is confirmed. Dust,
- * which [`plan_send`] never picks, counts in neither.
- */
-export function spendable(network: string, wallet: any, from: string): any;
-
-/**
  * The account's spending secret in both encodings: `{ orchard, sapling }`.
  */
 export function spending_keys(network: string, seed: Uint8Array, hd_index: number): any;
@@ -159,78 +148,55 @@ export function spending_keys(network: string, seed: Uint8Array, hd_index: numbe
 /**
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
  * against `ufvk`. `chunk` is its number, which fixes each note's position.
- * Notes before `from` are skipped while their records still fingerprint as
- * `tried`, the `digest` an earlier read returned; else all are tried.
  *
- * Returns `{ count, min_height, from, digest, hits: [{ pool, scope, value, nf_mine, index }] }`:
- * `from` is where it started, `digest` fingerprints all `count` notes.
+ * Returns `{ count, min_height, hits: [{ pool, scope, value, nf_mine, index }] }`.
  */
-export function try_decrypt(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array, from: number, tried: Uint8Array): any;
+export function try_decrypt(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array): any;
 
 /**
  * Trial-decrypt one pool's chunk in full against `ufvk`: the raw
  * `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
- * and the `index` of each hit [`try_decrypt`] found in it. Returns
+ * the `index` of each hit [`try_decrypt`] found in it, and of each spend
+ * [`spends::find_spends`] found. Returns
  * `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
- *    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
+ *    sent: [{ pool, value, recipient, memo, height, tx_index, position }],
+ *    spends: [{ nf, height, tx_index }] }`.
  */
-export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array, memos: Uint8Array, outgoing: Uint8Array, hits: Uint32Array): any;
-
-/**
- * [`try_decrypt`] with its key agreement already done: `secrets` is the GPU
- * shader's output for [`gpu_inputs`] of the same arguments. Fails when a
- * spot check finds the GPU wrong; [`try_decrypt`] then answers instead.
- */
-export function try_decrypt_gpu(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array, from: number, tried: Uint8Array, secrets: Uint32Array): any;
-
-/**
- * The shielded pools `ufvk` has a key for, newest first: Ironwood uses the
- * Orchard key. A Ledger's viewing key has no Sapling key.
- */
-export function ufvk_pools(network: string, ufvk: string): string[];
-
-/**
- * Builds the Halo2 proving and verifying keys now, for this instance's
- * proofs to skip; seconds of work, so call it off the UI thread.
- */
-export function warm_prover(): void;
+export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array, memos: Uint8Array, outgoing: Uint8Array, hits: Uint32Array, spends: Uint32Array): any;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
-    readonly apply_ledger_signatures: (a: number, b: number, c: any) => [number, number, number, number];
+    readonly combine_pczts: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly derive_account_from_ufvk: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
+    readonly find_spends: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly gap_limits: () => [number, number, number];
-    readonly gpu_inputs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number, number, number];
     readonly max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
     readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
+    readonly nullifiers_spent: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly plan_migration: (a: number, b: number, c: any) => [number, number, number];
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly plan_shield: (a: number, b: number, c: any) => [number, number, number];
-    readonly prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly script_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
     readonly send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any, k: number) => [number, number, number, number];
     readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any) => [number, number, number, number];
     readonly sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
-    readonly spendable: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
-    readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
-    readonly try_decrypt_gpu: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number, number];
-    readonly ufvk_pools: (a: number, b: number, c: number, d: number) => [number, number, number, number];
-    readonly warm_prover: () => void;
+    readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
+    readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number) => [number, number, number];
+    readonly rustsecp256k1_v0_10_0_context_create: (a: number) => number;
+    readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
-    readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
-    readonly rustsecp256k1_v0_10_0_context_create: (a: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

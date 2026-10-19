@@ -16,14 +16,22 @@ import type {
   DerivedAccount,
   Zip32Path,
 } from "../../ipc/contract";
-import { mnemonicToSeed } from "../../background/crypto/mnemonic";
-import { deriveAccount, getNetwork } from "../../background/crypto/zillions";
-import { LEDGER_BIP44_PATH, LEDGER_ZIP32_PATH, type LedgerKeys } from "./ledger";
+import {
+  deriveAccount,
+  deriveAccountFromUfvk,
+  getNetwork,
+} from "../../background/crypto/zillions.js";
+import {
+  LEDGER_BIP44_PATH,
+  LEDGER_ZIP32_PATH,
+  type LedgerKeys,
+} from "./ledger.js";
+import { mnemonicToSeed } from "../../background/crypto/mnemonic.js";
 
 export type CreateAccountInput = {
   accountSecret: AccountSecret;
   alias: string;
-  flow: "create" | "import";
+  flow: "create" | "import" | "keystone";
   bip44Path: Bip44Path;
   zip32Path: Zip32Path;
   passwordRequired: boolean;
@@ -49,7 +57,9 @@ const CLOCK_MARGIN_BLOCKS = (7 * 24 * 60 * 60) / 75;
 const estimateBirthday = (): number => {
   const [height, time] = CHECKPOINTS[getNetwork()];
   const elapsed = Math.max(0, Date.now() / 1000 - time);
-  return Math.floor(height + elapsed / ASSUMED_BLOCK_SECONDS - CLOCK_MARGIN_BLOCKS);
+  return Math.floor(
+    height + elapsed / ASSUMED_BLOCK_SECONDS - CLOCK_MARGIN_BLOCKS,
+  );
 };
 
 export type CreateAccountResult =
@@ -67,7 +77,7 @@ type DerivedAddresses = {
 export const createAccount = async (
   client: BackgroundClient,
   input: CreateAccountInput,
-  onProgress: (info: string) => void
+  onProgress: (info: string) => void,
 ): Promise<CreateAccountResult> => {
   const {
     accountSecret,
@@ -138,7 +148,7 @@ export type CreateLedgerAccountResult =
 export const createLedgerAccount = async (
   client: BackgroundClient,
   input: { keys: LedgerKeys; passwordRequired: boolean; password?: string },
-  onProgress: (info: string) => void
+  onProgress: (info: string) => void,
 ): Promise<CreateLedgerAccountResult> => {
   const { keys, passwordRequired, password } = input;
   try {
@@ -170,21 +180,33 @@ export const createLedgerAccount = async (
 /**
  * Derive transparent + shielded receivers for the account secret.
  *
- * Only the MNEMONIC flow is implemented: keys come from the phrase's seed. Raw private-key and spending-key imports are NOT
- * implemented yet (there is no derivation path for bare keys) and throw
+ * Only the MNEMONIC flow is implemented: keys come from the phrase's seed. Raw private-key and spending-key
+ * imports are NOT implemented yet (there is no derivation path for bare keys) and throw
  * rather than fabricate a bogus address.
  */
 const deriveAddresses = async (
   secret: AccountSecret,
-  hdIndex: number
+  hdIndex: number,
 ): Promise<DerivedAddresses> => {
   switch (secret.t) {
     case "Mnemonic": {
       const seed = await mnemonicToSeed(
         secret.seedPhrase.join(" "),
-        secret.passphrase
+        secret.passphrase,
       );
       const account = await deriveAccount(seed, hdIndex);
+      if (!account.transparent) {
+        throw new Error("Account has no transparent receiver");
+      }
+      return {
+        transparentAddress: account.transparent,
+        shieldedAddress: account.unified,
+        viewingKey: account.ufvk,
+      };
+    }
+
+    case "ViewingKey": {
+      const account = await deriveAccountFromUfvk(secret.viewingKey);
       if (!account.transparent) {
         throw new Error("Account has no transparent receiver");
       }
@@ -211,5 +233,7 @@ const prettySecret = (secret: AccountSecret): string => {
       return "private key";
     case "ShieldedKeys":
       return "spending key";
+    case "ViewingKey":
+      return "viewing key";
   }
 };
