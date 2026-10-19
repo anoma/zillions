@@ -9,9 +9,7 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use zcash_keys::address::Address;
 use zcash_keys::encoding::{encode_extended_spending_key, AddressCodec};
-use zcash_keys::keys::{
-    Era, ReceiverRequirement, UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey,
-};
+use zcash_keys::keys::{Era, UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey};
 use zcash_protocol::consensus::{Network, NetworkConstants};
 use zcash_protocol::{PoolType, ShieldedPool};
 use zip32::{fingerprint::SeedFingerprint, AccountId, DiversifierIndex};
@@ -110,7 +108,8 @@ pub(crate) fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
     };
     // Sapling works on about half the indices; take the next one it does.
     let (address, _) = ufvk
-        .find_address(DiversifierIndex::from(j), request)
+        // .find_address(DiversifierIndex::from(j), request)
+        .find_address(DiversifierIndex::from(j), UnifiedAddressRequest::SHIELDED)
         .map_err(|e| e.to_string())?;
     Ok(address.encode(network))
 }
