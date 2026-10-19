@@ -58,8 +58,8 @@ function orderedBuffer<T>(firstIndex: number) {
 
 export const CORES = navigator.hardwareConcurrency ?? 4;
 
-/** `?gpu=off` keeps trial decryption on the CPU, to compare. */
-const GPU = new URLSearchParams(location.search).get("gpu") !== "off";
+/** `VITE_GPU_DISABLED=true` keeps trial decryption on the CPU, to compare. */
+const GPU = import.meta.env.VITE_GPU_DISABLED !== "true";
 
 export async function crawlChunks(options: {
   ufvk: string;

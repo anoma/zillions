@@ -9,7 +9,7 @@ of scope. The CPU path stays, as the fallback everywhere.
   GPU. That step is 80% of `try_decrypt`'s time.
 - **Fresh setup sync of the test wallet (85 chunks, M1, 8 workers):**
 
-  | | GPU | CPU (`?gpu=off`) | speedup |
+  | | GPU | CPU only | speedup |
   |---|---|---|---|
   | Chrome 155 | 25.8 s | 82.5 s | 3.2× |
   | Firefox 157 | 29.9 s | 90.1 s | 3.0× |
@@ -64,7 +64,7 @@ slower. Products by Pallas's zero limbs are left out.
 | Over ~1% of pairs off the curve (a killed or garbled dispatch) | chunk fails; the worker turns its GPU path off and redoes the chunk on the CPU |
 | A spot-checked secret (4 outputs × 2 ivks per chunk) differs from the CPU's | same |
 | Device lost | page stops offering the GPU; workers carry on with the CPU |
-| `?gpu=off` in the URL | CPU only, to compare |
+| `VITE_GPU_DISABLED=true` at build time (see `.env.example`) | CPU only, to compare |
 
 Under concurrency Firefox's GPU returned zeroed and half-written buffers for
 long command buffers. The off-curve check caught every one of them. Short
@@ -121,7 +121,8 @@ CPU chunk from the start). This is separate from the GPU work: splitting
 
 ## Open
 
-- No phone, Intel, AMD or NVIDIA measurements yet. Teammates can compare
-  through the Netlify preview with and without `?gpu=off`.
+- No phone, Intel, AMD or NVIDIA measurements yet. The flag is build-time,
+  so a GPU-vs-CPU comparison needs a local build with `VITE_GPU_DISABLED=true`
+  next to the Netlify preview.
 - Kernel headroom is small (about 80% of the M1's IMAD32 peak). Specialised
   squaring might add 10–15%.
