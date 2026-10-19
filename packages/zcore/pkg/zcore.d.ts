@@ -14,6 +14,11 @@ export function address_kind(network: string, address: string): string | undefin
 export function derive_account(network: string, seed: Uint8Array, hd_index: number): any;
 
 /**
+ * The account at unified full viewing key `ufvk`: `{ ufvk, transparent, unified }`.
+ */
+export function derive_account_from_ufvk(network: string, ufvk: string): any;
+
+/**
  * Transparent addresses `from..from + count` on one BIP-44 chain of the
  * viewing key's account: `"external"` (receiving) or `"internal"` (change).
  * Empty when the viewing key has no transparent part.
@@ -160,6 +165,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly derive_account_from_ufvk: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly find_spends: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number, number];
     readonly fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
@@ -183,8 +189,8 @@ export interface InitOutput {
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number) => [number, number, number];
     readonly rustsecp256k1_v0_10_0_context_create: (a: number) => number;
     readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
-    readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
+    readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

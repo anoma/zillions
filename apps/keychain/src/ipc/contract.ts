@@ -41,13 +41,14 @@ export type Zip32Path = {
 export type AccountType = "mnemonic" | "private-key" | "shielded-keys";
 
 /** The flow that produced an account. */
-export type AccountFlow = "create" | "import";
+export type AccountFlow = "create" | "import" | "keystone";
 
 /** Secret material the user supplies during onboarding. */
 export type AccountSecret =
   | { t: "Mnemonic"; seedPhrase: string[]; passphrase: string }
   | { t: "PrivateKey"; privateKey: string }
-  | { t: "ShieldedKeys"; spendingKey: string };
+  | { t: "ShieldedKeys"; spendingKey: string }
+  | { t: "ViewingKey"; viewingKey: string };
 
 /** A stored parent account (transparent or shielded), as returned to the UI. */
 export type AccountStore = {

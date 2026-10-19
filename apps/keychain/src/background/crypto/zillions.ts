@@ -5,6 +5,7 @@
  */
 import initZcore, {
   derive_account,
+  derive_account_from_ufvk,
   fresh_address,
   pczt_summary,
   seed_fingerprint,
@@ -46,6 +47,14 @@ export const deriveAccount = async (
 ): Promise<DerivedKeys> => {
   await initZillionsSdk();
   return derive_account(getNetwork(), seed, hdIndex);
+};
+
+/** The account at ZIP-32 index `hdIndex` of `seed`. */
+export const deriveAccountFromUfvk = async (
+  ufvk: string
+): Promise<DerivedKeys> => {
+  await initZillionsSdk();
+  return derive_account_from_ufvk(getNetwork(), ufvk);
 };
 
 /**

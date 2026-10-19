@@ -32,6 +32,16 @@ export const Start = () => {
         >
           Import existing keys
         </ActionButton>
+        <ActionButton
+          size="lg"
+          outlineColor="black"
+          backgroundHoverColor="black"
+          textHoverColor="primary"
+          data-testid="setup-import-keystone-key-button"
+          onClick={() => dispatch({ type: "chooseFlow", flow: "keystone" })}
+        >
+          Import Keystone key
+        </ActionButton>
       </Stack>
     </div>
   );

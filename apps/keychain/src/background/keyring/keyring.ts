@@ -259,6 +259,12 @@ export class Keyring {
             passphrase: "",
             accountType: "shielded-keys",
           };
+        case "ViewingKey":
+          return {
+            text: JSON.stringify({ viewingKey: accountSecret.viewingKey }),
+            passphrase: "",
+            accountType: "viewing-key",
+          }
       }
     })();
 

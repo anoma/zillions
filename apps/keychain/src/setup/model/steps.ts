@@ -25,4 +25,8 @@ export const STEP_META: Record<Step, StepMeta> = {
   "import.secret": { title: "Import Existing Keys", index: 1, total: 3 },
   "import.name": { title: "Set Up Your Imported Keys", index: 2, total: 3 },
   "import.complete": { title: "Keys Imported", index: 3, total: 3 },
+
+  "keystone.import": { title: "Import Keystone Key", index: 1, total: 3 },
+  "keystone.name": { title: "Set Up Your Imported Keys", index: 2, total: 3 },
+  "keystone.complete": { title: "Keys Imported", index: 3, total: 3 },
 };

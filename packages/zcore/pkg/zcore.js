@@ -45,6 +45,24 @@ export function derive_account(network, seed, hd_index) {
 }
 
 /**
+ * The account at unified full viewing key `ufvk`: `{ ufvk, transparent, unified }`.
+ * @param {string} network
+ * @param {string} ufvk
+ * @returns {any}
+ */
+export function derive_account_from_ufvk(network, ufvk) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.derive_account_from_ufvk(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Transparent addresses `from..from + count` on one BIP-44 chain of the
  * viewing key's account: `"external"` (receiving) or `"internal"` (change).
  * Empty when the viewing key has no transparent part.

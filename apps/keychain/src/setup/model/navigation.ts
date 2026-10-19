@@ -18,8 +18,14 @@ const IMPORT_ORDER: Step[] = [
   "import.complete",
 ];
 
+const KEYSTONE_ORDER: Step[] = [
+  "keystone.import",
+  "keystone.name",
+  "keystone.complete",
+];
+
 const orderFor = (flow: Flow): Step[] =>
-  flow === "create" ? CREATE_ORDER : flow === "import" ? IMPORT_ORDER : [];
+  flow === "create" ? CREATE_ORDER : flow === "import" ? IMPORT_ORDER : flow === "keystone" ? KEYSTONE_ORDER : [];
 
 export const previousStep = (flow: Flow, step: Step): Step => {
   if (step === "start") return "start";

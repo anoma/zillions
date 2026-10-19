@@ -17,12 +17,12 @@ import type {
   Zip32Path,
 } from "../../ipc/contract";
 import { mnemonicToSeed } from "../../background/crypto/mnemonic";
-import { deriveAccount } from "../../background/crypto/zillions";
+import { deriveAccount, deriveAccountFromUfvk } from "../../background/crypto/zillions";
 
 export type CreateAccountInput = {
   accountSecret: AccountSecret;
   alias: string;
-  flow: "create" | "import";
+  flow: "create" | "import" | "keystone";
   bip44Path: Bip44Path;
   zip32Path: Zip32Path;
   passwordRequired: boolean;
@@ -186,6 +186,18 @@ const deriveAddresses = async (
       };
     }
 
+    case "ViewingKey": {
+      const account = await deriveAccountFromUfvk(secret.viewingKey);
+      if (!account.transparent) {
+        throw new Error("Account has no transparent receiver");
+      }
+      return {
+        transparentAddress: account.transparent,
+        shieldedAddress: account.unified,
+        viewingKey: account.ufvk,
+      };
+    }
+
     case "PrivateKey":
       throw new Error("Private key import is not implemented yet");
 
@@ -202,5 +214,7 @@ const prettySecret = (secret: AccountSecret): string => {
       return "private key";
     case "ShieldedKeys":
       return "spending key";
+    case "ViewingKey":
+      return "viewing key";
   }
 };

@@ -11,6 +11,7 @@ import { CreateWarning } from "./steps/create/CreateWarning";
 import { ImportSecret } from "./steps/import/ImportSecret";
 import { Complete } from "./steps/shared/Complete";
 import { NameAndPassword } from "./steps/shared/NameAndPassword";
+import { KeystoneImport } from "./steps/keystone/KeystoneImport";
 
 export const StepRenderer = () => {
   const { state } = useWizard();
@@ -39,6 +40,13 @@ export const StepRenderer = () => {
     case "import.complete":
       return <Complete />;
 
+    // Keystone branch
+    case "keystone.import":
+      return <KeystoneImport />;
+    case "keystone.name":
+      return <NameAndPassword nextStep="keystone.complete" />;
+    case "keystone.complete":
+      return <Complete />;
     default: {
       const _never: never = state.step;
       return _never;

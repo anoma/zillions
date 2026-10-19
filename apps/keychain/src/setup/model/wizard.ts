@@ -15,7 +15,7 @@ import type {
 import type { MnemonicLength, SecretKind } from "./secrets";
 
 /** Which onboarding branch the user is in. */
-export type Flow = "none" | "create" | "import";
+export type Flow = "none" | "create" | "import" | "keystone";
 
 /** The discrete steps. `start` is the landing choice. */
 export type Step =
@@ -96,6 +96,7 @@ export type WizardEvent =
   | { type: "setSecretKind"; kind: SecretKind }
   | { type: "setPrivateKey"; value: string }
   | { type: "setSpendingKey"; value: string }
+  | { type: "setViewingKey"; value: string }
   | { type: "setBirthday"; birthday: number | undefined }
   | { type: "setBip39Passphrase"; value: string }
   | { type: "setBip44Path"; path: Bip44Path }
@@ -124,7 +125,7 @@ export const wizardReducer = (
       return {
         ...state,
         flow: event.flow,
-        step: event.flow === "create" ? "create.warning" : "import.secret",
+        step: event.flow === "create" ? "create.warning" : event.flow === "keystone" ? "keystone.import" : "import.secret",
         // Create: auto-fetch chain tip (new account has no prior history).
         // Import: default to 0; the SDK clamps any height at or below Sapling
         // activation to an empty tree, so this scans from the start of the
@@ -165,6 +166,9 @@ export const wizardReducer = (
     case "setAlias":
       return { ...state, alias: event.alias };
 
+    case "setViewingKey":
+      return { ...state, viewingKey: event.viewingKey };
+  
     case "setPassword":
       return { ...state, password: event.password };
 
