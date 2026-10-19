@@ -10,7 +10,7 @@ use wasm_bindgen::prelude::*;
 use zcash_keys::address::Address;
 use zcash_keys::encoding::{encode_extended_spending_key, AddressCodec};
 use zcash_keys::keys::{
-    Era, ReceiverRequirement, UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey,
+    Era, UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey,
 };
 use zcash_protocol::consensus::{Network, NetworkConstants};
 use zcash_protocol::{PoolType, ShieldedPool};
@@ -83,13 +83,6 @@ pub fn seed_fingerprint(seed: &[u8]) -> Result<String, JsError> {
     Ok(hex::encode(fp.to_bytes()))
 }
 
-/// Orchard and Sapling, never transparent.
-const ORCHARD_SAPLING: UnifiedAddressRequest = UnifiedAddressRequest::unsafe_custom(
-    ReceiverRequirement::Require,
-    ReceiverRequirement::Require,
-    ReceiverRequirement::Omit,
-);
-
 pub(crate) fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
     let ufvk = UnifiedFullViewingKey::decode(network, ufvk)?;
     // Random, not a counter: the keychain and the app hand out addresses with no shared state.
@@ -97,7 +90,7 @@ pub(crate) fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
     OsRng.fill_bytes(&mut j);
     // Sapling works on about half the indices; take the next one it does.
     let (address, _) = ufvk
-        .find_address(DiversifierIndex::from(j), ORCHARD_SAPLING)
+        .find_address(DiversifierIndex::from(j), UnifiedAddressRequest::SHIELDED)
         .map_err(|e| e.to_string())?;
     Ok(address.encode(network))
 }
