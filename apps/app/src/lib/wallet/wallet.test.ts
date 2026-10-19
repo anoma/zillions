@@ -344,7 +344,7 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
   expect(sends).toEqual([
     expect.objectContaining({ tx_type: "Sent", value: -4_000n }),
   ]);
-  expect(sends[0].status).not.toBe("Pending");
+  expect(sends[0].block_height).toBe(3_210);
 });
 
 test("shows the transparent side as last synced before any sync answers", async () => {

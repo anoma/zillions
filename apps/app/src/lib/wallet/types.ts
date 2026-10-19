@@ -193,6 +193,8 @@ export type Activity = {
   to: Party;
   /** A payment to the account itself: it shows no sign. */
   self?: true;
+  /** Blocks left to mine one still processing; absent when it never expires or the tip is unknown. */
+  expires_in?: number;
 };
 
 /** Someone else's address, with what it was paid when it's a recipient. */

@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
-import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import {
+  PendingStatus,
   TransactionTypeAndStatus,
   TransactionTypeIcon,
 } from "./TransactionTypeAndStatus";
@@ -70,10 +70,7 @@ export function TransactionHistory() {
               />
               <div className="flex items-center max-sm:col-start-2 max-sm:text-xs max-sm:text-neutral-500">
                 {tx.status === "Pending" ? (
-                  <span className="flex items-center gap-1 text-neutral-500">
-                    <SpinnerIcon className="size-3" />
-                    Processing
-                  </span>
+                  <PendingStatus tx={tx} />
                 ) : (
                   <time>
                     {tx.timestamp &&

@@ -17,7 +17,7 @@ import {
 } from "./chain/lightwalletd";
 import { type ProveStage, submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
-import { pendingActivity, prunePending } from "./pending";
+import { confirmedAt, pendingActivity, prunePending } from "./pending";
 import {
   maxSend,
   planMigration,
@@ -498,7 +498,10 @@ export class Wallet {
       addresses,
     );
     const mined = new Set(history.map((tx) => tx.txid));
-    return [...pendingActivity(pending, mined), ...history];
+    return [
+      ...pendingActivity(pending, mined, this.#tip),
+      ...confirmedAt(history, this.#tip),
+    ];
   }
 
   /**
