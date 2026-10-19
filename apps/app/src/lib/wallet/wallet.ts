@@ -17,7 +17,7 @@ import {
 } from "./chain/lightwalletd";
 import { type ProveStage, submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
-import { pendingActivity, prunePending } from "./pending";
+import { confirmedAt, pendingActivity, prunePending } from "./pending";
 import {
   maxSend,
   planMigration,
@@ -59,6 +59,8 @@ const FRY = import.meta.env.VITE_ALLOW_CPU_TO_FRY === "true";
 
 /** How long after a sync ends, however it ends, the next one starts by itself. */
 const RESYNC_MS = 60_000;
+/** Between syncs the tip is checked this often, and a new block syncs at once. */
+const TIP_CHECK_MS = 15_000;
 
 /** Whether the browser asks to save data (Chromium only). */
 const saveData = () =>
@@ -108,6 +110,8 @@ export class Wallet {
   #sizes?: TreeSizes;
   #recentRunning = false;
   #resync?: ReturnType<typeof setTimeout>;
+  /** Tip checks since the last sync ended. */
+  #checks = 0;
 
   constructor(options: { id: string; ufvk: string; birthday?: number }) {
     this.id = options.id;
@@ -203,11 +207,13 @@ export class Wallet {
   /**
    * Brings the wallet up to the chain tip: new chunks, and setup until it's
    * done. History then goes on in the background. A call while one runs
-   * shares it, and pauses history meanwhile. It runs again by itself a minute
-   * after it ends, once nothing runs in the background.
+   * shares it, and pauses history meanwhile. It runs again by itself once a
+   * new block is mined, or a minute after it ends, once nothing runs in the
+   * background.
    */
   sync = dedupe(async () => {
     clearTimeout(this.#resync);
+    this.#resync = undefined;
     try {
       await this.#syncRecent();
     } catch (err) {
@@ -216,19 +222,25 @@ export class Wallet {
       throw err;
     } finally {
       // Counted from the end, so a slow sync never queues another.
+      this.#checks = 0;
       if (!this.#abort.signal.aborted) {
-        this.#resync = setTimeout(this.#resyncTick, RESYNC_MS);
+        this.#resync = setTimeout(this.#resyncTick, TIP_CHECK_MS);
       }
     }
   });
 
   /** The timed sync, held back while history or the spam era runs: a sync would pause it. */
-  #resyncTick = () => {
-    if (this.#history) {
-      this.#resync = setTimeout(this.#resyncTick, RESYNC_MS);
-      return;
-    }
-    this.resync();
+  #resyncTick = async () => {
+    const timer = this.#resync;
+    this.#checks++;
+    const due =
+      !this.#history &&
+      (this.#checks * TIP_CHECK_MS >= RESYNC_MS ||
+        (await fetchLatestHeight().catch(() => 0)) > (this.#tip ?? Infinity));
+    // A sync started meanwhile schedules the next tick itself.
+    if (this.#resync !== timer || this.#abort.signal.aborted) return;
+    if (due && !this.#history) return this.resync();
+    this.#resync = setTimeout(this.#resyncTick, TIP_CHECK_MS);
   };
 
   /** A sync that, like the timed one, skips while history or the spam era runs. */
@@ -498,7 +510,10 @@ export class Wallet {
       addresses,
     );
     const mined = new Set(history.map((tx) => tx.txid));
-    return [...pendingActivity(pending, mined), ...history];
+    return [
+      ...pendingActivity(pending, mined, this.#tip),
+      ...confirmedAt(history, this.#tip),
+    ];
   }
 
   /**

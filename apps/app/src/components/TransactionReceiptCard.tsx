@@ -1,5 +1,7 @@
+import { useNow } from "../hooks/useNow";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
+import { minutesLeft, PROCESSING_ESTIMATE_MIN } from "../lib/wallet/pending";
 import type { Activity, Party } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
@@ -23,8 +25,30 @@ export type TransactionReceiptCardProps = {
     | "from"
     | "to"
     | "self"
-  > & { memo?: string };
+  > &
+    Partial<Pick<Activity, "confirmations" | "expires_in">> & {
+      memo?: string;
+    };
 };
+
+/** Minutes left of the usual wait for a transaction still processing, or that it's late. */
+function ProcessingHint({
+  timestamp,
+  expires_in,
+}: Pick<Activity, "timestamp" | "expires_in">) {
+  const now = useNow(10_000);
+  const left =
+    timestamp === undefined ? undefined : minutesLeft(timestamp, now);
+  return (
+    <div className="mt-2 text-center text-xs text-neutral-500">
+      {left === 0
+        ? `Taking longer than usual${expires_in !== undefined ? ` · expires in ${expires_in} blocks` : ""}`
+        : left === undefined
+          ? `Usually takes about ${PROCESSING_ESTIMATE_MIN} minutes`
+          : `About ${left} min left`}
+    </div>
+  );
+}
 
 /** Every address on a side that has several, each recipient with what it got. */
 function PartyList({ label, party }: { label: string; party: Party }) {
@@ -68,6 +92,9 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
         <div className="mt-15 mx-auto w-fit">
           <TransactionTypeAndStatus tx={tx} />
         </div>
+        {tx.status === "Pending" && !tx.confirmations && (
+          <ProcessingHint timestamp={tx.timestamp} expires_in={tx.expires_in} />
+        )}
 
         <div
           className="mt-2 text-center leading-none font-medium"

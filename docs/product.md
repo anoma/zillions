@@ -195,8 +195,15 @@ Moves shielded funds to one of the account's own transparent addresses.
     same pool shows as Sent, to "Shielded" or "Transparent", its amount what
     reached the receiving address (not change), the fee apart;
   - **Status**: "Processing" from the moment a send, shield or unshield is
-    broadcast until it's mined, then "Completed" (a payment link: Unclaimed,
-    Claimed or Cancelled); one that expires unmined drops off the list;
+    broadcast until it's mined, then "Confirming n/k" with a ring filling
+    one segment per block, then "Completed" (a payment link: Unclaimed,
+    Claimed or Cancelled). k is zcash_client_backend's default: 3 for the
+    account's own transactions, 10 for a payment received from someone else.
+    Processing counts down the usual 3 minutes live ("Processing · ~2
+    min", and "About 2 min left" on its detail page); past them it reads
+    "Still processing", and the detail page says how many blocks are left
+    before it expires. Hovering or tapping the status explains what it's
+    waiting for. One that expires unmined drops off the list;
   - **Time**.
 - A **detail page** per transaction: type, status, amounts broken down (e.g.
   "Sent from Transparent" / "Received in Shielded"), fee, from, to, time,

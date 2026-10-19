@@ -54,7 +54,9 @@ work.
   birthday.
 - **Every sync pauses phases 3–4** and starts them again when it ends:
   waiting for the chunks in flight, then the sync itself, ~10 s on 1 worker.
-  So the one-minute re-sync (`RESYNC_MS`) holds off while phases 3–4 run,
+  Between syncs the tip is checked every 15 s (`TIP_CHECK_MS`) and a new
+  block syncs at once, or a minute after the last sync (`RESYNC_MS`) at the
+  latest. That timed sync holds off while phases 3–4 run,
   and new activity then shows once they end or on a refresh. The first sync
   of a visit, and a tap on the indicator, still run at once. Coming back to
   the tab or back online also syncs at once, but holds off like the timer.

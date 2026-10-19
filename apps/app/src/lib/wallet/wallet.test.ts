@@ -135,6 +135,7 @@ const { cachedTransparent } = await import("./transparent");
 type TransparentCache = import("./transparent").TransparentCache;
 const { fetchBlock, fetchLatestHeight, fetchTransaction } =
   await import("./chain/lightwalletd");
+const { fetchTreeSizes } = await import("./chain/indexer");
 const store = await import("./store");
 const { crawlChunks } = await import("./shielded/crawl");
 
@@ -344,7 +345,7 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
   expect(sends).toEqual([
     expect.objectContaining({ tx_type: "Sent", value: -4_000n }),
   ]);
-  expect(sends[0].status).not.toBe("Pending");
+  expect(sends[0].block_height).toBe(3_210);
 });
 
 test("shows the transparent side as last synced before any sync answers", async () => {
@@ -555,6 +556,8 @@ test("syncs again a minute after a sync ends, never queuing one behind a slow sy
   tips.mockImplementationOnce(
     () => new Promise((resolve) => (answer = () => resolve(chain.tip))),
   );
+  const syncs = vi.mocked(fetchTreeSizes);
+  syncs.mockClear();
   const wallet = new Wallet({ id: "r", ufvk: "uview" });
 
   const first = wallet.sync();
@@ -562,14 +565,34 @@ test("syncs again a minute after a sync ends, never queuing one behind a slow sy
   expect(tips).toHaveBeenCalledTimes(1);
   answer();
   await first;
+  expect(syncs).toHaveBeenCalledTimes(1);
 
+  // Checked every 15 s meanwhile, the tip stays put.
   await vi.advanceTimersByTimeAsync(59_000);
-  expect(tips).toHaveBeenCalledTimes(1);
+  expect(syncs).toHaveBeenCalledTimes(1);
   await vi.advanceTimersByTimeAsync(1_000);
-  expect(tips).toHaveBeenCalledTimes(2);
+  expect(syncs).toHaveBeenCalledTimes(2);
 
   wallet.free();
   vi.useRealTimers();
+});
+
+test("syncs as soon as a check finds a new block", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const syncs = vi.mocked(fetchTreeSizes);
+  const wallet = new Wallet({ id: "b", ufvk: "uview" });
+  await wallet.sync();
+  syncs.mockClear();
+
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(syncs).not.toHaveBeenCalled();
+  chain.tip += 1;
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(syncs).toHaveBeenCalledTimes(1);
+
+  wallet.free();
+  vi.useRealTimers();
+  chain.tip -= 1;
 });
 
 test("holds the timed sync while history runs, and syncs once it ends", async () => {
@@ -588,22 +611,22 @@ test("holds the timed sync while history runs, and syncs once it ends", async ()
     }
     return crawl(o);
   });
-  const tips = vi.mocked(fetchLatestHeight);
-  tips.mockClear();
+  const syncs = vi.mocked(fetchTreeSizes);
+  syncs.mockClear();
   const wallet = new Wallet({ id: "h", ufvk: "uview" });
 
   await wallet.sync();
   await vi.advanceTimersByTimeAsync(3 * 60_000);
   wallet.resync();
   await vi.advanceTimersByTimeAsync(0);
-  expect(tips).toHaveBeenCalledTimes(1);
+  expect(syncs).toHaveBeenCalledTimes(1);
 
   release();
-  await vi.advanceTimersByTimeAsync(60_000);
-  expect(tips).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(syncs).toHaveBeenCalledTimes(2);
   wallet.resync();
   await vi.advanceTimersByTimeAsync(0);
-  expect(tips).toHaveBeenCalledTimes(3);
+  expect(syncs).toHaveBeenCalledTimes(3);
 
   wallet.free();
   vi.useRealTimers();

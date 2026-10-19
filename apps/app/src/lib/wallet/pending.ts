@@ -29,15 +29,19 @@ export const prunePending = (
         seen.tip <= p.expiryHeight + EXPIRY_MARGIN),
   );
 
-/** What history lists for pending transactions not in `mined`, newest first. */
+/**
+ * What history lists for pending transactions not in `mined`, newest first,
+ * with the blocks each has left to be mined once `tip` is known.
+ */
 export const pendingActivity = (
   pending: PendingTx[],
   mined: Set<string>,
+  tip?: number,
 ): Activity[] =>
   pending
     .filter((p) => p.receipt && !mined.has(p.txid))
     .reverse()
-    .map(({ txid, receipt }) => ({
+    .map(({ txid, receipt, expiryHeight }) => ({
       ...receipt!,
       txid,
       status: "Pending",
@@ -45,4 +49,41 @@ export const pendingActivity = (
       confirmations: 0,
       memo: receipt!.memo,
       pool: "mixed",
+      ...(expiryHeight > 0 &&
+        tip !== undefined && {
+          expires_in: Math.max(0, expiryHeight - tip),
+        }),
     }));
+
+/**
+ * Confirmations a mined transaction needs to show as completed:
+ * zcash_client_backend's `ConfirmationsPolicy` defaults, trusted for our
+ * own transactions and untrusted for a payment from someone else.
+ */
+export const requiredConfirmations = (tx_type: Activity["tx_type"]) =>
+  tx_type === "Received" ? 10 : 3;
+
+/** Mined `history` with its confirmations at `tip`, Pending until it has enough; an unknown tip leaves it as is. */
+export const confirmedAt = (history: Activity[], tip: number | undefined) =>
+  tip === undefined
+    ? history
+    : history.map((tx): Activity => {
+        // The indexer can be past the tip this session last read.
+        const confirmations = Math.max(1, tip - tx.block_height + 1);
+        return confirmations < requiredConfirmations(tx.tx_type)
+          ? { ...tx, confirmations, status: "Pending" }
+          : { ...tx, confirmations };
+      });
+
+/** Zcash's target block time. */
+export const BLOCK_SECONDS = 75;
+
+/** About how long a broadcast takes to show mined: a block, the indexer, the next sync, with room. */
+export const PROCESSING_ESTIMATE_MIN = 3;
+
+/** Whole minutes left of the usual wait for a broadcast at `timestamp` (Unix seconds) as of `now` (ms); 0 once it's late. */
+export const minutesLeft = (timestamp: number, now: number) =>
+  Math.max(
+    0,
+    Math.ceil(PROCESSING_ESTIMATE_MIN - (now / 1000 - timestamp) / 60),
+  );
