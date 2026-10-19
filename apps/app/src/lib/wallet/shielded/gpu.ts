@@ -83,14 +83,21 @@ function open() {
     const adapter = await navigator.gpu?.requestAdapter({
       powerPreference: "high-performance",
     });
-    if (!adapter) return undefined;
+    // A software ("fallback") adapter runs slower than the wasm it would
+    // replace. Chrome before 127 has no `info`, only `isFallbackAdapter`.
+    const legacy = adapter as { isFallbackAdapter?: boolean } | null;
+    if (
+      !adapter ||
+      (adapter.info?.isFallbackAdapter ?? legacy?.isFallbackAdapter)
+    )
+      return undefined;
     const gpu = await adapter.requestDevice();
     gpu.lost.then((info) => {
       console.warn("GPU lost, trial decryption back on the CPU:", info.message);
       device = Promise.resolve(undefined);
       pipelines.clear();
     });
-    const { vendor, architecture } = adapter.info;
+    const { vendor = "", architecture = "" } = adapter.info ?? {};
     console.info(
       `Trial decryption on the GPU: ${`${vendor} ${architecture}`.trim() || "yes"}`,
     );
