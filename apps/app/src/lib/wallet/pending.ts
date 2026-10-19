@@ -75,5 +75,15 @@ export const confirmedAt = (history: Activity[], tip: number | undefined) =>
           : { ...tx, confirmations };
       });
 
-/** About how long a broadcast takes to show mined: a 75 s block, the indexer, a minute's re-sync, with room. */
+/** Zcash's target block time. */
+export const BLOCK_SECONDS = 75;
+
+/** About how long a broadcast takes to show mined: a block, the indexer, the next sync, with room. */
 export const PROCESSING_ESTIMATE_MIN = 5;
+
+/** Whole minutes left of the usual wait for a broadcast at `timestamp` (Unix seconds) as of `now` (ms); 0 once it's late. */
+export const minutesLeft = (timestamp: number, now: number) =>
+  Math.max(
+    0,
+    Math.ceil(PROCESSING_ESTIMATE_MIN - (now / 1000 - timestamp) / 60),
+  );

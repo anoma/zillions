@@ -3,8 +3,14 @@ import type { PendingTx } from "./types";
 
 vi.mock("./chain/lightwalletd", () => ({}));
 
-const { held, pendingActivity, prunePending, confirmedAt, EXPIRY_MARGIN } =
-  await import("./pending");
+const {
+  held,
+  pendingActivity,
+  prunePending,
+  confirmedAt,
+  minutesLeft,
+  EXPIRY_MARGIN,
+} = await import("./pending");
 
 const tx = (txid: string, rest: Partial<PendingTx> = {}): PendingTx => ({
   txid,
@@ -106,4 +112,16 @@ test("a mined transaction stays pending until it has the default confirmations",
   expect(at(99)).toEqual(["Sent Pending 1", "Received Pending 1"]);
   // No tip yet: history stays as the indexer has it.
   expect(at(undefined)).toEqual(["Sent Confirmed 0", "Received Confirmed 0"]);
+});
+
+test("a broadcast counts down the usual 5 minutes, then reads as late", () => {
+  const sent = 1_000;
+  const at = (seconds: number) => minutesLeft(sent, (sent + seconds) * 1000);
+
+  expect(at(0)).toBe(5);
+  expect(at(30)).toBe(5);
+  expect(at(60)).toBe(4);
+  expect(at(4 * 60 + 59)).toBe(1);
+  expect(at(5 * 60)).toBe(0);
+  expect(at(60 * 60)).toBe(0);
 });

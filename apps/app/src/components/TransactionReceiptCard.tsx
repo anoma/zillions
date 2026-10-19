@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useNow } from "../hooks/useNow";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
-import { PROCESSING_ESTIMATE_MIN } from "../lib/wallet/pending";
+import { minutesLeft, PROCESSING_ESTIMATE_MIN } from "../lib/wallet/pending";
 import type { Activity, Party } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
@@ -31,24 +31,21 @@ export type TransactionReceiptCardProps = {
     };
 };
 
-/** How long a transaction still processing usually takes, or that it's late. */
+/** Minutes left of the usual wait for a transaction still processing, or that it's late. */
 function ProcessingHint({
   timestamp,
   expires_in,
 }: Pick<Activity, "timestamp" | "expires_in">) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 10_000);
-    return () => clearInterval(timer);
-  }, []);
-  const late =
-    timestamp !== undefined &&
-    now / 1000 - timestamp > PROCESSING_ESTIMATE_MIN * 60;
+  const now = useNow(10_000);
+  const left =
+    timestamp === undefined ? undefined : minutesLeft(timestamp, now);
   return (
     <div className="mt-2 text-center text-xs text-neutral-500">
-      {late
+      {left === 0
         ? `Taking longer than usual${expires_in !== undefined ? ` · expires in ${expires_in} blocks` : ""}`
-        : `Usually takes about ${PROCESSING_ESTIMATE_MIN} minutes`}
+        : left === undefined
+          ? `Usually takes about ${PROCESSING_ESTIMATE_MIN} minutes`
+          : `About ${left} min left`}
     </div>
   );
 }
