@@ -22,6 +22,7 @@ const TIMEOUT = NODE_ENV === "development" ? 50 : 1000;
 
 export const KeystoneImport = () => {
   const { state, dispatch } = useWizard();
+  const [zip32Path, setZip32Path] = useState(state.zip32Path);
   const [viewingKey, setViewingKey] = useState(state.viewingKey);
   const [viewingKeyError, setViewingKeyError] = useState("");
   const [alias, setAlias] = useState(state.alias);
@@ -31,6 +32,7 @@ export const KeystoneImport = () => {
     if(accounts.accounts.length > 0) {
       setViewingKey(accounts.accounts[0].ufvk);
       setAlias(accounts.accounts[0].name);
+      setZip32Path({ account: accounts.accounts[0].index });
     }
   }, [])
 
@@ -42,6 +44,7 @@ export const KeystoneImport = () => {
     e.preventDefault();
     dispatch({ type: "setAlias", alias });
     dispatch({ type: "setViewingKey", viewingKey });
+    dispatch({ type: "setZip32Path", path: zip32Path });
     dispatch({ type: "setSecretKind", kind: "viewing-key" });
     dispatch({ type: "goToStep", step: "keystone.name" });
   }
