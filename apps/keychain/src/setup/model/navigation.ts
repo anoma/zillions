@@ -18,8 +18,16 @@ const IMPORT_ORDER: Step[] = [
   "import.complete",
 ];
 
-const orderFor = (flow: Flow): Step[] =>
-  flow === "create" ? CREATE_ORDER : flow === "import" ? IMPORT_ORDER : [];
+const LEDGER_ORDER: Step[] = ["ledger.password", "ledger.complete"];
+
+const ORDERS: Record<Flow, Step[]> = {
+  none: [],
+  create: CREATE_ORDER,
+  import: IMPORT_ORDER,
+  ledger: LEDGER_ORDER,
+};
+
+const orderFor = (flow: Flow): Step[] => ORDERS[flow];
 
 export const previousStep = (flow: Flow, step: Step): Step => {
   if (step === "start") return "start";

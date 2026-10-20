@@ -106,6 +106,12 @@ export class BackgroundClient {
     return this.send("keyring/deriveShieldedAccount", input);
   }
 
+  saveLedgerAccount(
+    input: IpcRequest<"keyring/saveLedgerAccount">
+  ): Promise<IpcResponse<"keyring/saveLedgerAccount">> {
+    return this.send("keyring/saveLedgerAccount", input);
+  }
+
   /** All stored account records (parents and their shielded children). */
   queryAccounts(): Promise<StoredAccount[]> {
     return this.send("keyring/queryAccounts", {});

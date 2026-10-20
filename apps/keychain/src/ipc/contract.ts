@@ -38,7 +38,11 @@ export type Zip32Path = {
   index?: number;
 };
 
-export type AccountType = "mnemonic" | "private-key" | "shielded-keys";
+export type AccountType =
+  | "mnemonic"
+  | "private-key"
+  | "shielded-keys"
+  | "ledger";
 
 /** The flow that produced an account. */
 export type AccountFlow = "create" | "import";
@@ -208,6 +212,28 @@ export type IpcContract = {
       birthday: number;
     };
     res: DerivedAccount;
+  };
+  /**
+   * Store a Ledger account (no secret: keys stay on the device) with its
+   * shielded child, and make it active. Re-connecting an already imported
+   * Ledger just re-activates it.
+   */
+  "keyring/saveLedgerAccount": {
+    req: {
+      alias: string;
+      bip44Path: Bip44Path;
+      zip32Path: Zip32Path;
+      transparentAddress: string;
+      shieldedAddress: string;
+      /** Encoded UFVK (`uview1…`) read from the device. */
+      viewingKey: string;
+      birthday: number;
+    };
+    res: {
+      parentAccount: AccountStore;
+      shieldedAccount?: DerivedAccount;
+      alreadyImported: boolean;
+    };
   };
   "keyring/queryAccounts": {
     req: Record<string, never>;

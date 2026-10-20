@@ -9,6 +9,7 @@ import { CreateConfirm } from "./steps/create/CreateConfirm";
 import { CreateSeed } from "./steps/create/CreateSeed";
 import { CreateWarning } from "./steps/create/CreateWarning";
 import { ImportSecret } from "./steps/import/ImportSecret";
+import { LedgerPassword } from "./steps/ledger/LedgerPassword";
 import { Complete } from "./steps/shared/Complete";
 import { NameAndPassword } from "./steps/shared/NameAndPassword";
 
@@ -37,6 +38,12 @@ export const StepRenderer = () => {
     case "import.name":
       return <NameAndPassword nextStep="import.complete" />;
     case "import.complete":
+      return <Complete />;
+
+    // ledger branch
+    case "ledger.password":
+      return <LedgerPassword />;
+    case "ledger.complete":
       return <Complete />;
 
     default: {

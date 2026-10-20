@@ -56,8 +56,14 @@ export const ViewAccount = () => {
   const transparentAddress = isShieldedParent ? undefined : parent.address;
 
   // The spending key belongs to the shielded account: the parent itself for a
-  // spending-key import, otherwise its derived shielded child.
-  const shieldedAccountId = isShieldedParent ? parent.id : shieldedChild?.id;
+  // spending-key import, otherwise its derived shielded child. A Ledger's
+  // never leaves the device.
+  const shieldedAccountId =
+    parent.type === "ledger"
+      ? undefined
+      : isShieldedParent
+        ? parent.id
+        : shieldedChild?.id;
 
   const isMnemonic = parent.type === "mnemonic";
 

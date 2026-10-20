@@ -147,6 +147,13 @@ export const handlers: HandlerMap = {
     return keyring.deriveShieldedAccount(input);
   },
 
+  "keyring/saveLedgerAccount": async (input) => {
+    const { keyring, broadcaster } = await getServices();
+    const result = await keyring.storeLedgerAccount(input);
+    void broadcaster.accountChanged();
+    return result;
+  },
+
   "keyring/queryAccounts": async () => {
     const { accounts } = await getServices();
     return (await accounts.findAll()).map(toStoredAccount);

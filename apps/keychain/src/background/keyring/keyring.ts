@@ -38,6 +38,18 @@ const UUID_NAMESPACE = "9bfceade-37fe-11ed-acc0-a3da3461b38c";
 // check is `validateMnemonic`.
 const LOOKS_LIKE_BIP39_WORD = /^[a-z]{3,8}$/;
 
+const toAccountStore = (a: KeyStoreType): AccountStore => ({
+  id: a.id,
+  alias: a.alias,
+  address: a.address,
+  owner: a.owner,
+  type: a.type as AccountType,
+  path: a.path as Bip44Path,
+  parentId: a.parentId,
+  source: a.source as AccountStore["source"],
+  timestamp: a.timestamp,
+});
+
 /**
  * Keyring: key semantics for the Setup flow — mnemonic generation/validation,
  * secret encoding, and account/keypair record construction.
@@ -198,6 +210,9 @@ export class Keyring {
     if (!secretHolder) {
       throw new Error(`Parent account not found: ${record.parentId}`);
     }
+    if ((secretHolder.type as string) === "ledger") {
+      throw new Error("Signing with a Ledger account is not supported yet");
+    }
     if ((secretHolder.type as string) !== "mnemonic") {
       throw new Error(
         "Only mnemonic-backed accounts are supported (imported raw keys are not supported yet)"
@@ -330,6 +345,93 @@ export class Keyring {
       path,
       source,
       timestamp,
+    };
+  }
+
+  /**
+   * Store a Ledger account and make it active. The keys never leave the
+   * device, so like a derived child the record's `sensitive` is an encrypted
+   * empty payload. A Ledger that's already imported is re-activated instead.
+   */
+  public async storeLedgerAccount(input: {
+    alias: string;
+    bip44Path: Bip44Path;
+    zip32Path: Zip32Path;
+    transparentAddress: string;
+    shieldedAddress: string;
+    viewingKey: string;
+    birthday: number;
+  }): Promise<{
+    parentAccount: AccountStore;
+    shieldedAccount?: DerivedAccount;
+    alreadyImported: boolean;
+  }> {
+    await this.vaultService.assertIsUnlocked();
+
+    const existing = await this.accounts.findByAddress(
+      input.transparentAddress
+    );
+    if (existing) {
+      const parent = existing.parentId
+        ? await this.accounts.findById(existing.parentId)
+        : existing;
+      if (!parent) {
+        throw new Error(`Parent account not found: ${existing.parentId}`);
+      }
+      const child = (await this.accounts.findAll()).find(
+        (a) => a.parentId === parent.id
+      );
+      await this.accounts.setActiveAccount(
+        parent.id,
+        parent.type as AccountType
+      );
+      return {
+        parentAccount: toAccountStore(parent),
+        shieldedAccount: child && {
+          id: child.id,
+          alias: child.alias,
+          address: child.address,
+          type: child.type as AccountType,
+          parentId: child.parentId,
+        },
+        alreadyImported: true,
+      };
+    }
+
+    const id = uuidv4();
+    const accountStore: KeyStoreType = {
+      id,
+      alias: input.alias,
+      address: input.transparentAddress,
+      owner: input.transparentAddress,
+      path: input.bip44Path,
+      type: "ledger" as KeyStoreType["type"],
+      source: "imported",
+      timestamp: 0,
+      seedFingerprint: "",
+      birthday: input.birthday,
+    };
+    const sensitive = await this.vaultService.encryptSensitiveData({
+      text: "",
+      passphrase: "",
+    });
+    await this.accounts.add({ public: accountStore, sensitive });
+
+    const shieldedAccount = await this.deriveShieldedAccount({
+      parentId: id,
+      alias: input.alias,
+      path: input.zip32Path,
+      source: "imported",
+      shieldedAddress: input.shieldedAddress,
+      viewingKey: input.viewingKey,
+      birthday: input.birthday,
+    });
+    await this.accounts.setActiveAccount(id, "ledger");
+
+    return {
+      parentAccount: toAccountStore(accountStore),
+      shieldedAccount,
+      alreadyImported: false,
     };
   }
 
