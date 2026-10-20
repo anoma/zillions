@@ -25,6 +25,8 @@ import {
   isHighFee,
   summaryAsText,
 } from "../utils/pczt";
+import { KeystoneSDK, UR } from "@keystonehq/keystone-sdk";
+import { AnimatedQRCode } from "@keystonehq/animated-qr";
 
 type Props = {
   details?: ApprovalDetails;
@@ -48,11 +50,17 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const [walletName, setWalletName] = useState<string>();
   const [highFeeAccepted, setHighFeeAccepted] = useState(false);
   const highFee = details ? isHighFee(details.summary) : false;
+  const [ur, setUr] = useState<UR>();
+  const keystoneSDK = new KeystoneSDK();
 
   useEffect(() => {
     const fetchDetails = async (): Promise<void> => {
       if (client && msgId && origin) {
         const summary = await client.queryPcztSummary(msgId);
+        const ur = keystoneSDK.zcash.generatePczt(
+          Buffer.from(summary.pczt, "base64"),
+        );
+        setUr(ur);
         setDetails({ msgId, signer, origin, summary });
       }
     };
@@ -117,6 +125,11 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
                 </Stack>
               )}
             </section>
+            <AnimatedQRCode
+              options={{ size: 340 }}
+              type={ur.type}
+              cbor={ur.cbor.toString("hex")}
+            />
           </>
         )}
       </main>
