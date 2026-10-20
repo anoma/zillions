@@ -90,7 +90,11 @@ pub(crate) fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
     // Random, not a counter: the keychain and the app hand out addresses with no shared state.
     let mut j = [0u8; 11];
     OsRng.fill_bytes(&mut j);
-    let request = if ufvk.sapling().is_some() { ORCHARD_SAPLING } else { ORCHARD };
+    let request = if ufvk.sapling().is_some() {
+        ORCHARD_SAPLING
+    } else {
+        ORCHARD
+    };
     // Sapling works on about half the indices; take the next one it does.
     let (address, _) = ufvk
         .find_address(DiversifierIndex::from(j), request)
@@ -275,11 +279,16 @@ mod tests {
         .unwrap()
         .encode(&network.network_type());
 
-        let Some(Address::Unified(ua)) = Address::decode(&network, &fresh(&network, &ledger).unwrap())
+        let Some(Address::Unified(ua)) =
+            Address::decode(&network, &fresh(&network, &ledger).unwrap())
         else {
             panic!("not a unified address")
         };
         assert!(ua.sapling().is_none() && ua.transparent().is_none());
-        assert!(full.orchard().unwrap().scope_for_address(ua.orchard().unwrap()).is_some());
+        assert!(full
+            .orchard()
+            .unwrap()
+            .scope_for_address(ua.orchard().unwrap())
+            .is_some());
     }
 }
