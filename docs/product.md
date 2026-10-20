@@ -468,7 +468,9 @@ Challenges to check, one by one:
   address is refused with an explanation. When Ledger's app adds Sapling, the
   wallet adds it too.
 - Needs Ledger's Zcash app 3.9.1 or later (Ironwood); with an older one the
-  user is asked to update it. Chromium-based browsers only.
+  user is asked to update it. The Ledger Nano S can't run it and is refused
+  with an explanation. Chromium-based browsers only: elsewhere the Keychain
+  doesn't offer to connect a Ledger.
 - A send is approved in the Keychain as usual, then reviewed and approved on
   the device; what the device shows is what gets signed.
 - While waiting on the device, the Keychain shows each step (connect, unlock,
