@@ -29,6 +29,7 @@ export type CreateAccountInput = {
   password?: string;
   /** Block height at which the account was created/imported. undefined = auto-fetch chain tip. */
   birthday: number | undefined;
+  seedFingerprint: string;
 };
 
 /**
@@ -102,6 +103,7 @@ export const createAccount = async (
     passwordRequired,
     password,
     birthday,
+    seedFingerprint,
   } = input;
 
   try {
@@ -134,6 +136,7 @@ export const createAccount = async (
       shieldedAddress,
       viewingKey,
       birthday: resolvedBirthday,
+      seedFingerprint,
     });
 
     // A spending-key import is itself the shielded account; nothing to derive.

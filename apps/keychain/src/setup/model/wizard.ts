@@ -82,6 +82,7 @@ export const initialWizardState = (passwordRequired: boolean): WizardState => ({
   bip44Path: { account: 0, change: 0, index: 0 },
   zip32Path: { account: 0 },
   birthday: undefined,
+  seedFingerprint: "",
   completion: "idle",
   completionInfo: "",
 });
@@ -103,6 +104,7 @@ export type WizardEvent =
   | { type: "setZip32Path"; path: Zip32Path }
   | { type: "setAlias"; alias: string }
   | { type: "setPassword"; password: string | undefined }
+  | { type: "setSeedFingerprint"; value: string }
   | { type: "completionStarted"; info: string }
   | { type: "completionInfo"; info: string }
   | {
@@ -167,10 +169,13 @@ export const wizardReducer = (
       return { ...state, alias: event.alias };
 
     case "setViewingKey":
-      return { ...state, viewingKey: event.viewingKey };
+      return { ...state, viewingKey: event.value };
   
     case "setPassword":
       return { ...state, password: event.password };
+
+    case "setSeedFingerprint":
+      return { ...state, seedFingerprint: event.value };
 
     case "completionStarted":
       return { ...state, completion: "pending", completionInfo: event.info };

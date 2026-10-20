@@ -192,6 +192,7 @@ export type IpcContract = {
       viewingKey: string;
       /** Block height at which this account was created/imported. */
       birthday: number;
+      seedFingerprint: string;
     };
     res: AccountStore;
   };

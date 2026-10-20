@@ -57,6 +57,7 @@ export const NameAndPassword = ({ nextStep }: Props) => {
         passwordRequired: state.passwordRequired,
         password,
         birthday: state.birthday,
+        seedFingerprint: state.seedFingerprint,
       },
       (info) => dispatch({ type: "completionInfo", info })
     );
