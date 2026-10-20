@@ -13,28 +13,44 @@ import type {
 import { gpuSecrets } from "./gpu";
 import DecryptWorker from "./worker.ts?worker";
 
-/** Wraps a worker as a request/response channel: one chunk in flight at a time. */
-export function workerChannel() {
+/**
+ * Wraps a worker as a request/response channel: one chunk in flight at a time.
+ * Aborting `signal` terminates the worker and rejects the chunk in flight.
+ */
+export function workerChannel(signal?: AbortSignal) {
   const worker = new DecryptWorker();
   return {
-    run: (request: ChunkRequest) =>
-      new Promise<ChunkWorkerSuccess>((resolve, reject) => {
-        worker.onmessage = ({ data }: MessageEvent<ChunkWorkerResponse>) => {
-          if ("gpuInputs" in data) {
-            gpuSecrets(data.pool, data.gpuInputs).then(
-              (secrets) =>
-                worker.postMessage(
-                  { secrets: secrets ?? null },
-                  secrets ? [secrets.buffer] : [],
-                ),
-              (err) => worker.postMessage({ gpuError: String(err) }),
-            );
-          } else if ("error" in data) reject(new Error(data.error));
-          else resolve(data);
-        };
-        worker.onerror = (e) => reject(new Error(e.message || "worker error"));
-        worker.postMessage(request);
-      }),
+    run: (request: ChunkRequest) => {
+      let onAbort = () => {};
+      return (
+        new Promise<ChunkWorkerSuccess>((resolve, reject) => {
+          if (signal?.aborted) return reject(signal.reason);
+          onAbort = () => {
+            worker.terminate();
+            reject(signal!.reason);
+          };
+          signal?.addEventListener("abort", onAbort, { once: true });
+          worker.onmessage = ({ data }: MessageEvent<ChunkWorkerResponse>) => {
+            if ("gpuInputs" in data) {
+              gpuSecrets(data.pool, data.gpuInputs, signal).then(
+                (secrets) =>
+                  worker.postMessage(
+                    { secrets: secrets ?? null },
+                    secrets ? [secrets.buffer] : [],
+                  ),
+                (err) => worker.postMessage({ gpuError: String(err) }),
+              );
+            } else if ("error" in data) reject(new Error(data.error));
+            else resolve(data);
+          };
+          worker.onerror = (e) =>
+            reject(new Error(e.message || "worker error"));
+          worker.postMessage(request);
+        })
+          // The signal outlives thousands of chunks: drop each one's listener.
+          .finally(() => signal?.removeEventListener("abort", onAbort))
+      );
+    },
     terminate: () => worker.terminate(),
   };
 }
@@ -98,7 +114,7 @@ export async function crawlChunks(options: {
             await new Promise((resolve) => setTimeout(resolve, 1000));
             continue;
           }
-          const channel = (channels[i] ??= workerChannel());
+          const channel = (channels[i] ??= workerChannel(signal));
           const chunk = nextChunk--;
           release(
             chunk,
@@ -107,6 +123,9 @@ export async function crawlChunks(options: {
         }
       }),
     );
+  } catch (err) {
+    // Callers check `signal.aborted` themselves; an abort isn't a failure.
+    if (!signal?.aborted) throw err;
   } finally {
     channels.forEach((channel) => channel?.terminate());
   }

@@ -107,10 +107,18 @@ function open() {
 
 /**
  * The shared secrets for `inputs`, zcore's `gpu_inputs` for `pool`; undefined
- * when this browser or machine has no usable GPU. Throws on a GPU error.
+ * when this browser or machine has no usable GPU. Throws on a GPU error, or
+ * without touching the GPU if `signal` aborted while it waited its turn.
  */
-export function gpuSecrets(pool: Pool, inputs: Uint8Array) {
-  const run = queue.then(() => secrets(pool, inputs));
+export function gpuSecrets(
+  pool: Pool,
+  inputs: Uint8Array,
+  signal?: AbortSignal,
+) {
+  const run = queue.then(() => {
+    signal?.throwIfAborted();
+    return secrets(pool, inputs);
+  });
   queue = run.catch(() => undefined);
   return run;
 }
