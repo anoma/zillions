@@ -19,6 +19,8 @@ import { TransactionDataPanel } from "../ui/TransactionDataPanel";
 import { TransferSummary } from "../ui/TransferSummary";
 import { walletNameFor } from "../utils/accounts";
 import { flowCount, summaryAsText } from "../utils/pczt";
+import {KeystoneSDK, UR} from "@keystonehq/keystone-sdk";
+import {AnimatedQRCode} from "@keystonehq/animated-qr";
 
 type Props = {
   details?: ApprovalDetails;
@@ -40,11 +42,15 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const [displayTransactionData, setDisplayTransactionData] = useState(false);
   const [summaryError, setSummaryError] = useState<string>();
   const [walletName, setWalletName] = useState<string>();
+  const [ur, setUr] = useState<UR>();
+  const keystoneSDK = new KeystoneSDK();
 
   useEffect(() => {
     const fetchDetails = async (): Promise<void> => {
       if (client && msgId && origin) {
         const summary = await client.queryPcztSummary(msgId);
+        const ur = keystoneSDK.zcash.generatePczt(Buffer.from(summary.pczt, 'base64'));
+        setUr(ur);
         setDetails({ msgId, signer, origin, summary });
       }
     };
@@ -112,6 +118,7 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
                 </Stack>
               )}
             </section>
+            <AnimatedQRCode options={{size: 340}} type={ur.type} cbor={ur.cbor.toString("hex")}/>
           </>
         )}
       </main>

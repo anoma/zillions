@@ -131,5 +131,5 @@ export const signPczt = (
 export const buildPcztSummary = async (pczt: string, ufvk: string): PcztSummary => {
   await initZillionsSdk();
   const summary = pczt_summary(getNetwork(), base64ToBytes(pczt), ufvk);
-  return { ...summary, raw: summary };
+  return { ...summary, raw: summary, pczt };
 };

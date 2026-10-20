@@ -64,4 +64,6 @@ export type PcztSummary = {
   fee: string;
   /** The full `to_json()` structure for the raw expandable view. */
   raw: unknown;
+  /** The original PCZT. */
+  pczt: PcztBase64;
 };
