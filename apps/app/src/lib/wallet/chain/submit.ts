@@ -58,6 +58,19 @@ const loadSaplingParams = () =>
       throw err;
     }));
 
+/**
+ * Starts fetching the Sapling parameters if proving `pczt` will need them, so
+ * the download runs while the user approves. A failed fetch is retried, and
+ * reported, by `submitTransaction`.
+ */
+export function prefetchSaplingParams(pczt: Uint8Array) {
+  initZcore()
+    .then(() => {
+      if (needs_sapling_params(pczt)) return loadSaplingParams();
+    })
+    .catch(() => {});
+}
+
 /** `prove_pczt`'s result. */
 export interface Proved {
   txid: string;

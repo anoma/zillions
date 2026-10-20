@@ -1,6 +1,8 @@
+import { useNow } from "../hooks/useNow";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
-import type { Activity } from "../lib/wallet/types";
+import { minutesLeft, PROCESSING_ESTIMATE_MIN } from "../lib/wallet/pending";
+import type { Activity, Party } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
 import { FormPage } from "./FormPage";
@@ -8,6 +10,7 @@ import { FeeRow } from "./PlannedFee";
 import { TransactionTypeAndStatus } from "./TransactionTypeAndStatus";
 import { TransactionValue } from "./TransactionValue";
 import { Breakdown, FormCard } from "./TransferForm";
+import { ZecValue } from "./ZecValue";
 
 const copyFieldClassName =
   "justify-between gap-4 px-4 py-3 rounded-lg border border-line bg-card transition-colors duration-300 hover:border-line-strong";
@@ -26,8 +29,57 @@ export type TransactionReceiptCardProps = {
     | "timestamp"
     | "from"
     | "to"
-  > & { memo?: string };
+    | "self"
+  > &
+    Partial<Pick<Activity, "confirmations" | "expires_in">> & {
+      memo?: string;
+    };
 };
+
+/** Minutes left of the usual wait for a transaction still processing, or that it's late. */
+function ProcessingHint({
+  timestamp,
+  expires_in,
+}: Pick<Activity, "timestamp" | "expires_in">) {
+  const now = useNow(10_000);
+  const left =
+    timestamp === undefined ? undefined : minutesLeft(timestamp, now);
+  return (
+    <div className="text-xs text-gray-600">
+      {left === 0
+        ? `Taking longer than usual${expires_in !== undefined ? ` · expires in ${expires_in} blocks` : ""}`
+        : left === undefined
+          ? `Usually takes about ${PROCESSING_ESTIMATE_MIN} minutes`
+          : `About ${left} min left`}
+    </div>
+  );
+}
+
+/** Every address on a side that has several, each recipient with what it got. */
+function PartyList({ label, party }: { label: string; party: Party }) {
+  if (!("address" in party) || !party.more) return null;
+  return (
+    <div className="px-4 py-3 rounded-lg border border-line bg-card text-xs font-medium">
+      <div className="text-gray-600">{label}</div>
+      {[party, ...party.more].map(({ address, value }) => (
+        <div
+          key={address}
+          className="mt-2 grid grid-cols-[1fr_auto] items-center gap-2"
+        >
+          <CopyToClipboardControl
+            value={address}
+            className="justify-between gap-2"
+          >
+            <span className="font-normal tracking-tight wrap-anywhere">
+              {address}
+            </span>
+          </CopyToClipboardControl>
+          {value !== undefined && <ZecValue zat={value} />}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
   const { signal, value } = transactionValue(tx);
@@ -72,6 +124,9 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
         <div className="text-sm font-medium">
           <TransactionTypeAndStatus tx={tx} />
         </div>
+        {tx.status === "Pending" && !tx.confirmations && (
+          <ProcessingHint timestamp={tx.timestamp} expires_in={tx.expires_in} />
+        )}
         <div
           className="py-3 leading-none font-medium"
           style={{ fontSize: fitFontSize(valueChars, "3.75rem") }}
@@ -106,6 +161,8 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
       )}
 
       <FormCard heading="Details" headingId="receipt-details">
+        <PartyList label="Senders" party={tx.from} />
+        <PartyList label="Recipients" party={tx.to} />
         {tx.memo && (
           <CopyToClipboardControl
             value={tx.memo}

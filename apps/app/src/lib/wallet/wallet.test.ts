@@ -39,6 +39,7 @@ const saved = vi.hoisted(() => ({
   notes: [] as Note[],
   sent: [] as Sent[],
   blocks: new Map<number, Block>(),
+  state: undefined as WalletState | undefined,
 }));
 
 // No spam era: setup reads the whole small chain.
@@ -98,6 +99,7 @@ vi.mock("./chain/lightwalletd", async (actual) => ({
     async (height: number) => chain.blocks.get(height) ?? block(),
   ),
   fetchLatestHeight: vi.fn(async () => chain.tip),
+  fetchTransaction: vi.fn(async () => ({ data: new Uint8Array(), height: 0 })),
 }));
 
 vi.mock("./transparent", () => ({
@@ -122,6 +124,7 @@ vi.mock("./store", async (actual) => ({
     saved.notes = structuredClone(state.notes);
     saved.sent = structuredClone(state.sent);
     saved.blocks = structuredClone(state.blocks);
+    saved.state = structuredClone(state);
   }),
 }));
 
@@ -130,7 +133,9 @@ const zcore = await import("@zillions/zcore");
 const { submitTransaction } = await import("./chain/submit");
 const { cachedTransparent } = await import("./transparent");
 type TransparentCache = import("./transparent").TransparentCache;
-const { fetchBlock, fetchLatestHeight } = await import("./chain/lightwalletd");
+const { fetchBlock, fetchLatestHeight, fetchTransaction } =
+  await import("./chain/lightwalletd");
+const { fetchTreeSizes } = await import("./chain/indexer");
 const store = await import("./store");
 const { crawlChunks } = await import("./shielded/crawl");
 
@@ -140,7 +145,7 @@ function block(overrides: Partial<Block> = {}): Block {
     txids: new Map(),
     treeSizes: { ...chain.sizes },
     outputs: new Map(),
-    vout: new Map(),
+    transparentInputs: [],
     ...overrides,
   };
 }
@@ -228,7 +233,9 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
   });
   vi.mocked(zcore.parse_transaction).mockReturnValue({
     inputs: [],
+    outputs: [],
     nullifiers: [nf("bb")],
+    value_balance: 1_000,
   });
   await wallet.submit(new Uint8Array(), 1_000n, {
     tx_type: "Sent",
@@ -298,7 +305,9 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
   });
   vi.mocked(zcore.parse_transaction).mockReturnValue({
     inputs: [],
+    outputs: [],
     nullifiers: [nf("ce")],
+    value_balance: 1_000,
   });
   await wallet.submit(new Uint8Array(), 0n, {
     tx_type: "Sent",
@@ -336,13 +345,25 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
   expect(sends).toEqual([
     expect.objectContaining({ tx_type: "Sent", value: -4_000n }),
   ]);
-  expect(sends[0].status).not.toBe("Pending");
+  expect(sends[0].block_height).toBe(3_210);
 });
 
 test("shows the transparent side as last synced before any sync answers", async () => {
   vi.mocked(store.loadState).mockResolvedValueOnce({
     ...store.emptyState("f"),
-    transparent: {} as TransparentCache,
+    // The transparent sync parsed it: its input names the sender.
+    transparent: {
+      txs: [
+        {
+          txid: "t",
+          height: 3_000,
+          inputs: [{ txid: "prev", index: 0, address: "t1someone" }],
+          outputs: [{ index: 0, value: 5_000, address: "t1ours" }],
+          value_balance: 0,
+          expiry_height: 0,
+        },
+      ],
+    } as unknown as TransparentCache,
   });
   vi.mocked(cachedTransparent).mockResolvedValueOnce({
     utxos: [],
@@ -351,8 +372,8 @@ test("shows the transparent side as last synced before any sync answers", async 
         txid: "t",
         height: 3_000,
         received: 5_000n,
+        receiving: 5_000n,
         spent: 0n,
-        from: "t1someone",
         to: "t1ours",
       },
     ],
@@ -403,6 +424,50 @@ test("stores a recent block, and fetches it again each sync", async () => {
 
   expect(fetches() - before).toBe(2);
   expect(saved.blocks.has(3_150)).toBe(true);
+});
+
+test("fetches a transaction in full once, and not again after a reload", async () => {
+  chain.sizes = { sapling: 0, orchard: 2 * 16_384, ironwood: 0 };
+  // Paid us from transparent coins: read for its sender.
+  chain.hits.set("orchard:1", [
+    { ...note("orchard", 16_387, nf("fa")), height: 3_150 },
+  ]);
+  chain.blocks.set(
+    3_150,
+    block({ txids: new Map([[1, "tx1"]]), transparentInputs: [1] }),
+  );
+  vi.mocked(zcore.parse_transaction).mockReturnValue({
+    txid: "tx1",
+    inputs: [],
+    outputs: [],
+    value_balance: 0,
+    expiry_height: 0,
+  });
+  const fetches = () =>
+    vi.mocked(fetchTransaction).mock.calls.filter(([id]) => id === "tx1")
+      .length;
+  const before = fetches();
+
+  await new Wallet({ id: "i", ufvk: "uview" }).sync();
+  expect(fetches() - before).toBe(1);
+
+  vi.mocked(store.loadState).mockResolvedValueOnce(saved.state);
+  const reloaded = new Wallet({ id: "i", ufvk: "uview" });
+  await reloaded.sync();
+  await reloaded.sync();
+  expect(fetches() - before).toBe(1);
+});
+
+test("never asks for a shielded payment received by its txid", async () => {
+  chain.sizes = { sapling: 0, orchard: 2 * 16_384, ironwood: 0 };
+  chain.hits.set("orchard:1", [
+    { ...note("orchard", 16_387, nf("fb")), height: 3_150 },
+  ]);
+  chain.blocks.set(3_150, block({ txids: new Map([[1, "tx2"]]) }));
+
+  await new Wallet({ id: "j", ufvk: "uview" }).sync();
+  const asked = vi.mocked(fetchTransaction).mock.calls.map(([txid]) => txid);
+  expect(asked).not.toContain("tx2");
 });
 
 test("names and dates what a chunk finds before the crawl ends", async () => {
@@ -491,6 +556,8 @@ test("syncs again a minute after a sync ends, never queuing one behind a slow sy
   tips.mockImplementationOnce(
     () => new Promise((resolve) => (answer = () => resolve(chain.tip))),
   );
+  const syncs = vi.mocked(fetchTreeSizes);
+  syncs.mockClear();
   const wallet = new Wallet({ id: "r", ufvk: "uview" });
 
   const first = wallet.sync();
@@ -498,14 +565,34 @@ test("syncs again a minute after a sync ends, never queuing one behind a slow sy
   expect(tips).toHaveBeenCalledTimes(1);
   answer();
   await first;
+  expect(syncs).toHaveBeenCalledTimes(1);
 
+  // Checked every 15 s meanwhile, the tip stays put.
   await vi.advanceTimersByTimeAsync(59_000);
-  expect(tips).toHaveBeenCalledTimes(1);
+  expect(syncs).toHaveBeenCalledTimes(1);
   await vi.advanceTimersByTimeAsync(1_000);
-  expect(tips).toHaveBeenCalledTimes(2);
+  expect(syncs).toHaveBeenCalledTimes(2);
 
   wallet.free();
   vi.useRealTimers();
+});
+
+test("syncs as soon as a check finds a new block", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const syncs = vi.mocked(fetchTreeSizes);
+  const wallet = new Wallet({ id: "b", ufvk: "uview" });
+  await wallet.sync();
+  syncs.mockClear();
+
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(syncs).not.toHaveBeenCalled();
+  chain.tip += 1;
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(syncs).toHaveBeenCalledTimes(1);
+
+  wallet.free();
+  vi.useRealTimers();
+  chain.tip -= 1;
 });
 
 test("holds the timed sync while history runs, and syncs once it ends", async () => {
@@ -524,22 +611,22 @@ test("holds the timed sync while history runs, and syncs once it ends", async ()
     }
     return crawl(o);
   });
-  const tips = vi.mocked(fetchLatestHeight);
-  tips.mockClear();
+  const syncs = vi.mocked(fetchTreeSizes);
+  syncs.mockClear();
   const wallet = new Wallet({ id: "h", ufvk: "uview" });
 
   await wallet.sync();
   await vi.advanceTimersByTimeAsync(3 * 60_000);
   wallet.resync();
   await vi.advanceTimersByTimeAsync(0);
-  expect(tips).toHaveBeenCalledTimes(1);
+  expect(syncs).toHaveBeenCalledTimes(1);
 
   release();
-  await vi.advanceTimersByTimeAsync(60_000);
-  expect(tips).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(syncs).toHaveBeenCalledTimes(2);
   wallet.resync();
   await vi.advanceTimersByTimeAsync(0);
-  expect(tips).toHaveBeenCalledTimes(3);
+  expect(syncs).toHaveBeenCalledTimes(3);
 
   wallet.free();
   vi.useRealTimers();

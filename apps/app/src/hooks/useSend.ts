@@ -8,7 +8,7 @@ import { useEffect } from "react";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
-import { warmProver } from "../lib/wallet/chain/submit";
+import { prefetchSaplingParams, warmProver } from "../lib/wallet/chain/submit";
 import {
   prefetchTrees,
   type SendPlan,
@@ -136,6 +136,7 @@ export function useSend() {
         send,
         account.shielded,
       );
+      prefetchSaplingParams(pczt);
       track("approval");
       const signed = await keychain().sign({
         signer:

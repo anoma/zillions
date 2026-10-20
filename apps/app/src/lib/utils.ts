@@ -91,7 +91,7 @@ export const shortenAddress = (
 };
 
 export function transactionValue(
-  tx: Pick<Activity, "tx_type" | "value" | "fee">,
+  tx: Pick<Activity, "tx_type" | "value" | "fee" | "self">,
 ) {
   let value = tx.value;
   // Sent values come back negative; flip to positive for display.
@@ -104,9 +104,14 @@ export function transactionValue(
   }
 
   // Received and sent are the balance's ups and downs; the rest moves money
-  // between the account's own pools, so they carry no sign.
+  // between the account's own pools, so they carry no sign. Nor does a
+  // self-payment: signed by its fee, a small one would read as a loss.
   const signal =
-    tx.tx_type === "Received" ? "+" : tx.tx_type === "Sent" ? "−" : "";
+    tx.tx_type === "Received"
+      ? "+"
+      : tx.tx_type === "Sent" && !tx.self
+        ? "−"
+        : "";
 
   return { signal, value };
 }

@@ -94,3 +94,37 @@ it("builds the keys before a proof that had no warm-up", async () => {
   expect(FakeWorker.all[0].sent[0]).toEqual({ warm: true });
   expect(stages).toEqual(["proving-key"]);
 });
+
+it("proves with the parameters prefetched before approval, fetched once", async () => {
+  const zcore = await import("@zillions/zcore");
+  vi.mocked(zcore.needs_sapling_params).mockReturnValue(true);
+  // Each file's one byte picks the hash its check expects.
+  const hashes = [
+    "8e48ffd23abb3a5fd9c5589204f32d9c31285a04b78096ba40a79b75677efc13",
+    "2f0ebbcbb9bb0bcffe95a397e7eba89c29eb4dde6191c339db88570e3f3fb0e4",
+  ];
+  const fetch = vi.fn(
+    async (url: string) =>
+      new Response(new Uint8Array([url.includes("spend") ? 0 : 1])),
+  );
+  vi.stubGlobal("fetch", fetch);
+  vi.spyOn(crypto.subtle, "digest").mockImplementation(
+    async (_, data) =>
+      Uint8Array.from(hashes[(data as Uint8Array)[0]].match(/../g)!, (b) =>
+        parseInt(b, 16),
+      ).buffer,
+  );
+
+  submit.prefetchSaplingParams(new Uint8Array([7]));
+  await tick();
+  expect(fetch).toHaveBeenCalledTimes(2);
+
+  void submit.submitTransaction(new Uint8Array([7]));
+  await tick();
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(FakeWorker.all[0].sent[1]).toEqual({
+    pczt: new Uint8Array([7]),
+    sapling: { spend: new Uint8Array([0]), output: new Uint8Array([1]) },
+  });
+  vi.unstubAllGlobals();
+});

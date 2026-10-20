@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
 
-import { buildActivity, payments, sendingTxs } from "./activity";
+import { buildActivity, sendingTxs } from "./activity";
 import type { Block } from "./chain/lightwalletd";
-import type { TransparentTx } from "./transparent";
+import type { ParsedTx, TransparentTx } from "./transparent";
 import type { Note } from "./types";
 
 const note = (position: number, value: number, memo?: string): Note => ({
@@ -36,6 +36,7 @@ test("our own transparent addresses show as the pool, others' as the address", (
     txid,
     height: at.height,
     received: 0n,
+    receiving: 0n,
     spent: 0n,
     ...rest,
   });
@@ -48,12 +49,21 @@ test("our own transparent addresses show as the pool, others' as the address", (
     [],
     [
       tx("unshield", { received: 10_000n, to: "t1internal" }),
-      tx("received", { received: 5_000n, from: "t1someone", to: "t1default" }),
+      tx("received", { received: 5_000n, to: "t1default" }),
     ],
     new Map([
       [at.height, { txids: new Map([[at.tx_index, "unshield"]]) }],
     ]) as never,
-    new Map(),
+    // Its sender, read off the input that spent their coin.
+    new Map([
+      [
+        "received",
+        full("received", {
+          inputs: [{ txid: "prev", index: 0, address: "t1someone" }],
+          outputs: [{ index: 0, value: 5_000, address: "t1default" }],
+        }),
+      ],
+    ]),
     ours,
   );
   const sides = (txid: string) => {
@@ -131,8 +141,18 @@ const block = (overrides: Partial<Block>): Block => ({
   txids: new Map(),
   treeSizes: { sapling: 0, orchard: 0, ironwood: 0 },
   outputs: new Map(),
-  vout: new Map(),
+  transparentInputs: [],
   ...overrides,
+});
+
+/** A transaction as `parse_transaction` reads it. */
+const full = (txid: string, rest: Partial<ParsedTx> = {}): ParsedTx => ({
+  txid,
+  inputs: [],
+  outputs: [],
+  value_balance: 0,
+  expiry_height: 0,
+  ...rest,
 });
 
 test("our sending transactions are those that spent a note or a coin of ours", () => {
@@ -143,8 +163,20 @@ test("our sending transactions are those that spent a note or a coin of ours", (
   const txs = sendingTxs(
     [{ ...note(1, 150_000), spend: { status: "spent", at } }, note(3, 30_000)],
     [
-      { txid: "tshield", height: 3_160, received: 0n, spent: 9_000n },
-      { txid: "treceived", height: 3_160, received: 5_000n, spent: 0n },
+      {
+        txid: "tshield",
+        height: 3_160,
+        received: 0n,
+        receiving: 0n,
+        spent: 9_000n,
+      },
+      {
+        txid: "treceived",
+        height: 3_160,
+        received: 5_000n,
+        receiving: 5_000n,
+        spent: 0n,
+      },
     ],
     blocks,
   );
@@ -153,27 +185,17 @@ test("our sending transactions are those that spent a note or a coin of ours", (
 
 test("a send's payment is what it paid to someone else's transparent address", () => {
   const at = { height: 3_150, tx_index: 3 };
-  const out = (value: number, address: string) => ({
-    value,
-    script: new TextEncoder().encode(address),
-  });
   const blocks = new Map([
-    [
-      at.height,
-      block({
-        txids: new Map([[3, "tx3"]]),
-        // Paid out, and an unshield's padding to our own address.
-        vout: new Map([[3, [out(100_000, "t1theirs"), out(0, "t1ours")]]]),
-      }),
+    [at.height, block({ txids: new Map([[3, "tx3"]]) })],
+  ]);
+  // Paid out, and an unshield's padding to our own address.
+  const tx3 = full("tx3", {
+    outputs: [
+      { index: 0, value: 100_000, address: "t1theirs" },
+      { index: 1, value: 0, address: "t1ours" },
     ],
-  ]);
-  const paid = payments([at], blocks, new Set(["t1ours"]), (script) =>
-    new TextDecoder().decode(script),
-  );
-  expect([...paid.values()]).toEqual([
-    [{ value: 100_000, recipient: "t1theirs" }],
-  ]);
-
+    value_balance: 120_000,
+  });
   const history = buildActivity(
     [
       { ...note(1, 150_000), spend: { status: "spent", at } },
@@ -182,7 +204,8 @@ test("a send's payment is what it paid to someone else's transparent address", (
     [],
     [],
     blocks,
-    paid,
+    new Map([["tx3", tx3]]),
+    new Set(["t1ours"]),
   );
   expect(history.find((tx) => tx.txid === "tx3")).toMatchObject({
     txid: "tx3",
@@ -190,6 +213,31 @@ test("a send's payment is what it paid to someone else's transparent address", (
     value: -100_000n,
     to: { address: "t1theirs" },
     fee: 20_000n,
+  });
+});
+
+test("a fetched send's fee is exact, even with a note it spent not found yet", () => {
+  const at = { height: 3_150, tx_index: 3 };
+  const blocks = new Map([
+    [at.height, block({ txids: new Map([[3, "tx3"]]) })],
+  ]);
+  const sent = {
+    id: "a_orchard_9",
+    pool: "orchard" as const,
+    value: 100_000,
+    recipient: "u1theirs",
+    position: 9,
+    ...at,
+  };
+  const entry = (txs?: Map<string, ParsedTx>) =>
+    buildActivity([{ ...note(2, 30_000), ...at }], [sent], [], blocks, txs)[0];
+
+  expect(entry()).toMatchObject({ value: -100_000n, fee: 0n });
+  // Shielded to shielded: all that leaves the pools is the fee.
+  const tx3 = full("tx3", { value_balance: 15_000 });
+  expect(entry(new Map([["tx3", tx3]]))).toMatchObject({
+    value: -100_000n,
+    fee: 15_000n,
   });
 });
 
@@ -206,7 +254,13 @@ test("a send from transparent coins to a shielded address counts its payment onc
     position: 9,
     ...at,
   };
-  const spend = { txid: "tx", height: at.height, received: 0n, spent: 41_000n };
+  const spend = {
+    txid: "tx",
+    height: at.height,
+    received: 0n,
+    receiving: 0n,
+    spent: 41_000n,
+  };
   const blocks = new Map([
     [at.height, block({ txids: new Map([[at.tx_index, "tx"]]) })],
   ]);

@@ -36,6 +36,9 @@ zcash_keys = { version = "0.16", default-features = false, features = ["orchard"
 transparent = { package = "zcash_transparent", version = "0.10", default-features = false, features = ["transparent-inputs"] }
 # Script bytes → address, as `zcash_transparent` reads them.
 zcash_script = { version = "0.4", default-features = false }
+# Hash160 of the public key a P2PKH input reveals: its sender's address.
+sha2 = "0.10"
+ripemd = "0.1"
 zcash_protocol = "0.10"
 zcash_primitives = { version = "0.30", default-features = false, features = ["transparent-inputs"] }
 # Shielding's PCZT roles: the app creates and proves, the keychain signs.
@@ -50,6 +53,10 @@ orchard = { version = "0.15", default-features = false, features = ["std", "circ
 # Pre-ZIP-212 Sapling notes carry their rcm as a scalar.
 jubjub = "0.10"
 ff = "0.13"
+# GPU trial decryption: the secrets back from the shader, and the cipher they key.
+pasta_curves = "0.5"
+group = "0.13"
+chacha20 = "0.9"
 zip32 = { version = "0.2", default-features = false }
 
 # Upstream wallet policy for sends: note selection, change, fees, ZIP 318.

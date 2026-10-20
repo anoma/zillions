@@ -1,5 +1,5 @@
 import type { Block } from "./chain/lightwalletd";
-import type { TransparentCache } from "./transparent";
+import type { ParsedTx, TransparentCache } from "./transparent";
 
 export type Pool = "sapling" | "orchard" | "ironwood";
 
@@ -57,6 +57,8 @@ export interface ChunkRequest {
   sends?: true;
   /** The notes an earlier read tried, skipped when it was this chunk and they're unchanged. */
   tried?: Tried;
+  /** Trial-decrypts on the GPU when there is one, else on the CPU. */
+  gpu?: boolean;
 }
 
 /** How many of a chunk's notes a read tried, and a fingerprint of their bytes. */
@@ -111,8 +113,17 @@ export type ChunkWorkerError = {
   error: string;
 };
 
-/** Worker → main: a chunk's result, or the error that chunk hit. */
-export type ChunkWorkerResponse = ChunkWorkerSuccess | ChunkWorkerError;
+/** Worker → main: a chunk's key agreement, for the page's GPU to run. */
+export type GpuRequest = { pool: Pool; gpuInputs: Uint8Array };
+
+/** Main → worker: its secrets, `null` when there's no usable GPU. */
+export type GpuReply = { secrets: Uint32Array | null } | { gpuError: string };
+
+/** Worker → main: a chunk's result, the error that chunk hit, or a GPU request. */
+export type ChunkWorkerResponse =
+  | ChunkWorkerSuccess
+  | ChunkWorkerError
+  | GpuRequest;
 
 /** Chunks read newest-first: `from` to `to` are read (none when `from > to`), `floor` to `from - 1` are left. */
 export interface Segment {
@@ -151,7 +162,7 @@ export interface ShieldedScan {
 /** Everything the wallet keeps for one account, stored as a whole. */
 export interface WalletState {
   /** Bumped when the shape changes: an older state is dropped and synced again. */
-  version: 3;
+  version: 4;
   id: string;
   notes: Note[];
   sent: Sent[];
@@ -159,8 +170,10 @@ export interface WalletState {
   pending: PendingTx[];
   /** Absent before the first transparent sync. */
   transparent?: TransparentCache;
-  /** The blocks history names, for their txids, times and transparent outputs. */
+  /** The blocks history names, for their txids and times. */
   blocks: Map<number, Block>;
+  /** History's transactions read in full, by txid. */
+  txs: Map<string, ParsedTx>;
 }
 
 /** One transaction as history shows it. */
@@ -178,13 +191,21 @@ export type Activity = {
   pool: "ironwood" | "orchard" | "sapling" | "transparent" | "mixed";
   from: Party;
   to: Party;
+  /** A payment to the account itself: it shows no sign. */
+  self?: true;
+  /** Blocks left to mine one still processing; absent when it never expires or the tip is unknown. */
+  expires_in?: number;
 };
 
+/** Someone else's address, with what it was paid when it's a recipient. */
+export type Counterparty = { address: string; value?: bigint };
+
 /**
- * One side of a transaction: someone else's address, or just the pool when
- * the address isn't shown — our own, or a shielded sender, never revealed. A
- * migration names the shielded pools it moved between.
+ * One side of a transaction: someone else's address, the first of several
+ * when `more` holds the rest, or just the pool when the address isn't shown
+ * — our own, or a shielded sender, never revealed. A migration names the
+ * shielded pools it moved between.
  */
 export type Party =
-  | { address: string }
+  | (Counterparty & { more?: Counterparty[] })
   | { pool: "shielded" | "transparent" | "sapling" | "orchard" | "ironwood" };

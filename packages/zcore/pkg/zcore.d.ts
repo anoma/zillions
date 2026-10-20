@@ -34,6 +34,15 @@ export function fresh_address(network: string, ufvk: string): string;
 export function gap_limits(): any;
 
 /**
+ * What the app's GPU shader reads to do [`try_decrypt`]'s key agreement for
+ * the same arguments: the pool's two ivk scalars (external, internal; 32
+ * little-endian bytes each), then each note's ephemeral key as affine
+ * coordinates, 64 bytes, from the first note `try_decrypt` would try. Empty
+ * when the UFVK has no key for the pool.
+ */
+export function gpu_inputs(network: string, ufvk: string, pool: string, body: Uint8Array, from: number, tried: Uint8Array): Uint8Array;
+
+/**
  * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
  */
 export function max_send(network: string, wallet: any, send: any): bigint;
@@ -45,9 +54,9 @@ export function needs_sapling_params(pczt: Uint8Array): boolean;
 
 /**
  * The transparent side of a raw transaction mined at `height`, which fixes
- * the consensus rules it is read under, and the nullifiers it spends:
- * `{ txid, inputs: [{ txid, index }], outputs: [{ index, value, address }],
- * nullifiers }`.
+ * the consensus rules it is read under, and what it shows of its shielded
+ * one: `{ txid, inputs: [{ txid, index, address }], outputs: [{ index, value,
+ * address }], nullifiers, value_balance, expiry_height }`.
  */
 export function parse_transaction(network: string, height: number, data: Uint8Array): any;
 
@@ -146,6 +155,13 @@ export function try_decrypt(network: string, ufvk: string, pool: string, chunk: 
 export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array, memos: Uint8Array, outgoing: Uint8Array, hits: Uint32Array): any;
 
 /**
+ * [`try_decrypt`] with its key agreement already done: `secrets` is the GPU
+ * shader's output for [`gpu_inputs`] of the same arguments. Fails when a
+ * spot check finds the GPU wrong; [`try_decrypt`] then answers instead.
+ */
+export function try_decrypt_gpu(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array, from: number, tried: Uint8Array, secrets: Uint32Array): any;
+
+/**
  * Builds the Halo2 proving and verifying keys now, for this instance's
  * proofs to skip; seconds of work, so call it off the UI thread.
  */
@@ -160,6 +176,7 @@ export interface InitOutput {
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly gap_limits: () => [number, number, number];
+    readonly gpu_inputs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number, number, number];
     readonly max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
     readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -176,6 +193,7 @@ export interface InitOutput {
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
+    readonly try_decrypt_gpu: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number, number];
     readonly warm_prover: () => void;
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;

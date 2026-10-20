@@ -116,6 +116,40 @@ export function gap_limits() {
 }
 
 /**
+ * What the app's GPU shader reads to do [`try_decrypt`]'s key agreement for
+ * the same arguments: the pool's two ivk scalars (external, internal; 32
+ * little-endian bytes each), then each note's ephemeral key as affine
+ * coordinates, 64 bytes, from the first note `try_decrypt` would try. Empty
+ * when the UFVK has no key for the pool.
+ * @param {string} network
+ * @param {string} ufvk
+ * @param {string} pool
+ * @param {Uint8Array} body
+ * @param {number} from
+ * @param {Uint8Array} tried
+ * @returns {Uint8Array}
+ */
+export function gpu_inputs(network, ufvk, pool, body, from, tried) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ptr4 = passArray8ToWasm0(tried, wasm.__wbindgen_malloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ret = wasm.gpu_inputs(ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, from, ptr4, len4);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v6 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v6;
+}
+
+/**
  * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
  * @param {string} network
  * @param {any} wallet
@@ -149,9 +183,9 @@ export function needs_sapling_params(pczt) {
 
 /**
  * The transparent side of a raw transaction mined at `height`, which fixes
- * the consensus rules it is read under, and the nullifiers it spends:
- * `{ txid, inputs: [{ txid, index }], outputs: [{ index, value, address }],
- * nullifiers }`.
+ * the consensus rules it is read under, and what it shows of its shielded
+ * one: `{ txid, inputs: [{ txid, index, address }], outputs: [{ index, value,
+ * address }], nullifiers, value_balance, expiry_height }`.
  * @param {string} network
  * @param {number} height
  * @param {Uint8Array} data
@@ -500,6 +534,40 @@ export function try_decrypt_full(network, ufvk, pool, chunk, ciphertexts, memos,
 }
 
 /**
+ * [`try_decrypt`] with its key agreement already done: `secrets` is the GPU
+ * shader's output for [`gpu_inputs`] of the same arguments. Fails when a
+ * spot check finds the GPU wrong; [`try_decrypt`] then answers instead.
+ * @param {string} network
+ * @param {string} ufvk
+ * @param {string} pool
+ * @param {number} chunk
+ * @param {Uint8Array} body
+ * @param {number} from
+ * @param {Uint8Array} tried
+ * @param {Uint32Array} secrets
+ * @returns {any}
+ */
+export function try_decrypt_gpu(network, ufvk, pool, chunk, body, from, tried, secrets) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(pool, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ptr4 = passArray8ToWasm0(tried, wasm.__wbindgen_malloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ptr5 = passArray32ToWasm0(secrets, wasm.__wbindgen_malloc);
+    const len5 = WASM_VECTOR_LEN;
+    const ret = wasm.try_decrypt_gpu(ptr0, len0, ptr1, len1, ptr2, len2, chunk, ptr3, len3, from, ptr4, len4, ptr5, len5);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Builds the Halo2 proving and verifying keys now, for this instance's
  * proofs to skip; seconds of work, so call it off the UI thread.
  */
@@ -756,17 +824,22 @@ function __wbg_get_imports() {
             const ret = arg0;
             return ret;
         },
-        __wbindgen_generic_0000000000000002: function(arg0, arg1) {
+        __wbindgen_generic_0000000000000002: function(arg0) {
+            // Cast intrinsic for `I64 -> Externref`.
+            const ret = arg0;
+            return ret;
+        },
+        __wbindgen_generic_0000000000000003: function(arg0, arg1) {
             // Cast intrinsic for `Ref(Slice(U8)) -> NamedExternref("Uint8Array")`.
             const ret = getArrayU8FromWasm0(arg0, arg1);
             return ret;
         },
-        __wbindgen_generic_0000000000000003: function(arg0, arg1) {
+        __wbindgen_generic_0000000000000004: function(arg0, arg1) {
             // Cast intrinsic for `Ref(String) -> Externref`.
             const ret = getStringFromWasm0(arg0, arg1);
             return ret;
         },
-        __wbindgen_generic_0000000000000004: function(arg0) {
+        __wbindgen_generic_0000000000000005: function(arg0) {
             // Cast intrinsic for `U64 -> Externref`.
             const ret = BigInt.asUintN(64, arg0);
             return ret;

@@ -1,19 +1,23 @@
-import initZcore, { parse_transaction, script_address } from "@zillions/zcore";
+import initZcore, { parse_transaction } from "@zillions/zcore";
 
 import { invariant } from "../invariant";
 import { dedupe, singleton } from "../utils";
 import {
   activityHeights,
   buildActivity,
-  payments,
   sendingTxs,
+  txidsToRead,
 } from "./activity";
 import { balances, spendable, walletData } from "./balance";
 import { fetchTreeSizes, type TreeSizes } from "./chain/indexer";
-import { fetchBlock, fetchLatestHeight } from "./chain/lightwalletd";
+import {
+  fetchBlock,
+  fetchLatestHeight,
+  fetchTransaction,
+} from "./chain/lightwalletd";
 import { type ProveStage, submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
-import { pendingActivity, prunePending } from "./pending";
+import { confirmedAt, pendingActivity, prunePending } from "./pending";
 import {
   maxSend,
   planMigration,
@@ -40,6 +44,7 @@ import {
   cachedTransparent,
   keepReserved,
   nextInternalAddress,
+  type ParsedTx,
   REORG_DEPTH,
   reserveInternalAddress,
   syncTransparent,
@@ -54,6 +59,8 @@ const FRY = import.meta.env.VITE_ALLOW_CPU_TO_FRY === "true";
 
 /** How long after a sync ends, however it ends, the next one starts by itself. */
 const RESYNC_MS = 60_000;
+/** Between syncs the tip is checked this often, and a new block syncs at once. */
+const TIP_CHECK_MS = 15_000;
 
 /** Whether the browser asks to save data (Chromium only). */
 const saveData = () =>
@@ -103,6 +110,8 @@ export class Wallet {
   #sizes?: TreeSizes;
   #recentRunning = false;
   #resync?: ReturnType<typeof setTimeout>;
+  /** Tip checks since the last sync ended. */
+  #checks = 0;
 
   constructor(options: { id: string; ufvk: string; birthday?: number }) {
     this.id = options.id;
@@ -198,11 +207,13 @@ export class Wallet {
   /**
    * Brings the wallet up to the chain tip: new chunks, and setup until it's
    * done. History then goes on in the background. A call while one runs
-   * shares it, and pauses history meanwhile. It runs again by itself a minute
-   * after it ends, once nothing runs in the background.
+   * shares it, and pauses history meanwhile. It runs again by itself once a
+   * new block is mined, or a minute after it ends, once nothing runs in the
+   * background.
    */
   sync = dedupe(async () => {
     clearTimeout(this.#resync);
+    this.#resync = undefined;
     try {
       await this.#syncRecent();
     } catch (err) {
@@ -211,19 +222,25 @@ export class Wallet {
       throw err;
     } finally {
       // Counted from the end, so a slow sync never queues another.
+      this.#checks = 0;
       if (!this.#abort.signal.aborted) {
-        this.#resync = setTimeout(this.#resyncTick, RESYNC_MS);
+        this.#resync = setTimeout(this.#resyncTick, TIP_CHECK_MS);
       }
     }
   });
 
   /** The timed sync, held back while history or the spam era runs: a sync would pause it. */
-  #resyncTick = () => {
-    if (this.#history) {
-      this.#resync = setTimeout(this.#resyncTick, RESYNC_MS);
-      return;
-    }
-    this.resync();
+  #resyncTick = async () => {
+    const timer = this.#resync;
+    this.#checks++;
+    const due =
+      !this.#history &&
+      (this.#checks * TIP_CHECK_MS >= RESYNC_MS ||
+        (await fetchLatestHeight().catch(() => 0)) > (this.#tip ?? Infinity));
+    // A sync started meanwhile schedules the next tick itself.
+    if (this.#resync !== timer || this.#abort.signal.aborted) return;
+    if (due && !this.#history) return this.resync();
+    this.#resync = setTimeout(this.#resyncTick, TIP_CHECK_MS);
   };
 
   /** A sync that, like the timed one, skips while history or the spam era runs. */
@@ -413,7 +430,45 @@ export class Wallet {
         console.error("[sync] block lookup failed", heights[i], block.reason);
     });
     if (heights.length) this.#save();
+    await this.#fetchTxs();
     this.#emitProgress();
+  };
+
+  /** History's transactions in full: those fetched, and those the transparent sync read. */
+  #fullTxs = () =>
+    new Map<string, ParsedTx>([
+      ...(this.#state.transparent?.txs ?? []).map(
+        (tx) => [tx.txid, tx] as const,
+      ),
+      ...this.#state.txs,
+    ]);
+
+  /**
+   * Fetches in full each transaction history reads that way, once: a txid
+   * fixes its contents, so it's kept for good. One that fails is asked for
+   * next sync.
+   */
+  #fetchTxs = async () => {
+    const { notes, sent, blocks } = this.#state;
+    const known = this.#fullTxs();
+    const txids = txidsToRead(
+      notes,
+      sent,
+      this.#transparent?.txs ?? [],
+      blocks,
+    );
+    const missing = [...txids].filter((txid) => !known.has(txid));
+    if (!missing.length) return;
+    await initZcore();
+    const { txs } = this.#state;
+    const fetched = await Promise.allSettled(missing.map(fetchTransaction));
+    fetched.forEach((raw, i) => {
+      if (raw.status === "fulfilled") {
+        const { data, height } = raw.value;
+        txs.set(missing[i], parse_transaction(NETWORK, height, data));
+      } else console.error("[sync] tx lookup failed", missing[i], raw.reason);
+    });
+    this.#save();
   };
 
   /**
@@ -443,19 +498,22 @@ export class Wallet {
   async getTransactionHistory(): Promise<Activity[]> {
     await this.#seed();
     const { notes, sent, blocks, pending } = this.#state;
-    const txs = this.#transparent?.txs ?? [];
-    const addresses = this.#transparent?.addresses;
-    await initZcore();
     // Until the transparent side names our addresses, an unshield to one of
     // them would read as a payment.
-    const paid = addresses
-      ? payments(this.#sendingTxs().values(), blocks, addresses, (script) =>
-          script_address(NETWORK, script),
-        )
-      : undefined;
-    const history = buildActivity(notes, sent, txs, blocks, paid, addresses);
+    const addresses = this.#transparent?.addresses;
+    const history = buildActivity(
+      notes,
+      sent,
+      this.#transparent?.txs ?? [],
+      blocks,
+      addresses && this.#fullTxs(),
+      addresses,
+    );
     const mined = new Set(history.map((tx) => tx.txid));
-    return [...pendingActivity(pending, mined), ...history];
+    return [
+      ...pendingActivity(pending, mined, this.#tip),
+      ...confirmedAt(history, this.#tip),
+    ];
   }
 
   /**

@@ -1,12 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
-import { SpinnerIcon } from "../icons/SpinnerIcon";
 import type { Activity } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
-import { TransactionTypeIcon } from "./TransactionTypeAndStatus";
+import { PendingStatus, TransactionTypeIcon } from "./TransactionTypeAndStatus";
 import { TransactionValue } from "./TransactionValue";
 import { focusRingClassName } from "./ui/utils";
 
@@ -133,14 +132,7 @@ function Row({ tx }: { tx: Activity }) {
 }
 
 function When({ tx }: { tx: Activity }) {
-  if (tx.status === "Pending") {
-    return (
-      <span className="flex items-center gap-1">
-        <SpinnerIcon className="size-3" />
-        Processing
-      </span>
-    );
-  }
+  if (tx.status === "Pending") return <PendingStatus tx={tx} />;
   if (!tx.timestamp) return null;
   return (
     <time>

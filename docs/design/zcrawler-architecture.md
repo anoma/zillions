@@ -58,8 +58,13 @@ lightwalletd; nothing from a local crawler.
 - **Retries.** Indexer and lightwalletd calls retry network errors, 403
   (CloudFront's rate limit), 408, 429 and 5xx for about a minute; a broadcast
   is never retried. A sync that still fails resumes from its cursor.
-- **Reorgs.** Not handled by the indexer: it stores blocks 2–3 behind the tip
-  and never rewrites a height. See ask 8.
+- **Reorgs.** Open: the indexer team hasn't settled how far behind the tip it
+  indexes or how it rewrites a reorged height. As of 2026-10-19 zcrawler main
+  checks each block's parent hash and rewinds orphaned blocks (logged in
+  `zcrawler_reorgs`, with ziziphus rewinding its trees), and can stay
+  `--confirmations` blocks behind the tip (default 5); the deployed indexer
+  runs at the tip. Check the zcrawler repo and its `/status` page rather than
+  this note. See ask 8.
 
 ## Measured baseline
 
@@ -411,9 +416,11 @@ Sync as built). They are the private way back once that lookup goes.
 6. **Confirm the upper-domain sizing** against real mainnet counts (above).
 7. ~~Cumulative-base + tiered-tail nullifiers~~ — served instead as whole
    2¹⁸ chunks (see Nullifier distribution).
-8. **Reorgs.** Store only confirmed blocks (~10 deep) or rewrite reorged
-   heights: today a reorg in the last 2–3 blocks leaves stale notes,
-   nullifiers and tree roots, some in year-long `immutable` chunks.
+8. **Reorgs.** Store only confirmed blocks or rewrite reorged heights.
+   Partly done and still open: zcrawler main rewinds orphaned blocks and has
+   a `--confirmations` lag (see Reorgs above); depth and whether year-long
+   `immutable` chunks can still hold stale notes, nullifiers or tree roots
+   are undecided.
 9. **The Orchard nullifier tail times out** (504 after 90 s; the chunk after
    it 404s with a DB error). Unused by this client, but broken.
 10. **A private spent lookup** to replace `/spent` (heliaxdev/zcrawler#16),

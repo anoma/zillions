@@ -6,7 +6,7 @@ export function TransactionValue({
   tx,
   className,
 }: {
-  tx: Pick<Activity, "tx_type" | "value" | "fee">;
+  tx: Pick<Activity, "tx_type" | "value" | "fee" | "self">;
   className?: string;
 }) {
   const { signal, value } = transactionValue(tx);

@@ -89,6 +89,25 @@ const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   srcDir: ".",
+  // WXT defaults Firefox to MV2; the background is written for MV3's
+  // non-persistent lifecycle (session storage, keep-alive), same as Chrome.
+  manifestVersion: 3,
+
+  // AMO reviewers rebuild from the sources zip, which needs the workspace
+  // root (lockfile, @zillions/zcore) rather than just this app.
+  zip: {
+    sourcesRoot: r("../.."),
+    excludeSources: [
+      "apps/app/**",
+      "docs/**",
+      "scripts/**",
+      "packages/sapling-params/**",
+      "packages/zcore/target/**",
+      "packages/zcore/patched/**",
+      "apps/keychain/examples/**",
+      "**/graphify-out/**",
+    ],
+  },
 
   runner: {
     // This forces the dev browser to reuse the same profile directory
@@ -139,7 +158,12 @@ export default defineConfig({
       ? {
         browser_specific_settings: {
           gecko: {
-            strict_min_version: "115.0",
+            // Firefox keys storage and IndexedDB by this ID; without it every
+            // reinstall gets a fresh ID and an empty vault.
+            id: "keychain@zillions.heliax.dev",
+            // MV3 content scripts need their host permission granted; 127+
+            // grants it at install instead of leaving it opt-in.
+            strict_min_version: "128.0",
             data_collection_permissions: { required: ["none"] },
           },
         },
