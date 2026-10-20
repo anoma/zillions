@@ -2,13 +2,13 @@
  * Final sign confirmation: re-verifies the password when the 30-minute auth
  * window expired, then submits the approved sign request (the background
  * decrypts the seed and signs the PCZT) and closes. A Ledger account's PCZT
- * is signed on the device from here instead, as WebHID needs a page and a
- * click, and the background puts the device's signatures in.
+ * is signed on the device from here instead, as WebHID needs a page, and the
+ * background puts the device's signatures in.
  */
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { ActionButton, Alert, Input, Stack } from "@zillions/components";
+import { Alert, Input, Stack } from "@zillions/components";
 
 import {
   initZillionsSdk,
@@ -75,8 +75,6 @@ export const ConfirmSignTx = ({ details }: Props) => {
     abortLedger.current = new AbortController();
     const { signal } = abortLedger.current;
     try {
-      // Connecting comes first, while the click still counts as one:
-      // WebHID's picker needs it.
       const signatures = await withLedger(
         setLedgerStep,
         async (device) => {
@@ -84,7 +82,7 @@ export const ConfirmSignTx = ({ details }: Props) => {
           const transaction = ledgerTransaction(ledger.pczt, ledger.hdIndex);
           return signLedgerPczt(device, transaction, setLedgerStep);
         },
-        signal
+        signal,
       );
       await client?.submitSignTx(msgId, signer, signatures);
       setStatus(Status.Completed);
@@ -97,11 +95,10 @@ export const ConfirmSignTx = ({ details }: Props) => {
     }
   };
 
-  const cancelLedger = () => {
+  const cancelLedger = async () => {
     abortLedger.current?.abort();
-    setLedgerStep(undefined);
-    setError(undefined);
-    setStatus(undefined);
+    await client?.rejectSignTx(msgId);
+    await closeCurrentTab();
   };
 
   const handleApproveSignTx = useCallback(
@@ -124,7 +121,6 @@ export const ConfirmSignTx = ({ details }: Props) => {
         return;
       }
 
-      // The device waits for a click of its own.
       if (ledger) {
         setStatus(undefined);
         setRequiresAuth(false);
@@ -132,7 +128,7 @@ export const ConfirmSignTx = ({ details }: Props) => {
       }
       await signTx();
     },
-    [requiresAuth, password, ledger]
+    [requiresAuth, password, ledger],
   );
 
   useEffect(() => {
@@ -151,7 +147,9 @@ export const ConfirmSignTx = ({ details }: Props) => {
 
   useEffect(() => {
     // User is authenticated with a valid session, so submit signed Tx:
-    if (requiresAuth === false && ledger === null) void signTx();
+    if (requiresAuth !== false || ledger === undefined) return;
+    if (ledger) void signOnLedger();
+    else void signTx();
   }, [requiresAuth, ledger]);
 
   useEffect(() => {
@@ -181,29 +179,22 @@ export const ConfirmSignTx = ({ details }: Props) => {
             />
           </>
         )}
-        {!requiresAuth &&
-          ledger &&
-          (ledgerStep ?
-            <LedgerProgress
-              steps={["connect", "unlock", "open-app", "sign"]}
-              current={ledgerStep}
-              error={status === Status.Failed ? error : undefined}
-              onCancel={cancelLedger}
-              onRetry={() => void signOnLedger()}
-            />
-          : <ActionButton
-              size="lg"
-              backgroundHoverColor="black"
-              textHoverColor="primary"
-              onClick={() => void signOnLedger()}
-            >
-              Sign with Ledger
-            </ActionButton>)}
+        {!requiresAuth && ledger && (
+          <LedgerProgress
+            steps={["connect", "unlock", "open-app", "sign"]}
+            current={ledgerStep ?? "connect"}
+            error={status === Status.Failed ? error : undefined}
+            onCancel={() => void cancelLedger()}
+            onRetry={() => void signOnLedger()}
+          />
+        )}
         {!requiresAuth &&
           !ledger &&
-          (status === Status.Failed ?
+          (status === Status.Failed ? (
             <Alert type="error">{error}</Alert>
-          : <Alert type="warning">Submitting signature</Alert>)}
+          ) : (
+            <Alert type="warning">Submitting signature</Alert>
+          ))}
         <div className="flex-1" />
         {requiresAuth && (
           <ApprovalActions
