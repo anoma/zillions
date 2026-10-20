@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { TransactionReceiptCard } from "./TransactionReceiptCard";
 
 export function TransferSuccess({
@@ -6,11 +7,20 @@ export function TransferSuccess({
 }: ComponentProps<typeof TransactionReceiptCard>) {
   return (
     <>
-      <div className="px-10 max-sm:px-6 mt-15">
-        <div className="px-2 py-5 border border-gray-300 bg-white max-w-125 mx-auto rounded-2xl text-center">
-          <div className="font-semibold">Transaction submitted</div>
-          <div className="text-xs">
-            This transaction is awaiting network confirmation.
+      <div className="px-10 max-sm:px-6 mt-10">
+        <div
+          role="status"
+          className="max-w-150 mx-auto px-5 py-4 flex items-center gap-3 rounded-lg bg-gold/15"
+        >
+          <SpinnerIcon
+            aria-hidden="true"
+            className="size-4 shrink-0 text-gold"
+          />
+          <div>
+            <div className="text-sm font-semibold">Transaction submitted</div>
+            <div className="text-xs text-gray-600">
+              Waiting for the network to confirm it.
+            </div>
           </div>
         </div>
       </div>

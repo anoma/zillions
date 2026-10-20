@@ -25,7 +25,7 @@ export function CopyToClipboardControl({
     }, timeInMiliseconds);
   };
 
-  const onClick = (e: React.MouseEvent): void => {
+  const copy = (e: React.SyntheticEvent): void => {
     e.preventDefault();
     if (copied) return;
     navigator.clipboard.writeText(value);
@@ -36,19 +36,28 @@ export function CopyToClipboardControl({
     <div
       className={twMerge(
         "relative flex items-center gap-2 active:top-px cursor-pointer",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
         className,
       )}
       role="button"
-      aria-labelledby="Copy to clipboard"
-      onClick={onClick}
+      tabIndex={0}
+      onClick={copy}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && copy(e)}
     >
       {children}
+      <span className="sr-only" aria-live="polite">
+        {copied ? "Copied" : "Copy"}
+      </span>
       {copied ? (
         <GoCheckCircle
+          aria-hidden="true"
           className={twMerge("shrink-0 size-5 animate-pop-in", iconClassName)}
         />
       ) : (
-        <GoCopy className={twMerge("shrink-0 size-5", iconClassName)} />
+        <GoCopy
+          aria-hidden="true"
+          className={twMerge("shrink-0 size-5", iconClassName)}
+        />
       )}
     </div>
   );

@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import QRCode from "react-qr-code";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
-import { PageShell } from "../components/PageShell";
+import { FormPage } from "../components/FormPage";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
+import { SpinnerIcon } from "../icons/SpinnerIcon";
 
 export const Route = createFileRoute("/receive")({
   component: ReceiveRoute,
@@ -19,34 +20,48 @@ function ReceiveRoute() {
   const address = isTransparent ? account.transparent.address : shielded;
 
   return (
-    <PageShell title="Receive" className="w-full max-w-120 mx-auto">
-      <div className="mt-10">
-        <ShieldedTransparentToggle
-          isTransparent={isTransparent}
-          setIsTransparent={setIsTransparent}
-        />
-      </div>
-      {address && (
-        <>
-          <div className="flex justify-center mt-6">
+    <FormPage title="Receive">
+      <ShieldedTransparentToggle
+        label="Address type"
+        isTransparent={isTransparent}
+        setIsTransparent={setIsTransparent}
+      />
+
+      <section aria-label="Your address" className="flex flex-col gap-5">
+        <div className="mx-auto p-4 rounded-xl border border-line bg-card">
+          {address ? (
             <QRCode
-              size={320}
+              key={address}
+              size={208}
               value={address}
               bgColor="transparent"
               fgColor="#000000"
               level="M"
+              title={`QR code of your ${isTransparent ? "transparent" : "shielded"} address`}
+              className="motion-safe:animate-fade-in"
             />
-          </div>
-          <div className="mt-6">
-            <CopyToClipboardControl
-              value={address}
-              className="mx-auto w-fit px-4 py-2 border border-gray-300 rounded-2xl text-sm font-medium wrap-anywhere"
-            >
-              <div>{address}</div>
-            </CopyToClipboardControl>
-          </div>
-        </>
-      )}
-    </PageShell>
+          ) : (
+            <div className="size-52 grid place-items-center">
+              <SpinnerIcon className="size-5 text-gold" />
+            </div>
+          )}
+        </div>
+
+        {address && (
+          <CopyToClipboardControl
+            value={address}
+            className="justify-between gap-4 px-4 py-3 rounded-xl border border-line bg-card transition-colors duration-300 hover:border-line-strong"
+          >
+            <span className="text-sm font-medium wrap-anywhere">{address}</span>
+          </CopyToClipboardControl>
+        )}
+
+        <p className="-mt-2 text-xs text-gray-600">
+          {isTransparent
+            ? "Your one transparent address, for exchanges and wallets that can't pay shielded addresses. Payments to it are visible on-chain."
+            : "A new address is generated each time you open this page, so payers can't link their payments to you. Earlier ones keep working."}
+        </p>
+      </section>
+    </FormPage>
   );
 }

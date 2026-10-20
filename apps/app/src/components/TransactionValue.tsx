@@ -4,14 +4,16 @@ import { ZecValue } from "./ZecValue";
 
 export function TransactionValue({
   tx,
+  className,
 }: {
   tx: Pick<Activity, "tx_type" | "value" | "fee" | "self">;
+  className?: string;
 }) {
   const { signal, value } = transactionValue(tx);
   return (
     <span>
       {signal}
-      <ZecValue zat={value} />
+      <ZecValue zat={value} className={className} />
     </span>
   );
 }

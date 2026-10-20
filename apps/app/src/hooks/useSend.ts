@@ -9,7 +9,11 @@ import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
 import { prefetchSaplingParams, warmProver } from "../lib/wallet/chain/submit";
-import { prefetchTrees, type SendRequest } from "../lib/wallet/send";
+import {
+  prefetchTrees,
+  type SendPlan,
+  type SendRequest,
+} from "../lib/wallet/send";
 import type { PendingActivity } from "../lib/wallet/types";
 import { useAccount } from "./useAccount";
 import { internalAddress } from "./useAddresses";
@@ -76,6 +80,18 @@ export function useSendPlan(
     if (plan.data) prefetchTrees(plan.data);
   }, [plan.data]);
   return { plan, maxAmount, ceiling };
+}
+
+/**
+ * What a plan from transparent funds shields as change. Upstream shields a
+ * transparent send's change when the recipient is shielded: the shielded side
+ * then holds payment and change together, hiding the amount.
+ */
+export function shieldedChangeOf(plan?: SendPlan) {
+  return (plan?.steps ?? [])
+    .flatMap((step) => step.change)
+    .filter((c) => c.pool !== "transparent")
+    .reduce((sum, c) => sum + BigInt(c.value), 0n);
 }
 
 /** Why a send form's plan fails, for the user: an amount the source can't cover, or the error itself. */

@@ -1,25 +1,24 @@
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
-import { PageShell } from "../components/PageShell";
+import { useEffect, useState } from "react";
+import { twMerge } from "tailwind-merge";
+import { AmountDisplay } from "../components/AmountInput";
+import { FormPage } from "../components/FormPage";
 import { FeeRow } from "../components/PlannedFee";
 import {
-  Field,
-  FormError,
-  PoolPill,
-  SubmitProgress,
-  TransferForm,
+  Breakdown,
+  FormCard,
+  PoolRoute,
+  SubmitBlock,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
-import { ActionButton } from "../components/ui/ActionButton";
-import { ZecValue } from "../components/ZecValue";
 import { useAccount } from "../hooks/useAccount";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useSubmitStage } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
-import { fitFontSize, zatoshiToZec } from "../lib/utils";
+import { zatoshiToZec } from "../lib/utils";
 import { warmProver } from "../lib/wallet/chain/submit";
 
 /** Least a shielding may move: zcore's rule, as the fee would eat the rest. */
@@ -52,7 +51,7 @@ function ShieldRoute() {
     }),
   );
 
-  const [validationMessage, setValidationMessage] = useState<ReactNode>(null);
+  const [validationMessage, setValidationMessage] = useState("");
   const { stages, track } = useSubmitStage();
   useEffect(warmProver, []);
   const shield = useMutation({
@@ -87,72 +86,71 @@ function ShieldRoute() {
     return <TransferSuccess tx={{ ...shield.data, status: "Pending" }} />;
   }
 
-  const error = shield.error ?? proposal.error;
   const tooLittle = available > 0n && available < SHIELDING_THRESHOLD;
+  const tooLittleMessage = `Shielding needs at least ${zatoshiToZec(SHIELDING_THRESHOLD)} ZEC`;
 
   const onSubmit = () => {
     const problem =
-      available === 0n ? (
-        "No transparent funds to shield"
-      ) : tooLittle ? (
-        <>
-          Shielding needs at least <ZecValue zat={SHIELDING_THRESHOLD} />
-        </>
-      ) : !proposal.data && !proposal.error ? (
-        "Preparing the transaction, try again in a moment"
-      ) : null;
+      available === 0n
+        ? "No transparent funds to shield"
+        : tooLittle
+          ? tooLittleMessage
+          : !proposal.data && !proposal.error
+            ? "Preparing the transaction, try again in a moment"
+            : "";
     setValidationMessage(problem);
     if (!problem && proposal.data) shield.mutate();
   };
 
+  const error = shield.error ?? proposal.error;
+  // The threshold already shows by the amount.
+  const formError =
+    validationMessage === tooLittleMessage
+      ? undefined
+      : validationMessage || error?.message;
+
   return (
-    <PageShell title="Shield">
-      <TransferForm className="@container" onSubmit={onSubmit}>
-        <Field label="From">
-          <PoolPill pool="transparent" title={account.transparent.address} />
-        </Field>
+    <FormPage title="Shield" onSubmit={onSubmit}>
+      <FormCard heading="Moving">
+        <PoolRoute
+          from="transparent"
+          to="shielded"
+          fromTitle={account.transparent.address}
+        />
+      </FormCard>
 
-        <div className="mt-4 text-xs font-medium text-center">
-          Shields all transparent funds
-        </div>
-
-        <div
-          className="mt-2 h-30 w-full flex items-center justify-center text-center leading-none font-medium"
-          style={{
-            fontSize: fitFontSize(zatoshiToZec(available).length, "6rem"),
-          }}
+      <FormCard heading="Amount">
+        <AmountDisplay zat={available} />
+        <p
+          role={tooLittle ? "alert" : undefined}
+          className={twMerge(
+            "-mt-1 text-sm text-center font-medium",
+            tooLittle ? "text-red-700" : "text-gray-600",
+          )}
         >
-          {zatoshiToZec(available)}
-        </div>
+          {tooLittle ? tooLittleMessage : "All your transparent funds"}
+        </p>
+      </FormCard>
 
-        <Field label="To" className="mt-4">
-          <PoolPill pool="shielded" />
-        </Field>
-
+      <Breakdown label="You'll have shielded" total={proposal.data?.value}>
+        <FeeRow
+          label="Transparent funds"
+          fee={available > 0n ? available : undefined}
+          pending={false}
+        />
         <FeeRow fee={proposal.data?.fee} pending={proposal.isLoading} />
+      </Breakdown>
 
-        <ActionButton
-          size="lg"
-          className="mt-4 w-full"
-          backgroundColor="black"
-          textColor="white"
-          disabled={shield.isPending}
-        >
-          {shield.isPending ? "Shielding..." : "Shield"}
-        </ActionButton>
-
-        {shield.isPending && <SubmitProgress stages={stages} />}
-
-        {tooLittle && !validationMessage && (
-          <div className="mt-2 text-sm text-center font-medium">
-            Shielding needs at least <ZecValue zat={SHIELDING_THRESHOLD} />
-          </div>
-        )}
-
-        {(validationMessage || error) && (
-          <FormError>{validationMessage || error?.message}</FormError>
-        )}
-      </TransferForm>
-    </PageShell>
+      <SubmitBlock
+        label={
+          proposal.data ? `Shield ${zatoshiToZec(available)} ZEC` : "Shield"
+        }
+        pending={shield.isPending}
+        pendingLabel="Shielding..."
+        color="black"
+        stages={stages}
+        error={formError}
+      />
+    </FormPage>
   );
 }

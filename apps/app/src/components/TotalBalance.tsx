@@ -1,15 +1,11 @@
-import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { fitFontSize, zatoshiToZec } from "../lib/utils";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { ActionButton } from "./ui/ActionButton";
+import { sectionLabelClassName } from "./ui/utils";
 import { ZecValue } from "./ZecValue";
-
-function Label({ children }: { children: ReactNode }) {
-  return <div className="text-sm mb-1 xl:mb-6">{children}</div>;
-}
 
 export function TotalBalance() {
   const balance = useGetBalance();
@@ -30,59 +26,104 @@ export function TotalBalance() {
   // +2 for the half-size " ZEC" suffix.
   const totalChars = zatoshiToZec(totalBalance).length + 2;
 
+  const pools = shieldedBalance + transparentBalance;
+  const shieldedShare =
+    pools > 0n ? Number((shieldedBalance * 1000n) / pools) / 10 : 0;
+
   return (
-    <div className="@container p-10 max-sm:px-6 flex max-lg:flex-col lg:items-center justify-between gap-10 font-medium border-b border-gray-300 overflow-auto">
-      <div>
-        <Label>Total Balance</Label>
-        <div
-          className="my-5 lg:my-10 [--max:3rem] xl:[--max:4.5rem]"
-          style={{ fontSize: fitFontSize(totalChars, "var(--max)") }}
-        >
-          <ZecValue zat={totalBalance} />
+    <div className="p-10 max-sm:px-6 font-medium">
+      <section aria-labelledby="balance-total" className="flex flex-col gap-8">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div className="flex flex-col gap-4">
+            <h2 id="balance-total" className={sectionLabelClassName}>
+              Total balance
+            </h2>
+            <div
+              className="[--max:3rem] xl:[--max:4.5rem] leading-none"
+              style={{ fontSize: fitFontSize(totalChars, "var(--max)") }}
+            >
+              <ZecValue zat={totalBalance} className="proportional-nums" />
+            </div>
+          </div>
+          <div className="flex gap-2 max-sm:w-full">
+            <ActionButton
+              href="/send"
+              size="sm"
+              className="w-36 max-sm:flex-1"
+              backgroundColor="gold-button"
+            >
+              Send
+            </ActionButton>
+            <ActionButton
+              href="/receive"
+              size="sm"
+              className="w-36 max-sm:flex-1"
+              outlineColor="black"
+            >
+              Receive
+            </ActionButton>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <ActionButton href="/send" size="sm" className="w-50 max-sm:flex-1">
-            Send
-          </ActionButton>
-          <ActionButton
-            href="/receive"
-            size="sm"
-            className="w-50 max-sm:flex-1"
-            outlineColor="black"
+
+        <div className="flex flex-col gap-8">
+          {/* The numbers below say the same; the bar only shows the split at a glance. */}
+          <div
+            aria-hidden="true"
+            className="h-1 flex rounded-full overflow-hidden bg-black/10"
           >
-            Receive
+            <div
+              className="bg-gold transition-[width] duration-500 ease-out"
+              style={{ width: `${shieldedShare}%` }}
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-x-20 gap-y-6">
+            <PoolBalance
+              label="Shielded"
+              zat={shieldedBalance}
+              dotClassName="bg-gold"
+              action={{ href: "/unshield", label: "Unshield" }}
+            />
+            <PoolBalance
+              label="Transparent"
+              zat={transparentBalance}
+              dotClassName="bg-black/10"
+              action={{ href: "/shield", label: "Shield" }}
+            />
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PoolBalance({
+  label,
+  zat,
+  dotClassName,
+  action,
+}: {
+  label: string;
+  zat: bigint;
+  dotClassName: string;
+  action: { href: string; label: string };
+}) {
+  return (
+    <div>
+      <h3 className="flex items-center gap-2 text-xs text-gray-600">
+        <span
+          aria-hidden="true"
+          className={twMerge("size-2 rounded-full", dotClassName)}
+        />
+        {label}
+      </h3>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <ZecValue zat={zat} className="text-xl xl:text-2xl proportional-nums" />
+        {zat > 0n && (
+          <ActionButton href={action.href} size="xs" outlineColor="black">
+            {action.label}
           </ActionButton>
-        </div>
-      </div>
-      <div>
-        <Label>Shielded balance</Label>
-        <div className="my-3 lg:my-6">
-          <ZecValue zat={shieldedBalance} className="text-xl xl:text-3xl" />
-        </div>
-        <ActionButton
-          href="/unshield"
-          size="xs"
-          outlineColor="black"
-          className={twMerge(!shieldedBalance && "max-lg:hidden lg:invisible")}
-        >
-          Unshield
-        </ActionButton>
-      </div>
-      <div className="lg:mr-15">
-        <Label>Transparent balance</Label>
-        <div className="my-3 lg:my-6">
-          <ZecValue zat={transparentBalance} className="text-xl xl:text-3xl" />
-        </div>
-        <ActionButton
-          href="/shield"
-          size="xs"
-          outlineColor="black"
-          className={twMerge(
-            !transparentBalance && "max-lg:hidden lg:invisible",
-          )}
-        >
-          Shield
-        </ActionButton>
+        )}
       </div>
     </div>
   );

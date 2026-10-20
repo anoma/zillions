@@ -11,18 +11,23 @@ export function MigrationSection() {
   if (!MIGRATION_ENABLED || orchard < MIGRATION_MINIMUM) return null;
 
   return (
-    <div className="px-10 max-sm:px-6 py-6 flex max-sm:flex-col sm:items-center gap-4 bg-neutral-800 text-white">
-      <DatabaseArrowIcon className="size-6 shrink-0" />
-      <div className="flex-1">
-        <div className="font-medium">Move to Ironwood</div>
-        <div className="text-sm text-neutral-300">
-          Your <ZecValue zat={orchard} /> in Orchard needs to move to Ironwood,
-          the new shielded pool.
+    <div className="px-10 pt-4 max-sm:px-6">
+      <section
+        aria-label="Move to Ironwood"
+        className="p-5 flex max-sm:flex-col sm:items-center gap-4 rounded-3xl bg-neutral-800 text-white"
+      >
+        <DatabaseArrowIcon aria-hidden="true" className="size-6 shrink-0" />
+        <div className="flex-1">
+          <div className="font-medium">Move to Ironwood</div>
+          <div className="text-sm text-neutral-300">
+            Your <ZecValue zat={orchard} /> in Orchard needs to move to
+            Ironwood, the new shielded pool.
+          </div>
         </div>
-      </div>
-      <ActionButton href="/migrate" size="sm" className="w-40 isolate">
-        Migrate
-      </ActionButton>
+        <ActionButton href="/migrate" size="sm" className="w-40 isolate">
+          Migrate
+        </ActionButton>
+      </section>
     </div>
   );
 }

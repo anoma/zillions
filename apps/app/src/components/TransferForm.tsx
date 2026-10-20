@@ -1,83 +1,67 @@
 import {
   type ComponentProps,
   type ReactNode,
+  type Ref,
   useEffect,
   useState,
 } from "react";
 import { twMerge } from "tailwind-merge";
 import type { StageEntry, SubmitStage } from "../hooks/useSubmitStage";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
+import { AmountInput } from "./AmountInput";
+import { TotalRow } from "./PlannedFee";
+import { ActionButton } from "./ui/ActionButton";
+import type { Color } from "./ui/types";
+import { pillButtonClassName } from "./ui/utils";
 import { ZecValue } from "./ZecValue";
 
-export function TransferForm({
-  onSubmit,
-  className,
-  children,
-}: {
-  onSubmit: () => void;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <form
-      className={twMerge(
-        "w-full max-w-125 mx-auto mt-10 flex flex-col",
-        className,
-      )}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit();
-      }}
-    >
-      {children}
-    </form>
-  );
-}
+const POOL_LABEL = { shielded: "Shielded", transparent: "Transparent" };
 
-export function Field({
-  label,
-  className,
-  children,
+/** A transfer's fixed source and destination pools, as one row. */
+export function PoolRoute({
+  from,
+  to,
+  fromTitle,
 }: {
-  label: string;
-  className?: string;
-  children: ReactNode;
+  from: "shielded" | "transparent";
+  to: "shielded" | "transparent";
+  fromTitle?: string;
 }) {
-  return (
-    <label className={className}>
-      <div className="text-xs font-medium mb-1">{label}</div>
-      {children}
-    </label>
-  );
-}
-
-/** A fixed From/To pool, drawn like the pool toggle's selected or unselected side. */
-export function PoolPill({
-  pool,
-  title,
-}: {
-  pool: "shielded" | "transparent";
-  title?: string;
-}) {
-  if (pool === "transparent") {
-    return (
-      <div
-        title={title}
-        className="h-11 w-full flex items-center justify-center rounded-full border border-gray-300 font-medium"
-      >
-        Transparent
-      </div>
-    );
-  }
-  return (
-    <div
+  const pill = (pool: "shielded" | "transparent", title?: string) => (
+    <span
       title={title}
-      className="h-11 w-full p-0.5 rounded-full border border-gray-300"
+      className={twMerge(
+        "h-12 flex items-center justify-center rounded-full text-base font-medium",
+        pool === "shielded" ? "bg-gold" : "border border-line bg-card",
+      )}
     >
-      <div className="h-full w-full flex items-center justify-center rounded-full bg-gold font-medium">
-        Shielded
-      </div>
-    </div>
+      {POOL_LABEL[pool]}
+    </span>
+  );
+  return (
+    <p className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <span className="sr-only">From</span>
+      {pill(from, fromTitle)}
+      <span className="sr-only">to</span>
+      <ArrowRightIcon aria-hidden="true" className="size-4 text-black/50" />
+      {pill(to)}
+    </p>
+  );
+}
+
+function ArrowRightIcon(props: ComponentProps<"svg">) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M3 8h10M9 4l4 4-4 4" />
+    </svg>
   );
 }
 
@@ -85,25 +69,24 @@ export function AvailableWithMax({
   available,
   isMax,
   onToggleMax,
-  maxTitle,
 }: {
   available: bigint;
   isMax: boolean;
   onToggleMax: () => void;
-  maxTitle?: string;
 }) {
   return (
-    <div className="mt-4 flex items-center justify-center gap-2 text-xs font-medium">
+    <div className="flex items-center justify-center gap-2 text-xs font-medium">
       <span>
         Available: <ZecValue zat={available} />
       </span>
       <button
         type="button"
         className={twMerge(
-          "px-2 py-0.5 rounded-full border border-gray-300",
-          isMax && "bg-black text-white border-black",
+          pillButtonClassName,
+          isMax &&
+            "bg-black text-white border-black hover:bg-black hover:border-black",
         )}
-        title={maxTitle}
+        aria-pressed={isMax}
         onClick={onToggleMax}
       >
         Max
@@ -223,8 +206,177 @@ function CheckIcon(props: ComponentProps<"svg">) {
 
 export function FormError({ children }: { children: ReactNode }) {
   return (
-    <div role="alert" className="mt-4 text-red-500 text-center">
+    <div
+      role="alert"
+      className="mt-4 text-red-700 text-center motion-safe:animate-fade-in"
+    >
       {children}
     </div>
+  );
+}
+
+/** A submit-time problem, shown by the field it's about. */
+export type Problem<Field extends string = "amount"> = {
+  field: Field | "form";
+  message: string;
+};
+
+/**
+ * A section of the form's card, with a heading row and room for a control
+ * beside it. With `htmlFor` the heading is the label of that control.
+ */
+export function FormCard({
+  heading,
+  headingId,
+  htmlFor,
+  aside,
+  className,
+  children,
+}: {
+  heading: ReactNode;
+  headingId?: string;
+  htmlFor?: string;
+  aside?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-labelledby={headingId}
+      className={twMerge("flex flex-col gap-2", className)}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <h2 id={headingId} className="text-xs font-medium">
+          {htmlFor ? <label htmlFor={htmlFor}>{heading}</label> : heading}
+        </h2>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** The hero amount field with its error line. `id` is the input's, and prefixes the others. */
+export function AmountField({
+  id,
+  value,
+  onChange,
+  error,
+  describedBy,
+  ref,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+  describedBy?: string;
+  ref?: Ref<HTMLInputElement>;
+}) {
+  const errorId = `${id}-error`;
+  return (
+    <>
+      <AmountInput
+        id={id}
+        ref={ref}
+        value={value}
+        className={twMerge("h-28", error && "text-red-700")}
+        maxFontSize="6rem"
+        aria-invalid={Boolean(error)}
+        aria-describedby={
+          [error && errorId, describedBy].filter(Boolean).join(" ") || undefined
+        }
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error && (
+        <p
+          id={errorId}
+          role="alert"
+          className="-mt-1 text-sm text-center font-medium text-red-700 motion-safe:animate-fade-in"
+        >
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** The fee breakdown: `rows` then the total line. */
+export function Breakdown({
+  label,
+  total,
+  children,
+}: {
+  label?: string;
+  total?: bigint;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-label="Summary"
+      className="flex flex-col gap-1.5 px-4 pt-6 border-t border-line"
+    >
+      {children}
+      <TotalRow label={label} value={total} />
+    </section>
+  );
+}
+
+/** The submit button, with whatever stands under it: notices, progress, errors. */
+export function SubmitBlock({
+  label,
+  pending,
+  pendingLabel,
+  color = "gold-button",
+  stages,
+  error,
+  children,
+}: {
+  label: string;
+  pending: boolean;
+  pendingLabel: string;
+  color?: Extract<Color, "gold-button" | "black">;
+  stages: StageEntry[];
+  error?: string;
+  children?: ReactNode;
+}) {
+  return (
+    // Pulled toward the summary: the button acts on what it adds up.
+    <div className="-mt-2">
+      <ActionButton
+        size="md"
+        className="w-full h-14"
+        backgroundColor={color}
+        textColor={color === "black" ? "white" : undefined}
+        disabled={pending}
+      >
+        {pending ? pendingLabel : label}
+      </ActionButton>
+      {children}
+      {pending && <SubmitProgress stages={stages} />}
+      {error && <FormError>{error}</FormError>}
+    </div>
+  );
+}
+
+/** A line under the submit button. */
+export function Notice({
+  icon,
+  className,
+  children,
+}: {
+  icon?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <p
+      className={twMerge(
+        "mt-3 flex items-center justify-center gap-1.5 text-sm text-center font-medium",
+        className,
+      )}
+    >
+      {icon}
+      {children}
+    </p>
   );
 }

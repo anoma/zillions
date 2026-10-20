@@ -1,13 +1,21 @@
 @import "tailwindcss";
 @import "@fontsource-variable/montserrat";
 
-@source inline("{bg,text,border,before:bg,before:border}-neutral-{500,800}");
+@source inline("{bg,text,border,before:bg,before:border}-neutral-{500,700,800}");
 
 @theme {
   --font-sans: "Montserrat Variable", sans-serif;
 
   --color-surface: #ecebe7;
   --color-gold: #ceb462;
+  --color-card: #f6f5f2;
+  --color-line: #e6e4df;
+  --color-line-strong: #cdcac2;
+
+  /* Tailwind's stone: greys warm enough to sit on the cream surfaces. */
+  --color-gray-400: oklch(70.9% 0.01 56.259);
+  --color-gray-500: oklch(55.3% 0.013 58.071);
+  --color-gray-600: oklch(44.4% 0.011 73.639);
 
   --ease-out-circ: cubic-bezier(0.075, 0.82, 0.165, 1);
 
@@ -20,6 +28,14 @@
     to {
       transform: rotate(1turn);
       transform-origin: center;
+    }
+  }
+
+  --animate-fade-in: fade-in 0.3s ease-out;
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
     }
   }
 
@@ -36,6 +52,23 @@
   }
 }
 
+/* Outside @theme: no utility class uses it, so Tailwind wouldn't emit it. */
+:root {
+  --color-gold-button: oklch(0.8 0.11 92.18 / 1);
+}
+
 body {
   @apply bg-surface;
+}
+
+/* Registered so ActionButton's colors (set as custom properties) can transition. */
+@property --color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@property --text-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: black;
 }

@@ -32,9 +32,10 @@ export const Toggle = ({
       className={twMerge(
         "@container group block",
         "relative h-7 w-11 p-0.5 rounded-full cursor-pointer",
-        "border border-gray-300",
+        "border border-line-strong",
         "transition-colors duration-300 ease-out",
-        "bg-surface",
+        "bg-card",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
         disabled && "opacity-30 cursor-not-allowed",
         className,
       )}

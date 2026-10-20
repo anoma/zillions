@@ -9,9 +9,9 @@ export function ZecValue({
   className?: string;
 }) {
   return (
-    <span className={twMerge("whitespace-nowrap", className)}>
+    <span className={twMerge("whitespace-nowrap tabular-nums", className)}>
       {zatoshiToZec(zat)}
-      <span className="text-[max(8px,0.5em)]"> ZEC</span>
+      <span className="text-[max(0.7rem,0.5em)]"> ZEC</span>
     </span>
   );
 }

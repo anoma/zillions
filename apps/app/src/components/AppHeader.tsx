@@ -23,6 +23,8 @@ function AccountProfile() {
   return (
     <Tooltip
       position="bottom"
+      // Right-aligned: centred under a label this close to the edge, it would overflow the page.
+      className="left-auto right-0 translate-x-0"
       onClose={() => setShown((n) => n + 1)}
       content={
         <div className="p-4 space-y-3 w-55">
@@ -118,7 +120,7 @@ function MoreMenu() {
 
 export function AppHeader() {
   return (
-    <header className="h-full flex items-center justify-end border-b border-gray-300 bg-surface px-6">
+    <header className="h-full flex items-center justify-end border-b border-line-strong bg-surface px-6">
       <Link to="/" className="mr-auto lg:hidden">
         <ZillionsIcon className="h-8" />
       </Link>

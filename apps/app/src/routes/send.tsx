@@ -1,27 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { twMerge } from "tailwind-merge";
-import { AmountInput } from "../components/AmountInput";
-import { PageShell } from "../components/PageShell";
-import { PlannedFee } from "../components/PlannedFee";
+import { useRef, useState } from "react";
+import { FormPage } from "../components/FormPage";
+import { FeeRow, PlannedFee } from "../components/PlannedFee";
+import { MemoField } from "../components/send/MemoField";
+import { PaymentLinkFields } from "../components/send/PaymentLinkFields";
+import { PaymentLinkToggle } from "../components/send/PaymentLinkToggle";
+import { PrivacyNotice } from "../components/send/PrivacyNotice";
+import { RecipientField } from "../components/send/RecipientField";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import {
+  AmountField,
   AvailableWithMax,
-  Field,
-  FormError,
-  SubmitProgress,
-  TransferForm,
+  Breakdown,
+  FormCard,
+  type Problem,
+  SubmitBlock,
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
-import { ActionButton } from "../components/ui/ActionButton";
-import { placeholderClassName } from "../components/ui/utils";
-import { ZecValue } from "../components/ZecValue";
-import { useAddressKind } from "../hooks/useAddresses";
+import { useAddressKind, useFreshAddress } from "../hooks/useAddresses";
+import { useAmountField } from "../hooks/useAmountField";
 import { useGetBalance } from "../hooks/useGetBalance";
-import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
-import { zatoshiToZec, zecToZatoshi } from "../lib/utils";
-
-const MEMO_BYTES = 512;
+import {
+  planProblem,
+  shieldedChangeOf,
+  useSend,
+  useSendPlan,
+} from "../hooks/useSend";
+import { memoProblem } from "../lib/memo";
+import { CLAIM_FEE, DESCRIPTION_BYTES } from "../lib/paymentLink";
+import { zatoshiToZec } from "../lib/utils";
 
 export const Route = createFileRoute("/send")({
   component: SendRoute,
@@ -29,72 +36,76 @@ export const Route = createFileRoute("/send")({
 
 function SendRoute() {
   const balance = useGetBalance();
-
-  const [isTransparentFrom, setIsTransparentFrom] = useState(false);
-  const [amountString, setAmountString] = useState("");
-  const [isMax, setIsMax] = useState(false);
+  const [transparentFrom, setTransparentFrom] = useState(false);
+  const amountField = useAmountField();
+  const [isPaymentLink, setIsPaymentLink] = useState(false);
   const [to, setTo] = useState("");
-  const [showMemo, setShowMemo] = useState(false);
+  const [memoOpen, setMemoOpen] = useState(false);
+  // With a payment link, the message is the link's description.
   const [memoText, setMemoText] = useState("");
-  const [validationMessage, setValidationMessage] = useState("");
+  const [problem, setProblem] = useState<Problem<"amount" | "to">>();
+  const amountRef = useRef<HTMLInputElement>(null);
+  const toRef = useRef<HTMLInputElement>(null);
 
-  const from = isTransparentFrom ? "transparent" : "shielded";
-  const typed = (() => {
-    try {
-      return zecToZatoshi(amountString);
-    } catch {
-      return 0n;
-    }
-  })();
+  const from = transparentFrom ? "transparent" : "shielded";
   const toKind = useAddressKind(to);
-  const isTransparentTo = toKind === "transparent";
-  const isShieldedTo = toKind === "shielded";
+  const transparentTo = !isPaymentLink && toKind === "transparent";
+  // The fee depends on the recipient. A payment link has none, and until an
+  // address is entered our own stands in, so Max and the fee still work.
+  const standInTo = useFreshAddress() ?? "";
 
-  const memoBytes = new TextEncoder().encode(memoText).length;
-  const memoProblem = !memoText
-    ? undefined
-    : isTransparentTo
-      ? "Transparent addresses can't receive messages"
-      : memoBytes > MEMO_BYTES
-        ? "Message is too long"
-        : undefined;
+  const memoBytes = isPaymentLink ? DESCRIPTION_BYTES : undefined;
+  const memoError = memoProblem(memoText, transparentTo, memoBytes);
   // A memo doesn't change the fee, so one the send can't carry is left out of the plan.
-  const memo = memoText && !memoProblem ? memoText : undefined;
+  const memo = memoText && !memoError && !isPaymentLink ? memoText : undefined;
 
-  const planned = useSendPlan({ from, to, amount: typed, memo }, isMax);
+  const { typed, isMax } = amountField;
+  const planned = useSendPlan(
+    {
+      from,
+      to: isPaymentLink ? standInTo : to || (isMax ? standInTo : ""),
+      // A link is funded with its amount plus the claim fee.
+      amount: isPaymentLink && typed > 0n ? typed + CLAIM_FEE : typed,
+      memo,
+    },
+    isMax,
+  );
   const { maxAmount, ceiling } = planned;
-  // From transparent to a shielded recipient, upstream shields the change too:
-  // the shielded side then holds payment and change together, hiding the amount.
-  const shieldedChange = isTransparentFrom
-    ? (planned.plan.data?.steps ?? [])
-        .flatMap((step) => step.change)
-        .filter((c) => c.pool !== "transparent")
-        .reduce((sum, c) => sum + BigInt(c.value), 0n)
-    : 0n;
-  const amount = isMax ? (maxAmount.data ?? 0n) : typed;
+  const extra = isPaymentLink ? CLAIM_FEE : 0n;
+  const max = maxAmount.data ?? 0n;
+  const amount = isMax ? (max > extra ? max - extra : 0n) : typed;
   const send = useSend();
 
-  const availableBalance = !balance.data
+  const available = !balance.data
     ? 0n
-    : isTransparentFrom
+    : transparentFrom
       ? balance.data.unshieldedBalance
       : balance.data.shieldedBalance;
+  const overBalance = Boolean(balance.data) && amount + extra > available;
 
   const onSubmit = () => {
-    setValidationMessage("");
-    const problem = !to
-      ? "Set a recipient"
-      : toKind === null
-        ? "Not a valid Zcash address"
-        : amount <= 0n
-          ? "Set an amount"
-          : amount > availableBalance
-            ? "Insufficient balance"
-            : (memoProblem ?? (ceiling ? planProblem(planned) : undefined));
-    if (problem) {
-      setValidationMessage(problem);
+    const found: Problem<"amount" | "to"> | undefined =
+      amount <= 0n
+        ? { field: "amount", message: "Set an amount" }
+        : overBalance
+          ? { field: "amount", message: "Insufficient balance" }
+          : isPaymentLink
+            ? memoError
+              ? undefined
+              : { field: "form", message: "Payment links aren't available yet" }
+            : !to
+              ? { field: "to", message: "Set a recipient" }
+              : toKind === null
+                ? { field: "to", message: "Not a valid Zcash address" }
+                : undefined;
+    // Memo and fee ceiling problems already show by their fields.
+    if (found || memoError || ceiling) {
+      setProblem(found);
+      if (found?.field === "amount") amountRef.current?.focus();
+      if (found?.field === "to") toRef.current?.focus();
       return;
     }
+    setProblem(undefined);
     send.mutate({
       from,
       to,
@@ -114,161 +125,150 @@ function SendRoute() {
     return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
   }
 
-  const error = send.error?.message ?? planProblem(planned);
-
-  const amountInput = isMax
-    ? maxAmount.data
-      ? zatoshiToZec(maxAmount.data)
-      : ""
-    : amountString;
+  const clear = () => setProblem(undefined);
+  const amountError =
+    problem?.field === "amount"
+      ? problem.message
+      : overBalance
+        ? "Insufficient balance"
+        : ceiling
+          ? planProblem(planned)
+          : undefined;
+  const toError = problem?.field === "to" ? problem.message : undefined;
+  const formError =
+    send.error?.message ??
+    (problem?.field === "form" ? problem.message : undefined) ??
+    (ceiling || overBalance ? undefined : planProblem(planned));
+  const planFee = planned.plan.data?.fee;
+  const total =
+    amount > 0n && planFee !== undefined
+      ? amount + extra + BigInt(planFee)
+      : undefined;
+  const transparent = transparentFrom || transparentTo;
 
   return (
-    <PageShell title="Send">
-      <TransferForm onSubmit={onSubmit}>
-        <Field label="From">
-          <ShieldedTransparentToggle
-            isTransparent={isTransparentFrom}
-            setIsTransparent={(value) => {
-              setIsTransparentFrom(value);
-              setValidationMessage("");
-            }}
-          />
-        </Field>
-
-        <AvailableWithMax
-          available={availableBalance}
-          isMax={isMax}
-          maxTitle={to ? undefined : "Enter a recipient to fill the maximum"}
-          onToggleMax={() => {
-            setIsMax(!isMax);
-            setValidationMessage("");
+    <FormPage title="Send" onSubmit={onSubmit}>
+      <FormCard heading="Pay from" htmlFor="send-from">
+        <ShieldedTransparentToggle
+          id="send-from"
+          label="Pay from"
+          isTransparent={transparentFrom}
+          setIsTransparent={(value) => {
+            setTransparentFrom(value);
+            clear();
           }}
         />
+      </FormCard>
 
-        <AmountInput
-          className="mt-2"
-          value={amountInput}
-          onFocus={() => setValidationMessage("")}
-          onChange={(e) => {
-            setIsMax(false);
-            setAmountString(e.target.value);
-            setValidationMessage("");
-          }}
-        />
-
-        <Field label="To" className="mt-4">
-          <input
-            name="to"
-            type="text"
-            placeholder="Enter Zcash address..."
-            className={twMerge(
-              "h-11 w-full px-4 font-medium rounded-lg border border-gray-300 outline-none",
-              placeholderClassName,
-              isTransparentTo && "border-black",
-              isShieldedTo && "border-gold",
-            )}
-            value={to}
-            onFocus={() => setValidationMessage("")}
-            onChange={(e) => {
-              setTo(e.target.value.trim());
-              setValidationMessage("");
-            }}
-          />
-        </Field>
-
-        {!showMemo
-          ? !isTransparentTo && (
-              <button
-                type="button"
-                className="mt-2 self-start text-xs font-medium hover:underline"
-                onClick={() => setShowMemo(true)}
-              >
-                + Add a message
-              </button>
-            )
-          : (!isTransparentTo || memoText) && (
-              <div className="mt-4">
-                <div className="mb-1 flex justify-between text-xs font-medium">
-                  <label htmlFor="memo">Message</label>
-                  <button
-                    type="button"
-                    className="hover:underline"
-                    onClick={() => {
-                      setShowMemo(false);
-                      setMemoText("");
-                      setValidationMessage("");
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-                <textarea
-                  id="memo"
-                  name="memo"
-                  rows={3}
-                  autoFocus
-                  placeholder="Only the recipient can read this"
-                  className={twMerge(
-                    "w-full px-4 py-3 font-medium rounded-lg border border-gray-300 outline-none resize-none",
-                    placeholderClassName,
-                    memoProblem && "border-red-500",
-                  )}
-                  value={memoText}
-                  onFocus={() => setValidationMessage("")}
-                  onChange={(e) => {
-                    setMemoText(e.target.value);
-                    setValidationMessage("");
-                  }}
-                />
-                <div className="flex justify-between gap-2 text-xs">
-                  <span className="text-red-500">{memoProblem}</span>
-                  <span
-                    className={twMerge(
-                      "tabular-nums",
-                      memoBytes > MEMO_BYTES && "text-red-500",
-                    )}
-                  >
-                    {memoBytes}/{MEMO_BYTES}
-                  </span>
-                </div>
-              </div>
-            )}
-
-        <PlannedFee {...planned} />
-
-        <ActionButton
-          size="lg"
-          className="mt-4 w-full"
-          backgroundColor={
-            isTransparentFrom || isTransparentTo ? "black" : undefined
-          }
-          textColor={isTransparentFrom || isTransparentTo ? "white" : undefined}
-          disabled={send.isPending}
-        >
-          {send.isPending ? "Sending..." : "Send"}
-        </ActionButton>
-
-        <div className="mt-2 text-sm text-center font-medium">
-          {isTransparentFrom && isTransparentTo
-            ? "This transfer is transparent"
-            : isTransparentFrom || isTransparentTo
-              ? "This transfer is partly shielded"
-              : "This transfer is shielded"}
-        </div>
-
-        {shieldedChange > 0n && (
-          <div className="mt-1 text-xs text-center">
-            <ZecValue zat={shieldedChange} /> also moves from your transparent
-            to your shielded balance, so the amount you send stays private.
+      <FormCard
+        heading="Amount"
+        htmlFor="send-amount"
+        aside={
+          <div id="send-available">
+            <AvailableWithMax
+              available={available}
+              isMax={isMax}
+              onToggleMax={() => {
+                amountField.toggleMax();
+                clear();
+              }}
+            />
           </div>
-        )}
+        }
+      >
+        <AmountField
+          id="send-amount"
+          ref={amountRef}
+          value={amountField.shown(amount)}
+          describedBy="send-available"
+          error={amountError}
+          onChange={(value) => {
+            amountField.type(value);
+            clear();
+          }}
+        />
+      </FormCard>
 
-        {send.isPending && <SubmitProgress stages={send.stages} />}
-
-        {(validationMessage || error) && (
-          <FormError>{validationMessage || error}</FormError>
+      <FormCard
+        headingId="send-to"
+        heading="To"
+        htmlFor={isPaymentLink ? undefined : "send-to-address"}
+        aside={
+          <PaymentLinkToggle
+            active={isPaymentLink}
+            onChange={(value) => {
+              setIsPaymentLink(value);
+              amountField.setIsMax(false);
+              clear();
+            }}
+          />
+        }
+        className="gap-3"
+      >
+        {isPaymentLink ? (
+          <PaymentLinkFields />
+        ) : (
+          <RecipientField
+            ref={toRef}
+            value={to}
+            kind={toKind}
+            error={toError}
+            onChange={(value) => {
+              setTo(value);
+              clear();
+            }}
+          />
         )}
-      </TransferForm>
-    </PageShell>
+        <MemoField
+          open={memoOpen}
+          onOpenChange={setMemoOpen}
+          memo={memoText}
+          onChange={(value) => {
+            setMemoText(value);
+            clear();
+          }}
+          toTransparent={transparentTo}
+          maxBytes={memoBytes}
+          placeholder={
+            isPaymentLink ? "Whoever claims the link sees this" : undefined
+          }
+        />
+      </FormCard>
+
+      <Breakdown total={total}>
+        <FeeRow
+          label={isPaymentLink ? "Link amount" : "Amount"}
+          fee={amount > 0n ? amount : undefined}
+          pending={isMax && maxAmount.isLoading}
+        />
+        <PlannedFee {...planned} />
+        {isPaymentLink && (
+          <FeeRow label="Claim fee" fee={CLAIM_FEE} pending={false} />
+        )}
+      </Breakdown>
+
+      <SubmitBlock
+        label={
+          isPaymentLink
+            ? "Create payment link"
+            : amount > 0n
+              ? `Send ${zatoshiToZec(amount)} ZEC`
+              : "Send"
+        }
+        pending={send.isPending}
+        pendingLabel={isPaymentLink ? "Creating link..." : "Sending..."}
+        color={transparent ? "black" : "gold-button"}
+        stages={send.stages}
+        error={formError}
+      >
+        <PrivacyNotice
+          transparentFrom={transparentFrom}
+          transparentTo={transparentTo}
+          shieldedChange={
+            transparentFrom ? shieldedChangeOf(planned.plan.data) : 0n
+          }
+        />
+      </SubmitBlock>
+    </FormPage>
   );
 }

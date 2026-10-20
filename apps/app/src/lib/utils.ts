@@ -103,7 +103,9 @@ export function transactionValue(
     value += tx.fee;
   }
 
-  // Never by the fee: a self-payment smaller than its fee would read as a loss.
+  // Received and sent are the balance's ups and downs; the rest moves money
+  // between the account's own pools, so they carry no sign. Nor does a
+  // self-payment: signed by its fee, a small one would read as a loss.
   const signal =
     tx.tx_type === "Received"
       ? "+"

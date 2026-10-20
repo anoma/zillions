@@ -24,17 +24,47 @@ export function PlannedFee({
   );
 }
 
-export function FeeRow({ fee, pending }: { fee?: bigint; pending: boolean }) {
+/** A summary's closing line: what it all comes to. */
+export function TotalRow({
+  label = "Total",
+  value,
+}: {
+  label?: string;
+  value?: bigint;
+}) {
   return (
-    <div className="mt-4 flex items-center justify-between text-xs font-medium">
-      <div>Transaction fee</div>
+    <div className="mt-1 flex items-center justify-between text-xs font-semibold">
+      <span>{label}</span>
+      <span aria-live="polite">
+        {value !== undefined ? (
+          <ZecValue zat={value} />
+        ) : (
+          <span className="text-gray-500">–</span>
+        )}
+      </span>
+    </div>
+  );
+}
+
+export function FeeRow({
+  fee,
+  pending,
+  label = "Transaction fee",
+}: {
+  fee?: bigint;
+  pending: boolean;
+  label?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between text-xs font-medium text-gray-600">
+      <div>{label}</div>
       <div>
         {fee !== undefined ? (
           <ZecValue zat={fee} />
         ) : pending ? (
           <SpinnerIcon className="size-3" />
         ) : (
-          "-"
+          <span className="text-gray-500">–</span>
         )}
       </div>
     </div>
