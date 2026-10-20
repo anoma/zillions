@@ -36,6 +36,9 @@ export type CreateAccountInput = {
   zip32Path: Zip32Path;
   passwordRequired: boolean;
   password?: string;
+  /** Block height at which the account was created/imported. undefined = auto-fetch chain tip. */
+  birthday: number | undefined;
+  seedFingerprint: string;
 };
 
 /** A recent block per network: [height, unix time in seconds]. */
@@ -87,6 +90,8 @@ export const createAccount = async (
     zip32Path,
     passwordRequired,
     password,
+    birthday,
+    seedFingerprint,
   } = input;
 
   try {
@@ -116,6 +121,8 @@ export const createAccount = async (
       shieldedAddress,
       viewingKey,
       birthday,
+      // birthday: resolvedBirthday,
+      seedFingerprint,
     });
 
     // A spending-key import is itself the shielded account; nothing to derive.

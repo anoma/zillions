@@ -51,13 +51,20 @@ export const NameAndPassword = ({ nextStep }: Props) => {
           viewingKey: state.viewingKey,
         }),
         alias,
-        flow: state.flow === "import" ? "import" : state.flow === "keystone" ? "keystone" : "create",
+        flow:
+          state.flow === "import"
+            ? "import"
+            : state.flow === "keystone"
+              ? "keystone"
+              : "create",
         bip44Path: state.bip44Path,
         zip32Path: state.zip32Path,
         passwordRequired: state.passwordRequired,
         password,
+        birthday: state.birthday,
+        seedFingerprint: state.seedFingerprint,
       },
-      (info) => dispatch({ type: "completionInfo", info })
+      (info) => dispatch({ type: "completionInfo", info }),
     );
 
     if (result.ok) {

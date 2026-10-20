@@ -285,9 +285,11 @@ export class Keyring {
     shieldedAddress: string;
     viewingKey: string;
     birthday: number;
+    seedFingerprint: string;
   }): Promise<AccountStore> {
     await this.vaultService.assertIsUnlocked();
 
+    let { seedFingerprint } = input;
     const { accountSecret, alias, flow, path } = input;
     const source: AccountSource = flow === "create" ? "generated" : "imported";
     const timestamp = source === "generated" ? new Date().getTime() : 0;
@@ -340,13 +342,10 @@ export class Keyring {
     // create_account_ufvk (needs fingerprint + hdIndex to embed zip32_derivation
     // in the PCZT, enabling the extension to sign). Non-mnemonic accounts have
     // no seed, so the fingerprint is stored as an empty string.
-    let seedFingerprint: string;
     if (accountType === "mnemonic") {
       await initZillionsSdk();
       const seed = await mnemonicToSeed(text, passphrase);
       seedFingerprint = computeSeedFingerprint(seed);
-    } else {
-      seedFingerprint = "";
     }
 
     // Random, so nothing secret (the phrase or key in `text`) feeds an id that

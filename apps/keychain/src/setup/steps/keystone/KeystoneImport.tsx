@@ -23,12 +23,14 @@ const TIMEOUT = NODE_ENV === "development" ? 50 : 1000;
 export const KeystoneImport = () => {
   const { state, dispatch } = useWizard();
   const [zip32Path, setZip32Path] = useState(state.zip32Path);
+  const [seedFingerprint, setSeedFingerprint] = useState(state.seedFingerprint);
   const [viewingKey, setViewingKey] = useState(state.viewingKey);
   const [viewingKeyError, setViewingKeyError] = useState("");
   const [alias, setAlias] = useState(state.alias);
   const handleScan= useCallback(({type, cbor}: {type: string, cbor: string}) => {
     const accounts = ZcashAccounts.fromCBOR(Buffer.from(cbor, 'hex'));
     console.log("onScanSuccess", accounts);
+    setSeedFingerprint(accounts.seedFingerprint.toHex());
     if(accounts.accounts.length > 0) {
       setViewingKey(accounts.accounts[0].ufvk);
       setAlias(accounts.accounts[0].name);
@@ -43,7 +45,8 @@ export const KeystoneImport = () => {
   const onSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     dispatch({ type: "setAlias", alias });
-    dispatch({ type: "setViewingKey", viewingKey });
+    dispatch({ type: "setSeedFingerprint", value: seedFingerprint });
+    dispatch({ type: "setViewingKey", value: viewingKey });
     dispatch({ type: "setZip32Path", path: zip32Path });
     dispatch({ type: "setSecretKind", kind: "viewing-key" });
     dispatch({ type: "goToStep", step: "keystone.name" });
