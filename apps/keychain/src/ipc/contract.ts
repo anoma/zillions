@@ -322,6 +322,11 @@ export type IpcContract = {
     req: { msgId: string; signer: string };
     res: void;
   };
+  /** Confirm the pending sign request owned by the calling popup's tab. */
+  "approvals/submitSignedTx": {
+    req: { msgId: string; signed: string };
+    res: void;
+  };
   /** Reject the pending sign request owned by the calling popup's tab. */
   "approvals/rejectSignTx": {
     req: { msgId: string };

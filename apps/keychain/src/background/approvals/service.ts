@@ -224,6 +224,30 @@ export class ApprovalsService {
     this.pendingTxs.delete(msgId);
   }
 
+  /** The approval popup confirmed: sign and settle the dapp's promise. */
+  async submitSignedTx(
+    popupTabId: number,
+    msgId: string,
+    signed: string
+  ): Promise<void> {
+    const pending = this.pendingTxs.get(msgId);
+    const resolvers = this.getResolver(popupTabId);
+
+    if (!pending) {
+      throw new Error(`Pending signing data not found for ${msgId}`);
+    }
+
+    try {
+      // A PCZT spans transparent + shielded; the keyring signs the whole PCZT
+      // in one pass and returns the signed PCZT as base64.
+      resolvers.resolve(signed);
+    } catch (e) {
+      resolvers.reject(e);
+    }
+
+    this.pendingTxs.delete(msgId);
+  }
+
   /** The approval popup rejected: drop the PCZT and fail the dapp's promise. */
   async rejectSignTx(popupTabId: number, msgId: string): Promise<void> {
     const resolvers = this.getResolver(popupTabId);

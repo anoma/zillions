@@ -174,6 +174,11 @@ export class BackgroundClient {
     return this.send("approvals/submitSignTx", { msgId, signer });
   }
 
+  /** Confirm the pending sign request owned by this popup's tab. */
+  submitSignedTx(msgId: string, signed: string): Promise<void> {
+    return this.send("approvals/submitSignedTx", { msgId, signed });
+  }
+
   /** Reject the pending sign request owned by this popup's tab. */
   rejectSignTx(msgId: string): Promise<void> {
     return this.send("approvals/rejectSignTx", { msgId });
