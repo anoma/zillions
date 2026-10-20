@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.11.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.10.0...zillions-app-v1.11.0) (2026-10-20)
+
+
+### Features
+
+* adding cog and nav on AppHeader ([#114](https://github.com/heliaxdev/zillions-interface/issues/114)) ([66d76e6](https://github.com/heliaxdev/zillions-interface/commit/66d76e65f1f42c29eeaff37fc17f8bfb56c592b9))
+* confirmation progress ([#111](https://github.com/heliaxdev/zillions-interface/issues/111)) ([8ad5496](https://github.com/heliaxdev/zillions-interface/commit/8ad54965ce884dd3f0aced43892ccb7f2f57e08f))
+* full transactions in history ([#102](https://github.com/heliaxdev/zillions-interface/issues/102)) ([25e1225](https://github.com/heliaxdev/zillions-interface/commit/25e12256fa4ff5056b3da85dd56421c1f1a15685))
+* GPU trial decryption ([#106](https://github.com/heliaxdev/zillions-interface/issues/106)) ([587fac3](https://github.com/heliaxdev/zillions-interface/commit/587fac3bbe1d9685fa102ba0638e64457504e4ad))
+* ledger shielded sync ([#118](https://github.com/heliaxdev/zillions-interface/issues/118)) ([5415802](https://github.com/heliaxdev/zillions-interface/commit/5415802f0e17c9f653a3bb5a5bf93d7ec12241a4))
+* redesign send with a payment link toggle, and a cleaner visual pass ([#103](https://github.com/heliaxdev/zillions-interface/issues/103)) ([6f80721](https://github.com/heliaxdev/zillions-interface/commit/6f8072127ff56ff43cdecf0ef5997a2f18ac555a))
+
+
+### Bug Fixes
+
+* abort kills in-flight workers ([#116](https://github.com/heliaxdev/zillions-interface/issues/116)) ([a599cb2](https://github.com/heliaxdev/zillions-interface/commit/a599cb2491cb394d6e634f7dcad9b7f69f09ed7f))
+* amount field validation ([#122](https://github.com/heliaxdev/zillions-interface/issues/122)) ([3dd968e](https://github.com/heliaxdev/zillions-interface/commit/3dd968e0eee916a68b91f203acec142f14443e83))
+
+
+### Performance Improvements
+
+* cache sapling params ([#108](https://github.com/heliaxdev/zillions-interface/issues/108)) ([58aa537](https://github.com/heliaxdev/zillions-interface/commit/58aa5374ba464831a82011aaf28da12cbf27f2ec))
+
 ## [1.10.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.9.0...zillions-app-v1.10.0) (2026-10-15)
 
 
