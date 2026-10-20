@@ -55,8 +55,10 @@ export type LedgerKeys = {
 };
 
 const MESSAGE_OF: Record<string, string> = {
+  // Chrome reports an unplugged Ledger and one whose access was revoked alike.
   NoAccessibleDeviceError:
-    "No Ledger found. Plug it in, unlock it and try again.",
+    "No Ledger found. Plug it in and unlock it. If it still isn't found, " +
+    "connect it again from Add Keys → Connect to hardware wallet.",
 };
 
 /**
