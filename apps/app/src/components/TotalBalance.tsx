@@ -1,7 +1,6 @@
 import { twMerge } from "tailwind-merge";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { fitFontSize, zatoshiToZec } from "../lib/utils";
-import { HeldFunds } from "./HeldFunds";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { ActionButton } from "./ui/ActionButton";
@@ -19,11 +18,9 @@ export function TotalBalance() {
     return <PageError>{String(balance.error)}</PageError>;
   }
 
-  const shieldedBalance = balance.data.shieldedBalance;
-  const pendingBalance =
-    balance.data.pendingChange + balance.data.pendingSpendable;
-  const transparentBalance = balance.data.unshieldedBalance;
-  const totalBalance = shieldedBalance + transparentBalance + pendingBalance;
+  const shieldedBalance = balance.data.shielded.balance;
+  const transparentBalance = balance.data.transparent.balance;
+  const totalBalance = shieldedBalance + transparentBalance;
   // +2 for the half-size " ZEC" suffix.
   const totalChars = zatoshiToZec(totalBalance).length + 2;
 
@@ -36,13 +33,9 @@ export function TotalBalance() {
       <section aria-labelledby="balance-total" className="flex flex-col gap-8">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-1.5">
-              <h2 id="balance-total" className={sectionLabelClassName}>
-                Total balance
-              </h2>
-              {/* Starts the tooltip under the label, so it fits a 320px screen. */}
-              <HeldFunds className="-left-25 translate-x-0" />
-            </div>
+            <h2 id="balance-total" className={sectionLabelClassName}>
+              Total balance
+            </h2>
             <div
               className="[--max:3rem] xl:[--max:4.5rem] leading-none"
               style={{ fontSize: fitFontSize(totalChars, "var(--max)") }}

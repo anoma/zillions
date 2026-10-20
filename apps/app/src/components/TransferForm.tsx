@@ -68,10 +68,14 @@ function ArrowRightIcon(props: ComponentProps<"svg">) {
 
 export function AvailableWithMax({
   available,
+  waiting,
+  pool,
   isMax,
   onToggleMax,
 }: {
   available: bigint;
+  waiting: bigint;
+  pool: "shielded" | "transparent";
   isMax: boolean;
   onToggleMax: () => void;
 }) {
@@ -81,7 +85,11 @@ export function AvailableWithMax({
         Available: <ZecValue zat={available} />
       </span>
       {/* Opens leftwards: this row sits at the card's right edge. */}
-      <HeldFunds className="left-auto right-0 translate-x-0" />
+      <HeldFunds
+        zat={waiting}
+        pool={pool}
+        className="left-auto right-0 translate-x-0"
+      />
       <button
         type="button"
         className={twMerge(

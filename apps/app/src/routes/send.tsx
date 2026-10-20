@@ -84,11 +84,7 @@ function SendRoute() {
   const amount = isMax ? (max > extra ? max - extra : 0n) : typed;
   const send = useSend();
 
-  const available = !balance.data
-    ? 0n
-    : transparentFrom
-      ? balance.data.unshieldedBalance
-      : balance.data.shieldedBalance;
+  const available = balance.data?.[from].available ?? 0n;
   const overBalance = Boolean(balance.data) && isOverBalance(amount, available);
 
   const onSubmit = () => {
@@ -175,6 +171,8 @@ function SendRoute() {
           <div id="send-available">
             <AvailableWithMax
               available={available}
+              waiting={balance.data?.[from].waiting ?? 0n}
+              pool={from}
               isMax={isMax}
               onToggleMax={() => {
                 amountField.toggleMax();

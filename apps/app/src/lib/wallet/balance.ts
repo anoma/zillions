@@ -1,5 +1,5 @@
 import { held } from "./pending";
-import type { WalletData } from "./send";
+import type { Source, Spendable, WalletData } from "./send";
 import type { OwnUtxo } from "./transparent";
 import type { Note, PendingTx, WalletState } from "./types";
 
@@ -21,20 +21,37 @@ export function spendable(
   };
 }
 
+/**
+ * Per source: `balance`, everything it holds with what pending transactions
+ * return; `available`, what a send can spend now; and `waiting`, what will be
+ * once it's confirmed. Dust is in `balance` alone. Without `now` (no tip yet),
+ * everything not pending counts as available.
+ */
 export function balances(
   notes: Note[],
   utxos: OwnUtxo[],
   pending: PendingTx[],
+  now?: Spendable,
 ) {
   const free = spendable(notes, utxos, pending);
+  const own = { shielded: total(free.notes), transparent: total(free.utxos) };
+  const returning = { shielded: 0n, transparent: 0n };
+  for (const p of pending) {
+    const transparent = BigInt(p.transparentChange ?? 0);
+    returning.transparent += transparent;
+    returning.shielded += BigInt(p.change) - transparent;
+  }
+  const of = (source: Source) => ({
+    balance: own[source] + returning[source],
+    available: now?.[source].now ?? own[source],
+    waiting:
+      returning[source] + (now ? now[source].later - now[source].now : 0n),
+  });
   return {
-    shieldedBalance: total(free.notes),
-    /** The part of `shieldedBalance` still in Orchard, closed since NU6.3. */
+    shielded: of("shielded"),
+    transparent: of("transparent"),
+    /** Orchard notes not held by a pending transaction: Orchard is closed since NU6.3. */
     orchardBalance: total(free.notes.filter((n) => n.pool === "orchard")),
-    pendingChange: pending.reduce((sum, p) => sum + BigInt(p.change), 0n),
-    // TODO
-    pendingSpendable: 0n,
-    unshieldedBalance: total(free.utxos),
   };
 }
 

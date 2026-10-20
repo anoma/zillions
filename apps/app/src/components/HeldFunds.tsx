@@ -1,22 +1,25 @@
 import { GoInfo } from "react-icons/go";
 import { twMerge } from "tailwind-merge";
-import { useGetBalance } from "../hooks/useGetBalance";
 import { zatoshiToZec } from "../lib/utils";
 import { Tooltip } from "./Tooltip";
 
-/** An info icon whose tooltip names what pending transactions hold; nothing while they hold none. */
-export function HeldFunds({ className }: { className?: string }) {
-  const balance = useGetBalance();
-  const held = balance.data
-    ? balance.data.pendingChange + balance.data.pendingSpendable
-    : 0n;
-  if (held <= 0n) return null;
+/** An info icon on the `zat` of `pool` waiting for confirmations; nothing when there is none. */
+export function HeldFunds({
+  zat,
+  pool,
+  className,
+}: {
+  zat: bigint;
+  pool: "shielded" | "transparent";
+  className?: string;
+}) {
+  if (zat <= 0n) return null;
 
   return (
     <Tooltip
       position="bottom"
       className={twMerge("z-10 w-56 p-3 font-normal text-left", className)}
-      content={`${zatoshiToZec(held)} ZEC from pending transactions isn't spendable yet. It will be once they confirm.`}
+      content={`${zatoshiToZec(zat)} ZEC of your ${pool} balance is waiting for confirmations. You can spend it once it's confirmed.`}
     >
       <GoInfo
         aria-hidden="true"

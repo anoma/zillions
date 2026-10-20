@@ -89,11 +89,14 @@ holds only what the device supports (3.6).
 - **Total balance** in ZEC, with the **shielded** and **transparent** parts
   shown separately.
 - **Pending** amounts (sent or received but not yet confirmed) are included in
-  the total, and their transactions show as pending in the list (2.6). —
-  _Built_ for sends: what a send spends leaves the balance at once and can't
-  be spent again, and its change (or an unshield's amount) counts until it's
-  mined or expires. Amounts received but not yet mined aren't shown yet: the
-  wallet only reads mined blocks.
+  the total and in the shielded or transparent part they go to, and their
+  transactions show as pending in the list (2.6). — _Built_ for sends: what a
+  send spends leaves the balance at once and can't be spent again, and its
+  change (or an unshield's amount) counts in its pool until it's mined or
+  expires. Amounts received but not yet mined aren't shown yet: the wallet
+  only reads mined blocks.
+- Balances are everything the account holds. Only a send's **available**
+  amount (2.3–2.5) leaves out what can't be spent yet. — _Built_
 - Shortcut buttons: **Send**, **Receive**, **Shield** (shown when there is a
   transparent balance), **Unshield** (shown when there is a shielded balance).
 - Recent transactions (see 2.6).
@@ -116,7 +119,13 @@ holds only what the device supports (3.6).
 
 - **From**: choose the shielded or the transparent balance. Within that
   balance the wallet picks the funds itself (see 1); there is no pool choice.
-- Shows the **available** amount for the chosen source.
+- Shows the **available** amount for the chosen source: what a send can spend
+  now. Pending change and shielded funds still confirming are left out: 3
+  confirmations for the account's own transactions, 10 for payments received
+  (`zcash_client_backend`'s defaults; transparent coins count once mined). So
+  is dust that costs more to spend than it's worth. When something is
+  waiting, a small info icon by it says how much, and that it's spendable once
+  confirmed. — _Built_
 - **Amount** entry in ZEC.
 - **Tap-to-fill** (Max): the maximum sendable amount, the available balance
   less the fee, kept up to date as the recipient changes.

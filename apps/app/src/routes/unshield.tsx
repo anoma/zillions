@@ -45,7 +45,7 @@ function UnshieldRoute() {
   const { maxAmount, ceiling } = planned;
   const amount = isMax ? (maxAmount.data ?? 0n) : typed;
   const send = useSend();
-  const available = balance.data?.shieldedBalance ?? 0n;
+  const available = balance.data?.shielded.available ?? 0n;
   const overBalance = Boolean(balance.data) && isOverBalance(amount, available);
 
   const clear = () => {
@@ -129,6 +129,8 @@ function UnshieldRoute() {
           <div id="unshield-available">
             <AvailableWithMax
               available={available}
+              waiting={balance.data?.shielded.waiting ?? 0n}
+              pool="shielded"
               isMax={isMax}
               onToggleMax={() => {
                 amountField.toggleMax();

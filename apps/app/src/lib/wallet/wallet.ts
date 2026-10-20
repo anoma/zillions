@@ -25,6 +25,8 @@ import {
   sendPczt,
   type SendRequest,
   shieldPczt,
+  type Source,
+  spendableNow,
 } from "./send";
 import { CORES, workerChannel } from "./shielded/crawl";
 import {
@@ -493,8 +495,16 @@ export class Wallet {
   // empty wallet first.
   async getBalance() {
     await this.#seed();
-    const { notes, pending } = this.#state;
-    return balances(notes, this.#transparent?.utxos ?? [], pending);
+    const { notes, pending, blocks } = this.#state;
+    const utxos = this.#transparent?.utxos ?? [];
+    const tip = this.#tip;
+    const now =
+      tip === undefined
+        ? undefined
+        : await spendableNow(
+            walletData(tip, spendable(notes, utxos, pending), blocks),
+          );
+    return balances(notes, utxos, pending, now);
   }
 
   /** Newest first, pending transactions on top until sync finds them mined. */
@@ -587,13 +597,13 @@ export class Wallet {
   /**
    * Proves and broadcasts a signed PCZT, then holds the notes and coins it
    * spends out of the balance and of new plans until it's mined or expires.
-   * `change` is what it returns to us, shown as pending meanwhile, and
+   * `change` is what it returns to us, by pool, shown as pending meanwhile, and
    * `receipt` what history lists for it. `onStage` follows proving and
    * broadcasting.
    */
   submit = async (
     signed: Uint8Array,
-    change: bigint,
+    change: Record<Source, bigint>,
     receipt: PendingActivity,
     onStage?: (stage: ProveStage) => void,
   ) => {
@@ -613,7 +623,8 @@ export class Wallet {
       expiryHeight,
       nullifiers: tx.nullifiers,
       outpoints: tx.inputs.map((i) => `${i.txid}:${i.index}`),
-      change: Number(change),
+      change: Number(change.shielded + change.transparent),
+      transparentChange: Number(change.transparent),
       receipt,
     });
     this.#save();
