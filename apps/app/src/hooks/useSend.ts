@@ -22,13 +22,10 @@ import { useSubmitStage } from "./useSubmitStage";
 import { useWallet } from "./useWallet";
 
 /**
- * The plan for `send` as the form changes: its fee is the one that will be
- * paid. With `max`, the amount is left to the plan: the most the source can
- * pay to this recipient after fees. `extra` is funded on top of what the
- * user sends, and is in `amount` already. `ceiling` is set when the typed
- * amount and its fee are more than the source holds, or under `max` when
- * nothing is left after fees and `extra`: the most the user can send instead,
- * and that plan's fee once known.
+ * The plan for `send` as the form changes; its fee is the one that will be
+ * paid, and with `max` the plan picks the amount. `extra` is funded on top of
+ * what the user sends (already in `amount`). `ceiling`, when fees leave the
+ * user short, is the most they can send instead and that plan's fee once known.
  */
 export function useSendPlan(
   { from, to, amount, memo }: SendRequest,

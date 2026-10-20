@@ -18,9 +18,8 @@ export function shownAmount(text: string, isMax: boolean, amount?: bigint) {
 }
 
 /**
- * Who a send form plans against: the recipient once it's a valid address.
- * Until then a link or Max plans against `standIn`, our own address, for the
- * fee; a typed amount waits, so a bad address can't pass for a balance problem.
+ * The address to plan against: `to` once valid; until then `standIn` for a
+ * link or Max, and "" (no plan) for a typed amount.
  */
 export function planRecipient({
   to,
@@ -40,19 +39,15 @@ export function planRecipient({
   return isMax ? standIn : "";
 }
 
-/**
- * Whether `amount` is more than the source holds. Fees, a link's claim fee
- * included, aren't counted: going over by a fee shows as a ceiling instead.
- */
+/** Whether `amount` alone exceeds `available`: fees, claim fee too, don't count. */
 export function isOverBalance(amount: bigint, available: bigint) {
   return amount > available;
 }
 
 /**
  * The most the user can send instead, or undefined when nothing caps them.
- * `most` is the most the source can fund after fees; `extra` is funded on top
- * of what the user sends (a link's claim fee) and is in `wanted` already.
- * `short` means `wanted` failed to plan.
+ * `most` is what the source funds after fees, `wanted` already includes
+ * `extra` (a link's claim fee), and `short` means `wanted` failed to plan.
  */
 export function ceilingOf({
   most,

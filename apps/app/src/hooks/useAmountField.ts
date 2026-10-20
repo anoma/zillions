@@ -3,10 +3,9 @@ import { missingAmount, shownAmount } from "../lib/amount";
 import { capDecimals, zecToZatoshi } from "../lib/utils";
 
 /**
- * What the user typed in an amount field, or Max. `typed` is the text as
- * zatoshi (0 while it isn't a number); `shown(amount)` is the text to draw,
- * which under Max is the resolved amount once known, 0 included. `missing`
- * says why the amount is 0.
+ * What the user typed in an amount field, or Max: `typed` in zatoshi (0 while
+ * not a number), `shown(amount)` the text to draw (under Max the amount once
+ * known, 0 included), and `missing` why the amount is 0.
  */
 export function useAmountField() {
   const [text, setText] = useState("");

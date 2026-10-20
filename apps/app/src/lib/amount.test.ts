@@ -37,7 +37,7 @@ test("Max draws its result once known, 0 included, and nothing while loading", (
 test("a fake address never reaches the planner, so it can't pass for a fee problem", () => {
   const plan = (to: string, valid: boolean, isMax: boolean) =>
     planRecipient({ to, valid, isMax, isPaymentLink: false, standIn: "u1me" });
-  // Max with "aaaa" plans against our own address; the To field says why.
+  // Max with "aaaa" plans against our own address.
   expect(plan("aaaa", false, true)).toBe("u1me");
   expect(plan("", false, true)).toBe("u1me");
   // A typed amount waits for a valid recipient.
@@ -69,8 +69,7 @@ test("Max on a balance below the fee: nothing to send, and it says so", () => {
 });
 
 test("Max on a link: the claim fee can leave nothing even when the transaction fee fits", () => {
-  // 0.0002 ZEC transparent, 0.00015 fee: the source can fund 5,000 zats,
-  // less than the 10,000-zat claim fee.
+  // 0.0002 ZEC with a 0.00015 fee funds 5,000 zats, under the claim fee.
   const ceiling = ceilingOf({
     most: 5_000n,
     wanted: 0n,
@@ -95,8 +94,7 @@ test("Max on a link with room for the claim fee sets no ceiling", () => {
 });
 
 test("a typed link amount over the balance suggests what the link itself can hold", () => {
-  // 0.0004 ZEC shielded, typed 0.0003: funding 0.0004 plus the fee fails,
-  // and the most the source can fund is 0.0003, claim fee included.
+  // Typed 0.0003 of 0.0004: the source funds at most 0.0003, claim fee included.
   const ceiling = ceilingOf({
     most: 30_000n,
     wanted: 30_000n + CLAIM_FEE,
@@ -111,8 +109,7 @@ test("a typed link amount over the balance suggests what the link itself can hol
 });
 
 test("a link amount equal to the balance gets the fee message, not insufficient balance", () => {
-  // 0.0004 ZEC shielded, typed 0.0004: the claim fee is a fee, like the
-  // transaction fee, so the amount itself fits and the ceiling explains.
+  // Typed 0.0004 of 0.0004: only the fees go over, so the ceiling explains.
   expect(isOverBalance(40_000n, 40_000n)).toBe(false);
   const ceiling = ceilingOf({
     most: 30_000n,
