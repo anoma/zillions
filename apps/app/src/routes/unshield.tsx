@@ -140,7 +140,9 @@ function UnshieldRoute() {
         <AmountField
           id="unshield-amount"
           ref={amountRef}
-          value={amountField.shown(amount)}
+          value={amountField.shown(
+            maxAmount.data === undefined ? undefined : amount,
+          )}
           describedBy="unshield-available"
           error={amountError}
           onChange={(value) => {

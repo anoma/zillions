@@ -60,18 +60,19 @@ function SendRoute() {
   const memo = memoText && !memoError && !isPaymentLink ? memoText : undefined;
 
   const { typed, isMax } = amountField;
+  // A link is funded with its amount plus the claim fee.
+  const extra = isPaymentLink ? CLAIM_FEE : 0n;
   const planned = useSendPlan(
     {
       from,
       to: isPaymentLink ? standInTo : to || (isMax ? standInTo : ""),
-      // A link is funded with its amount plus the claim fee.
-      amount: isPaymentLink && typed > 0n ? typed + CLAIM_FEE : typed,
+      amount: typed > 0n ? typed + extra : typed,
       memo,
     },
     isMax,
+    extra,
   );
   const { maxAmount, ceiling } = planned;
-  const extra = isPaymentLink ? CLAIM_FEE : 0n;
   const max = maxAmount.data ?? 0n;
   const amount = isMax ? (max > extra ? max - extra : 0n) : typed;
   const send = useSend();
@@ -179,7 +180,9 @@ function SendRoute() {
         <AmountField
           id="send-amount"
           ref={amountRef}
-          value={amountField.shown(amount)}
+          value={amountField.shown(
+            maxAmount.data === undefined ? undefined : amount,
+          )}
           describedBy="send-available"
           error={amountError}
           onChange={(value) => {
@@ -198,7 +201,6 @@ function SendRoute() {
             active={isPaymentLink}
             onChange={(value) => {
               setIsPaymentLink(value);
-              amountField.setIsMax(false);
               clear();
             }}
           />
