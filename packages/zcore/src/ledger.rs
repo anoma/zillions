@@ -406,7 +406,12 @@ pub(crate) fn apply(pczt: Pczt, signatures: Signatures) -> Result<Pczt, String> 
         let [der @ .., 0x01] = &sig[..] else {
             return Err("a transparent signature must be SIGHASH_ALL".into());
         };
-        let mut sig = secp256k1::ecdsa::Signature::from_der(der).map_err(|e| e.to_string())?;
+        // The device sets the DER tag's low bit (0x30 -> 0x31) to R's y parity.
+        let mut der = der.to_vec();
+        if let Some(tag) = der.first_mut() {
+            *tag &= !1;
+        }
+        let mut sig = secp256k1::ecdsa::Signature::from_der(&der).map_err(|e| e.to_string())?;
         // libsecp256k1 verifies only low-S signatures.
         sig.normalize_s();
         signer
@@ -593,6 +598,17 @@ mod tests {
             // The extractor checks every signature, binding ones included.
             crate::roles::prove(signed, None).unwrap();
         }
+    }
+
+    #[test]
+    fn reads_a_transparent_signature_with_the_parity_bit() {
+        let unsigned = shield();
+        let mut sigs = device_signatures(&unsigned);
+        let mut sig = hex::decode(&sigs.transparent[0]).unwrap();
+        assert_eq!(sig[0], 0x30);
+        sig[0] |= 0x01;
+        sigs.transparent[0] = hex::encode(sig);
+        assert!(apply(unsigned, sigs).is_ok());
     }
 
     #[test]
