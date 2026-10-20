@@ -54,12 +54,29 @@ export type LedgerKeys = {
   viewingKey: string;
 };
 
-/** Describe DMK errors (plain `{ _tag, message }` objects) and thrown Errors. */
+const MESSAGE_OF: Record<string, string> = {
+  NoAccessibleDeviceError:
+    "No Ledger found. Plug it in, unlock it and try again.",
+};
+
+/**
+ * Describe thrown Errors and DMK errors, which are plain `{ _tag }` objects
+ * carrying no message of their own, only the error that caused them.
+ */
 export const ledgerErrorMessage = (e: unknown): string => {
   if (e instanceof Error) return e.message;
   if (e && typeof e === "object") {
-    const { message, _tag } = e as { message?: string; _tag?: string };
-    if (message || _tag) return message || _tag!;
+    const { message, _tag, originalError } = e as {
+      message?: string;
+      _tag?: string;
+      originalError?: unknown;
+    };
+    if (message) return message;
+    if (_tag && MESSAGE_OF[_tag]) return MESSAGE_OF[_tag];
+    if (_tag && originalError instanceof Error) {
+      return `${_tag}: ${originalError.message}`;
+    }
+    if (_tag) return _tag;
   }
   return String(e);
 };
@@ -78,21 +95,55 @@ const STEP_OF: Partial<Record<UserInteractionRequired, LedgerStep>> = {
   [UserInteractionRequired.SignTransaction]: "sign",
 };
 
-const discoverDevice = (dmk: DeviceManagementKit) =>
-  new Promise<DiscoveredDevice>((resolve, reject) => {
-    const sub = dmk.startDiscovering({ transport: webHidIdentifier }).subscribe({
-      next: (device) => {
-        sub?.unsubscribe();
-        void dmk.stopDiscovering();
-        resolve(device);
-      },
-      error: reject,
-    });
-  });
+const LEDGER_VENDOR_ID = 0x2c97;
 
-const runAction = <Output, Error, Intermediate extends DeviceActionIntermediateValue>(
+/**
+ * A Ledger the extension already has access to, else one the user picks in
+ * the browser's device prompt. The approval window can't show that prompt,
+ * so signing relies on the access granted when the Ledger was imported.
+ */
+const discoverDevice = async (dmk: DeviceManagementKit) => {
+  const { hid } = navigator as Navigator & {
+    hid: { getDevices(): Promise<{ vendorId: number }[]> };
+  };
+  const granted = (await hid.getDevices()).some(
+    (d) => d.vendorId === LEDGER_VENDOR_ID,
+  );
+  return new Promise<DiscoveredDevice>((resolve, reject) => {
+    if (granted) {
+      // Starts empty, then lists the granted devices once the browser answers.
+      const sub = dmk
+        .listenToAvailableDevices({ transport: webHidIdentifier })
+        .subscribe({
+          next: ([device]) => {
+            if (!device) return;
+            queueMicrotask(() => sub.unsubscribe());
+            resolve(device);
+          },
+          error: reject,
+        });
+      return;
+    }
+    const sub = dmk
+      .startDiscovering({ transport: webHidIdentifier })
+      .subscribe({
+        next: (device) => {
+          sub?.unsubscribe();
+          void dmk.stopDiscovering();
+          resolve(device);
+        },
+        error: reject,
+      });
+  });
+};
+
+const runAction = <
+  Output,
+  Error,
+  Intermediate extends DeviceActionIntermediateValue,
+>(
   { observable }: ExecuteDeviceActionReturnType<Output, Error, Intermediate>,
-  onStep: (step: LedgerStep) => void
+  onStep: (step: LedgerStep) => void,
 ) =>
   new Promise<Output>((resolve, reject) => {
     observable.subscribe({
@@ -131,7 +182,7 @@ const runAction = <Output, Error, Intermediate extends DeviceActionIntermediateV
 export const withLedger = async <T>(
   onStep: (step: LedgerStep) => void,
   use: (signer: SignerZcash, device: DiscoveredDevice) => Promise<T>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<T> => {
   const dmk = new DeviceManagementKitBuilder()
     .addTransport(webHidTransportFactory)
@@ -144,15 +195,15 @@ export const withLedger = async <T>(
     const { version } = await runAction(signer.getAppConfig(), onStep);
     if (!isSupportedAppVersion(version)) {
       throw new Error(
-        `Update the Zcash app on your Ledger to ${MIN_ZCASH_APP_VERSION} or later (it has ${version}).`
+        `Update the Zcash app on your Ledger to ${MIN_ZCASH_APP_VERSION} or later (it has ${version}).`,
       );
     }
     return use(signer, device);
   };
   const aborted = new Promise<never>((_, reject) =>
     signal?.addEventListener("abort", () =>
-      reject(new Error("Ledger request was cancelled"))
-    )
+      reject(new Error("Ledger request was cancelled")),
+    ),
   );
   try {
     return await Promise.race([session(), aborted]);
@@ -164,7 +215,7 @@ export const withLedger = async <T>(
 /** The account's addresses and UFVK; the user confirms the UFVK on the device. */
 export const connectLedger = (
   onStep: (step: LedgerStep) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<LedgerKeys> =>
   withLedger(
     onStep,
@@ -176,11 +227,11 @@ export const connectLedger = (
 
       const { address: transparentAddress } = await runAction(
         signer.getAddress(bip44),
-        onStep
+        onStep,
       );
       const { address: shieldedAddress } = await runAction(
         signer.getShieldedAddress(bip44),
-        onStep
+        onStep,
       );
       onStep("confirm-key");
       const fvk = await runAction(signer.getFullViewingKey(zip32), onStep);
@@ -195,7 +246,7 @@ export const connectLedger = (
         viewingKey: fvk.fullViewingKey,
       };
     },
-    signal
+    signal,
   );
 
 const toHex = (bytes: Uint8Array): string =>
@@ -205,12 +256,12 @@ const toHex = (bytes: Uint8Array): string =>
 export const signLedgerPczt = async (
   signer: SignerZcash,
   transaction: PcztTransaction,
-  onStep: (step: LedgerStep) => void
+  onStep: (step: LedgerStep) => void,
 ): Promise<LedgerSignatures> => {
   onStep("sign");
   const signed = await runAction(
     signer.signPcztTransaction(transaction),
-    onStep
+    onStep,
   );
   return {
     orchard: signed.orchard.map((s) => toHex(s.spendAuthSig)),
