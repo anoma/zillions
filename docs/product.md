@@ -470,7 +470,7 @@ Challenges to check, one by one:
 - Needs Ledger's Zcash app 3.9.1 or later (Ironwood); with an older one the
   user is asked to update it. Chromium-based browsers only.
 - A send is approved in the Keychain as usual, then reviewed and approved on
-  the device; what the device shows is what gets signed. — _Planned_
+  the device; what the device shows is what gets signed.
 - While waiting on the device, the Keychain shows each step (connect, unlock,
   open the Zcash app, approve) with a way to cancel or try again.
 - The recovery phrase and spending keys can't be revealed: they never leave

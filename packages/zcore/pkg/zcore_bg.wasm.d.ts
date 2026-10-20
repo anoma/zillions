@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+export const apply_ledger_signatures: (a: number, b: number, c: any) => [number, number, number, number];
 export const derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
@@ -10,6 +11,7 @@ export const gpu_inputs: (a: number, b: number, c: number, d: number, e: number,
 export const max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
 export const needs_sapling_params: (a: number, b: number) => [number, number, number];
 export const parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const plan_migration: (a: number, b: number, c: any) => [number, number, number];
 export const plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];

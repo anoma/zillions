@@ -4,14 +4,19 @@
  * PCZT signing. Offline key math, used by the setup tab and the background.
  */
 import initZcore, {
+  apply_ledger_signatures,
   derive_account,
   fresh_address,
+  pczt_ledger_transaction,
   pczt_summary,
   seed_fingerprint,
   sign_pczt,
   spending_keys,
 } from "@zillions/zcore";
+import type { PcztTransaction } from "@ledgerhq/device-signer-kit-zcash";
 import type { PcztSummary } from "@zillions/types";
+
+import type { LedgerSignatures } from "../../ipc/contract";
 
 let initialized: Promise<unknown> | undefined;
 
@@ -119,7 +124,35 @@ export const signPczt = (
  * per-pool totals; each output is `mine` when `ufvk`, the signing account's
  * viewing key, proves it lands back in the account.
  */
-export const buildPcztSummary = (pczt: string, ufvk: string): PcztSummary => {
+export const buildPcztSummary = async (
+  pczt: string,
+  ufvk: string
+): Promise<PcztSummary> => {
+  await initZillionsSdk();
   const summary = pczt_summary(getNetwork(), base64ToBytes(pczt), ufvk);
   return { ...summary, raw: summary };
 };
+
+/**
+ * `pczt` (base64) as a Ledger's Zcash app reads it, for the account at
+ * ZIP-32 index `hdIndex`. Throws on Sapling, which a Ledger can't sign.
+ */
+export const ledgerTransaction = (
+  pczt: string,
+  hdIndex: number
+): PcztTransaction =>
+  pczt_ledger_transaction(
+    getNetwork(),
+    base64ToBytes(pczt),
+    hdIndex
+  ) as PcztTransaction;
+
+/**
+ * `pczt` (base64) with a Ledger's signatures in; throws if one doesn't sign
+ * it. The binding signatures are the app's to add when it extracts.
+ */
+export const applyLedgerSignatures = (
+  pczt: string,
+  signatures: LedgerSignatures
+): string =>
+  bytesToBase64(apply_ledger_signatures(base64ToBytes(pczt), signatures));

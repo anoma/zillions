@@ -64,6 +64,8 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 | `send_pczt`, `shield_pczt` | Builds the unsigned PCZT; needs each spent pool's note commitment tree |
 | `pczt_summary`             | What a PCZT moves, to show before signing                              |
 | `sign_pczt`                | Signs with the seed: run it wherever the seed lives                    |
+| `pczt_ledger_transaction`  | The PCZT as the Ledger signer kit's `signPcztTransaction` takes it     |
+| `apply_ledger_signatures`  | Puts a Ledger's spend authorizations into the PCZT, checking each      |
 | `needs_sapling_params`     | Whether proving needs the Sapling parameters (~51 MB)                  |
 | `prove_pczt`               | Proves the signed PCZT and returns the raw transaction to broadcast    |
 

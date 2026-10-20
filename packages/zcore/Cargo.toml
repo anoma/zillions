@@ -43,6 +43,8 @@ zcash_protocol = "0.10"
 zcash_primitives = { version = "0.30", default-features = false, features = ["transparent-inputs"] }
 # Shielding's PCZT roles: the app creates and proves, the keychain signs.
 pczt = { version = "0.9", default-features = false, features = ["orchard", "transparent", "zcp-builder", "io-finalizer", "signer", "prover", "spend-finalizer", "tx-extractor"] }
+# Signatures a Ledger returns arrive DER-encoded.
+secp256k1 = { version = "0.29", default-features = false }
 bip32 = { version = "=0.6.0-pre.1", default-features = false }
 rand_core = { version = "0.6", features = ["getrandom"] }
 # wasm32 has no OS randomness: the browser's crypto supplies it.

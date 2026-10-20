@@ -9,6 +9,13 @@
 export function address_kind(network: string, address: string): string | undefined;
 
 /**
+ * `pczt` with a Ledger's `signatures` applied: `{ orchard, ironwood,
+ * transparent }`, each a list of hex signatures in the order the kit returns
+ * them. Throws if one doesn't sign this PCZT.
+ */
+export function apply_ledger_signatures(pczt: Uint8Array, signatures: any): Uint8Array;
+
+/**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  */
 export function derive_account(network: string, seed: Uint8Array, hd_index: number): any;
@@ -59,6 +66,14 @@ export function needs_sapling_params(pczt: Uint8Array): boolean;
  * address }], nullifiers, value_balance, expiry_height }`.
  */
 export function parse_transaction(network: string, height: number, data: Uint8Array): any;
+
+/**
+ * The PCZT `pczt` as `@ledgerhq/device-signer-kit-zcash`'s
+ * `signPcztTransaction` takes it, for the account at ZIP 32 index `hd_index`:
+ * byte fields as `Uint8Array`s, amounts as `bigint`s. Throws on a Sapling
+ * spend or output, which a Ledger can't sign.
+ */
+export function pczt_ledger_transaction(network: string, pczt: Uint8Array, hd_index: number): any;
 
 /**
  * What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
@@ -178,6 +193,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly apply_ledger_signatures: (a: number, b: number, c: any) => [number, number, number, number];
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
@@ -186,6 +202,7 @@ export interface InitOutput {
     readonly max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
     readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly plan_migration: (a: number, b: number, c: any) => [number, number, number];
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];

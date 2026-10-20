@@ -19,6 +19,7 @@ import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
+import type { LedgerSignatures, LedgerSignTx } from "../../ipc/contract";
 import { LocalStorage, type KeyStoreType } from "../../storage";
 import { buildPcztSummary } from "../crypto/zillions";
 import { Keyring } from "../keyring";
@@ -226,11 +227,25 @@ export class ApprovalsService {
     return buildPcztSummary(pending.pczt, ufvk);
   }
 
+  /**
+   * The pending PCZT if a Ledger account signs it: the device is reachable
+   * only from the popup, which signs with it and submits the signatures.
+   */
+  async queryLedgerSignTx(msgId: string): Promise<LedgerSignTx | null> {
+    const pending = this.pendingTxs.get(msgId);
+    if (!pending) {
+      throw new Error(`Transaction data not found for ${msgId}`);
+    }
+    const hdIndex = await this.keyring.ledgerHdIndex(pending.signer);
+    return hdIndex === undefined ? null : { pczt: pending.pczt, hdIndex };
+  }
+
   /** The approval popup confirmed: sign and settle the dapp's promise. */
   async submitSignTx(
     popupTabId: number,
     msgId: string,
-    signer: string
+    signer: string,
+    ledgerSignatures?: LedgerSignatures
   ): Promise<void> {
     const pending = this.pendingTxs.get(msgId);
     const resolvers = this.getResolver(popupTabId);
@@ -248,7 +263,11 @@ export class ApprovalsService {
       const record = await this.activeSigner(signer || pending.signer);
       // A PCZT spans transparent + shielded; the keyring signs the whole PCZT
       // in one pass and returns the signed PCZT as base64.
-      const signed = await this.keyring.sign(pending.pczt, record.address);
+      const signed = await this.keyring.sign(
+        pending.pczt,
+        record.address,
+        ledgerSignatures
+      );
       resolvers.resolve(signed);
     } catch (e) {
       resolvers.reject(e);

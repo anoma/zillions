@@ -26,6 +26,26 @@ export function address_kind(network, address) {
 }
 
 /**
+ * `pczt` with a Ledger's `signatures` applied: `{ orchard, ironwood,
+ * transparent }`, each a list of hex signatures in the order the kit returns
+ * them. Throws if one doesn't sign this PCZT.
+ * @param {Uint8Array} pczt
+ * @param {any} signatures
+ * @returns {Uint8Array}
+ */
+export function apply_ledger_signatures(pczt, signatures) {
+    const ptr0 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.apply_ledger_signatures(ptr0, len0, signatures);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  * @param {string} network
  * @param {Uint8Array} seed
@@ -197,6 +217,28 @@ export function parse_transaction(network, height, data) {
     const ptr1 = passArray8ToWasm0(data, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
     const ret = wasm.parse_transaction(ptr0, len0, height, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * The PCZT `pczt` as `@ledgerhq/device-signer-kit-zcash`'s
+ * `signPcztTransaction` takes it, for the account at ZIP 32 index `hd_index`:
+ * byte fields as `Uint8Array`s, amounts as `bigint`s. Throws on a Sapling
+ * spend or output, which a Ledger can't sign.
+ * @param {string} network
+ * @param {Uint8Array} pczt
+ * @param {number} hd_index
+ * @returns {any}
+ */
+export function pczt_ledger_transaction(network, pczt, hd_index) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.pczt_ledger_transaction(ptr0, len0, ptr1, len1, hd_index);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }
@@ -699,6 +741,10 @@ function __wbg_get_imports() {
         },
         __wbg_entries_fb6397112b1de25f: function(arg0) {
             const ret = Object.entries(arg0);
+            return ret;
+        },
+        __wbg_from_296ca31f8d0f1c52: function(arg0) {
+            const ret = Array.from(arg0);
             return ret;
         },
         __wbg_getRandomValues_c44a50d8cfdaebeb: function() { return handleError(function (arg0, arg1) {

@@ -16,6 +16,8 @@ import {
   type IpcKind,
   type IpcRequest,
   type IpcResponse,
+  type LedgerSignatures,
+  type LedgerSignTx,
   type LockState,
   type MnemonicValidation,
   type ResetPasswordResult,
@@ -175,9 +177,22 @@ export class BackgroundClient {
     return this.send("approvals/queryPcztSummary", { msgId });
   }
 
+  /** The pending PCZT under `msgId` if a Ledger account signs it, else null. */
+  queryLedgerSignTx(msgId: string): Promise<LedgerSignTx | null> {
+    return this.send("approvals/queryLedgerSignTx", { msgId });
+  }
+
   /** Confirm the pending sign request owned by this popup's tab. */
-  submitSignTx(msgId: string, signer: string): Promise<void> {
-    return this.send("approvals/submitSignTx", { msgId, signer });
+  submitSignTx(
+    msgId: string,
+    signer: string,
+    ledgerSignatures?: LedgerSignatures
+  ): Promise<void> {
+    return this.send("approvals/submitSignTx", {
+      msgId,
+      signer,
+      ledgerSignatures,
+    });
   }
 
   /** Reject the pending sign request owned by this popup's tab. */
