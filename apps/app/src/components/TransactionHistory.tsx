@@ -10,8 +10,8 @@ import { TransactionValue } from "./TransactionValue";
 import { focusRingClassName } from "./ui/utils";
 
 // icon | type over time | amount; desktops add the From → To route before the
-// amount. The list owns the columns and each row subgrids into them, so the
-// routes line up from row to row.
+// amount. The list owns the columns and each row subgrids into them, so every
+// route starts at the same place.
 const gridClassName =
   "grid gap-x-4 grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_minmax(8rem,1fr)_minmax(0,2fr)_auto]";
 const rowClassName = "col-span-full grid grid-cols-subgrid items-center";
@@ -114,7 +114,7 @@ function Row({ tx }: { tx: Activity }) {
       </div>
       <div
         className={twMerge(
-          "grid grid-cols-[9rem_auto_minmax(0,1fr)] items-center gap-3 text-gray-600",
+          "min-w-0 flex items-center gap-3 text-gray-600",
           routeClassName,
         )}
       >

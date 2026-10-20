@@ -5,7 +5,11 @@ import { inputClassName, pillButtonClassName } from "../ui/utils";
 
 type Kind = ReturnType<typeof useAddressKind>;
 
-const canPaste = Boolean(navigator.clipboard?.readText);
+// Touch screens only: on desktops, reading the clipboard asks for a
+// permission, and pasting into the field is already one shortcut away.
+const canPaste =
+  Boolean(navigator.clipboard?.readText) &&
+  matchMedia("(pointer: coarse)").matches;
 
 /** The address field, a Paste button while it's empty, and what the address is under it. */
 export function RecipientField({

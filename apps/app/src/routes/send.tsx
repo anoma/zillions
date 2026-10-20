@@ -27,7 +27,7 @@ import {
   useSendPlan,
 } from "../hooks/useSend";
 import { memoProblem } from "../lib/memo";
-import { CLAIM_FEE, descriptionProblem } from "../lib/paymentLink";
+import { CLAIM_FEE, DESCRIPTION_BYTES } from "../lib/paymentLink";
 import { zatoshiToZec } from "../lib/utils";
 
 export const Route = createFileRoute("/send")({
@@ -41,8 +41,8 @@ function SendRoute() {
   const [isPaymentLink, setIsPaymentLink] = useState(false);
   const [to, setTo] = useState("");
   const [memoOpen, setMemoOpen] = useState(false);
+  // With a payment link, the message is the link's description.
   const [memoText, setMemoText] = useState("");
-  const [description, setDescription] = useState("");
   const [problem, setProblem] = useState<Problem<"amount" | "to">>();
   const amountRef = useRef<HTMLInputElement>(null);
   const toRef = useRef<HTMLInputElement>(null);
@@ -54,14 +54,10 @@ function SendRoute() {
   // address is entered our own stands in, so Max and the fee still work.
   const standInTo = useFreshAddress() ?? "";
 
-  const memoError = isPaymentLink
-    ? undefined
-    : memoProblem(memoText, transparentTo);
+  const memoBytes = isPaymentLink ? DESCRIPTION_BYTES : undefined;
+  const memoError = memoProblem(memoText, transparentTo, memoBytes);
   // A memo doesn't change the fee, so one the send can't carry is left out of the plan.
   const memo = memoText && !memoError && !isPaymentLink ? memoText : undefined;
-  const descriptionError = isPaymentLink
-    ? descriptionProblem(description)
-    : undefined;
 
   const { typed, isMax } = amountField;
   const planned = useSendPlan(
@@ -94,7 +90,7 @@ function SendRoute() {
         : overBalance
           ? { field: "amount", message: "Insufficient balance" }
           : isPaymentLink
-            ? descriptionError
+            ? memoError
               ? undefined
               : { field: "form", message: "Payment links aren't available yet" }
             : !to
@@ -102,8 +98,8 @@ function SendRoute() {
               : toKind === null
                 ? { field: "to", message: "Not a valid Zcash address" }
                 : undefined;
-    // Memo, description and fee ceiling problems already show by their fields.
-    if (found || memoError || descriptionError || ceiling) {
+    // Memo and fee ceiling problems already show by their fields.
+    if (found || memoError || ceiling) {
       setProblem(found);
       if (found?.field === "amount") amountRef.current?.focus();
       if (found?.field === "to") toRef.current?.focus();
@@ -152,8 +148,9 @@ function SendRoute() {
 
   return (
     <FormPage title="Send" onSubmit={onSubmit}>
-      <FormCard heading="Pay from">
+      <FormCard heading="Pay from" htmlFor="send-from">
         <ShieldedTransparentToggle
+          id="send-from"
           label="Pay from"
           isTransparent={transparentFrom}
           setIsTransparent={(value) => {
@@ -165,6 +162,7 @@ function SendRoute() {
 
       <FormCard
         heading="Amount"
+        htmlFor="send-amount"
         aside={
           <div id="send-available">
             <AvailableWithMax
@@ -193,9 +191,8 @@ function SendRoute() {
 
       <FormCard
         headingId="send-to"
-        heading={
-          isPaymentLink ? "To" : <label htmlFor="send-to-address">To</label>
-        }
+        heading="To"
+        htmlFor={isPaymentLink ? undefined : "send-to-address"}
         aside={
           <PaymentLinkToggle
             active={isPaymentLink}
@@ -209,37 +206,33 @@ function SendRoute() {
         className="gap-3"
       >
         {isPaymentLink ? (
-          <PaymentLinkFields
-            description={description}
+          <PaymentLinkFields />
+        ) : (
+          <RecipientField
+            ref={toRef}
+            value={to}
+            kind={toKind}
+            error={toError}
             onChange={(value) => {
-              setDescription(value);
+              setTo(value);
               clear();
             }}
           />
-        ) : (
-          <>
-            <RecipientField
-              ref={toRef}
-              value={to}
-              kind={toKind}
-              error={toError}
-              onChange={(value) => {
-                setTo(value);
-                clear();
-              }}
-            />
-            <MemoField
-              open={memoOpen}
-              onOpenChange={setMemoOpen}
-              memo={memoText}
-              onChange={(value) => {
-                setMemoText(value);
-                clear();
-              }}
-              toTransparent={transparentTo}
-            />
-          </>
         )}
+        <MemoField
+          open={memoOpen}
+          onOpenChange={setMemoOpen}
+          memo={memoText}
+          onChange={(value) => {
+            setMemoText(value);
+            clear();
+          }}
+          toTransparent={transparentTo}
+          maxBytes={memoBytes}
+          placeholder={
+            isPaymentLink ? "Whoever claims the link sees this" : undefined
+          }
+        />
       </FormCard>
 
       <Breakdown total={total}>

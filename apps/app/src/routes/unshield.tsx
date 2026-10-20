@@ -123,6 +123,7 @@ function UnshieldRoute() {
 
       <FormCard
         heading="Amount"
+        htmlFor="unshield-amount"
         aside={
           <div id="unshield-available">
             <AvailableWithMax

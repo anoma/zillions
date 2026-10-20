@@ -4,7 +4,6 @@ import QRCode from "react-qr-code";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
 import { FormPage } from "../components/FormPage";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
-import { FormCard } from "../components/TransferForm";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
@@ -22,15 +21,13 @@ function ReceiveRoute() {
 
   return (
     <FormPage title="Receive">
-      <FormCard heading="Address type">
-        <ShieldedTransparentToggle
-          label="Address type"
-          isTransparent={isTransparent}
-          setIsTransparent={setIsTransparent}
-        />
-      </FormCard>
+      <ShieldedTransparentToggle
+        label="Address type"
+        isTransparent={isTransparent}
+        setIsTransparent={setIsTransparent}
+      />
 
-      <FormCard heading="Your address" className="gap-5">
+      <section aria-label="Your address" className="flex flex-col gap-5">
         <div className="mx-auto p-4 rounded-xl border border-line bg-card">
           {address ? (
             <QRCode
@@ -62,9 +59,9 @@ function ReceiveRoute() {
         <p className="-mt-2 text-xs text-gray-600">
           {isTransparent
             ? "Your one transparent address, for exchanges and wallets that can't pay shielded addresses. Payments to it are visible on-chain."
-            : "A new address each time you open this page, so payers can't link their payments to you. Earlier ones keep working."}
+            : "A new address is generated each time you open this page, so payers can't link their payments to you. Earlier ones keep working."}
         </p>
-      </FormCard>
+      </section>
     </FormPage>
   );
 }

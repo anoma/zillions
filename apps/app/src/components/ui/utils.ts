@@ -35,7 +35,7 @@ export const pillButtonClassName = twMerge(
   focusRingClassName,
 );
 
-/** Inline text that acts as a button, like "Add a message" or "Remove". */
+/** Inline text that acts as a button, like "Add a memo" or "Remove". */
 export const textButtonClassName = twMerge(
   "rounded-sm cursor-pointer underline decoration-transparent underline-offset-4",
   "transition-colors duration-300 hover:decoration-current",

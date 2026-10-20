@@ -5,9 +5,13 @@ export function utf8Length(text: string) {
 }
 
 /** Why `memo` can't go in a send to this recipient, if it can't. */
-export function memoProblem(memo: string, toTransparent: boolean) {
+export function memoProblem(
+  memo: string,
+  toTransparent: boolean,
+  maxBytes = MEMO_BYTES,
+) {
   if (!memo) return undefined;
   if (toTransparent) return "Transparent addresses can't receive messages";
-  if (utf8Length(memo) > MEMO_BYTES) return "Message is too long";
+  if (utf8Length(memo) > maxBytes) return "Message is too long";
   return undefined;
 }

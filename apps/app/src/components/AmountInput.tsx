@@ -5,7 +5,7 @@ import { placeholderClassName } from "./ui/utils";
 
 /** "ZEC" after a hero amount, sized relative to it. */
 export function AmountUnit() {
-  return <span className="ml-[0.4em] text-[0.4em] text-gray-600">ZEC</span>;
+  return <span className="ml-[0.4em] text-[0.4em]">ZEC</span>;
 }
 
 /**
@@ -26,9 +26,13 @@ export function AmountInput({
       )}
     >
       {/* Chrome won't set an input's line-height below normal; the sizer and
-          unit match it so all three share a baseline. */}
+          unit match it so all three share a baseline. While empty, the unit
+          follows the placeholder's colour. */}
       <div
-        className="flex items-baseline leading-[normal] font-medium"
+        className={twMerge(
+          "flex items-baseline leading-[normal] font-medium transition-colors duration-300 ease-out-circ",
+          "has-placeholder-shown:text-black/35 has-[input:placeholder-shown:hover:not(:focus)]:text-black/60",
+        )}
         // +2 leaves room for the unit.
         style={{ fontSize: fitFontSize(value.length + 2, maxFontSize) }}
       >

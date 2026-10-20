@@ -221,16 +221,21 @@ export type Problem<Field extends string = "amount"> = {
   message: string;
 };
 
-/** A section of the form's card, with a heading row and room for a control beside it. */
+/**
+ * A section of the form's card, with a heading row and room for a control
+ * beside it. With `htmlFor` the heading is the label of that control.
+ */
 export function FormCard({
   heading,
   headingId,
+  htmlFor,
   aside,
   className,
   children,
 }: {
   heading: ReactNode;
   headingId?: string;
+  htmlFor?: string;
   aside?: ReactNode;
   className?: string;
   children: ReactNode;
@@ -242,7 +247,7 @@ export function FormCard({
     >
       <div className="flex items-center justify-between gap-4">
         <h2 id={headingId} className="text-xs font-medium">
-          {heading}
+          {htmlFor ? <label htmlFor={htmlFor}>{heading}</label> : heading}
         </h2>
         {aside}
       </div>
@@ -251,7 +256,7 @@ export function FormCard({
   );
 }
 
-/** The hero amount field with its error line. `id` prefixes the ids it exposes. */
+/** The hero amount field with its error line. `id` is the input's, and prefixes the others. */
 export function AmountField({
   id,
   value,
@@ -271,6 +276,7 @@ export function AmountField({
   return (
     <>
       <AmountInput
+        id={id}
         ref={ref}
         value={value}
         className={twMerge("h-28", error && "text-red-700")}

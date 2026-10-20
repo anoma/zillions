@@ -3,7 +3,7 @@ import { MEMO_BYTES, memoProblem, utf8Length } from "../../lib/memo";
 import { inputClassName, textButtonClassName } from "../ui/utils";
 
 /**
- * "Add a message" and, once opened, the memo box. The box stays while it holds
+ * "Add a memo" and, once opened, the memo box. The box stays while it holds
  * text even for a transparent recipient, so a message is never dropped
  * silently; empty, it disappears for one.
  */
@@ -13,12 +13,16 @@ export function MemoField({
   memo,
   onChange,
   toTransparent,
+  maxBytes = MEMO_BYTES,
+  placeholder = "Only the recipient can read this",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   memo: string;
   onChange: (memo: string) => void;
   toTransparent: boolean;
+  maxBytes?: number;
+  placeholder?: string;
 }) {
   if (!open) {
     return (
@@ -31,14 +35,14 @@ export function MemoField({
           )}
           onClick={() => onOpenChange(true)}
         >
-          + Add a message
+          + Add a memo
         </button>
       )
     );
   }
   if (toTransparent && !memo) return null;
 
-  const problem = memoProblem(memo, toTransparent);
+  const problem = memoProblem(memo, toTransparent, maxBytes);
   const bytes = utf8Length(memo);
   return (
     <div>
@@ -61,7 +65,7 @@ export function MemoField({
         name="memo"
         rows={3}
         autoFocus
-        placeholder="Only the recipient can read this"
+        placeholder={placeholder}
         aria-invalid={Boolean(problem)}
         aria-describedby="send-memo-hint"
         className={twMerge(
@@ -80,10 +84,10 @@ export function MemoField({
         <span
           className={twMerge(
             "tabular-nums",
-            bytes > MEMO_BYTES && "text-red-700",
+            bytes > maxBytes && "text-red-700",
           )}
         >
-          {bytes}/{MEMO_BYTES}
+          {bytes}/{maxBytes}
         </span>
       </div>
     </div>

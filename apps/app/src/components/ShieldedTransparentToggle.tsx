@@ -8,10 +8,13 @@ const OPTIONS = [
 
 /** Shielded/Transparent segmented control: a radio group with a sliding pill. */
 export function ShieldedTransparentToggle({
+  id,
   isTransparent,
   setIsTransparent,
   label,
 }: {
+  /** Given to the selected option, so a `<label>` can focus it. */
+  id?: string;
   isTransparent: boolean;
   setIsTransparent: (value: boolean) => void;
   label?: string;
@@ -49,6 +52,9 @@ export function ShieldedTransparentToggle({
             key={option.label}
             type="button"
             role="radio"
+            id={selected ? id : undefined}
+            // Keeps the option's own name; a <label> pointing here would replace it.
+            aria-label={option.label}
             aria-checked={selected}
             tabIndex={selected ? 0 : -1}
             onClick={() => setIsTransparent(option.isTransparent)}
