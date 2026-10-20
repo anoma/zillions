@@ -8,6 +8,8 @@
 import {
   DeviceActionStatus,
   DeviceManagementKitBuilder,
+  DeviceModelId,
+  LEDGER_VENDOR_ID,
   UserInteractionRequired,
   type DeviceActionIntermediateValue,
   type DeviceManagementKit,
@@ -54,6 +56,9 @@ export type LedgerKeys = {
   viewingKey: string;
 };
 
+/** Whether this browser can reach a Ledger at all: WebHID, Chromium only. */
+export const canUseLedger = (): boolean => "hid" in navigator;
+
 const MESSAGE_OF: Record<string, string> = {
   // Chrome reports an unplugged Ledger and one whose access was revoked alike.
   NoAccessibleDeviceError:
@@ -96,8 +101,6 @@ const STEP_OF: Partial<Record<UserInteractionRequired, LedgerStep>> = {
   [UserInteractionRequired.ConfirmOpenApp]: "open-app",
   [UserInteractionRequired.SignTransaction]: "sign",
 };
-
-const LEDGER_VENDOR_ID = 0x2c97;
 
 /**
  * A Ledger the extension already has access to, else one the user picks in
@@ -192,6 +195,11 @@ export const withLedger = async <T>(
   const session = async () => {
     onStep("connect");
     const device = await discoverDevice(dmk);
+    if (device.deviceModel.model === DeviceModelId.NANO_S) {
+      throw new Error(
+        "The Ledger Nano S can't run the Zcash app version Zillions needs. Use another Ledger model.",
+      );
+    }
     const sessionId = await dmk.connect({ device });
     const signer = new SignerZcashBuilder({ dmk, sessionId }).build();
     const { version } = await runAction(signer.getAppConfig(), onStep);

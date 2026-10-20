@@ -6,6 +6,7 @@ import { Logo } from "@zillions/components/assets/Logo";
 import { useRef, useState } from "react";
 
 import {
+  canUseLedger,
   connectLedger,
   ledgerErrorMessage,
   type LedgerStep,
@@ -81,16 +82,18 @@ export const Start = () => {
           >
             Import existing keys
           </ActionButton>
-          <ActionButton
-            size="lg"
-            outlineColor="black"
-            backgroundHoverColor="black"
-            textHoverColor="primary"
-            data-testid="setup-connect-ledger-button"
-            onClick={() => void onConnectLedger()}
-          >
-            Connect to hardware wallet
-          </ActionButton>
+          {canUseLedger() && (
+            <ActionButton
+              size="lg"
+              outlineColor="black"
+              backgroundHoverColor="black"
+              textHoverColor="primary"
+              data-testid="setup-connect-ledger-button"
+              onClick={() => void onConnectLedger()}
+            >
+              Connect to hardware wallet
+            </ActionButton>
+          )}
         </Stack>
       }
     </div>
