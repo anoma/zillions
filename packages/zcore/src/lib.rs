@@ -16,6 +16,7 @@
 mod build;
 mod gpu;
 mod keys;
+mod ledger;
 mod migration;
 mod notes;
 mod roles;

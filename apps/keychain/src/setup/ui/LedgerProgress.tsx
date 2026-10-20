@@ -21,6 +21,7 @@ const STEP_TEXT: Record<LedgerStep, { title: string; hint?: string }> = {
     title: "Approve the viewing key",
     hint: "It lets Zillions find your funds. It can't spend them.",
   },
+  sign: { title: "Review and approve the transaction" },
 };
 
 type Props = {

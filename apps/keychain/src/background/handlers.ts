@@ -280,9 +280,19 @@ export const handlers: HandlerMap = {
     return approvals.queryPcztSummary(msgId);
   },
 
-  "approvals/submitSignTx": async ({ msgId, signer }, ctx) => {
+  "approvals/queryLedgerSignTx": async ({ msgId }) => {
     const { approvals } = await getServices();
-    await approvals.submitSignTx(requireTabId(ctx), msgId, signer);
+    return approvals.queryLedgerSignTx(msgId);
+  },
+
+  "approvals/submitSignTx": async ({ msgId, signer, ledgerSignatures }, ctx) => {
+    const { approvals } = await getServices();
+    await approvals.submitSignTx(
+      requireTabId(ctx),
+      msgId,
+      signer,
+      ledgerSignatures
+    );
   },
 
   "approvals/rejectSignTx": async ({ msgId }, ctx) => {

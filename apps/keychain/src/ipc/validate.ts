@@ -13,6 +13,7 @@ import type {
   DerivedAccount,
   IpcKind,
   IpcResponse,
+  LedgerSignTx,
   LockState,
   MnemonicValidation,
   ResetPasswordResult,
@@ -90,6 +91,10 @@ const isOutputArray = (v: unknown): boolean =>
   Array.isArray(v) &&
   v.every((o) => isRecord(o) && typeof o.mine === "boolean");
 
+const isLedgerSignTxOrNull = (v: unknown): v is LedgerSignTx | null =>
+  v === null ||
+  (isRecord(v) && typeof v.pczt === "string" && typeof v.hdIndex === "number");
+
 const isPcztSummary = (v: unknown): v is PcztSummary =>
   isRecord(v) &&
   typeof v.fee === "string" &&
@@ -154,6 +159,11 @@ export const validateResponse = <K extends IpcKind>(
     case "approvals/queryPcztSummary":
       if (!isPcztSummary(value))
         throw new ResponseShapeError(kind, "expected PcztSummary");
+      return value as IpcResponse<K>;
+
+    case "approvals/queryLedgerSignTx":
+      if (!isLedgerSignTxOrNull(value))
+        throw new ResponseShapeError(kind, "expected LedgerSignTx | null");
       return value as IpcResponse<K>;
 
     case "dapp/accounts":

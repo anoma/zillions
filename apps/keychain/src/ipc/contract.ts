@@ -53,6 +53,20 @@ export type AccountSecret =
   | { t: "PrivateKey"; privateKey: string }
   | { t: "ShieldedKeys"; spendingKey: string };
 
+/**
+ * A Ledger's signatures over a PCZT, hex, in the order the signer kit returns
+ * them: one per Orchard and per Ironwood spend the PCZT leaves unsigned, one
+ * per transparent input (DER, then the sighash type byte).
+ */
+export type LedgerSignatures = {
+  orchard: string[];
+  ironwood: string[];
+  transparent: string[];
+};
+
+/** A pending PCZT for a Ledger account, and the account's ZIP-32 index. */
+export type LedgerSignTx = { pczt: string; hdIndex: number };
+
 /** A stored parent account (transparent or shielded), as returned to the UI. */
 export type AccountStore = {
   id: string;
@@ -341,9 +355,20 @@ export type IpcContract = {
     req: { msgId: string };
     res: PcztSummary;
   };
-  /** Confirm the pending sign request owned by the calling popup's tab. */
+  /**
+   * The pending PCZT under `msgId` when its signer is a Ledger account, which
+   * the popup has the device sign; null for any other account.
+   */
+  "approvals/queryLedgerSignTx": {
+    req: { msgId: string };
+    res: LedgerSignTx | null;
+  };
+  /**
+   * Confirm the pending sign request owned by the calling popup's tab. A
+   * Ledger account's request carries the device's signatures.
+   */
   "approvals/submitSignTx": {
-    req: { msgId: string; signer: string };
+    req: { msgId: string; signer: string; ledgerSignatures?: LedgerSignatures };
     res: void;
   };
   /** Reject the pending sign request owned by the calling popup's tab. */

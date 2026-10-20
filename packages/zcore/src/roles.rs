@@ -26,7 +26,7 @@ use crate::parse_network;
 
 const HARDENED: u32 = 0x8000_0000;
 
-fn to_pczt_error(e: impl std::fmt::Debug) -> String {
+pub(crate) fn to_pczt_error(e: impl std::fmt::Debug) -> String {
     format!("{e:?}")
 }
 

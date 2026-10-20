@@ -580,7 +580,7 @@ pub(crate) fn pczt<N>(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::send::tests::{orchard_family_note, wallet_ufvk, SEED, TIP};
     use crate::wallet::WalletData;

@@ -8,6 +8,7 @@ import type {
   AccountType,
   Bip44Path,
   DerivedAccount,
+  LedgerSignatures,
   MnemonicValidation,
   Zip32Path,
 } from "../../ipc/contract";
@@ -20,6 +21,7 @@ import {
   validateMnemonic,
 } from "../crypto/mnemonic";
 import {
+  applyLedgerSignatures,
   computeSeedFingerprint,
   deriveAccount,
   initZillionsSdk,
@@ -127,28 +129,68 @@ export class Keyring {
    * The signing account is the `signer` address when given, else the active
    * account. A derived shielded child carries no secret of its own — the
    * mnemonic lives on its parent — so the secret is revealed from the parent
-   * record while the hd index comes from the resolved account's path. Only
-   * mnemonic-backed accounts can sign.
+   * record while the hd index comes from the resolved account's path. A
+   * Ledger account's device signed in the approval tab; its
+   * `ledgerSignatures` go into the PCZT here.
    */
-  public async sign(pczt: string, signer?: string): Promise<string> {
+  public async sign(
+    pczt: string,
+    signer?: string,
+    ledgerSignatures?: LedgerSignatures
+  ): Promise<string> {
     await this.vaultService.assertIsUnlocked();
     await initZillionsSdk();
 
     const record = await this.signingAccount(signer);
+    if (await this.ledgerAccount(record)) {
+      if (!ledgerSignatures) {
+        throw new Error("A Ledger account signs on its device");
+      }
+      return applyLedgerSignatures(pczt, ledgerSignatures);
+    }
     const { seed, hdIndex } = await this.resolveSeed(record);
     return signPczt(pczt, seed, hdIndex);
   }
 
   /**
    * The viewing key (UFVK) of the account `sign` would sign with, derived
-   * from its seed: what the approval summary checks outputs against.
+   * from its seed, or for a Ledger account the one the device exported:
+   * what the approval summary checks outputs against.
    */
   public async viewingKey(signer?: string): Promise<string> {
     await this.vaultService.assertIsUnlocked();
 
     const record = await this.signingAccount(signer);
+    const ledger = await this.ledgerAccount(record);
+    if (ledger) return ledger.ufvk;
     const { seed, hdIndex } = await this.resolveSeed(record);
     return (await deriveAccount(seed, hdIndex)).ufvk;
+  }
+
+  /** The `signer` address's ZIP-32 index if a Ledger holds its keys. */
+  public async ledgerHdIndex(signer?: string): Promise<number | undefined> {
+    const record = await this.signingAccount(signer);
+    return (await this.ledgerAccount(record))?.hdIndex;
+  }
+
+  /**
+   * A Ledger account's stored UFVK and ZIP-32 index, both on its shielded
+   * child, whichever of the pair `record` is; undefined for other accounts.
+   */
+  private async ledgerAccount(
+    record: KeyStoreType
+  ): Promise<{ ufvk: string; hdIndex: number } | undefined> {
+    const parent = record.parentId
+      ? await this.accounts.findById(record.parentId)
+      : record;
+    if ((parent?.type as string) !== "ledger") return undefined;
+    const child = record.parentId
+      ? record
+      : (await this.accounts.findAll()).find((r) => r.parentId === record.id);
+    if (!child) {
+      throw new Error(`Shielded account of ${record.address} not found`);
+    }
+    return { ufvk: child.owner, hdIndex: child.path.account };
   }
 
   /** The `signer` address's account, else the active one. */
@@ -211,7 +253,7 @@ export class Keyring {
       throw new Error(`Parent account not found: ${record.parentId}`);
     }
     if ((secretHolder.type as string) === "ledger") {
-      throw new Error("Signing with a Ledger account is not supported yet");
+      throw new Error("A Ledger account's keys never leave the device");
     }
     if ((secretHolder.type as string) !== "mnemonic") {
       throw new Error(
