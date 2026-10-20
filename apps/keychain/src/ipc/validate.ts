@@ -132,6 +132,7 @@ export const validateResponse = <K extends IpcKind>(
     case "approvals/resolveDisconnection":
     case "approvals/revokeConnection":
     case "approvals/submitSignTx":
+    case "approvals/submitSignedTx":
     case "approvals/rejectSignTx":
     case "approvals/submitUpdateDefaultAccount":
       // void — accept undefined/null

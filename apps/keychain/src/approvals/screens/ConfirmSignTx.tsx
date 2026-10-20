@@ -158,9 +158,13 @@ export const ConfirmSignTx = ({ details }: Props) => {
     if (status === Status.Completed) void closeCurrentTab();
   }, [status]);
 
-  const handleScan= useCallback(({type, cbor}: {type: string, cbor: string}) => {
+  const handleScan= useCallback(async ({type, cbor}: {type: string, cbor: string}) => {
     const tx = ZcashPCZT.fromCBOR(Buffer.from(cbor, 'hex'));
     console.log("onScanSuccess", tx);
+    setStatus(Status.Pending);
+    // A PCZT covers transparent + shielded in a single signing pass.
+    await client?.submitSignedTx(msgId, tx.getData().toBase64());
+    setStatus(Status.Completed);
   }, [])
 
   const handleError= useCallback((error: string) => {

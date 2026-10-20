@@ -295,6 +295,11 @@ export const handlers: HandlerMap = {
     );
   },
 
+  "approvals/submitSignedTx": async ({ msgId, signed }, ctx) => {
+    const { approvals } = await getServices();
+    await approvals.submitSignedTx(requireTabId(ctx), msgId, signed);
+  },
+
   "approvals/rejectSignTx": async ({ msgId }, ctx) => {
     const { approvals } = await getServices();
     await approvals.rejectSignTx(requireTabId(ctx), msgId);
