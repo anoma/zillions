@@ -1,7 +1,6 @@
 import Transport from "@ledgerhq/hw-transport";
 import TransportUSB from "@ledgerhq/hw-transport-webusb";
 import {
-  GetFullViewingKeyDAOutput,
   GetFullViewingKeyDAReturnType,
   SignerZcashBuilder,
 } from "@ledgerhq/device-signer-kit-zcash";
@@ -11,7 +10,7 @@ import {
   DeviceManagementKit,
   DeviceManagementKitBuilder,
 } from "@ledgerhq/device-management-kit";
-import semver from "semver";
+// import semver from "semver";
 import { randomUUID } from "crypto";
 import { makeBip44Path, makeSaplingPath } from "./path";
 import { DefaultSignerZcash } from "@ledgerhq/device-signer-kit-zcash/internal/DefaultSignerZcash.js";
@@ -24,9 +23,8 @@ export type LedgerViewingKey = {
 };
 
 export const LEDGER_ZCASH_MIN_VERSION = "3.0.0";
-export const LEDGER_ZCASH_BLACKLISTED = "nanoS";
-const coinType = 133; // TODO: Set to correct coin type
-
+export const LEDGER_ZCASH_BLACKLISTED = ["nanoS"];
+const coinType = 133;
 /**
  * Initialize USB transport
  * @async
@@ -120,7 +118,7 @@ export class Ledger {
     path: string = DEFAULT_LEDGER_ZIP32_PATH,
   ): Promise<GetFullViewingKeyDAReturnType> {
     try {
-      await this.validateZcashSupport();
+      // await this.validateZcashSupport();
 
       return this.signer.getFullViewingKey(path);
     } catch (e) {
@@ -160,16 +158,17 @@ export class Ledger {
    * @async
    * @returns boolean
    */
-  public async isZcashSupported(): Promise<boolean> {
-    const {
-      info: { appVersion },
-      deviceId,
-    } = await this.status();
-    const isSupportedVersion = !semver.lt(appVersion, LEDGER_ZCASH_MIN_VERSION);
-    const isSupportedDevice = deviceId !== LEDGER_ZCASH_BLACKLISTED;
-
-    return isSupportedVersion && isSupportedDevice;
-  }
+  // TODO: Implement status
+  // public async isZcashSupported(): Promise<boolean> {
+  //   const {
+  //     info: { appVersion },
+  //     deviceId,
+  //   } = await this.status();
+  //   const isSupportedVersion = !semver.lt(appVersion, LEDGER_ZCASH_MIN_VERSION);
+  //   const isSupportedDevice = deviceId !== LEDGER_ZCASH_BLACKLISTED;
+  //
+  //   return isSupportedVersion && isSupportedDevice;
+  // }
 
   /**
    * Validate the version against the minimum required version and
@@ -178,22 +177,23 @@ export class Ledger {
    * @async
    * @returns void
    */
-  private async validateZcashSupport(): Promise<void> {
-    if (!(await this.isZcashSupported())) {
-      const {
-        info: { appVersion },
-        deviceId,
-        deviceName,
-      } = await this.status();
-
-      if (deviceId === LEDGER_ZCASH_BLACKLISTED) {
-        throw new Error(`This method is not supported on ${deviceName}!`);
-      }
-
-      throw new Error(
-        `This method requires Zip32 and is unsupported in ${appVersion}! ` +
-          `Please update to at least ${LEDGER_ZCASH_MIN_VERSION}!`,
-      );
-    }
-  }
+  // TODO: Implement status
+  // private async validateZcashSupport(): Promise<void> {
+  //   if (!(await this.isZcashSupported())) {
+  //     const {
+  //       info: { appVersion },
+  //       deviceId,
+  //       deviceName,
+  //     } = await this.status();
+  //
+  //     if (deviceId === LEDGER_ZCASH_BLACKLISTED) {
+  //       throw new Error(`This method is not supported on ${deviceName}!`);
+  //     }
+  //
+  //     throw new Error(
+  //       `Version ${appVersion} is unsupported! ` +
+  //         `Please update to at least ${LEDGER_ZCASH_MIN_VERSION}!`,
+  //     );
+  //   }
+  // }
 }

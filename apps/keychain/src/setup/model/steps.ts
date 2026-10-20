@@ -25,4 +25,8 @@ export const STEP_META: Record<Step, StepMeta> = {
   "import.secret": { title: "Import Existing Keys", index: 1, total: 3 },
   "import.name": { title: "Set Up Your Imported Keys", index: 2, total: 3 },
   "import.complete": { title: "Keys Imported", index: 3, total: 3 },
+
+  "connect.approve": { title: "Connect to Ledger", index: 1, total: 3 },
+  "connect.name": { title: "Ledger Account Name", index: 2, total: 3 },
+  "connect.complete": { title: "Ledger Account Imported", index: 3, total: 3 },
 };

@@ -16,7 +16,10 @@ import { PasswordFields } from "../../ui/PasswordFields";
 
 type Props = {
   /** Where to go once persistence starts (the completion step of the branch). */
-  nextStep: Extract<Step, "create.complete" | "import.complete">;
+  nextStep: Extract<
+    Step,
+    "create.complete" | "import.complete" | "connect.complete"
+  >;
 };
 
 export const NameAndPassword = ({ nextStep }: Props) => {
@@ -56,7 +59,7 @@ export const NameAndPassword = ({ nextStep }: Props) => {
         passwordRequired: state.passwordRequired,
         password,
       },
-      (info) => dispatch({ type: "completionInfo", info })
+      (info) => dispatch({ type: "completionInfo", info }),
     );
 
     if (result.ok) {

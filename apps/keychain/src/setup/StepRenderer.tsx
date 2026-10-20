@@ -9,6 +9,7 @@ import { CreateConfirm } from "./steps/create/CreateConfirm";
 import { CreateSeed } from "./steps/create/CreateSeed";
 import { CreateWarning } from "./steps/create/CreateWarning";
 import { ImportSecret } from "./steps/import/ImportSecret";
+import { ConnectLedger } from "./steps/ledger/ConnectLedger";
 import { Complete } from "./steps/shared/Complete";
 import { NameAndPassword } from "./steps/shared/NameAndPassword";
 
@@ -37,6 +38,14 @@ export const StepRenderer = () => {
     case "import.name":
       return <NameAndPassword nextStep="import.complete" />;
     case "import.complete":
+      return <Complete />;
+
+    // Ledger
+    case "connect.approve":
+      return <ConnectLedger />;
+    case "connect.name":
+      return <NameAndPassword nextStep="connect.complete" />;
+    case "connect.complete":
       return <Complete />;
 
     default: {

@@ -31,7 +31,7 @@ export type Step =
   | "import.secret"
   | "import.name"
   | "import.complete"
-  // connect branch
+  // connect ledger branch
   | "connect.approve"
   | "connect.name"
   | "connect.complete";
@@ -108,6 +108,7 @@ export type WizardEvent =
       type: "completionSucceeded";
       parentAccount?: AccountStore;
       shieldedAccount?: DerivedAccount;
+      ledgerAccount?: AccountStore;
     }
   | { type: "completionFailed"; info: string }
   | { type: "reset" };
