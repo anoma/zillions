@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.6.0...zillions-keychain-v0.7.0) (2026-10-20)
+
+
+### Features
+
+* firefox extension setup ([#104](https://github.com/heliaxdev/zillions-interface/issues/104)) ([7748f84](https://github.com/heliaxdev/zillions-interface/commit/7748f844af093cdd2adc1b9fe6ad9438fb9191c0))
+* ledger integration ([#113](https://github.com/heliaxdev/zillions-interface/issues/113)) ([b59ca1f](https://github.com/heliaxdev/zillions-interface/commit/b59ca1f2676b03daa294cc3e1b366c19f5a523c2))
+* ledger sends ([#120](https://github.com/heliaxdev/zillions-interface/issues/120)) ([2cba66a](https://github.com/heliaxdev/zillions-interface/commit/2cba66ae98b150616cfdecceaa135d9c32569033))
+* ledger shielded sync ([#118](https://github.com/heliaxdev/zillions-interface/issues/118)) ([5415802](https://github.com/heliaxdev/zillions-interface/commit/5415802f0e17c9f653a3bb5a5bf93d7ec12241a4))
+
+
+### Bug Fixes
+
+* ledger browser and model support ([#121](https://github.com/heliaxdev/zillions-interface/issues/121)) ([dfdf6f8](https://github.com/heliaxdev/zillions-interface/commit/dfdf6f898f3b9b313512f2d7a1c3def6b1686493))
+
 ## [0.6.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.5.1...zillions-keychain-v0.6.0) (2026-10-14)
 
 
