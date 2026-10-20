@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import {
   ceilingOf,
   ceilingProblem,
+  isOverBalance,
   missingAmount,
   shownAmount,
 } from "./amount";
@@ -85,6 +86,23 @@ test("a typed link amount over the balance suggests what the link itself can hol
   expect(ceilingProblem(ceiling!)).toBe(
     "Not enough to also pay the fee: you can send up to 0.0002 ZEC",
   );
+});
+
+test("a link amount equal to the balance gets the fee message, not insufficient balance", () => {
+  // 0.0004 ZEC shielded, typed 0.0004: the claim fee is a fee, like the
+  // transaction fee, so the amount itself fits and the ceiling explains.
+  expect(isOverBalance(40_000n, 40_000n)).toBe(false);
+  const ceiling = ceilingOf({
+    most: 30_000n,
+    wanted: 40_000n + CLAIM_FEE,
+    short: true,
+    max: false,
+    extra: CLAIM_FEE,
+  });
+  expect(ceilingProblem(ceiling!)).toBe(
+    "Not enough to also pay the fee: you can send up to 0.0002 ZEC",
+  );
+  expect(isOverBalance(40_001n, 40_000n)).toBe(true);
 });
 
 test("a typed amount over the balance suggests the most it can send", () => {

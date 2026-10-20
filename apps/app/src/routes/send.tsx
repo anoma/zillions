@@ -26,6 +26,7 @@ import {
   useSend,
   useSendPlan,
 } from "../hooks/useSend";
+import { isOverBalance } from "../lib/amount";
 import { memoProblem } from "../lib/memo";
 import { CLAIM_FEE, DESCRIPTION_BYTES } from "../lib/paymentLink";
 import { zatoshiToZec } from "../lib/utils";
@@ -82,7 +83,7 @@ function SendRoute() {
     : transparentFrom
       ? balance.data.unshieldedBalance
       : balance.data.shieldedBalance;
-  const overBalance = Boolean(balance.data) && amount + extra > available;
+  const overBalance = Boolean(balance.data) && isOverBalance(amount, available);
 
   const onSubmit = () => {
     const found: Problem<"amount" | "to"> | undefined =

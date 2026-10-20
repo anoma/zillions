@@ -18,6 +18,14 @@ export function shownAmount(text: string, isMax: boolean, amount?: bigint) {
 }
 
 /**
+ * Whether `amount` is more than the source holds. Fees, a link's claim fee
+ * included, aren't counted: going over by a fee shows as a ceiling instead.
+ */
+export function isOverBalance(amount: bigint, available: bigint) {
+  return amount > available;
+}
+
+/**
  * The most the user can send instead, or undefined when nothing caps them.
  * `most` is the most the source can fund after fees; `extra` is funded on top
  * of what the user sends (a link's claim fee) and is in `wanted` already.
