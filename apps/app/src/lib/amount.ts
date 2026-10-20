@@ -18,6 +18,29 @@ export function shownAmount(text: string, isMax: boolean, amount?: bigint) {
 }
 
 /**
+ * Who a send form plans against: the recipient once it's a valid address.
+ * Until then a link or Max plans against `standIn`, our own address, for the
+ * fee; a typed amount waits, so a bad address can't pass for a balance problem.
+ */
+export function planRecipient({
+  to,
+  valid,
+  isMax,
+  isPaymentLink,
+  standIn,
+}: {
+  to: string;
+  valid: boolean;
+  isMax: boolean;
+  isPaymentLink: boolean;
+  standIn: string;
+}) {
+  if (isPaymentLink) return standIn;
+  if (valid) return to;
+  return isMax ? standIn : "";
+}
+
+/**
  * Whether `amount` is more than the source holds. Fees, a link's claim fee
  * included, aren't counted: going over by a fee shows as a ceiling instead.
  */

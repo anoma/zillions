@@ -5,6 +5,7 @@ import {
   ceilingProblem,
   isOverBalance,
   missingAmount,
+  planRecipient,
   shownAmount,
 } from "./amount";
 import { capDecimals } from "./utils";
@@ -31,6 +32,27 @@ test("Max draws its result once known, 0 included, and nothing while loading", (
   expect(shownAmount("", true, 0n)).toBe("0");
   expect(shownAmount("", true, 20_000n)).toBe("0.0002");
   expect(shownAmount("1.5", false, 20_000n)).toBe("1.5");
+});
+
+test("a fake address never reaches the planner, so it can't pass for a fee problem", () => {
+  const plan = (to: string, valid: boolean, isMax: boolean) =>
+    planRecipient({ to, valid, isMax, isPaymentLink: false, standIn: "u1me" });
+  // Max with "aaaa" plans against our own address; the To field says why.
+  expect(plan("aaaa", false, true)).toBe("u1me");
+  expect(plan("", false, true)).toBe("u1me");
+  // A typed amount waits for a valid recipient.
+  expect(plan("aaaa", false, false)).toBe("");
+  expect(plan("t1abc", true, false)).toBe("t1abc");
+  expect(plan("t1abc", true, true)).toBe("t1abc");
+  expect(
+    planRecipient({
+      to: "aaaa",
+      valid: false,
+      isMax: false,
+      isPaymentLink: true,
+      standIn: "u1me",
+    }),
+  ).toBe("u1me");
 });
 
 test("Max on a balance below the fee: nothing to send, and it says so", () => {

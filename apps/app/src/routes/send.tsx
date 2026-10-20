@@ -26,7 +26,7 @@ import {
   useSend,
   useSendPlan,
 } from "../hooks/useSend";
-import { isOverBalance } from "../lib/amount";
+import { isOverBalance, planRecipient } from "../lib/amount";
 import { memoProblem } from "../lib/memo";
 import { CLAIM_FEE, DESCRIPTION_BYTES } from "../lib/paymentLink";
 import { zatoshiToZec } from "../lib/utils";
@@ -66,7 +66,13 @@ function SendRoute() {
   const planned = useSendPlan(
     {
       from,
-      to: isPaymentLink ? standInTo : to || (isMax ? standInTo : ""),
+      to: planRecipient({
+        to,
+        valid: Boolean(toKind),
+        isMax,
+        isPaymentLink,
+        standIn: standInTo,
+      }),
       amount: typed > 0n ? typed + extra : typed,
       memo,
     },
