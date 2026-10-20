@@ -56,6 +56,11 @@ export function zecToZatoshi(zec: string | number): bigint {
   return negative ? -zatoshi : zatoshi;
 }
 
+/** `text` with any digits past ZEC's 8 decimals cut off. */
+export function capDecimals(text: string): string {
+  return text.replace(new RegExp(`(\\.\\d{${DECIMALS}})\\d+`), "$1");
+}
+
 export function singleton<T>(fn: () => Promise<T>): () => Promise<T> {
   let instance: Promise<T> | undefined;
   return () => (instance ??= fn());

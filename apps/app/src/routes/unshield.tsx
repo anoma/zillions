@@ -18,6 +18,7 @@ import { useAmountField } from "../hooks/useAmountField";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
+import { isOverBalance } from "../lib/amount";
 import { zatoshiToZec } from "../lib/utils";
 
 export const Route = createFileRoute("/unshield")({
@@ -45,7 +46,7 @@ function UnshieldRoute() {
   const amount = isMax ? (maxAmount.data ?? 0n) : typed;
   const send = useSend();
   const available = balance.data?.shieldedBalance ?? 0n;
-  const overBalance = Boolean(balance.data) && amount > available;
+  const overBalance = Boolean(balance.data) && isOverBalance(amount, available);
 
   const clear = () => {
     setAmountProblem("");
@@ -61,8 +62,8 @@ function UnshieldRoute() {
       return;
     }
     const problem =
-      amount <= 0n
-        ? "Set an amount"
+      amount <= 0n && !ceiling
+        ? amountField.missing
         : overBalance
           ? "Insufficient balance"
           : ceiling
@@ -140,7 +141,9 @@ function UnshieldRoute() {
         <AmountField
           id="unshield-amount"
           ref={amountRef}
-          value={amountField.shown(amount)}
+          value={amountField.shown(
+            maxAmount.data === undefined ? undefined : amount,
+          )}
           describedBy="unshield-available"
           error={amountError}
           onChange={(value) => {

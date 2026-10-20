@@ -5,9 +5,9 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { ceilingOf, ceilingProblem } from "../lib/amount";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
-import { zatoshiToZec } from "../lib/utils";
 import { prefetchSaplingParams, warmProver } from "../lib/wallet/chain/submit";
 import {
   prefetchTrees,
@@ -22,15 +22,15 @@ import { useSubmitStage } from "./useSubmitStage";
 import { useWallet } from "./useWallet";
 
 /**
- * The plan for `send` as the form changes: its fee is the one that will be
- * paid. With `max`, the amount is left to the plan: the most the source can
- * pay to this recipient after fees. `ceiling` is set when the typed amount
- * and its fee are more than the source holds: the most it can send instead,
- * and that plan's fee once known.
+ * The plan for `send` as the form changes; its fee is the one that will be
+ * paid, and with `max` the plan picks the amount. `extra` is funded on top of
+ * what the user sends (already in `amount`). `ceiling`, when fees leave the
+ * user short, is the most they can send instead and that plan's fee once known.
  */
 export function useSendPlan(
   { from, to, amount, memo }: SendRequest,
   max: boolean,
+  extra = 0n,
 ) {
   const wallet = useWallet();
   const debouncedTo = useDebouncedValue(to);
@@ -71,10 +71,17 @@ export function useSendPlan(
     }),
   );
   const atMax = useQuery(planOf(maxAmount.data ?? 0n, max || short));
+  const ceilingAmount = ceilingOf({
+    most: maxAmount.data,
+    wanted: debouncedAmount,
+    short,
+    max,
+    extra,
+  });
   const ceiling =
-    short && maxAmount.data !== undefined && debouncedAmount > maxAmount.data
-      ? { amount: maxAmount.data, fee: atMax.data?.fee }
-      : undefined;
+    ceilingAmount === undefined
+      ? undefined
+      : { amount: ceilingAmount, fee: atMax.data?.fee };
   const plan = max ? atMax : typed;
   useEffect(() => {
     if (plan.data) prefetchTrees(plan.data);
@@ -100,11 +107,7 @@ export function planProblem({
   maxAmount,
   ceiling,
 }: ReturnType<typeof useSendPlan>) {
-  if (ceiling) {
-    return ceiling.amount > 0n
-      ? `Not enough to also pay the fee: you can send up to ${zatoshiToZec(ceiling.amount)} ZEC`
-      : "Not enough to pay the fee";
-  }
+  if (ceiling) return ceilingProblem(ceiling.amount);
   return (plan.error ?? maxAmount.error)?.message;
 }
 

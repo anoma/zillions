@@ -26,6 +26,7 @@ import {
   useSend,
   useSendPlan,
 } from "../hooks/useSend";
+import { isOverBalance, planRecipient } from "../lib/amount";
 import { memoProblem } from "../lib/memo";
 import { CLAIM_FEE, DESCRIPTION_BYTES } from "../lib/paymentLink";
 import { zatoshiToZec } from "../lib/utils";
@@ -60,18 +61,25 @@ function SendRoute() {
   const memo = memoText && !memoError && !isPaymentLink ? memoText : undefined;
 
   const { typed, isMax } = amountField;
+  // A link is funded with its amount plus the claim fee.
+  const extra = isPaymentLink ? CLAIM_FEE : 0n;
   const planned = useSendPlan(
     {
       from,
-      to: isPaymentLink ? standInTo : to || (isMax ? standInTo : ""),
-      // A link is funded with its amount plus the claim fee.
-      amount: isPaymentLink && typed > 0n ? typed + CLAIM_FEE : typed,
+      to: planRecipient({
+        to,
+        valid: Boolean(toKind),
+        isMax,
+        isPaymentLink,
+        standIn: standInTo,
+      }),
+      amount: typed > 0n ? typed + extra : typed,
       memo,
     },
     isMax,
+    extra,
   );
   const { maxAmount, ceiling } = planned;
-  const extra = isPaymentLink ? CLAIM_FEE : 0n;
   const max = maxAmount.data ?? 0n;
   const amount = isMax ? (max > extra ? max - extra : 0n) : typed;
   const send = useSend();
@@ -81,12 +89,12 @@ function SendRoute() {
     : transparentFrom
       ? balance.data.unshieldedBalance
       : balance.data.shieldedBalance;
-  const overBalance = Boolean(balance.data) && amount + extra > available;
+  const overBalance = Boolean(balance.data) && isOverBalance(amount, available);
 
   const onSubmit = () => {
     const found: Problem<"amount" | "to"> | undefined =
-      amount <= 0n
-        ? { field: "amount", message: "Set an amount" }
+      amount <= 0n && !ceiling
+        ? { field: "amount", message: amountField.missing }
         : overBalance
           ? { field: "amount", message: "Insufficient balance" }
           : isPaymentLink
@@ -179,7 +187,9 @@ function SendRoute() {
         <AmountField
           id="send-amount"
           ref={amountRef}
-          value={amountField.shown(amount)}
+          value={amountField.shown(
+            maxAmount.data === undefined ? undefined : amount,
+          )}
           describedBy="send-available"
           error={amountError}
           onChange={(value) => {
@@ -198,7 +208,6 @@ function SendRoute() {
             active={isPaymentLink}
             onChange={(value) => {
               setIsPaymentLink(value);
-              amountField.setIsMax(false);
               clear();
             }}
           />
