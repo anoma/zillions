@@ -32,6 +32,7 @@ test("history reads what setup left, then before the spam era, and the spam era 
   } as unknown as WalletState;
 
   const run = {
+    pools: ["ironwood", "orchard", "sapling"],
     state,
     tip: 3_500_000,
     workers: () => 2,

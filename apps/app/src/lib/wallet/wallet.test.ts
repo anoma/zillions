@@ -57,6 +57,12 @@ vi.mock("@zillions/zcore", () => ({
   send_pczt: vi.fn(),
   plan_shield: vi.fn(),
   shield_pczt: vi.fn(),
+  // A Ledger's viewing key holds Orchard and transparent keys only.
+  ufvk_pools: vi.fn((_network: string, ufvk: string) =>
+    ufvk === "uview-ledger"
+      ? ["ironwood", "orchard"]
+      : ["ironwood", "orchard", "sapling"],
+  ),
 }));
 
 vi.mock("./shielded/crawl", () => ({
@@ -172,6 +178,7 @@ beforeEach(() => {
     sizes: { sapling: 0, orchard: 0, ironwood: 0 },
     tip: 3_200,
   });
+  Object.assign(chain.setup, { sapling: 0, orchard: 0, ironwood: 0 });
   for (const map of [chain.hits, chain.spentAt, chain.sent, chain.blocks]) {
     map.clear();
   }
@@ -216,6 +223,39 @@ test("places a note's spend from the indexer, and reads what it paid into anothe
   );
   expect(saved.sent).toEqual([expect.objectContaining(payment)]);
   expect((await wallet.getBalance()).shieldedBalance).toBe(0n);
+});
+
+test("never reads a pool the viewing key has no key for, and still finishes", async () => {
+  chain.sizes = { sapling: 2 * 16_384, orchard: 3 * 16_384, ironwood: 10 };
+  // Setup ends at chunk 1: chunk 0 is history.
+  chain.setup.orchard = chain.setup.sapling = 1;
+  chain.hits.set("orchard:0", [note("orchard", 3, nf("ab"))]);
+  chain.hits.set("sapling:0", [note("sapling", 3, nf("ac"))]);
+  chain.spentAt.set(nf("ab"), { height: 3_100, tx_index: 2 });
+  // The spend pays a Sapling note too.
+  chain.blocks.set(
+    3_100,
+    block({
+      txids: new Map([[2, "tx2"]]),
+      outputs: new Map([[2, { sapling: 1, orchard: 1, ironwood: 0 }]]),
+    }),
+  );
+  vi.mocked(crawlChunks).mockClear();
+
+  const wallet = new Wallet({ id: "ledger", ufvk: "uview-ledger" });
+  const progress: string[] = [];
+  wallet.subscribeSyncProgress((p) => progress.push(p.phase));
+  await wallet.sync();
+  await vi.waitFor(() => expect(progress.at(-1)).toBe("done"));
+
+  const pools = vi.mocked(crawlChunks).mock.calls.map(([o]) => o.pool);
+  expect(pools).toContain("orchard");
+  expect(pools).not.toContain("sapling");
+  expect(lookup).not.toHaveBeenCalledWith(
+    expect.objectContaining({ pool: "sapling" }),
+  );
+  expect(saved.notes.map((n) => n.pool)).toEqual(["orchard"]);
+  expect(saved.state!.scan.scanned.sapling).toBeUndefined();
 });
 
 test("holds what a broadcast spends until it's mined or expires", async () => {

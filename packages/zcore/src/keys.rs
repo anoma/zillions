@@ -77,14 +77,27 @@ const ORCHARD_SAPLING: UnifiedAddressRequest = UnifiedAddressRequest::unsafe_cus
     ReceiverRequirement::Omit,
 );
 
+/// The Orchard receiver alone, which Ironwood pays to as well, for a viewing
+/// key with no Sapling part (a Ledger's).
+const ORCHARD: UnifiedAddressRequest = UnifiedAddressRequest::unsafe_custom(
+    ReceiverRequirement::Require,
+    ReceiverRequirement::Omit,
+    ReceiverRequirement::Omit,
+);
+
 pub(crate) fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
     let ufvk = UnifiedFullViewingKey::decode(network, ufvk)?;
     // Random, not a counter: the keychain and the app hand out addresses with no shared state.
     let mut j = [0u8; 11];
     OsRng.fill_bytes(&mut j);
+    let request = if ufvk.sapling().is_some() {
+        ORCHARD_SAPLING
+    } else {
+        ORCHARD
+    };
     // Sapling works on about half the indices; take the next one it does.
     let (address, _) = ufvk
-        .find_address(DiversifierIndex::from(j), ORCHARD_SAPLING)
+        .find_address(DiversifierIndex::from(j), request)
         .map_err(|e| e.to_string())?;
     Ok(address.encode(network))
 }
@@ -95,6 +108,27 @@ pub(crate) fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
 pub fn fresh_address(network: &str, ufvk: &str) -> Result<String, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
     fresh(&network, ufvk).map_err(|e| JsError::new(&e))
+}
+
+fn pools(network: &Network, ufvk: &str) -> Result<Vec<String>, String> {
+    let ufvk = UnifiedFullViewingKey::decode(network, ufvk)?;
+    let orchard = ufvk.orchard().is_some();
+    Ok([
+        ("ironwood", orchard),
+        ("orchard", orchard),
+        ("sapling", ufvk.sapling().is_some()),
+    ]
+    .into_iter()
+    .filter_map(|(pool, has)| has.then(|| pool.to_string()))
+    .collect())
+}
+
+/// The shielded pools `ufvk` has a key for, newest first: Ironwood uses the
+/// Orchard key. A Ledger's viewing key has no Sapling key.
+#[wasm_bindgen]
+pub fn ufvk_pools(network: &str, ufvk: &str) -> Result<Vec<String>, JsError> {
+    let network = parse_network(network).map_err(|e| JsError::new(&e))?;
+    pools(&network, ufvk).map_err(|e| JsError::new(&e))
 }
 
 fn kind(network: &Network, address: &str) -> Option<&'static str> {
@@ -156,6 +190,28 @@ mod tests {
     }
 
     #[test]
+    fn pools_are_the_ones_the_viewing_key_has_a_key_for() {
+        use zcash_address::unified::{Container, Encoding, Fvk, Ufvk};
+
+        let network = Network::MainNetwork;
+        let full = account(&network, &[7u8; 32], 0).unwrap().ufvk;
+        assert_eq!(
+            pools(&network, &full).unwrap(),
+            ["ironwood", "orchard", "sapling"]
+        );
+
+        // A Ledger's: Orchard and transparent only.
+        let (net, ufvk) = Ufvk::decode(&full).unwrap();
+        let items = ufvk
+            .items()
+            .into_iter()
+            .filter(|item| !matches!(item, Fvk::Sapling(_)))
+            .collect();
+        let ledger = Ufvk::try_from_items(items).unwrap().encode(&net);
+        assert_eq!(pools(&network, &ledger).unwrap(), ["ironwood", "orchard"]);
+    }
+
+    #[test]
     fn derives_the_account_the_viewing_key_names() {
         let seed = [7u8; 32];
         let network = Network::MainNetwork;
@@ -203,5 +259,36 @@ mod tests {
                 .decrypt_diversifier(sapling)
                 .is_some());
         }
+    }
+
+    #[test]
+    fn fresh_addresses_without_sapling() {
+        use zcash_address::unified::{Encoding, Fvk, Ufvk};
+        use zcash_keys::address::Address;
+        use zcash_protocol::consensus::Parameters;
+
+        let network = Network::MainNetwork;
+        let full = spending_key(&network, &[7u8; 32], 0)
+            .unwrap()
+            .to_unified_full_viewing_key();
+        // What a Ledger exports: Orchard and transparent, no Sapling.
+        let ledger = Ufvk::try_from_items(vec![
+            Fvk::Orchard(full.orchard().unwrap().to_bytes()),
+            Fvk::P2pkh(full.transparent().unwrap().serialize().try_into().unwrap()),
+        ])
+        .unwrap()
+        .encode(&network.network_type());
+
+        let Some(Address::Unified(ua)) =
+            Address::decode(&network, &fresh(&network, &ledger).unwrap())
+        else {
+            panic!("not a unified address")
+        };
+        assert!(ua.sapling().is_none() && ua.transparent().is_none());
+        assert!(full
+            .orchard()
+            .unwrap()
+            .scope_for_address(ua.orchard().unwrap())
+            .is_some());
     }
 }

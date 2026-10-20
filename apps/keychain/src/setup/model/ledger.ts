@@ -1,9 +1,9 @@
 /**
  * Ledger connection: discover a device over WebHID, open a DMK session, build
- * the Zcash signer on it and read the account's public keys. Each device
- * action runs inside the DMK's open-app flow, so it also walks the user
- * through unlocking and opening the Zcash app, reporting each required
- * interaction via `onInteraction`.
+ * the Zcash signer on it, check the app version, then read the account's
+ * public keys. Each device action runs inside the DMK's
+ * open-app flow, so it also walks the user through unlocking and opening the
+ * Zcash app; `onStep` reports what the device waits on.
  */
 import {
   DeviceActionStatus,
@@ -14,21 +14,26 @@ import {
   type DiscoveredDevice,
   type ExecuteDeviceActionReturnType,
 } from "@ledgerhq/device-management-kit";
-import { SignerZcashBuilder } from "@ledgerhq/device-signer-kit-zcash";
+import {
+  SignerZcashBuilder,
+  type SignerZcash,
+} from "@ledgerhq/device-signer-kit-zcash";
 import {
   webHidIdentifier,
   webHidTransportFactory,
 } from "@ledgerhq/device-transport-kit-web-hid";
 
 import type { Bip44Path, Zip32Path } from "../../ipc/contract";
-
-export { UserInteractionRequired };
-
-// SLIP-44 coin type for Zcash mainnet; the Ledger Zcash app derives under it.
-const ZCASH_COIN_TYPE = 133;
+import { getNetwork } from "../../background/crypto/zillions";
 
 export const LEDGER_BIP44_PATH: Bip44Path = { account: 0, change: 0, index: 0 };
 export const LEDGER_ZIP32_PATH: Zip32Path = { account: 0 };
+
+/** The first app-zcash that signs Ironwood spends with the right nullifier. */
+export const MIN_ZCASH_APP_VERSION = "3.9.1";
+
+/** What the device waits on, in the order a session meets them. */
+export type LedgerStep = "connect" | "unlock" | "open-app" | "confirm-key";
 
 /** Everything the keychain stores for a Ledger account; no secrets. */
 export type LedgerKeys = {
@@ -49,32 +54,54 @@ export const ledgerErrorMessage = (e: unknown): string => {
   return String(e);
 };
 
+export const isSupportedAppVersion = (version: string): boolean => {
+  const [a, b, c] = version.split(".").map(Number);
+  const [x, y, z] = MIN_ZCASH_APP_VERSION.split(".").map(Number);
+  return a !== x ? a > x : b !== y ? b > y : c >= z;
+};
+
+const coinType = () => (getNetwork() === "main" ? 133 : 1);
+
+const STEP_OF: Partial<Record<UserInteractionRequired, LedgerStep>> = {
+  [UserInteractionRequired.UnlockDevice]: "unlock",
+  [UserInteractionRequired.ConfirmOpenApp]: "open-app",
+};
+
 const discoverDevice = (dmk: DeviceManagementKit) =>
   new Promise<DiscoveredDevice>((resolve, reject) => {
-    const sub = dmk.startDiscovering({ transport: webHidIdentifier }).subscribe({
-      next: (device) => {
-        sub?.unsubscribe();
-        void dmk.stopDiscovering();
-        resolve(device);
-      },
-      error: reject,
-    });
+    const sub = dmk
+      .startDiscovering({ transport: webHidIdentifier })
+      .subscribe({
+        next: (device) => {
+          sub?.unsubscribe();
+          void dmk.stopDiscovering();
+          resolve(device);
+        },
+        error: reject,
+      });
   });
 
-const runAction = <Output, Error, Intermediate extends DeviceActionIntermediateValue>(
+const runAction = <
+  Output,
+  Error,
+  Intermediate extends DeviceActionIntermediateValue,
+>(
   { observable }: ExecuteDeviceActionReturnType<Output, Error, Intermediate>,
-  onInteraction: (interaction: UserInteractionRequired) => void
+  onStep: (step: LedgerStep) => void,
 ) =>
   new Promise<Output>((resolve, reject) => {
     observable.subscribe({
       next: (state) => {
         switch (state.status) {
-          case DeviceActionStatus.Pending:
-            onInteraction(
-              state.intermediateValue
-                .requiredUserInteraction as UserInteractionRequired
-            );
+          case DeviceActionStatus.Pending: {
+            const step =
+              STEP_OF[
+                state.intermediateValue
+                  .requiredUserInteraction as UserInteractionRequired
+              ];
+            if (step) onStep(step);
             break;
+          }
           case DeviceActionStatus.Completed:
             resolve(state.output);
             break;
@@ -91,44 +118,77 @@ const runAction = <Output, Error, Intermediate extends DeviceActionIntermediateV
   });
 
 /**
- * Must be called from a user gesture: WebHID only shows the device picker in
- * response to one. The session is closed before returning.
+ * Run `use` on a connected Zcash app, closing the session after; rejects if
+ * the app is older than `MIN_ZCASH_APP_VERSION` or `signal` aborts. Must be
+ * called from a user gesture: WebHID only shows the device picker in
+ * response to one.
  */
-export const connectLedger = async (
-  onInteraction: (interaction: UserInteractionRequired) => void
-): Promise<LedgerKeys> => {
+export const withLedger = async <T>(
+  onStep: (step: LedgerStep) => void,
+  use: (signer: SignerZcash, device: DiscoveredDevice) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> => {
   const dmk = new DeviceManagementKitBuilder()
     .addTransport(webHidTransportFactory)
     .build();
-  try {
+  const session = async () => {
+    onStep("connect");
     const device = await discoverDevice(dmk);
     const sessionId = await dmk.connect({ device });
     const signer = new SignerZcashBuilder({ dmk, sessionId }).build();
-
-    const { account, change, index } = LEDGER_BIP44_PATH;
-    const bip44 = `44'/${ZCASH_COIN_TYPE}'/${account}'/${change}/${index}`;
-    const zip32 = `32'/${ZCASH_COIN_TYPE}'/${LEDGER_ZIP32_PATH.account}'`;
-
-    const { address: transparentAddress } = await runAction(
-      signer.getAddress(bip44),
-      onInteraction
-    );
-    const { address: shieldedAddress } = await runAction(
-      signer.getShieldedAddress(bip44),
-      onInteraction
-    );
-    const fvk = await runAction(signer.getFullViewingKey(zip32), onInteraction);
-    if (fvk.mode !== "ufvk") {
-      throw new Error("Ledger returned an Orchard key instead of a UFVK");
+    const { version } = await runAction(signer.getAppConfig(), onStep);
+    if (!isSupportedAppVersion(version)) {
+      throw new Error(
+        `Update the Zcash app on your Ledger to ${MIN_ZCASH_APP_VERSION} or later (it has ${version}).`,
+      );
     }
-
-    return {
-      deviceName: device.deviceModel.name,
-      transparentAddress,
-      shieldedAddress,
-      viewingKey: fvk.fullViewingKey,
-    };
+    return use(signer, device);
+  };
+  const aborted = new Promise<never>((_, reject) =>
+    signal?.addEventListener("abort", () =>
+      reject(new Error("Ledger request was cancelled")),
+    ),
+  );
+  try {
+    return await Promise.race([session(), aborted]);
   } finally {
     dmk.close();
   }
 };
+
+/** The account's addresses and UFVK; the user confirms the UFVK on the device. */
+export const connectLedger = (
+  onStep: (step: LedgerStep) => void,
+  signal?: AbortSignal,
+): Promise<LedgerKeys> =>
+  withLedger(
+    onStep,
+    async (signer, device) => {
+      const coin = coinType();
+      const { account, change, index } = LEDGER_BIP44_PATH;
+      const bip44 = `44'/${coin}'/${account}'/${change}/${index}`;
+      const zip32 = `32'/${coin}'/${LEDGER_ZIP32_PATH.account}'`;
+
+      const { address: transparentAddress } = await runAction(
+        signer.getAddress(bip44),
+        onStep,
+      );
+      const { address: shieldedAddress } = await runAction(
+        signer.getShieldedAddress(bip44),
+        onStep,
+      );
+      onStep("confirm-key");
+      const fvk = await runAction(signer.getFullViewingKey(zip32), onStep);
+      if (fvk.mode !== "ufvk") {
+        throw new Error("Ledger returned an Orchard key instead of a UFVK");
+      }
+
+      return {
+        deviceName: device.deviceModel.name,
+        transparentAddress,
+        shieldedAddress,
+        viewingKey: fvk.fullViewingKey,
+      };
+    },
+    signal,
+  );

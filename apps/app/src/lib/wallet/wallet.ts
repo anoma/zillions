@@ -1,4 +1,4 @@
-import initZcore, { parse_transaction } from "@zillions/zcore";
+import initZcore, { parse_transaction, ufvk_pools } from "@zillions/zcore";
 
 import { invariant } from "../invariant";
 import { dedupe, singleton } from "../utils";
@@ -50,7 +50,7 @@ import {
   syncTransparent,
   type TransparentView,
 } from "./transparent";
-import type { Activity, PendingActivity, WalletState } from "./types";
+import type { Activity, PendingActivity, Pool, WalletState } from "./types";
 
 export type SyncEventListener = (e: SyncProgress) => void;
 
@@ -75,6 +75,8 @@ export class Wallet {
   readonly #ufvk: string;
   /** Block height below which nothing is crawled. Absent means full history. */
   readonly #birthday?: number;
+  /** The pools `#ufvk` has a key for; read once zcore is loaded. */
+  #pools?: Pool[];
 
   #state: WalletState;
   #key?: CryptoKey;
@@ -182,6 +184,7 @@ export class Wallet {
 
   #newRun = (tip: number, signal: AbortSignal): ShieldedRun => ({
     ufvk: this.#ufvk,
+    pools: (this.#pools ??= ufvk_pools(NETWORK, this.#ufvk) as Pool[]),
     // An import's 0 means none: the whole history.
     birthday: this.#birthday || undefined,
     state: this.#state,

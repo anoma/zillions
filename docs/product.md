@@ -59,7 +59,8 @@ fully: holding, seeing, receiving and spending.
 | Orchard     | Working     | Working | Working     | Built |
 | Ironwood    | Working     | Working | Working     | Built |
 
-Spending is _Built_: it awaits a first real transaction.
+Spending is _Built_: it awaits a first real transaction. A Ledger account
+holds only what the device supports (3.6).
 
 - Every kind of spend is required: from any pool the wallet holds funds in, to
   any kind of Zcash address.
@@ -453,6 +454,27 @@ Challenges to check, one by one:
 7. **Enforced, not promised.** The extension should be technically unable to
    reach the network (its permissions and security policy), so "offline" is a
    guarantee rather than a habit.
+
+### 3.6 Ledger hardware wallet — Built
+
+- **Connect a Ledger** from the Keychain's first screen, instead of creating
+  or importing a recovery phrase. Its keys never leave the device: the
+  Keychain keeps only what lets the wallet see the account (its viewing key
+  and addresses), which the user approves on the device.
+- **The wallet supports what Ledger's Zcash app supports, no more.** Today
+  that is transparent, Orchard and Ironwood: a Ledger account holds, sees,
+  receives and spends in those. The device has no Sapling key, so a Ledger
+  account can't see or spend Sapling funds, and a payment to a Sapling-only
+  address is refused with an explanation. When Ledger's app adds Sapling, the
+  wallet adds it too.
+- Needs Ledger's Zcash app 3.9.1 or later (Ironwood); with an older one the
+  user is asked to update it. Chromium-based browsers only.
+- A send is approved in the Keychain as usual, then reviewed and approved on
+  the device; what the device shows is what gets signed. — _Planned_
+- While waiting on the device, the Keychain shows each step (connect, unlock,
+  open the Zcash app, approve) with a way to cancel or try again.
+- The recovery phrase and spending keys can't be revealed: they never leave
+  the device.
 
 ## 4. Network
 

@@ -408,7 +408,9 @@ export class Keyring {
       type: "ledger" as KeyStoreType["type"],
       source: "imported",
       timestamp: 0,
-      seedFingerprint: "",
+      // The device never reveals its seed's. The app's PCZT needs 32 bytes and
+      // the device doesn't check them: zeros, the signer kit's default.
+      seedFingerprint: "00".repeat(32),
       birthday: input.birthday,
     };
     const sensitive = await this.vaultService.encryptSensitiveData({
