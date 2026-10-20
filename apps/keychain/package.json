@@ -18,6 +18,9 @@
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.2.8",
+    "@ledgerhq/device-management-kit": "^1.11.0",
+    "@ledgerhq/device-signer-kit-zcash": "^0.8.0",
+    "@ledgerhq/device-transport-kit-web-hid": "^1.2.4",
     "@zillions/zcore": "workspace:*",
     "clsx": "^2.1.1",
     "fp-ts": "^2.16.1",
