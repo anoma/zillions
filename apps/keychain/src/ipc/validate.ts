@@ -228,6 +228,17 @@ export const validateResponse = <K extends IpcKind>(
         throw new ResponseShapeError(kind, "expected DerivedAccount");
       return value as IpcResponse<K>;
 
+    case "keyring/saveLedgerAccount":
+      if (
+        !isRecord(value) ||
+        !isAccountStore(value.parentAccount) ||
+        (value.shieldedAccount !== undefined &&
+          !isDerivedAccount(value.shieldedAccount)) ||
+        typeof value.alreadyImported !== "boolean"
+      )
+        throw new ResponseShapeError(kind, "expected saved Ledger account");
+      return value as IpcResponse<K>;
+
     default: {
       // Exhaustiveness: if a channel is added to the contract without a
       // validator, this line fails to compile.

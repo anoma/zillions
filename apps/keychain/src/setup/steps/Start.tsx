@@ -3,15 +3,15 @@
  */
 import { ActionButton, Alert, Stack } from "@zillions/components";
 import { Logo } from "@zillions/components/assets/Logo";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   connectLedger,
   ledgerErrorMessage,
   UserInteractionRequired,
-  type LedgerConnection,
 } from "../model/ledger";
 import { useWizard } from "../SetupContext";
+import { saveLedger } from "./ledger/saveLedger";
 
 const INTERACTION_LABEL: Partial<Record<UserInteractionRequired, string>> = {
   [UserInteractionRequired.UnlockDevice]: "Unlock your Ledger",
@@ -19,32 +19,33 @@ const INTERACTION_LABEL: Partial<Record<UserInteractionRequired, string>> = {
 };
 
 export const Start = () => {
-  const { dispatch } = useWizard();
+  const { state, dispatch, client } = useWizard();
   const [connecting, setConnecting] = useState(false);
   const [interaction, setInteraction] = useState<UserInteractionRequired>();
-  const [ledger, setLedger] = useState<LedgerConnection>();
   const [error, setError] = useState<string>();
-
-  useEffect(() => () => ledger?.dmk.close(), [ledger]);
 
   const onConnectLedger = async () => {
     setError(undefined);
     setConnecting(true);
+    let keys;
     try {
-      setLedger(await connectLedger(setInteraction));
+      keys = await connectLedger(setInteraction);
     } catch (e) {
       setError(ledgerErrorMessage(e));
-    } finally {
       setConnecting(false);
       setInteraction(undefined);
+      return;
+    }
+    dispatch({ type: "ledgerConnected", keys });
+    // Without a password to set there's nothing to ask: store it right away.
+    if (!state.passwordRequired) {
+      await saveLedger(client, dispatch, { keys, passwordRequired: false });
     }
   };
 
-  const ledgerLabel = ledger
-    ? `Connected to ${ledger.deviceName}`
-    : connecting
-      ? (interaction && INTERACTION_LABEL[interaction]) ?? "Connecting…"
-      : "Connect to hardware wallet";
+  const ledgerLabel = connecting
+    ? (interaction && INTERACTION_LABEL[interaction]) ?? "Connecting…"
+    : "Connect to hardware wallet";
 
   return (
     <div className="flex flex-col flex-1 justify-center">
@@ -77,16 +78,11 @@ export const Start = () => {
           backgroundHoverColor="black"
           textHoverColor="primary"
           data-testid="setup-connect-ledger-button"
-          disabled={connecting || !!ledger}
+          disabled={connecting}
           onClick={() => void onConnectLedger()}
         >
           {ledgerLabel}
         </ActionButton>
-        {ledger && (
-          <p className="text-sm text-center text-neutral-700">
-            Zcash app v{ledger.appVersion}
-          </p>
-        )}
         {error && (
           <Alert title="Error" type="error">
             {error}

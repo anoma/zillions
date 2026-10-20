@@ -18,6 +18,7 @@ import type {
 } from "../../ipc/contract";
 import { mnemonicToSeed } from "../../background/crypto/mnemonic";
 import { deriveAccount, getNetwork } from "../../background/crypto/zillions";
+import { LEDGER_BIP44_PATH, LEDGER_ZIP32_PATH, type LedgerKeys } from "./ledger";
 
 export type CreateAccountInput = {
   accountSecret: AccountSecret;
@@ -124,6 +125,43 @@ export const createAccount = async (
     });
 
     return { ok: true, parentAccount, shieldedAccount };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+};
+
+export type CreateLedgerAccountResult =
+  | (CreateAccountResult & { ok: true; alreadyImported: boolean })
+  | { ok: false; error: string };
+
+/** Store a connected Ledger's public keys, setting the password first if needed. */
+export const createLedgerAccount = async (
+  client: BackgroundClient,
+  input: { keys: LedgerKeys; passwordRequired: boolean; password?: string },
+  onProgress: (info: string) => void
+): Promise<CreateLedgerAccountResult> => {
+  const { keys, passwordRequired, password } = input;
+  try {
+    if (passwordRequired && !password) {
+      return { ok: false, error: "Password is required and was not provided" };
+    }
+    if (password) {
+      onProgress("Setting a password for the extension.");
+      await client.createPassword(password);
+    }
+
+    onProgress("Storing your Ledger account.");
+    const result = await client.saveLedgerAccount({
+      alias: keys.deviceName,
+      bip44Path: LEDGER_BIP44_PATH,
+      zip32Path: LEDGER_ZIP32_PATH,
+      transparentAddress: keys.transparentAddress,
+      shieldedAddress: keys.shieldedAddress,
+      viewingKey: keys.viewingKey,
+      // The device may already hold funds from any point in history.
+      birthday: 0,
+    });
+    return { ok: true, ...result };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

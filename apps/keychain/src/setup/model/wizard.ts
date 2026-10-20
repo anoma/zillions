@@ -4,7 +4,7 @@
  * All transient wizard state lives in one typed object, mutated only via typed
  * events through the reducer. The rendered step is derived from `state.step`.
  *
- * Scope: create + import flows only (no Ledger).
+ * Scope: create, import and Ledger flows.
  */
 import type {
   AccountStore,
@@ -12,10 +12,11 @@ import type {
   DerivedAccount,
   Zip32Path,
 } from "../../ipc/contract";
+import type { LedgerKeys } from "./ledger";
 import type { MnemonicLength, SecretKind } from "./secrets";
 
 /** Which onboarding branch the user is in. */
-export type Flow = "none" | "create" | "import";
+export type Flow = "none" | "create" | "import" | "ledger";
 
 /** The discrete steps. `start` is the landing choice. */
 export type Step =
@@ -30,7 +31,10 @@ export type Step =
   // import branch
   | "import.secret"
   | "import.name"
-  | "import.complete";
+  | "import.complete"
+  // ledger branch (entered from start once the device is read)
+  | "ledger.password"
+  | "ledger.complete";
 
 /** Async persistence status for the final "complete" step. */
 export type CompletionStatus = "idle" | "pending" | "done" | "failed";
@@ -62,6 +66,9 @@ export type WizardState = {
   completionInfo: string;
   parentAccount?: AccountStore;
   shieldedAccount?: DerivedAccount;
+
+  // --- ledger ---
+  ledgerKeys?: LedgerKeys;
 };
 
 export const initialWizardState = (passwordRequired: boolean): WizardState => ({
@@ -87,6 +94,7 @@ export type WizardEvent =
   | { type: "passwordRequirementResolved"; required: boolean }
   | { type: "chooseFlow"; flow: Extract<Flow, "create" | "import"> }
   | { type: "goToStep"; step: Step }
+  | { type: "ledgerConnected"; keys: LedgerKeys }
   | { type: "setMnemonic"; mnemonic: string[] }
   | { type: "setMnemonicLength"; length: MnemonicLength }
   | { type: "setSecretKind"; kind: SecretKind }
@@ -124,6 +132,14 @@ export const wizardReducer = (
 
     case "goToStep":
       return { ...state, step: event.step };
+
+    case "ledgerConnected":
+      return {
+        ...state,
+        flow: "ledger",
+        ledgerKeys: event.keys,
+        step: state.passwordRequired ? "ledger.password" : "ledger.complete",
+      };
 
     case "setMnemonic":
       return { ...state, mnemonic: event.mnemonic };
