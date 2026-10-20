@@ -1,6 +1,13 @@
 import { expect, test } from "vitest";
 
-import { transactionValue } from "./utils";
+import { capDecimals, transactionValue } from "./utils";
+
+test("a typed amount keeps at most 8 decimals", () => {
+  expect(capDecimals("0.0000000000000000000000000001")).toBe("0.00000000");
+  expect(capDecimals("1.123456789")).toBe("1.12345678");
+  expect(capDecimals("0.00000001")).toBe("0.00000001");
+  expect(capDecimals("12.")).toBe("12.");
+});
 
 test("an amount is signed by who it's with, never by the fee", () => {
   const sign = (tx: Parameters<typeof transactionValue>[0]) =>

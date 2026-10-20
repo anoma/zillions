@@ -25,8 +25,8 @@ import { useWallet } from "./useWallet";
  * The plan for `send` as the form changes: its fee is the one that will be
  * paid. With `max`, the amount is left to the plan: the most the source can
  * pay to this recipient after fees. `ceiling` is set when the typed amount
- * and its fee are more than the source holds: the most it can send instead,
- * and that plan's fee once known.
+ * and its fee are more than the source holds, or under `max` when it can't
+ * pay any fee: the most it can send instead, and that plan's fee once known.
  */
 export function useSendPlan(
   { from, to, amount, memo }: SendRequest,
@@ -74,7 +74,9 @@ export function useSendPlan(
   const ceiling =
     short && maxAmount.data !== undefined && debouncedAmount > maxAmount.data
       ? { amount: maxAmount.data, fee: atMax.data?.fee }
-      : undefined;
+      : max && maxAmount.data === 0n
+        ? { amount: 0n, fee: undefined }
+        : undefined;
   const plan = max ? atMax : typed;
   useEffect(() => {
     if (plan.data) prefetchTrees(plan.data);

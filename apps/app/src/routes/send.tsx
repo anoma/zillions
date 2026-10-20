@@ -85,8 +85,8 @@ function SendRoute() {
 
   const onSubmit = () => {
     const found: Problem<"amount" | "to"> | undefined =
-      amount <= 0n
-        ? { field: "amount", message: "Set an amount" }
+      amount <= 0n && !ceiling
+        ? { field: "amount", message: amountField.missing }
         : overBalance
           ? { field: "amount", message: "Insufficient balance" }
           : isPaymentLink

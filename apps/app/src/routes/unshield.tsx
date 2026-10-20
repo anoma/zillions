@@ -61,8 +61,8 @@ function UnshieldRoute() {
       return;
     }
     const problem =
-      amount <= 0n
-        ? "Set an amount"
+      amount <= 0n && !ceiling
+        ? amountField.missing
         : overBalance
           ? "Insufficient balance"
           : ceiling
