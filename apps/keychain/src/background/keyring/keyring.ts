@@ -134,6 +134,9 @@ export class Keyring {
     await this.vaultService.assertIsUnlocked();
 
     const record = await this.signingAccount(signer);
+    if ((record.type as string) === "shielded-keys") {
+      return record.owner;
+    }
     const { seed, hdIndex } = await this.resolveSeed(record);
     return (await deriveAccount(seed, hdIndex)).ufvk;
   }

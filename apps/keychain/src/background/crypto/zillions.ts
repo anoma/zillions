@@ -128,7 +128,8 @@ export const signPczt = (
  * per-pool totals; each output is `mine` when `ufvk`, the signing account's
  * viewing key, proves it lands back in the account.
  */
-export const buildPcztSummary = (pczt: string, ufvk: string): PcztSummary => {
+export const buildPcztSummary = async (pczt: string, ufvk: string): PcztSummary => {
+  await initZillionsSdk();
   const summary = pczt_summary(getNetwork(), base64ToBytes(pczt), ufvk);
   return { ...summary, raw: summary };
 };

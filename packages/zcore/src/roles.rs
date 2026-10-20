@@ -168,7 +168,7 @@ pub(crate) fn sign(
 /// A PCZT's value flows, as the keychain's approval screen shows them.
 /// Shielded inputs are totals per pool: a spend's own value may be redacted,
 /// but each bundle keeps its net value.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Summary {
     network: &'static str,
@@ -183,7 +183,7 @@ pub(crate) struct Summary {
     fee: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 struct Flow {
     address: Option<String>,
     value: String,
