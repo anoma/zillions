@@ -1,39 +1,38 @@
 /**
  * Landing step: choose Create, Import or Connect to Hardware Wallet.
  */
-import { ActionButton, Alert, Stack } from "@zillions/components";
+import { ActionButton, Stack } from "@zillions/components";
 import { Logo } from "@zillions/components/assets/Logo";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   connectLedger,
   ledgerErrorMessage,
-  UserInteractionRequired,
+  type LedgerStep,
 } from "../model/ledger";
 import { useWizard } from "../SetupContext";
+import { LedgerProgress } from "../ui/LedgerProgress";
 import { saveLedger } from "./ledger/saveLedger";
 
-const INTERACTION_LABEL: Partial<Record<UserInteractionRequired, string>> = {
-  [UserInteractionRequired.UnlockDevice]: "Unlock your Ledger",
-  [UserInteractionRequired.ConfirmOpenApp]: "Open the Zcash app on your Ledger",
-};
+const STEPS: LedgerStep[] = ["connect", "unlock", "open-app", "confirm-key"];
 
 export const Start = () => {
   const { state, dispatch, client } = useWizard();
-  const [connecting, setConnecting] = useState(false);
-  const [interaction, setInteraction] = useState<UserInteractionRequired>();
+  /** Set while a Ledger session runs or has failed. */
+  const [step, setStep] = useState<LedgerStep>();
   const [error, setError] = useState<string>();
+  const abort = useRef<AbortController>(undefined);
 
   const onConnectLedger = async () => {
     setError(undefined);
-    setConnecting(true);
+    setStep("connect");
+    abort.current = new AbortController();
+    const { signal } = abort.current;
     let keys;
     try {
-      keys = await connectLedger(setInteraction);
+      keys = await connectLedger(setStep, signal);
     } catch (e) {
-      setError(ledgerErrorMessage(e));
-      setConnecting(false);
-      setInteraction(undefined);
+      if (!signal.aborted) setError(ledgerErrorMessage(e));
       return;
     }
     dispatch({ type: "ledgerConnected", keys });
@@ -43,52 +42,57 @@ export const Start = () => {
     }
   };
 
-  const ledgerLabel = connecting
-    ? (interaction && INTERACTION_LABEL[interaction]) ?? "Connecting…"
-    : "Connect to hardware wallet";
+  const onCancel = () => {
+    abort.current?.abort();
+    setStep(undefined);
+    setError(undefined);
+  };
 
   return (
     <div className="flex flex-col flex-1 justify-center">
       <div className="w-[320px] mx-auto mb-18 text-center">
         <Logo className="w-full" />
       </div>
-      <Stack as="div" direction="vertical" gap={2}>
-        <ActionButton
-          size="lg"
-          backgroundHoverColor="black"
-          textHoverColor="primary"
-          data-testid="setup-create-keys-button"
-          onClick={() => dispatch({ type: "chooseFlow", flow: "create" })}
-        >
-          Create new keys
-        </ActionButton>
-        <ActionButton
-          size="lg"
-          outlineColor="black"
-          backgroundHoverColor="black"
-          textHoverColor="primary"
-          data-testid="setup-import-keys-button"
-          onClick={() => dispatch({ type: "chooseFlow", flow: "import" })}
-        >
-          Import existing keys
-        </ActionButton>
-        <ActionButton
-          size="lg"
-          outlineColor="black"
-          backgroundHoverColor="black"
-          textHoverColor="primary"
-          data-testid="setup-connect-ledger-button"
-          disabled={connecting}
-          onClick={() => void onConnectLedger()}
-        >
-          {ledgerLabel}
-        </ActionButton>
-        {error && (
-          <Alert title="Error" type="error">
-            {error}
-          </Alert>
-        )}
-      </Stack>
+      {step ?
+        <LedgerProgress
+          steps={STEPS}
+          current={step}
+          error={error}
+          onCancel={onCancel}
+          onRetry={() => void onConnectLedger()}
+        />
+      : <Stack as="div" direction="vertical" gap={2}>
+          <ActionButton
+            size="lg"
+            backgroundHoverColor="black"
+            textHoverColor="primary"
+            data-testid="setup-create-keys-button"
+            onClick={() => dispatch({ type: "chooseFlow", flow: "create" })}
+          >
+            Create new keys
+          </ActionButton>
+          <ActionButton
+            size="lg"
+            outlineColor="black"
+            backgroundHoverColor="black"
+            textHoverColor="primary"
+            data-testid="setup-import-keys-button"
+            onClick={() => dispatch({ type: "chooseFlow", flow: "import" })}
+          >
+            Import existing keys
+          </ActionButton>
+          <ActionButton
+            size="lg"
+            outlineColor="black"
+            backgroundHoverColor="black"
+            textHoverColor="primary"
+            data-testid="setup-connect-ledger-button"
+            onClick={() => void onConnectLedger()}
+          >
+            Connect to hardware wallet
+          </ActionButton>
+        </Stack>
+      }
     </div>
   );
 };

@@ -568,6 +568,27 @@ export function try_decrypt_gpu(network, ufvk, pool, chunk, body, from, tried, s
 }
 
 /**
+ * The shielded pools `ufvk` has a key for, newest first: Ironwood uses the
+ * Orchard key. A Ledger's viewing key has no Sapling key.
+ * @param {string} network
+ * @param {string} ufvk
+ * @returns {string[]}
+ */
+export function ufvk_pools(network, ufvk) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.ufvk_pools(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayJsValueFromWasm0(ret[0], ret[1]);
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v3;
+}
+
+/**
  * Builds the Halo2 proving and verifying keys now, for this instance's
  * proofs to skip; seconds of work, so call it off the UI thread.
  */

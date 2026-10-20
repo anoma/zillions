@@ -34,6 +34,8 @@ import { checkSpends } from "./spends";
 /** One run of shielded work, over `state`. */
 export type ShieldedRun = {
   ufvk: string;
+  /** The pools `ufvk` has a key for: no other pool's chunks are read. */
+  pools: readonly Pool[];
   /** Block height below which nothing is crawled. Absent means full history. */
   birthday?: number;
   state: WalletState;
@@ -73,13 +75,19 @@ function applySent(run: ShieldedRun, pool: Pool, sent: SentOutput[]) {
   }
 }
 
-/** Each pool's newest chunk at `sizes`, with its segments and setup's end set the first time. */
+/**
+ * Each pool's newest chunk at `sizes`, with its segments and setup's end set
+ * the first time. A pool the key can't read has none, so progress skips it.
+ */
 async function prepare(run: ShieldedRun, sizes: TreeSizes) {
   const last = Object.fromEntries(
     POOLS.map((pool) => [pool, lastChunk(sizes[pool])]),
   ) as Record<Pool, number>;
   const { scanned } = run.state.scan;
   for (const pool of POOLS) {
+    if (!run.pools.includes(pool)) delete scanned[pool];
+  }
+  for (const pool of run.pools) {
     if (!scanned[pool]) {
       const birthday = run.birthday
         ? await firstChunkFrom(pool, run.birthday, Math.max(last[pool], 0))
@@ -167,7 +175,7 @@ export async function crawlRecent(
     advance();
   };
 
-  for (const pool of POOLS) {
+  for (const pool of run.pools) {
     if (last[pool] < 0 || sizes[pool] === previous?.[pool]) continue;
     const { top } = scan.scanned[pool]!;
     if (top.from > top.to) {
@@ -196,7 +204,7 @@ export async function crawlRecent(
     phase = "setup";
     [started, read] = [Date.now(), 0];
     advance();
-    for (const pool of POOLS) {
+    for (const pool of run.pools) {
       if (last[pool] < 0) continue;
       const p = scan.scanned[pool]!;
       await crawlSegment(
@@ -241,7 +249,7 @@ export async function crawlHistory(
   advance();
   const segments =
     phase === "history" ? (["top", "before"] as const) : (["spam"] as const);
-  const left = POOLS.flatMap((pool) =>
+  const left = run.pools.flatMap((pool) =>
     segments.flatMap((segment) => {
       const { from, floor } = scan.scanned[pool]![segment];
       return from > floor
@@ -252,7 +260,7 @@ export async function crawlHistory(
   console.log(`[sync] ${phase} left (chunks): ${left.join(", ") || "none"}`);
 
   for (const segment of segments) {
-    for (const pool of POOLS) {
+    for (const pool of run.pools) {
       const p = scan.scanned[pool]!;
       const [started, from] = [Date.now(), p[segment].from];
       await crawlSegment(run, pool, p[segment], {
@@ -324,7 +332,9 @@ export async function recoverSends(
     for (const [txId, { height, tx_index }] of txs) {
       const block = blocks.get(height);
       if (done.has(txId) || !block) continue;
-      const places = outputPositions(block, tx_index).filter((p) => p.count);
+      const places = outputPositions(block, tx_index).filter(
+        (p) => p.count && run.pools.includes(p.pool),
+      );
       // Not indexed yet: try again next sync.
       if (places.some((p) => p.first + p.count > sizes[p.pool])) continue;
       for (const { pool, first, count } of places) {
