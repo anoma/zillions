@@ -307,7 +307,7 @@ export function Breakdown({
   return (
     <section
       aria-label="Summary"
-      className="flex flex-col gap-2 p-4 rounded-lg bg-card"
+      className="flex flex-col gap-1.5 px-4 pt-6 border-t border-line"
     >
       {children}
       <TotalRow label={label} value={total} />
@@ -335,7 +335,7 @@ export function SubmitBlock({
 }) {
   return (
     // Pulled toward the summary: the button acts on what it adds up.
-    <div className="-mt-4">
+    <div className="-mt-2">
       <ActionButton
         size="md"
         className="w-full h-14"

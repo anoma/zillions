@@ -33,7 +33,7 @@ export function TotalRow({
   value?: bigint;
 }) {
   return (
-    <div className="mt-1 pt-4 border-t border-line flex items-center justify-between text-sm font-semibold">
+    <div className="mt-1 flex items-center justify-between text-xs font-semibold">
       <span>{label}</span>
       <span aria-live="polite">
         {value !== undefined ? (
@@ -56,7 +56,7 @@ export function FeeRow({
   label?: string;
 }) {
   return (
-    <div className="flex items-center justify-between text-sm font-medium">
+    <div className="flex items-center justify-between text-xs font-medium text-gray-600">
       <div>{label}</div>
       <div>
         {fee !== undefined ? (
