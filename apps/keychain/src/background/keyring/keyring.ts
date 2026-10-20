@@ -64,7 +64,7 @@ const toAccountStore = (a: KeyStoreType): AccountStore => ({
 export class Keyring {
   constructor(
     protected readonly vaultService: VaultService,
-    protected readonly accounts: AccountRepository
+    protected readonly accounts: AccountRepository,
   ) {}
 
   // Return new mnemonic to client for validation
@@ -108,7 +108,7 @@ export class Keyring {
     // structural check. If every word passes, the failure is a checksum
     // error, reported without an index.
     const invalidWordIndex = words.findIndex(
-      (w) => !LOOKS_LIKE_BIP39_WORD.test(w)
+      (w) => !LOOKS_LIKE_BIP39_WORD.test(w),
     );
     if (invalidWordIndex !== -1) {
       return {
@@ -136,7 +136,7 @@ export class Keyring {
   public async sign(
     pczt: string,
     signer?: string,
-    ledgerSignatures?: LedgerSignatures
+    ledgerSignatures?: LedgerSignatures,
   ): Promise<string> {
     await this.vaultService.assertIsUnlocked();
     await initZillionsSdk();
@@ -163,6 +163,10 @@ export class Keyring {
     const record = await this.signingAccount(signer);
     const ledger = await this.ledgerAccount(record);
     if (ledger) return ledger.ufvk;
+
+    if ((record.type as string) === "shielded-keys") {
+      return record.owner;
+    }
     const { seed, hdIndex } = await this.resolveSeed(record);
     return (await deriveAccount(seed, hdIndex)).ufvk;
   }
@@ -178,7 +182,7 @@ export class Keyring {
    * child, whichever of the pair `record` is; undefined for other accounts.
    */
   private async ledgerAccount(
-    record: KeyStoreType
+    record: KeyStoreType,
   ): Promise<{ ufvk: string; hdIndex: number } | undefined> {
     const parent = record.parentId
       ? await this.accounts.findById(record.parentId)
@@ -244,7 +248,7 @@ export class Keyring {
    * material, differing only in what they do with it.
    */
   private async resolveSeed(
-    record: KeyStoreType
+    record: KeyStoreType,
   ): Promise<{ seed: Uint8Array; hdIndex: number }> {
     const secretHolder = record.parentId
       ? await this.accounts.findById(record.parentId)
@@ -257,7 +261,7 @@ export class Keyring {
     }
     if ((secretHolder.type as string) !== "mnemonic") {
       throw new Error(
-        "Only mnemonic-backed accounts are supported (imported raw keys are not supported yet)"
+        "Only mnemonic-backed accounts are supported (imported raw keys are not supported yet)",
       );
     }
 
@@ -324,7 +328,7 @@ export class Keyring {
             text: JSON.stringify({ viewingKey: accountSecret.viewingKey }),
             passphrase: "",
             accountType: "viewing-key",
-          }
+          };
       }
     })();
 
@@ -335,8 +339,7 @@ export class Keyring {
       accountType === "shielded-keys"
         ? input.shieldedAddress
         : input.transparentAddress;
-    const owner =
-      accountType === "shielded-keys" ? input.viewingKey : address;
+    const owner = accountType === "shielded-keys" ? input.viewingKey : address;
 
     // Compute the seed fingerprint for mnemonic accounts so the app can call
     // create_account_ufvk (needs fingerprint + hdIndex to embed zip32_derivation
@@ -369,7 +372,7 @@ export class Keyring {
     const account = await this.accounts.findByAddress(address);
     if (account) {
       throw new Error(
-        `Keys for ${truncateInMiddle(address, 5, 8)} already imported!`
+        `Keys for ${truncateInMiddle(address, 5, 8)} already imported!`,
       );
     }
 
@@ -416,7 +419,7 @@ export class Keyring {
     await this.vaultService.assertIsUnlocked();
 
     const existing = await this.accounts.findByAddress(
-      input.transparentAddress
+      input.transparentAddress,
     );
     if (existing) {
       const parent = existing.parentId
@@ -426,11 +429,11 @@ export class Keyring {
         throw new Error(`Parent account not found: ${existing.parentId}`);
       }
       const child = (await this.accounts.findAll()).find(
-        (a) => a.parentId === parent.id
+        (a) => a.parentId === parent.id,
       );
       await this.accounts.setActiveAccount(
         parent.id,
-        parent.type as AccountType
+        parent.type as AccountType,
       );
       return {
         parentAccount: toAccountStore(parent),
@@ -513,7 +516,7 @@ export class Keyring {
     const existing = await this.accounts.findByAddress(input.shieldedAddress);
     if (existing) {
       throw new Error(
-        `Keys for ${truncateInMiddle(input.shieldedAddress, 5, 8)} already imported!`
+        `Keys for ${truncateInMiddle(input.shieldedAddress, 5, 8)} already imported!`,
       );
     }
 
@@ -521,7 +524,7 @@ export class Keyring {
       UUID_NAMESPACE,
       "shielded-account",
       parent.id,
-      input.path.account
+      input.path.account,
     );
     const timestamp = input.source === "generated" ? new Date().getTime() : 0;
 
