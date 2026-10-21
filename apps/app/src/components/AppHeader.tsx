@@ -1,5 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import { useContext } from "react";
+import { createPortal } from "react-dom";
 import { GoKebabHorizontal } from "react-icons/go";
+import { HeaderSlotContext } from "../context/headerSlot";
 import { ZillionsIcon } from "../icons/ZillionsIcon";
 import { AccountMenuButton } from "./account/AccountMenuButton";
 import { HelpLinks } from "./MainNav";
@@ -23,13 +26,23 @@ function MoreMenu() {
   );
 }
 
-export function AppHeader() {
+/** Portals the account menu into AppLayout's header; must sit inside WalletProvider. */
+export function AccountHeader() {
+  const slot = useContext(HeaderSlotContext);
+  return slot && createPortal(<AccountMenuButton />, slot);
+}
+
+export function AppHeader({
+  slotRef,
+}: {
+  slotRef: (el: HTMLElement | null) => void;
+}) {
   return (
     <header className="h-full flex items-center justify-end border-b border-line-strong bg-surface px-6">
       <Link to="/" className="mr-auto lg:hidden">
         <ZillionsIcon className="h-8" />
       </Link>
-      <AccountMenuButton />
+      <div ref={slotRef} className="contents" />
       <div className="lg:hidden">
         <MoreMenu />
       </div>
