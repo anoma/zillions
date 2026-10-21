@@ -524,6 +524,51 @@ impl Wallet {
         .collect()
     }
 
+    /// What `from` (`"shielded"` or `"transparent"`) can spend now, and once
+    /// every note is confirmed: dust never counts.
+    pub(crate) fn spendable(&self, from: &str) -> (u64, u64) {
+        // Past upstream's longest wait, 10 confirmations.
+        const SETTLED: u32 = 100;
+        (
+            self.spendable_at(from, TargetHeight::from(self.tip + 1)),
+            self.spendable_at(from, TargetHeight::from(self.tip + SETTLED)),
+        )
+    }
+
+    /// By the same confirmation and dust rules selection applies.
+    fn spendable_at(&self, from: &str, target: TargetHeight) -> u64 {
+        let policy = ConfirmationsPolicy::default();
+        if from == "transparent" {
+            return self
+                .spendable_utxos(target, policy)
+                .map(|o| u64::from(o.value()))
+                .filter(|&v| above_dust(v))
+                .sum();
+        }
+        let all =
+            || TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable);
+        let orchard_family = |notes, pool| {
+            select(notes, orchard_value, pool, all(), target, policy, &[])
+                .iter()
+                .map(|n| orchard_value(n.note()))
+                .sum::<u64>()
+        };
+        select(
+            &self.sapling,
+            sapling_value,
+            ShieldedPool::Sapling,
+            all(),
+            target,
+            policy,
+            &[],
+        )
+        .iter()
+        .map(|n| sapling_value(n.note()))
+        .sum::<u64>()
+            + orchard_family(&self.orchard, ShieldedPool::Orchard)
+            + orchard_family(&self.ironwood, ShieldedPool::Ironwood)
+    }
+
     /// Everything `from` (`"shielded"`, `"transparent"` or `"orchard"`) holds, spendable or not.
     pub(crate) fn total(&self, from: &str) -> u64 {
         if from == "transparent" {
@@ -651,6 +696,33 @@ mod tests {
         let change = orchard_family_note("ironwood", Scope::Internal, 50_000, TIP - 5, 2);
         let wallet = wallet(vec![received, change], vec![]);
         assert_eq!(picked(&wallet, at_least(10_000)), [(2, 50_000)]);
+        assert_eq!(wallet.spendable("shielded"), (50_000, 100_000));
+    }
+
+    #[test]
+    fn spendable_leaves_out_dust_and_unconfirmed() {
+        let note = |value, height, position| {
+            orchard_family_note("ironwood", Scope::External, value, height, position)
+        };
+        let ours =
+            crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 0, 1)
+                .unwrap()
+                .remove(0);
+        let wallet = wallet(
+            vec![
+                note(5_000, TIP - 100, 1),
+                note(70_000, TIP - 100, 2),
+                note(90_000, TIP - 2, 3),
+            ],
+            vec![
+                UtxoData::for_tests(&ours, 30_000, 0, TIP - 50),
+                UtxoData::for_tests(&ours, 5_000, 1, TIP - 50),
+                UtxoData::for_tests(&ours, 40_000, 2, TIP - 2),
+            ],
+        );
+        assert_eq!(wallet.spendable("shielded"), (70_000, 160_000));
+        // Upstream allows zero-confirmation shielding, so any mined coin counts.
+        assert_eq!(wallet.spendable("transparent"), (70_000, 70_000));
     }
 
     #[test]

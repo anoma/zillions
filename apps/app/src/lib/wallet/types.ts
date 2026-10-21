@@ -77,8 +77,10 @@ export interface PendingTx {
   nullifiers: string[];
   /** The coins it spends, as `txid:index`. */
   outpoints: string[];
-  /** Zatoshis it returns to us as change. */
+  /** Zatoshis it returns to us, as change or a payment to ourselves. */
   change: number;
+  /** The part of `change` going to a transparent address; older records have none. */
+  transparentChange?: number;
   /** What history lists for it until it's mined; older records have none. */
   receipt?: PendingActivity;
 }

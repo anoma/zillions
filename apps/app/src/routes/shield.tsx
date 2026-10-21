@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { AmountDisplay } from "../components/AmountInput";
 import { FormPage } from "../components/FormPage";
+import { HeldFunds } from "../components/HeldFunds";
 import { FeeRow } from "../components/PlannedFee";
 import {
   Breakdown,
@@ -32,7 +33,7 @@ function ShieldRoute() {
   const account = useAccount();
   const wallet = useWallet();
   const balance = useGetBalance();
-  const available = balance.data?.unshieldedBalance ?? 0n;
+  const available = balance.data?.transparent.available ?? 0n;
   const { seedFingerprint, hdIndex } = account.shielded;
 
   // The proposal is the PCZT that gets signed: its fee is the one paid.
@@ -73,7 +74,7 @@ function ShieldRoute() {
       // Everything shielded comes back to us, in Ironwood.
       const { txid } = await wallet.submit(
         base64ToBytes(signed),
-        value,
+        { shielded: value, transparent: 0n },
         receipt,
         track,
       );
@@ -121,15 +122,19 @@ function ShieldRoute() {
 
       <FormCard heading="Amount">
         <AmountDisplay zat={available} />
-        <p
+        <div
           role={tooLittle ? "alert" : undefined}
           className={twMerge(
-            "-mt-1 text-sm text-center font-medium",
+            "-mt-1 flex items-center justify-center gap-1.5 text-sm font-medium",
             tooLittle ? "text-red-700" : "text-gray-600",
           )}
         >
           {tooLittle ? tooLittleMessage : "All your transparent funds"}
-        </p>
+          <HeldFunds
+            zat={balance.data?.transparent.waiting ?? 0n}
+            pool="transparent"
+          />
+        </div>
       </FormCard>
 
       <Breakdown label="You'll have shielded" total={proposal.data?.value}>

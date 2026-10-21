@@ -9,6 +9,7 @@ import { twMerge } from "tailwind-merge";
 import type { StageEntry, SubmitStage } from "../hooks/useSubmitStage";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { AmountInput } from "./AmountInput";
+import { HeldFunds } from "./HeldFunds";
 import { TotalRow } from "./PlannedFee";
 import { ActionButton } from "./ui/ActionButton";
 import type { Color } from "./ui/types";
@@ -67,10 +68,14 @@ function ArrowRightIcon(props: ComponentProps<"svg">) {
 
 export function AvailableWithMax({
   available,
+  waiting,
+  pool,
   isMax,
   onToggleMax,
 }: {
   available: bigint;
+  waiting: bigint;
+  pool: "shielded" | "transparent";
   isMax: boolean;
   onToggleMax: () => void;
 }) {
@@ -79,6 +84,12 @@ export function AvailableWithMax({
       <span>
         Available: <ZecValue zat={available} />
       </span>
+      {/* Opens leftwards: this row sits at the card's right edge. */}
+      <HeldFunds
+        zat={waiting}
+        pool={pool}
+        className="left-auto right-0 translate-x-0"
+      />
       <button
         type="button"
         className={twMerge(

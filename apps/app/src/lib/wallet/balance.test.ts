@@ -63,13 +63,30 @@ test("only what's checked unspent and not held by a pending transaction is spend
   expect(free.utxos.map((u) => u.txid)).toEqual(["coin"]);
 });
 
-test("balances count what's spendable, and pending change apart", () => {
-  expect(balances(notes, utxos, pending)).toEqual({
-    shieldedBalance: 8_000n,
+test("balances include what pending transactions return, by pool, and nothing is available until zcore says so", () => {
+  const unshield: PendingTx = {
+    ...pending[0],
+    change: 3_000,
+    transparentChange: 1_000,
+  };
+  expect(balances(notes, utxos, [unshield])).toEqual({
+    shielded: { balance: 10_000n, available: 8_000n, waiting: 2_000n },
+    transparent: { balance: 2_000n, available: 1_000n, waiting: 1_000n },
     orchardBalance: 3_000n,
-    pendingChange: 2_000n,
-    pendingSpendable: 0n,
-    unshieldedBalance: 1_000n,
+  });
+});
+
+test("available is what zcore can spend now; what it can later waits, and dust neither", () => {
+  // 8,000 free: 4,000 spendable now, 2,500 once confirmed, the rest dust.
+  const now = {
+    shielded: { now: 4_000n, later: 6_500n },
+    transparent: { now: 1_000n, later: 1_000n },
+  };
+  // A record from before the split: all of its change counts as shielded.
+  expect(balances(notes, utxos, pending, now)).toEqual({
+    shielded: { balance: 10_000n, available: 4_000n, waiting: 4_500n },
+    transparent: { balance: 1_000n, available: 1_000n, waiting: 0n },
+    orchardBalance: 3_000n,
   });
 });
 

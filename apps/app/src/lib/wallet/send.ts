@@ -12,6 +12,7 @@ import initZcore, {
   plan_shield,
   send_pczt,
   shield_pczt,
+  spendable,
 } from "@zillions/zcore";
 import { queryClient } from "../queryClient";
 import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./chain/indexer";
@@ -62,6 +63,20 @@ const request = (send: SendRequest) => ({
 export async function planSend(wallet: WalletData, send: SendRequest) {
   await initZcore();
   return plan_send(NETWORK, wallet, request(send)) as SendPlan;
+}
+
+export type Source = "shielded" | "transparent";
+
+/** What each source can spend now, and `later` once every note is confirmed. */
+export type Spendable = Record<Source, { now: bigint; later: bigint }>;
+
+export async function spendableNow(wallet: WalletData): Promise<Spendable> {
+  await initZcore();
+  const of = (from: Source) => {
+    const { now, later } = spendable(NETWORK, wallet, from);
+    return { now: BigInt(now), later: BigInt(later) };
+  };
+  return { shielded: of("shielded"), transparent: of("transparent") };
 }
 
 /** The most `send` (its amount ignored) can pay after fees. */

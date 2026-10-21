@@ -53,6 +53,7 @@ vi.mock("@zillions/zcore", () => ({
     new TextDecoder().decode(script),
   ),
   max_send: vi.fn(() => 0),
+  spendable: vi.fn(() => ({ now: 0, later: 0 })),
   plan_send: vi.fn(),
   send_pczt: vi.fn(),
   plan_shield: vi.fn(),
@@ -222,7 +223,7 @@ test("places a note's spend from the indexer, and reads what it paid into anothe
     expect.objectContaining({ pool: "sapling", chunk: 0, sends: true }),
   );
   expect(saved.sent).toEqual([expect.objectContaining(payment)]);
-  expect((await wallet.getBalance()).shieldedBalance).toBe(0n);
+  expect((await wallet.getBalance()).shielded.balance).toBe(0n);
 });
 
 test("never reads a pool the viewing key has no key for, and still finishes", async () => {
@@ -264,7 +265,7 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
 
   const wallet = new Wallet({ id: "b", ufvk: "uview" });
   await wallet.sync();
-  expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
+  expect((await wallet.getBalance()).shielded.balance).toBe(5_000n);
 
   vi.mocked(submitTransaction).mockResolvedValue({
     txid: "t1",
@@ -277,14 +278,18 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
     nullifiers: [nf("bb")],
     value_balance: 1_000,
   });
-  await wallet.submit(new Uint8Array(), 1_000n, {
-    tx_type: "Sent",
-    value: -3_000n,
-    fee: 1_000n,
-    timestamp: 1,
-    from: { pool: "shielded" },
-    to: { address: "zs1" },
-  });
+  await wallet.submit(
+    new Uint8Array(),
+    { shielded: 1_000n, transparent: 0n },
+    {
+      tx_type: "Sent",
+      value: -3_000n,
+      fee: 1_000n,
+      timestamp: 1,
+      from: { pool: "shielded" },
+      to: { address: "zs1" },
+    },
+  );
   expect((await wallet.getTransactionHistory())[0]).toMatchObject({
     txid: "t1",
     status: "Pending",
@@ -292,10 +297,12 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
   });
 
   const pending = await wallet.getBalance();
-  expect([pending.shieldedBalance, pending.pendingChange]).toEqual([
-    0n,
-    1_000n,
-  ]);
+  // The change counts in the balance, and waits to be spent.
+  expect(pending.shielded).toEqual({
+    balance: 1_000n,
+    available: 0n,
+    waiting: 1_000n,
+  });
   await wallet.maxSend({ from: "shielded", to: "zs1", amount: 0n });
   expect(vi.mocked(zcore.max_send).mock.lastCall?.[1].notes).toEqual([]);
 
@@ -303,10 +310,7 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
   chain.tip = 3_300;
   await wallet.sync();
   const released = await wallet.getBalance();
-  expect([released.shieldedBalance, released.pendingChange]).toEqual([
-    5_000n,
-    0n,
-  ]);
+  expect(released.shielded.balance).toBe(5_000n);
   expect(
     (await wallet.getTransactionHistory()).some((tx) => tx.txid === "t1"),
   ).toBe(false);
@@ -329,7 +333,7 @@ test("places a Sapling spend from the indexer", async () => {
     status: "spent",
     at: { height: 3_050, tx_index: 4 },
   });
-  expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
+  expect((await wallet.getBalance()).shielded.balance).toBe(5_000n);
 });
 
 test("keeps a Sapling-only send with no change in history once mined", async () => {
@@ -349,14 +353,18 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
     nullifiers: [nf("ce")],
     value_balance: 1_000,
   });
-  await wallet.submit(new Uint8Array(), 0n, {
-    tx_type: "Sent",
-    value: -4_000n,
-    fee: 1_000n,
-    timestamp: 1,
-    from: { pool: "shielded" },
-    to: { address: "u1theirs" },
-  });
+  await wallet.submit(
+    new Uint8Array(),
+    { shielded: 0n, transparent: 0n },
+    {
+      tx_type: "Sent",
+      value: -4_000n,
+      fee: 1_000n,
+      timestamp: 1,
+      from: { pool: "shielded" },
+      to: { address: "u1theirs" },
+    },
+  );
 
   // Mined at 3_210, paying one Orchard note and nothing back to us.
   chain.spentAt.set(nf("ce"), { height: 3_210, tx_index: 2 });
@@ -546,7 +554,7 @@ test("crawls newest-first, and a later sync reads the chunks minted since and th
   });
   const wallet = new Wallet({ id: "j", ufvk: "uview" });
   await expect(wallet.sync()).rejects.toThrow("network");
-  expect((await wallet.getBalance()).shieldedBalance).toBe(0n);
+  expect((await wallet.getBalance()).shielded.balance).toBe(0n);
 
   chain.sizes.orchard = 5 * 16_384;
   vi.mocked(crawlChunks).mockImplementation(async (o) => {
@@ -558,7 +566,7 @@ test("crawls newest-first, and a later sync reads the chunks minted since and th
 
   // Those minted since down to chunk 2 again (it may have been filling), then below.
   expect(read).toEqual([2, 4, 3, 2, 1, 0]);
-  expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
+  expect((await wallet.getBalance()).shielded.balance).toBe(5_000n);
 });
 
 test("history waits while the browser saves data, then reads what setup left once asked", async () => {
@@ -576,12 +584,12 @@ test("history waits while the browser saves data, then reads what setup left onc
 
   await wallet.sync();
   expect(phases.at(-1)).toBe("paused");
-  expect((await wallet.getBalance()).shieldedBalance).toBe(0n);
+  expect((await wallet.getBalance()).shielded.balance).toBe(0n);
 
   wallet.downloadHistory();
   await vi.waitFor(() => expect(phases.at(-1)).toBe("done"));
   expect(phases).toContain("history");
-  expect((await wallet.getBalance()).shieldedBalance).toBe(5_000n);
+  expect((await wallet.getBalance()).shielded.balance).toBe(5_000n);
 
   Object.defineProperty(navigator, "connection", { value: undefined });
   chain.setup.orchard = 0;

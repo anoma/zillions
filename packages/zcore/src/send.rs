@@ -486,6 +486,23 @@ fn shield_wallet(network: &str, wallet: JsValue) -> Result<Wallet, String> {
     Wallet::new(network, &data)
 }
 
+/// What `from` (`"shielded"` or `"transparent"`) can spend before fees, in
+/// zatoshis: `{ now, later }`, `later` once every note is confirmed. Dust,
+/// which [`plan_send`] never picks, counts in neither.
+#[wasm_bindgen]
+pub fn spendable(network: &str, wallet: JsValue, from: &str) -> Result<JsValue, JsError> {
+    let wallet = shield_wallet(network, wallet).map_err(|e| JsError::new(&e))?;
+    let (now, later) = wallet.spendable(from);
+    serde_wasm_bindgen::to_value(&Spendable { now, later })
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
+#[derive(Serialize)]
+struct Spendable {
+    now: u64,
+    later: u64,
+}
+
 /// The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
 #[wasm_bindgen]
 pub fn max_send(network: &str, wallet: JsValue, send: JsValue) -> Result<u64, JsError> {

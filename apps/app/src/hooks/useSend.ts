@@ -148,9 +148,16 @@ export function useSend() {
             : account.shielded.address,
         pczt: bytesToBase64(pczt),
       });
-      const change = plan.steps
-        .flatMap((step) => step.change)
-        .reduce((sum, flow) => sum + BigInt(flow.value), 0n);
+      const change = { shielded: 0n, transparent: 0n };
+      for (const flow of plan.steps.flatMap((step) => step.change)) {
+        change[flow.pool === "transparent" ? "transparent" : "shielded"] +=
+          BigInt(flow.value);
+      }
+      if (toSelf) {
+        const pool = "pool" in shown.to ? shown.to.pool : undefined;
+        change[pool === "transparent" ? "transparent" : "shielded"] +=
+          send.amount;
+      }
       const receipt = {
         ...shown,
         fee: BigInt(plan.fee),
@@ -158,7 +165,7 @@ export function useSend() {
       };
       const { txid, expiryHeight } = await wallet.submit(
         base64ToBytes(signed),
-        change + (toSelf ? send.amount : 0n),
+        change,
         receipt,
         track,
       );

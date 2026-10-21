@@ -145,6 +145,13 @@ export function shield_pczt(network: string, ufvk: string, seed_fingerprint: str
 export function sign_pczt(network: string, pczt: Uint8Array, seed: Uint8Array, hd_index: number): Uint8Array;
 
 /**
+ * What `from` (`"shielded"` or `"transparent"`) can spend before fees, in
+ * zatoshis: `{ now, later }`, `later` once every note is confirmed. Dust,
+ * which [`plan_send`] never picks, counts in neither.
+ */
+export function spendable(network: string, wallet: any, from: string): any;
+
+/**
  * The account's spending secret in both encodings: `{ orchard, sapling }`.
  */
 export function spending_keys(network: string, seed: Uint8Array, hd_index: number): any;
@@ -213,6 +220,7 @@ export interface InitOutput {
     readonly send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any, k: number) => [number, number, number, number];
     readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any) => [number, number, number, number];
     readonly sign_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
+    readonly spendable: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
     readonly spending_keys: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly try_decrypt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number) => [number, number, number];
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];

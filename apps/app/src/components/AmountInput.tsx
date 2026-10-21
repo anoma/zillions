@@ -90,7 +90,7 @@ export function AmountDisplay({
       )}
     >
       <span
-        className="flex items-baseline leading-none font-medium tabular-nums"
+        className="flex items-baseline leading-none font-medium"
         style={{ fontSize: fitFontSize(zec.length + 2, "4.5rem") }}
       >
         {zec}

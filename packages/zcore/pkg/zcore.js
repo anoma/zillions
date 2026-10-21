@@ -484,6 +484,27 @@ export function sign_pczt(network, pczt, seed, hd_index) {
 }
 
 /**
+ * What `from` (`"shielded"` or `"transparent"`) can spend before fees, in
+ * zatoshis: `{ now, later }`, `later` once every note is confirmed. Dust,
+ * which [`plan_send`] never picks, counts in neither.
+ * @param {string} network
+ * @param {any} wallet
+ * @param {string} from
+ * @returns {any}
+ */
+export function spendable(network, wallet, from) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(from, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.spendable(ptr0, len0, wallet, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * The account's spending secret in both encodings: `{ orchard, sapling }`.
  * @param {string} network
  * @param {Uint8Array} seed

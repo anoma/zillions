@@ -125,7 +125,7 @@ function Row({ tx }: { tx: Activity }) {
         <AddressBadge party={tx.to} />
       </div>
       <div className="text-right text-base font-semibold">
-        <TransactionValue tx={tx} className="proportional-nums" />
+        <TransactionValue tx={tx} />
       </div>
     </Link>
   );
