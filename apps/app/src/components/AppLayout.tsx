@@ -17,7 +17,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <AppHeader slotRef={setHeaderSlot} />
         </div>
       </div>
-      <main className="lg:pl-50 pt-16 max-lg:pb-16">{children}</main>
+      <main className="min-h-svh flex flex-col lg:pl-50 pt-16 max-lg:pb-16">
+        {/* Full-page loaders and messages centre in this box, clear of the nav. */}
+        <div className="relative flex-1">{children}</div>
+      </main>
       <div className="lg:hidden">
         <BottomNav />
       </div>
