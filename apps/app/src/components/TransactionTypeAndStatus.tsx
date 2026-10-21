@@ -46,7 +46,7 @@ export function PendingIcon({
           {children}
           <ClockIcon
             aria-hidden="true"
-            className="absolute -right-1 -bottom-1 size-3.5 rounded-full bg-surface text-gray-600"
+            className="absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full bg-surface text-gray-600"
           />
         </span>
       </Tooltip>
