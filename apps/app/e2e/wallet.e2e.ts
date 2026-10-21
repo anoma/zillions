@@ -17,6 +17,11 @@ test.describe("not connected", () => {
     await expect(page.getByRole("link", { name: "Shield" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Unshield" })).toHaveCount(0);
     await expect(page.getByText("No transactions yet")).toBeVisible();
+
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await expect(page.getByRole("dialog", { name: "Account" })).toContainText(
+      "0.01 ZEC",
+    );
   });
 });
 
