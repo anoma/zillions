@@ -9,9 +9,7 @@ import init, {
   StringPointer,
   VecU8Pointer,
 } from "@zillions/crypto";
-// The wasm binary is resolved to a URL at build time (Vite `?url`) and copied
-// into the extension bundle (see vite.config.mts static-copy target).
-import cryptoWasmUrl from "@zillions/crypto/src/crypto/crypto_bg.wasm?url";
+import browser from "webextension-polyfill";
 
 import { Argon2Config, CryptoRecord, KdfType } from "./types";
 
@@ -28,7 +26,10 @@ let initialized: Promise<void> | undefined;
 export const initCrypto = async (): Promise<void> => {
   if (!initialized) {
     initialized = (async () => {
-      const output = await init(cryptoWasmUrl);
+      // Copied by the `build:publicAssets` hook in wxt.config.ts.
+      const output = await init({
+        module_or_path: browser.runtime.getURL("/wasm/crypto_bg.wasm"),
+      });
       cryptoMemory = output.memory;
     })();
   }

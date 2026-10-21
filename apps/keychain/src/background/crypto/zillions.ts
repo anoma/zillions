@@ -15,6 +15,7 @@ import initZcore, {
 } from "@zillions/zcore";
 import type { PcztTransaction } from "@ledgerhq/device-signer-kit-zcash";
 import type { PcztSummary } from "@zillions/types";
+import browser from "webextension-polyfill";
 
 import type { LedgerSignatures } from "../../ipc/contract";
 
@@ -22,7 +23,10 @@ let initialized: Promise<unknown> | undefined;
 
 /** Initialize the zcore wasm module. Idempotent; await before any call. */
 export const initZillionsSdk = (): Promise<unknown> => {
-  return (initialized ??= initZcore());
+  // Copied by the `build:publicAssets` hook in wxt.config.ts.
+  return (initialized ??= initZcore({
+    module_or_path: browser.runtime.getURL("/wasm/zcore_bg.wasm"),
+  }));
 };
 
 /**
