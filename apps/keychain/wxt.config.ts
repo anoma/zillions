@@ -47,8 +47,7 @@ const buildProcessEnv = (
 // `crypto` is special-cased: its entry is a prebuilt
 // wasm-bindgen `.js` glue file (not an `src/index`), so the bare import must
 // point at that file — otherwise the generic rule resolves it to a DIRECTORY
-// and the bundler fails with "Is a directory". The `/src/...` subpath rule
-// still handles `@zillions/crypto/src/crypto/crypto_bg.wasm?url`.
+// and the bundler fails with "Is a directory".
 const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
   const generic = ["components", "storage", "types", "utils"].flatMap(
     (name) => [
@@ -113,6 +112,24 @@ export default defineConfig({
     // This forces the dev browser to reuse the same profile directory
     // keeping cookies, localStorage, and IndexedDB safe between sessions.
     chromiumArgs: ["--user-data-dir=./.wxt/dev-profile"],
+  },
+
+  // The background is bundled as a single file, where Vite inlines every
+  // asset as base64; that pushed background.js past AMO's 5 MB limit. Ship
+  // the wasm at fixed paths instead and load it via `runtime.getURL`.
+  hooks: {
+    "build:publicAssets": (_, files) => {
+      files.push(
+        {
+          absoluteSrc: r("src/packages/crypto/src/crypto/crypto_bg.wasm"),
+          relativeDest: "wasm/crypto_bg.wasm",
+        },
+        {
+          absoluteSrc: r("../../packages/zcore/pkg/zcore_bg.wasm"),
+          relativeDest: "wasm/zcore_bg.wasm",
+        },
+      );
+    },
   },
 
   manifest: ({ browser }) => ({
@@ -195,6 +212,20 @@ export default defineConfig({
         name: "zillions-alias",
         config() {
           return { resolve: { alias: zillionsAliases() } };
+        },
+      },
+      {
+        // Vite inlines wasm-bindgen's default `new URL(..., import.meta.url)`
+        // even though we always pass `module_or_path`; see `hooks` above.
+        name: "zcore-no-default-wasm-url",
+        enforce: "pre",
+        transform(code: string, id: string) {
+          if (!id.endsWith("/zcore/pkg/zcore.js")) return;
+          const fallback = "new URL('zcore_bg.wasm', import.meta.url)";
+          if (!code.includes(fallback)) {
+            this.error(`zcore.js no longer contains ${fallback}`);
+          }
+          return code.replace(fallback, "undefined");
         },
       },
     ],
