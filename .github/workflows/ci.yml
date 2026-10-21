@@ -21,3 +21,21 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm app:test
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter zillions-app exec playwright install --with-deps chromium firefox
+      - run: pnpm app:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/app/test-results

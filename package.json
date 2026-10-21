@@ -11,6 +11,7 @@
     "keychain:dev": "pnpm --filter zillions-keychain dev",
     "app:build": "pnpm --filter zillions-app build",
     "app:test": "pnpm --filter zillions-app test",
+    "app:e2e": "pnpm --filter zillions-app e2e",
     "keychain:build": "pnpm --filter zillions-keychain build",
     "keychain:zip": "pnpm --filter zillions-keychain zip",
     "build": "bash scripts/build.sh",
