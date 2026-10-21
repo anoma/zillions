@@ -218,7 +218,9 @@ Moves shielded funds to one of the account's own transparent addresses.
 - A **detail page** per transaction: type, status, amounts broken down (e.g.
   "Sent from Transparent" / "Received in Shielded"), fee, from, to, time,
   memo when there is one, and a block-explorer link. The fee is exact
-  whenever the account paid it.
+  whenever the account paid it. Its amount carries no sign: the type
+  already says which way it went, and the sign is for reading the list as
+  the balance's ups and downs. The receipt after a send is this page.
 - A transaction is read in full from the server only where that shows
   more: when it spent the account's funds (its exact fee and transparent
   recipients) or transparent coins (its sender). A shielded payment received

@@ -8,7 +8,6 @@ import { CopyToClipboardControl } from "./CopyToClipboardControl";
 import { FormPage } from "./FormPage";
 import { FeeRow } from "./PlannedFee";
 import { TransactionTypeAndStatus } from "./TransactionTypeAndStatus";
-import { TransactionValue } from "./TransactionValue";
 import { Breakdown, FormCard } from "./TransferForm";
 import { ZecValue } from "./ZecValue";
 
@@ -82,9 +81,10 @@ function PartyList({ label, party }: { label: string; party: Party }) {
 }
 
 export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
-  const { signal, value } = transactionValue(tx);
+  // Unsigned: the type above already says which way it went.
+  const { value } = transactionValue(tx);
   // +2 for the half-size " ZEC" suffix.
-  const valueChars = signal.length + zatoshiToZec(value).length + 2;
+  const valueChars = zatoshiToZec(value).length + 2;
   // The last row is what the whole transaction comes to.
   const rows = (
     {
@@ -131,7 +131,7 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
           className="py-3 leading-none font-medium"
           style={{ fontSize: fitFontSize(valueChars, "3.75rem") }}
         >
-          <TransactionValue tx={tx} />
+          <ZecValue zat={value} />
         </div>
         {tx.timestamp && (
           <time className="text-xs text-gray-600">
