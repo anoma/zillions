@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.7.0...zillions-keychain-v0.8.0) (2026-10-21)
+
+
+### Features
+
+* firefox build optimizations ([#126](https://github.com/heliaxdev/zillions-interface/issues/126)) ([c6e5779](https://github.com/heliaxdev/zillions-interface/commit/c6e57798097a23b339382555285c14aef727e560))
+
 ## [0.7.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.6.0...zillions-keychain-v0.7.0) (2026-10-20)
 
 
