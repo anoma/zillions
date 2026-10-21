@@ -6,9 +6,6 @@ const CHAIN = "http://localhost:5291";
 export default defineConfig({
   testDir: "e2e",
   testMatch: "*.e2e.ts",
-  // Each test gets its own browser context, so none waits on another.
-  fullyParallel: true,
-  workers: process.env.CI ? "100%" : undefined,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
