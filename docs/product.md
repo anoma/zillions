@@ -205,15 +205,20 @@ Moves shielded funds to one of the account's own transparent addresses.
     same pool shows as Sent, to "Shielded" or "Transparent", its amount what
     reached the receiving address (not change), the fee apart;
   - **Status**: "Processing" from the moment a send, shield or unshield is
-    broadcast until it's mined, then "Confirming n/k" with a ring filling
-    one segment per block, then "Completed" (a payment link: Unclaimed,
-    Claimed or Cancelled). k is zcash_client_backend's default: 3 for the
-    account's own transactions, 10 for a payment received from someone else.
-    Processing counts down the usual 3 minutes live ("Processing · ~2
-    min", and "About 2 min left" on its detail page); past them it reads
-    "Still processing", and the detail page says how many blocks are left
-    before it expires. Hovering or tapping the status explains what it's
-    waiting for. One that expires unmined drops off the list;
+    broadcast (a payment received: once it's mined) until it has its
+    confirmations, then "Completed" (a payment link: Unclaimed, Claimed or
+    Cancelled). The confirmations are zcash_client_backend's default: 3 for
+    the account's own transactions, 10 for a payment received from someone
+    else. A pending transaction's icon carries a clock; hovering or tapping
+    it shows how far along it is as a percent and the minutes left, planned
+    upfront from 75-second blocks (4 min for its own: the next block, the
+    15-second tip check, 2 more blocks; 9 more blocks for a payment
+    received). Each event (mined, a new block) spreads what's left of the
+    percent over the new time left, so it only moves forward. Past the
+    estimate the percent is gone for good: before it's mined it says it's
+    taking longer and how many blocks are left before it expires; once
+    mined, the minutes left. The detail page shows the same line. One that
+    expires unmined drops off the list;
   - **Time**.
 - A **detail page** per transaction: type, status, amounts broken down (e.g.
   "Sent from Transparent" / "Received in Shielded"), fee, from, to, time,

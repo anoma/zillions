@@ -57,7 +57,9 @@ work.
   Between syncs the tip is checked every 15 s (`TIP_CHECK_MS`) and a new
   block syncs at once, or a minute after the last sync (`RESYNC_MS`) at the
   latest. That timed sync holds off while phases 3–4 run,
-  and new activity then shows once they end or on a refresh. The first sync
+  and new activity then shows once they end or on a refresh, except while
+  something is pending (unmined, or short of its confirmations): then a new
+  block syncs at once and pauses them. The first sync
   of a visit, and a tap on the indicator, still run at once. Coming back to
   the tab or back online also syncs at once, but holds off like the timer.
 

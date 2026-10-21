@@ -8,7 +8,8 @@ const {
   pendingActivity,
   prunePending,
   confirmedAt,
-  minutesLeft,
+  plan,
+  progressAt,
   EXPIRY_MARGIN,
 } = await import("./pending");
 
@@ -114,14 +115,54 @@ test("a mined transaction stays pending until it has the default confirmations",
   expect(at(undefined)).toEqual(["Sent Confirmed 0", "Received Confirmed 0"]);
 });
 
-test("a broadcast counts down the usual 3 minutes, then reads as late", () => {
+test("a send plans 4 minutes, and each event spreads what's left over the new time left", () => {
   const sent = 1_000;
-  const at = (seconds: number) => minutesLeft(sent, (sent + seconds) * 1000);
+  const ms = (seconds: number) => (sent + seconds) * 1000;
+  // `events` maps seconds after the broadcast to the confirmations seen then.
+  const run = (events: [number, number][], seconds: number) => {
+    let p = plan({ tx_type: "Sent", timestamp: sent }, ms(0));
+    for (const [at, confirmations] of events)
+      p = plan({ tx_type: "Sent", timestamp: sent, confirmations }, ms(at), p);
+    return progressAt(p, ms(seconds));
+  };
 
-  expect(at(0)).toBe(3);
-  expect(at(30)).toBe(3);
-  expect(at(60)).toBe(2);
-  expect(at(2 * 60 + 59)).toBe(1);
-  expect(at(3 * 60)).toBe(0);
-  expect(at(60 * 60)).toBe(0);
+  // 90 s to be mined, then 2 blocks of 75 s.
+  expect(run([], 0)).toEqual({ percent: 0, minutes: 4 });
+  expect(run([[90, 1]], 90)).toEqual({ percent: 37, minutes: 3 });
+  expect(
+    run(
+      [
+        [90, 1],
+        [165, 2],
+      ],
+      165,
+    ),
+  ).toEqual({ percent: 68, minutes: 2 });
+
+  // Mined late, at 180 s: the last 25% fills over the 150 s still needed.
+  expect(run([[180, 1]], 180)).toEqual({ percent: 75, minutes: 3 });
+  expect(run([[180, 1]], 255)).toEqual({ percent: 87, minutes: 2 });
+
+  // Past the estimate the percent is gone for good; once mined the time left is back.
+  expect(run([], 250)).toEqual({ percent: undefined, minutes: undefined });
+  expect(run([[300, 1]], 300)).toEqual({ percent: undefined, minutes: 3 });
+  expect(run([[300, 1]], 460)).toEqual({
+    percent: undefined,
+    minutes: undefined,
+  });
+});
+
+test("a payment received is planned from its block: 9 more blocks", () => {
+  const mined = 1_000;
+  const p = plan(
+    { tx_type: "Received", timestamp: mined, confirmations: 1 },
+    mined * 1000,
+  );
+  expect(progressAt(p, mined * 1000)).toEqual({ percent: 0, minutes: 12 });
+  // First seen later, it's already part way.
+  const late = plan(
+    { tx_type: "Received", timestamp: mined, confirmations: 1 },
+    (mined + 675) * 1000,
+  );
+  expect(progressAt(late, (mined + 675) * 1000).percent).toBe(50);
 });

@@ -5,7 +5,7 @@ import type { Activity } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
-import { PendingStatus, TransactionTypeIcon } from "./TransactionTypeAndStatus";
+import { PendingIcon, TransactionTypeIcon } from "./TransactionTypeAndStatus";
 import { TransactionValue } from "./TransactionValue";
 import { focusRingClassName } from "./ui/utils";
 
@@ -103,9 +103,13 @@ function Row({ tx }: { tx: Activity }) {
         "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black",
       )}
     >
-      <span className="size-9 grid place-items-center rounded-full bg-black/5 text-gray-600">
-        <TransactionTypeIcon tx_type={tx.tx_type} />
-      </span>
+      {tx.status === "Pending" ? (
+        <PendingIcon tx={tx}>
+          <TypeIcon tx={tx} />
+        </PendingIcon>
+      ) : (
+        <TypeIcon tx={tx} />
+      )}
       <div>
         <div>{tx.tx_type}</div>
         <div className="mt-0.5 text-xs text-gray-600">
@@ -131,8 +135,15 @@ function Row({ tx }: { tx: Activity }) {
   );
 }
 
+function TypeIcon({ tx }: { tx: Activity }) {
+  return (
+    <span className="size-9 grid place-items-center rounded-full bg-black/5 text-gray-600">
+      <TransactionTypeIcon tx_type={tx.tx_type} />
+    </span>
+  );
+}
+
 function When({ tx }: { tx: Activity }) {
-  if (tx.status === "Pending") return <PendingStatus tx={tx} />;
   if (!tx.timestamp) return null;
   return (
     <time>
