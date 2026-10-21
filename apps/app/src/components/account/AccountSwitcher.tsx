@@ -16,10 +16,7 @@ export function AccountSwitcher() {
   const [open, setOpen] = useState(false);
   const total =
     balance.data &&
-    balance.data.shieldedBalance +
-      balance.data.unshieldedBalance +
-      balance.data.pendingChange +
-      balance.data.pendingSpendable;
+    balance.data.shielded.balance + balance.data.transparent.balance;
 
   return (
     <div className="space-y-3">
