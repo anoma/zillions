@@ -1,4 +1,8 @@
-import initZcore, { parse_transaction, ufvk_pools } from "@zillions/zcore";
+import initZcore, {
+  combine_pczts,
+  parse_transaction,
+  ufvk_pools,
+} from "@zillions/zcore";
 
 import { invariant } from "../invariant";
 import { dedupe, singleton } from "../utils";
@@ -612,6 +616,14 @@ export class Wallet {
       .flatMap((s) => s.change)
       .reduce((sum, c) => sum + BigInt(c.value), 0n);
     return { pczt, value: shielded, fee: BigInt(plan.fee) };
+  };
+
+  /**
+   * Combine the two given PCZTs into one PCZT.
+   */
+  combine = async (pczt0: Uint8Array, pczt1: Uint8Array) => {
+    await initZcore();
+    return combine_pczts(pczt0, pczt1);
   };
 
   /**

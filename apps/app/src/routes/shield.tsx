@@ -78,6 +78,8 @@ function ShieldRoute() {
         receipt,
         track,
       );
+      // const combined_pczt = await wallet.combine(pczt, base64ToBytes(signed));
+      // const { txid } = await wallet.submit(combined_pczt, value, receipt);
       return { ...receipt, txid };
     },
     onSettled: (_, error) => track(undefined, error),

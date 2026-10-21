@@ -163,9 +163,13 @@ export function useSend() {
         fee: BigInt(plan.fee),
         timestamp: Math.floor(Date.now() / 1000),
       };
+      // Combine the proofs and signatures
+      const combined_pczt = await wallet.combine(pczt, base64ToBytes(signed));
       const { txid, expiryHeight } = await wallet.submit(
-        base64ToBytes(signed),
-        change,
+        // base64ToBytes(signed),
+        // change,
+        combined_pczt,
+        change + (toSelf ? send.amount : 0n),
         receipt,
         track,
       );
