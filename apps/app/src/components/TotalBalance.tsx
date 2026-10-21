@@ -40,7 +40,7 @@ export function TotalBalance() {
               className="[--max:3rem] xl:[--max:4.5rem] leading-none"
               style={{ fontSize: fitFontSize(totalChars, "var(--max)") }}
             >
-              <ZecValue zat={totalBalance} className="proportional-nums" />
+              <ZecValue zat={totalBalance} />
             </div>
           </div>
           <div className="flex gap-2 max-sm:w-full">
@@ -116,7 +116,7 @@ function PoolBalance({
         {label}
       </h3>
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <ZecValue zat={zat} className="text-xl xl:text-2xl proportional-nums" />
+        <ZecValue zat={zat} className="text-xl xl:text-2xl" />
         {zat > 0n && (
           <ActionButton href={action.href} size="xs" outlineColor="black">
             {action.label}
