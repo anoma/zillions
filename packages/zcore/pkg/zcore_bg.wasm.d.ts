@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+export const combine_pczts: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const derive_account_from_ufvk: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];

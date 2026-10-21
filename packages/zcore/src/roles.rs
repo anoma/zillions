@@ -20,6 +20,7 @@ use zcash_keys::keys::{UnifiedFullViewingKey, UnifiedSpendingKey};
 use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 use zip32::fingerprint::SeedFingerprint;
 use zip32::{AccountId, Scope};
+use pczt::roles::combiner::Combiner;
 
 use crate::parse_network;
 
@@ -533,6 +534,18 @@ pub fn sign_pczt(
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
     let signed = sign(&network, parse(pczt)?, seed, hd_index).map_err(|e| JsError::new(&e))?;
     serialize(signed)
+}
+
+/// Combine the two given PCZTs.
+#[wasm_bindgen]
+pub fn combine_pczts(
+    pczt0: &[u8],
+    pczt1: &[u8],
+) -> Result<Vec<u8>, JsError> {
+    let pczt0 = parse(pczt0)?;
+    let pczt1 = parse(pczt1)?;
+    let pczt = Combiner::new(vec![pczt0, pczt1]).combine().map_err(|e| JsError::new(&to_pczt_error(&e)))?;
+    serialize(pczt)
 }
 
 /// What a PCZT moves: `{ network, fee }` and inputs and outputs per pool

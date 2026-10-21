@@ -57,11 +57,8 @@ function ShieldRoute() {
         to: { pool: "shielded" as const },
       };
       // Everything shielded comes back to us, in Ironwood.
-      const { txid } = await wallet.submit(
-        base64ToBytes(signed),
-        value,
-        receipt,
-      );
+      const combined_pczt = await wallet.combine(pczt, base64ToBytes(signed));
+      const { txid } = await wallet.submit(combined_pczt, value, receipt);
       return { ...receipt, txid };
     },
   });

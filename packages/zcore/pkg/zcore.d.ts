@@ -9,6 +9,11 @@
 export function address_kind(network: string, address: string): string | undefined;
 
 /**
+ * Combine the two given PCZTs.
+ */
+export function combine_pczts(pczt0: Uint8Array, pczt1: Uint8Array): Uint8Array;
+
+/**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  */
 export function derive_account(network: string, seed: Uint8Array, hd_index: number): any;
@@ -164,6 +169,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly combine_pczts: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_account_from_ufvk: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
