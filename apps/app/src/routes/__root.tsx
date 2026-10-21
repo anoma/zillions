@@ -1,5 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { CatchNotFound, createRootRoute, Outlet } from "@tanstack/react-router";
+import { AccountHeader } from "../components/AppHeader";
 import { AppLayout } from "../components/AppLayout";
 import { AppLoader } from "../components/AppLoader";
 import { KeychainWall } from "../components/KeychainWall";
@@ -13,15 +14,16 @@ function RootLayout() {
   return (
     <CatchNotFound fallback={NotFound}>
       <QueryClientProvider client={queryClient}>
-        <AppLoader>
-          <KeychainWall>
-            <WalletProvider>
-              <AppLayout>
+        <AppLayout>
+          <AppLoader>
+            <KeychainWall>
+              <WalletProvider>
+                <AccountHeader />
                 <Outlet />
-              </AppLayout>
-            </WalletProvider>
-          </KeychainWall>
-        </AppLoader>
+              </WalletProvider>
+            </KeychainWall>
+          </AppLoader>
+        </AppLayout>
       </QueryClientProvider>
     </CatchNotFound>
   );
