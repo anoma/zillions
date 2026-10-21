@@ -37,7 +37,13 @@ const actionClass =
 const sync = (wallet: Wallet) =>
   wallet.sync().catch((e) => console.error("Sync failed", e));
 
-export function SyncIndicator() {
+export function SyncIndicator({
+  className,
+  tooltipClassName,
+}: {
+  className?: string;
+  tooltipClassName?: string;
+}) {
   const [progress, setProgress] = useState<SyncProgress>({
     phase: "catch-up",
     syncing: true,
@@ -122,7 +128,7 @@ export function SyncIndicator() {
   return (
     <Tooltip
       position="bottom"
-      className="z-10 w-60 py-3"
+      className={twMerge("z-10 w-60 py-3", tooltipClassName)}
       content={
         <div className="px-4 space-y-3 w-full text-xs font-medium">
           {phase === "catch-up" && syncing && (
@@ -200,7 +206,7 @@ export function SyncIndicator() {
       }
     >
       <button
-        className="h-10 p-2 text-left cursor-pointer"
+        className={twMerge("h-10 p-2 text-left cursor-pointer", className)}
         onClick={() => sync(wallet)}
       >
         {recent && syncing && (
@@ -208,7 +214,7 @@ export function SyncIndicator() {
         )}
         <div
           className={twMerge(
-            "size-2 rounded-full",
+            "size-2.5 rounded-full ring-2 ring-surface",
             recent && syncing
               ? "bg-gold animate-pulse"
               : failed
