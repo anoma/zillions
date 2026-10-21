@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.12.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.11.0...zillions-app-v1.12.0) (2026-10-21)
+
+
+### Features
+
+* app shell without keychain ([#135](https://github.com/heliaxdev/zillions-interface/issues/135)) ([b97456d](https://github.com/heliaxdev/zillions-interface/commit/b97456df695dff6bf0aa882f7bcd1452abb4f599))
+* improvements on app drawer ([#134](https://github.com/heliaxdev/zillions-interface/issues/134)) ([8064197](https://github.com/heliaxdev/zillions-interface/commit/80641970e26e94199f038dd8d6b2e9554b9f7f16))
+* show pending funds in balances ([#124](https://github.com/heliaxdev/zillions-interface/issues/124)) ([c171500](https://github.com/heliaxdev/zillions-interface/commit/c171500a033153c386a064696757968f971218c2))
+* tx progress estimate ([#145](https://github.com/heliaxdev/zillions-interface/issues/145)) ([4e8b99e](https://github.com/heliaxdev/zillions-interface/commit/4e8b99e44ebdec11ff5aeacb708585bcde56b048))
+
+
+### Bug Fixes
+
+* receipt nested div warning ([#131](https://github.com/heliaxdev/zillions-interface/issues/131)) ([7620a72](https://github.com/heliaxdev/zillions-interface/commit/7620a72e9a9350994e87d59687a0ab086c10a18e))
+* unsigned amount on receipt ([#136](https://github.com/heliaxdev/zillions-interface/issues/136)) ([89cbafc](https://github.com/heliaxdev/zillions-interface/commit/89cbafccd6ff02a69bcce49edfb29695f03c5a2d))
+
 ## [1.11.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.10.0...zillions-app-v1.11.0) (2026-10-20)
 
 
