@@ -1,7 +1,6 @@
-import { useNow } from "../hooks/useNow";
+import { usePendingProgress } from "../hooks/usePendingProgress";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
-import { minutesLeft, PROCESSING_ESTIMATE_MIN } from "../lib/wallet/pending";
 import type { Activity, Party } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
@@ -35,23 +34,10 @@ export type TransactionReceiptCardProps = {
     };
 };
 
-/** Minutes left of the usual wait for a transaction still processing, or that it's late. */
-function ProcessingHint({
-  timestamp,
-  expires_in,
-}: Pick<Activity, "timestamp" | "expires_in">) {
-  const now = useNow(10_000);
-  const left =
-    timestamp === undefined ? undefined : minutesLeft(timestamp, now);
-  return (
-    <div className="text-xs text-gray-600">
-      {left === 0
-        ? `Taking longer than usual${expires_in !== undefined ? ` · expires in ${expires_in} blocks` : ""}`
-        : left === undefined
-          ? `Usually takes about ${PROCESSING_ESTIMATE_MIN} minutes`
-          : `About ${left} min left`}
-    </div>
-  );
+/** The time left of a pending transaction, why it's late, or nothing once it's mined and late. */
+function ProcessingHint({ tx }: TransactionReceiptCardProps) {
+  const { detail } = usePendingProgress(tx);
+  return detail && <div className="text-xs text-gray-600">{detail}</div>;
 }
 
 /** Every address on a side that has several, each recipient with what it got. */
@@ -124,9 +110,7 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
         <div className="text-sm font-medium">
           <TransactionTypeAndStatus tx={tx} />
         </div>
-        {tx.status === "Pending" && !tx.confirmations && (
-          <ProcessingHint timestamp={tx.timestamp} expires_in={tx.expires_in} />
-        )}
+        {tx.status === "Pending" && <ProcessingHint tx={tx} />}
         <div
           className="py-3 leading-none font-medium"
           style={{ fontSize: fitFontSize(valueChars, "3.75rem") }}

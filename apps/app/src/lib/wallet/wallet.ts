@@ -17,7 +17,13 @@ import {
 } from "./chain/lightwalletd";
 import { type ProveStage, submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
-import { confirmedAt, pendingActivity, prunePending } from "./pending";
+import {
+  confirmedAt,
+  pendingActivity,
+  prunePending,
+  requiredConfirmations,
+  TIP_CHECK_MS,
+} from "./pending";
 import {
   maxSend,
   planMigration,
@@ -61,8 +67,6 @@ const FRY = import.meta.env.VITE_ALLOW_CPU_TO_FRY === "true";
 
 /** How long after a sync ends, however it ends, the next one starts by itself. */
 const RESYNC_MS = 60_000;
-/** Between syncs the tip is checked this often, and a new block syncs at once. */
-const TIP_CHECK_MS = 15_000;
 
 /** Whether the browser asks to save data (Chromium only). */
 const saveData = () =>
@@ -238,14 +242,30 @@ export class Wallet {
   #resyncTick = async () => {
     const timer = this.#resync;
     this.#checks++;
+    // A new block for something pending syncs even while history runs: it pauses for it.
+    const waiting = this.#waiting();
     const due =
-      !this.#history &&
-      (this.#checks * TIP_CHECK_MS >= RESYNC_MS ||
+      (!this.#history || waiting) &&
+      ((!this.#history && this.#checks * TIP_CHECK_MS >= RESYNC_MS) ||
         (await fetchLatestHeight().catch(() => 0)) > (this.#tip ?? Infinity));
     // A sync started meanwhile schedules the next tick itself.
     if (this.#resync !== timer || this.#abort.signal.aborted) return;
     if (due && !this.#history) return this.resync();
+    if (due && waiting)
+      return void this.sync().catch((e) => console.error("[sync] failed", e));
     this.#resync = setTimeout(this.#resyncTick, TIP_CHECK_MS);
+  };
+
+  /** Whether something is pending: unmined, or mined fewer blocks ago than a payment received needs. */
+  #waiting = () => {
+    const tip = this.#tip;
+    return (
+      this.#state.pending.length > 0 ||
+      (tip !== undefined &&
+        [...this.#state.blocks.keys()].some(
+          (height) => tip - height + 1 < requiredConfirmations("Received"),
+        ))
+    );
   };
 
   /** A sync that, like the timed one, skips while history or the spam era runs. */
