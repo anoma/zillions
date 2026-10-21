@@ -141,7 +141,7 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
             })}
           </time>
         )}
-        <p className="mt-3 w-full grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="mt-3 w-full grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <span className="sr-only">From</span>
           <AddressBadge party={tx.from} copyable pill />
           <span className="sr-only">to</span>
@@ -149,7 +149,7 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
             →
           </span>
           <AddressBadge party={tx.to} copyable pill />
-        </p>
+        </div>
       </section>
 
       {total && (
