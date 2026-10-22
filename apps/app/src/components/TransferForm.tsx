@@ -32,7 +32,7 @@ export function PoolRoute({
     <span
       title={title}
       className={twMerge(
-        "h-12 flex items-center justify-center rounded-full text-base font-medium",
+        "h-10 flex items-center justify-center rounded-full text-sm font-medium",
         pool === "shielded" ? "bg-gold" : "border border-line bg-card",
       )}
     >
@@ -257,7 +257,7 @@ export function FormCard({
       className={twMerge("flex flex-col gap-2", className)}
     >
       <div className="flex items-center justify-between gap-4">
-        <h2 id={headingId} className="text-xs font-medium">
+        <h2 id={headingId} className="text-xs font-medium text-gray-600">
           {htmlFor ? <label htmlFor={htmlFor}>{heading}</label> : heading}
         </h2>
         {aside}
@@ -290,8 +290,9 @@ export function AmountField({
         id={id}
         ref={ref}
         value={value}
-        className={twMerge("h-28", error && "text-red-700")}
-        maxFontSize="6rem"
+        // Digits have no descenders; this takes back the empty space under them.
+        className={twMerge("h-20 -mb-3", error && "text-red-700")}
+        maxFontSize="4.5rem"
         aria-invalid={Boolean(error)}
         aria-describedby={
           [error && errorId, describedBy].filter(Boolean).join(" ") || undefined
@@ -302,7 +303,7 @@ export function AmountField({
         <p
           id={errorId}
           role="alert"
-          className="-mt-1 text-sm text-center font-medium text-red-700 motion-safe:animate-fade-in"
+          className="text-sm text-center font-medium text-red-700 motion-safe:animate-fade-in"
         >
           {error}
         </p>
@@ -324,7 +325,7 @@ export function Breakdown({
   return (
     <section
       aria-label="Summary"
-      className="flex flex-col gap-1.5 px-4 pt-6 border-t border-line"
+      className="flex flex-col gap-1.5 px-4 pt-4 border-t border-line"
     >
       {children}
       <TotalRow label={label} value={total} />
@@ -351,11 +352,10 @@ export function SubmitBlock({
   children?: ReactNode;
 }) {
   return (
-    // Pulled toward the summary: the button acts on what it adds up.
-    <div className="-mt-2">
+    <div>
       <ActionButton
         size="md"
-        className="w-full h-14"
+        className="w-full h-12"
         backgroundColor={color}
         textColor={color === "black" ? "white" : undefined}
         disabled={pending}

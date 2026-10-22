@@ -57,7 +57,8 @@ export function RecipientField({
           aria-describedby="send-to-kind"
           className={twMerge(
             inputClassName,
-            "h-14 text-base text-ellipsis",
+            // 16px on phones: iOS zooms into any smaller field on focus.
+            "h-11 text-base sm:text-sm text-ellipsis",
             !value && canPaste && "pr-20",
             tone === "transparent" &&
               "border-black hover:border-black focus:border-black",
