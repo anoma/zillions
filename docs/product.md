@@ -282,16 +282,16 @@ wallet moves them to Ironwood following [ZIP 318], the standard other
 wallets (e.g. Zodl) follow too. Only Orchard is moved: ZIP 318 forbids
 offering Sapling as a destination, and Sapling funds stay where they are.
 
+A browser tab is rarely left open for hours, so the wallet never sends on
+its own: it plans the steps up front and the user sends each one when it's
+due. How it's built is in [migration.md](design/migration.md).
+
 - **On the home screen**, a section between the balance and the
   transactions, shown while Orchard holds at least 0.01 ZEC:
   - before it starts: the Orchard amount, one line on why it should move,
     and a **Migrate** button opening the migration page;
-  - while it runs: progress ("Transfer 3 of 8 complete"), when the next
-    transfer is due, and that the wallet must stay open for transfers to be
-    sent;
-  - when a transfer is due but wasn't sent (the wallet was closed): a notice,
-    never an error, with **Send now** and **Keep waiting**, saying that
-    sending now ties the transfer to this visit.
+  - while it runs: progress ("Transfer 3 of 8 complete") and either a
+    **Send next step** button, when one is due, or when the next one is due.
 - **The migration page** walks through, in order:
   1. **What happens**: Orchard is closed, the funds go to Ironwood, the
      amounts moved become public while who holds them stays private, and
@@ -299,33 +299,40 @@ offering Sapling as a destination, and Sapling funds stay where they are.
   2. **How**: _With added privacy_ (recommended): the funds move as several
      standard amounts, spread over hours, so they look like everyone
      else's; or _Immediately_: one transfer, faster, its full amount public
-     at once. Each shows the number of transfers, the time it takes and the
+     at once. Each shows the number of steps, the time it takes and the
      fees.
   3. **Network privacy**: a recommendation to turn on a trusted VPN such as
      NymVPN (free for the migration), with a warning that the IP address can
      link the transfers; the user may continue without. A web page can't
      route itself through Tor or Nym as ZIP 318 asks, and the Keychain isn't yet
      available in Tor Browser, so Tor Browser isn't suggested.
-  4. **Review**: the whole schedule (each transfer's amount and expected
-     time) and the total fees, confirmed once. Nothing leaves Orchard before
-     this confirmation; afterwards transfers go out without asking again.
-     The Keychain signs the whole schedule in one approval (3.4), in
-     batches if it is large.
-  5. **Progress**: as on the home screen, with each transfer listed.
-- Wording never calls the migration "automatic" or "guaranteed": transfers
-  are sent while the wallet is open, and late ones when it next opens.
+  4. **Review**: the whole plan (the preparation steps, each transfer's
+     amount and when it's due) and the total fees. Starting it sends
+     nothing; it saves the plan.
+  5. **Steps**: every step listed with its state. The step that is due has
+     a **Send** button and is approved in the Keychain like any transaction
+     (3.4). A step not yet due says when it will be, with a small **Send
+     now anyway** link and one line saying that sending early makes the
+     transfers easier to link. A step can't be sent before the notes it
+     spends exist on chain. **Stop migration** drops the remaining steps;
+     what wasn't sent stays in Orchard, already split into standard
+     amounts, and the section offers **Migrate** again.
+- Wording never calls the migration "automatic": nothing is sent unless the
+  user sends it.
+- The plan is kept in this browser only. Another browser or device shows
+  the Orchard balance and **Migrate**, not the plan. If the notes a step
+  needs were spent elsewhere, the remaining steps are planned again.
+- When only one transfer fits, it spends an Orchard note directly and
+  needs no preparation step.
 - In history (2.6), transfers show as Migrated, Orchard → Ironwood; the
-  preparation steps that split the funds into standard amounts show as such,
-  not as payments.
+  preparation steps that split the funds into standard amounts show as
+  such, not as payments.
 - _Immediately_ is built: its review shows the amount and fee of one
   transfer of every Orchard note to the account's own Ironwood, and confirming
-  sends it. _With privacy_ shows its real plan (the preparation steps, each
-  transfer's amount and expected time, the fees and what stays in Orchard),
-  but its button says it is a work in progress; nothing is sent.
+  sends it.
 - _To confirm_: recommending Tor Browser too, once the Keychain installs and
   is tested there (signed add-on, WebAssembly at its security levels).
-- _To confirm_: whether a running migration can be paused or cancelled, and
-  whether the leftover under 0.01 ZEC can be locked so nothing spends it by
+- _Later_: locking the leftover under 0.01 ZEC so nothing spends it by
   accident (Zodl offers this).
 
 [ZIP 318]: https://zips.z.cash/zip-0318
@@ -433,8 +440,8 @@ user's behalf.
 - The approval window shows: network, where funds come from, where they go,
   amounts, and the fee, plus the full details on demand.
 - The user approves or rejects; nothing is signed without approval.
-- A migration schedule (2.9) is approved as a whole: one window lists every
-  transfer and the total fees, and one approval signs them all. — _Planned_
+- Each step of a migration (2.9) is approved on its own, when the user
+  sends it, like any other transaction.
 - A payment link (2.10) is approved in one window titled as a payment link,
   showing its amount, the fee and the claim fee. Showing a link again or
   cancelling it is a separate approval of its own. The Keychain shares a
