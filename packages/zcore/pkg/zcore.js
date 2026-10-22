@@ -289,7 +289,7 @@ export function plan_migration(network, wallet) {
 /**
  * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
  * is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
- * change, fee }], fee }`, values in zatoshis.
+ * change, fee }], fee, bucket? }`, values in zatoshis.
  * @param {string} network
  * @param {any} wallet
  * @param {any} send

@@ -92,7 +92,7 @@ export function plan_migration(network: string, wallet: any): any;
 /**
  * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
  * is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
- * change, fee }], fee }`, values in zatoshis.
+ * change, fee }], fee, bucket? }`, values in zatoshis.
  */
 export function plan_send(network: string, wallet: any, send: any): any;
 

@@ -312,10 +312,10 @@ impl InputSource for Wallet {
     }
 
     fn anchor_computable(&self, _: ShieldedPool, _: BlockHeight) -> Result<bool, String> {
-        // Only asked for a ZIP 318 bucket anchor. ziziphus serves the root at
-        // its current tip alone, so none is: sends fall back to an ordinary
-        // (padded) shape until it keeps roots at bucket boundaries.
-        Ok(false)
+        // Only asked for a ZIP 318 bucket anchor: the app fetches
+        // lightwalletd's tree there and the tip is rebuilt at its size
+        // (`build::PoolTree::tip`).
+        Ok(true)
     }
 
     fn select_spendable_notes(

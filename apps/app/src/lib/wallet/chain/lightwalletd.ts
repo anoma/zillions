@@ -152,6 +152,36 @@ export class LightwalletdError extends Error {
 /** gRPC's NOT_FOUND: e.g. a txid neither mined nor in the mempool. */
 export const NOT_FOUND = 5;
 
+/**
+ * The Orchard and Ironwood note commitment trees at the end of block
+ * `height`, each a zcashd `CommitmentTree` in hex.
+ */
+export async function fetchTreeState(height: number) {
+  const [state] = await call("GetTreeState", message([[1, height]]));
+  const m = fields(state);
+  return { orchard: text(m, 6), ironwood: text(m, 7) };
+}
+
+/**
+ * How many notes a hex `CommitmentTree` holds: its left and right leaves,
+ * and `2^(i+1)` for each parent present at level `i`.
+ */
+export function treeSize(tree: string) {
+  const b = Uint8Array.from(tree.match(/../g) ?? [], (h) => parseInt(h, 16));
+  let i = 0;
+  const present = () => {
+    const p = b[i];
+    i += 1 + 32 * p;
+    return p;
+  };
+  let size = present() + present();
+  const levels = b[i++];
+  for (let level = 0; level < levels; level++) {
+    if (present()) size += 2 ** (level + 1);
+  }
+  return size;
+}
+
 export async function fetchLatestHeight() {
   const [block] = await call("GetLatestBlock", new Uint8Array());
   return num(fields(block), 1);

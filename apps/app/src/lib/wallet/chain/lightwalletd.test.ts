@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { type Block, outputPositions } from "./lightwalletd";
+import { type Block, outputPositions, treeSize } from "./lightwalletd";
 
 const none = { sapling: 0, orchard: 0, ironwood: 0 };
 
@@ -29,4 +29,14 @@ test("places a transaction's notes from the block's tree sizes", () => {
   expect(
     outputPositions(block, 7).find((p) => p.pool === "sapling")?.count,
   ).toBe(0);
+});
+
+test("counts a CommitmentTree's notes from its leaves and parents", () => {
+  const node = (byte: string) => `01${byte.repeat(32)}`;
+  expect(treeSize("000000")).toBe(0);
+  expect(treeSize(`${node("aa")}0000`)).toBe(1);
+  // Both leaves, and parents at levels 1 and 3 of four: 2 + 4 + 16.
+  expect(
+    treeSize(`${node("aa")}${node("bb")}0400${node("cc")}00${node("dd")}`),
+  ).toBe(22);
 });

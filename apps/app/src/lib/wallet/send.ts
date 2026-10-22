@@ -16,6 +16,7 @@ import initZcore, {
 } from "@zillions/zcore";
 import { queryClient } from "../queryClient";
 import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./chain/indexer";
+import { fetchTreeState, treeSize } from "./chain/lightwalletd";
 import { NETWORK } from "./config";
 import type { OwnUtxo } from "./transparent";
 import type { Note, Pool } from "./types";
@@ -43,7 +44,12 @@ export type PlanStep = {
   fee: number;
 };
 
-export type SendPlan = { steps: PlanStep[]; fee: number };
+export type SendPlan = {
+  steps: PlanStep[];
+  fee: number;
+  /** The bucket boundary a ZIP 318 crossing anchors to. */
+  bucket?: number;
+};
 
 /** What zcore plans from: the unspent notes and UTXOs, and the chain tip. */
 export type WalletData = {
@@ -140,11 +146,25 @@ const treeChunk = (pool: Pool, chunk: number) =>
     retry: false,
   });
 
+/** The chain's trees at a bucket boundary: deep enough never to change. */
+const treeState = (height: number) =>
+  queryClient.fetchQuery({
+    queryKey: ["treeState", height],
+    queryFn: () => fetchTreeState(height),
+    staleTime: Infinity,
+    retry: false,
+  });
+
 /**
  * The tree tip of every shielded pool a plan spends from or pays into (each
- * anchors to its real root), plus the frozen chunks holding its notes.
+ * anchors to its real root), plus the frozen chunks holding its notes. A
+ * crossing anchors its Orchard and Ironwood at a bucket boundary instead:
+ * zcore rebuilds the tips at the size lightwalletd's trees there give, which
+ * needs the chunk then filling if it has frozen since.
  */
 async function fetchTrees(plan: SendPlan) {
+  const bucket =
+    plan.bucket === undefined ? undefined : await treeState(plan.bucket);
   const notes = plan.steps.flatMap((s) => s.notes);
   const flows = plan.steps.flatMap((s) => [
     ...s.inputs,
@@ -163,17 +183,24 @@ async function fetchTrees(plan: SendPlan) {
           `The ${pool} tree hasn't reached this wallet's notes yet`,
         );
       }
+      const then =
+        bucket && (pool === "orchard" || pool === "ironwood")
+          ? bucket[pool]
+          : undefined;
       // Notes in the chunk still filling are served with the tip itself.
       const frozen = Math.floor(tip.size / CHUNK_SIZE);
       const chunkIds = [
-        ...new Set(positions.map((p) => Math.floor(p / CHUNK_SIZE))),
+        ...new Set([
+          ...positions.map((p) => Math.floor(p / CHUNK_SIZE)),
+          ...(then ? [Math.floor(treeSize(then) / CHUNK_SIZE)] : []),
+        ]),
       ].filter((c) => c < frozen);
       const chunks = new Map<number, Uint8Array>(
         await Promise.all(
           chunkIds.map(async (c) => [c, await treeChunk(pool, c)] as const),
         ),
       );
-      return [pool, { tip: tip.body, chunks }] as const;
+      return [pool, { tip: tip.body, chunks, bucket: then }] as const;
     }),
   );
   return Object.fromEntries(trees);
