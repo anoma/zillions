@@ -27,9 +27,10 @@ closed. Fees are the same either way: the same transactions are sent.
   before it's split.
 - **Order.** The amounts are shuffled, so their order says nothing about the
   balance.
-- **Timing.** Preparations are ~20 minutes apart and transfers ~90 minutes
-  apart (ZIP 318's exponential delays and caps). The first transfer is due
-  once the last preparation's notes can be anchored (see Anchors).
+- **Timing.** Transfers are ~90 minutes apart (ZIP 318's exponential delays
+  and caps). A step is due once the notes it spends can anchor at a bucket
+  boundary (see Anchors): the first transfer, 2–6 hours after the last
+  preparation.
 - **One transfer only.** When the plan has a single amount and one note
   covers it and its fee, there is no preparation: the transfer spends that
   note and keeps the change in Orchard.
@@ -47,15 +48,19 @@ worth the amount plus the transfer fee, so every transfer later spends
 exactly one note.
 
 - Orchard-only, a send to ourselves, padded to exactly 16 actions, with
-  ZIP 318's rolling expiry.
+  ZIP 318's rolling expiry and a bucket anchor, so only notes mined below
+  that boundary can go in.
 - Since NU6.3 an Orchard bundle disables cross-address transfers: a spend
   and an output never share an action (each is paired with a zero-value
   dummy), so a preparation spending `s` notes has room for `16 − s` outputs.
   Outputs go to our own internal address through
   `add_orchard_change_output`, which the rule allows.
 - Each preparation is built when it's sent, from the notes the wallet holds
-  then. When more amounts are needed than fit in one, the next preparation
-  spends the previous one's change, so it waits until that change is mined.
+  then: the largest ones that can anchor, at most 14, so there is room for an
+  amount and the change. It makes as many amounts as fit, in plan order;
+  the next preparation spends its change, so it waits until that change can
+  anchor (2–6 hours). Upstream builds it from a `Proposal` whose amounts are
+  Orchard change, which `build.rs` carries out like any send.
 
 ## Transfers
 
@@ -90,16 +95,16 @@ matched the chain's, and witnesses there proved against them
 
 ## History
 
-Transfers already show as Migrated (`activity.ts`). Preparations are told
-apart by shape, so they're labelled on any device: an Orchard-only send to
-ourselves with 16 actions and the rolling expiry, upstream's
-`zip318::classify` preparation case.
+Transfers already show as Migrated (`activity.ts`). Preparations show as
+Prepared, told apart from our notes alone so they're labelled on any device:
+Orchard spent into two or more of our own internal Orchard notes, nothing
+paid. Since NU6.3 nothing else makes Orchard notes.
 
 ## Testing
 
-The test account holds only about 0.011 ZEC in Orchard: one 0.01 ZEC
-transfer, no preparation. To exercise preparations and several transfers on
-it, a dev-only setting (`VITE_MIGRATION_TEST_AMOUNTS=true`, ignored in
+The test account holds about 0.008 ZEC in Orchard, under ZIP 318's 0.01
+ZEC minimum, so it can't migrate at all. To exercise preparations and
+several transfers on it, a dev-only setting (`VITE_MIGRATION_TEST_AMOUNTS=true`, ignored in
 production builds) plans amounts from 0.001 to 0.002 ZEC through a custom
 `PoolMigrationConstants`. Those transfers aren't standard amounts, so they
 don't blend in; it exists to test the flow, never to use.
