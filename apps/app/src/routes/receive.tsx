@@ -7,6 +7,7 @@ import { ShieldedTransparentToggle } from "../components/ShieldedTransparentTogg
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
+import { shortenAddress } from "../lib/utils";
 
 export const Route = createFileRoute("/receive")({
   component: ReceiveRoute,
@@ -27,8 +28,8 @@ function ReceiveRoute() {
         setIsTransparent={setIsTransparent}
       />
 
-      <section aria-label="Your address" className="flex flex-col gap-5">
-        <div className="mx-auto p-4 rounded-xl border border-line bg-card">
+      <section aria-label="Your address" className="flex flex-col gap-4">
+        <div className="mx-auto w-fit flex flex-col items-center gap-3 rounded-xl border border-line bg-card p-4 pb-3">
           {address ? (
             <QRCode
               key={address}
@@ -45,18 +46,20 @@ function ReceiveRoute() {
               <SpinnerIcon className="size-5 text-gold" />
             </div>
           )}
+          {address && (
+            <CopyToClipboardControl
+              value={address}
+              className="gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors duration-300 hover:bg-gold/15"
+              iconClassName="size-3.5"
+            >
+              <span className="font-mono text-neutral-700">
+                {shortenAddress(address, 8, 6, "…")}
+              </span>
+            </CopyToClipboardControl>
+          )}
         </div>
 
-        {address && (
-          <CopyToClipboardControl
-            value={address}
-            className="justify-between gap-4 px-4 py-3 rounded-xl border border-line bg-card transition-colors duration-300 hover:border-line-strong"
-          >
-            <span className="text-sm font-medium wrap-anywhere">{address}</span>
-          </CopyToClipboardControl>
-        )}
-
-        <p className="-mt-2 text-xs text-gray-600">
+        <p className="px-2 text-center text-xs text-neutral-500">
           {isTransparent
             ? "Your one transparent address, for exchanges and wallets that can't pay shielded addresses. Payments to it are visible on-chain."
             : "A new address is generated each time you open this page, so payers can't link their payments to you. Earlier ones keep working."}

@@ -32,7 +32,9 @@ test("receive shows a shielded address, then the transparent one", async ({
   const address = page.getByRole("button", { name: /^u1/ });
   await expect(address).toBeVisible();
   await page.getByRole("radio", { name: "Transparent" }).click();
-  const copy = page.getByRole("button", { name: account.transparent });
+  const copy = page.getByRole("button", {
+    name: account.transparent.slice(0, 8),
+  });
   await expect(copy).toBeVisible();
   await expect(
     page.getByRole("img", { name: "QR code of your transparent address" }),
