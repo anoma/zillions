@@ -131,12 +131,26 @@ async function call(method: string, request: Uint8Array) {
     }
   }
   if (status && status !== "0") {
-    throw new Error(
+    throw new LightwalletdError(
       `lightwalletd ${method}: ${decodeURIComponent(reason ?? `status ${status}`)}`,
+      Number(status),
     );
   }
   return messages;
 }
+
+/** A call the server answered with a gRPC error status. */
+export class LightwalletdError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/** gRPC's NOT_FOUND: e.g. a txid neither mined nor in the mempool. */
+export const NOT_FOUND = 5;
 
 export async function fetchLatestHeight() {
   const [block] = await call("GetLatestBlock", new Uint8Array());
@@ -268,7 +282,7 @@ export async function fetchBlock(height: number): Promise<Block> {
   };
 }
 
-/** A mined transaction by txid, given in explorer byte order. */
+/** A transaction by txid, given in explorer byte order; height 0 while it's in the mempool. */
 export async function fetchTransaction(txid: string): Promise<RawTransaction> {
   const internal = Uint8Array.from(
     txid.match(/../g)!.map((byte) => parseInt(byte, 16)),

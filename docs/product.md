@@ -230,7 +230,19 @@ Moves shielded funds to one of the account's own transparent addresses.
   more: when it spent the account's funds (its exact fee and transparent
   recipients) or transparent coins (its sender). A shielded payment received
   is never asked for by its id, so the server doesn't learn it's the
-  account's. What's read is kept, so it's asked for once.
+  account's (unless its receipt link is opened before sync finds it; see
+  below). What's read is kept, so it's asked for once.
+- **Shared receipt links**: a detail page link (`/tx/<txid>`) for a
+  transaction not in the viewer's history shows, instead of "Page not
+  found", only the detail page's fields the chain makes public:
+  "Processing" until it's mined, the time once it is, From and To
+  (transparent addresses; shielded ones as "Shielded"), the fee when no
+  transparent coins paid in (their values aren't in the transaction), and
+  the hash with its explorer link, where the rest is. There is no type and
+  no amount. One line says it isn't in the viewer's wallet. It needs a ready
+  Keychain like every other page (2.8). It's looked up by its id as soon as
+  history doesn't have it, so the server learns this viewer asked about it.
+  — _Built_
 
 ### 2.7 Sync — Working
 
