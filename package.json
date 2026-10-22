@@ -19,10 +19,5 @@
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^17.0.7"
-  },
-  "pnpm": {
-    "patchedDependencies": {
-      "@keystonehq/animated-qr-base": "patches/@keystonehq__animated-qr-base.patch"
-    }
   }
 }

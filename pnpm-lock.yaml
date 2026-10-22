@@ -4,11 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  '@keystonehq/animated-qr-base':
-    hash: qyfeilmvbg5keuimyil3puuo2q
-    path: patches/@keystonehq__animated-qr-base.patch
-
 importers:
 
   .:
