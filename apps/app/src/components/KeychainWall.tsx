@@ -1,5 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
+import { GoCheck } from "react-icons/go";
+import { twMerge } from "tailwind-merge";
 import { hasViewingKeys, type Account } from "../context/account";
 import {
   getKeychainAccounts,
@@ -9,6 +11,7 @@ import {
   getKeychainDefaultAccount,
   useGetKeychainDefaultAccount,
 } from "../hooks/useGetKeychainDefaultAccount";
+import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import {
   isKeychainAvailable,
   isKeychainVersionSupported,
@@ -16,7 +19,7 @@ import {
   KeychainEvent,
   MIN_KEYCHAIN_VERSION,
 } from "../lib/keychain/keychain";
-import { keychainUrl } from "../lib/urls";
+import { extensionUrl } from "../lib/urls";
 import { AccountProvider } from "./AccountProvider";
 import { FinalStatePage } from "./FinalStatePage";
 import { PageError } from "./PageError";
@@ -138,16 +141,13 @@ function Connect({ children }: { children: ReactNode }) {
 
   if (!isConnected) {
     return (
-      <FinalStatePage title="Connect Keychain">
-        <ActionButton
-          onClick={async () => {
-            await keychain().connect();
-            setIsConnected(await keychain().isConnected());
-          }}
-        >
-          Connect
-        </ActionButton>
-      </FinalStatePage>
+      <Setup
+        installed
+        onConnect={async () => {
+          await keychain().connect();
+          setIsConnected(await keychain().isConnected());
+        }}
+      />
     );
   }
 
@@ -156,13 +156,7 @@ function Connect({ children }: { children: ReactNode }) {
 
 function Download({ children }: { children: ReactNode }) {
   if (!isKeychainAvailable()) {
-    return (
-      <FinalStatePage title="Keychain not installed">
-        <a download href={keychainUrl}>
-          <ActionButton>Download Keychain</ActionButton>
-        </a>
-      </FinalStatePage>
-    );
+    return <Setup installed={false} />;
   }
 
   if (!isKeychainVersionSupported()) {
@@ -171,16 +165,128 @@ function Download({ children }: { children: ReactNode }) {
         <div>
           Version {MIN_KEYCHAIN_VERSION} or newer is required.
           <br />
-          Download the latest keychain and reinstall it.
+          Install the latest Keychain to continue.
         </div>
-        <a download href={keychainUrl}>
-          <ActionButton>Download Keychain</ActionButton>
-        </a>
+        <GetExtensionButton>Get the latest Keychain</GetExtensionButton>
       </FinalStatePage>
     );
   }
 
   return <>{children}</>;
+}
+
+function GetExtensionButton({ children }: { children: ReactNode }) {
+  return (
+    <ActionButton
+      href={extensionUrl}
+      target="_blank"
+      rel="noreferrer"
+      size="sm"
+      icon={<ExternalLinkIcon className="size-4" />}
+      iconPosition="right"
+      className="pr-11"
+    >
+      {children}
+    </ActionButton>
+  );
+}
+
+function SetupStep({
+  number,
+  title,
+  status,
+  children,
+}: {
+  number: number;
+  title: string;
+  status: "done" | "current" | "upcoming";
+  children: ReactNode;
+}) {
+  return (
+    <li
+      aria-current={status === "current" ? "step" : undefined}
+      className="flex gap-5 py-7 border-b border-line-strong"
+    >
+      <span
+        className={twMerge(
+          "size-8 shrink-0 flex items-center justify-center rounded-full border text-sm font-medium",
+          status === "done" && "border-gold bg-gold",
+          status === "current" && "border-black",
+          status === "upcoming" && "border-line-strong text-gray-400",
+        )}
+      >
+        {status === "done" ? <GoCheck className="size-4" /> : number}
+      </span>
+      <div
+        className={twMerge(
+          "flex-1 pt-1",
+          status === "upcoming" && "text-gray-400",
+        )}
+      >
+        <div className="font-medium">{title}</div>
+        <div
+          className={twMerge(
+            "mt-1 text-sm",
+            status !== "upcoming" && "text-gray-600",
+          )}
+        >
+          {children}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function Setup({
+  installed,
+  onConnect,
+}: {
+  installed: boolean;
+  onConnect?: () => Promise<void>;
+}) {
+  return (
+    <div className="absolute inset-0 overflow-auto flex px-6 py-12">
+      <div className="m-auto w-full max-w-md animate-fade-in">
+        <h1 className="text-3xl">Connect Keychain</h1>
+        <p className="mt-3 text-gray-600">
+          Zillions signs with the Zillions Keychain, a browser extension that
+          holds your keys. They never leave it.
+        </p>
+        <ol className="mt-10 border-t border-line-strong">
+          <SetupStep
+            number={1}
+            title="Install the extension"
+            status={installed ? "done" : "current"}
+          >
+            {installed ? (
+              "Zillions Keychain is installed."
+            ) : (
+              <>
+                Add Zillions Keychain to your browser, then reload this page.
+                <div className="mt-5">
+                  <GetExtensionButton>Get the extension</GetExtensionButton>
+                </div>
+              </>
+            )}
+          </SetupStep>
+          <SetupStep
+            number={2}
+            title="Connect"
+            status={installed ? "current" : "upcoming"}
+          >
+            Approve the connection in the Keychain window.
+            {onConnect && (
+              <div className="mt-5">
+                <ActionButton size="sm" onClick={onConnect}>
+                  Connect
+                </ActionButton>
+              </div>
+            )}
+          </SetupStep>
+        </ol>
+      </div>
+    </div>
+  );
 }
 
 export function KeychainWall({ children }: { children: ReactNode }) {

@@ -1,5 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
+import { useContext, useEffect } from "react";
 import { twMerge } from "tailwind-merge";
+import { SetNavEnabledContext } from "../context/nav";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { HouseIcon } from "../icons/HouseIcon";
@@ -15,6 +17,16 @@ const navItems = [
   { label: "Receive", to: "/receive", icon: ArrowDownIcon },
   { label: "Transactions", to: "/transactions", icon: RotateCcwIcon },
 ] as const;
+
+/** Enables navigation while mounted; place it where the wallet is ready. */
+export function EnableNav() {
+  const setNavEnabled = useContext(SetNavEnabledContext);
+  useEffect(() => {
+    setNavEnabled(true);
+    return () => setNavEnabled(false);
+  }, [setNavEnabled]);
+  return null;
+}
 
 export function HelpLinks() {
   return (
@@ -47,8 +59,9 @@ export function HelpLinks() {
   );
 }
 
-export function MainNav() {
-  const { pathname } = useLocation();
+export function MainNav({ enabled }: { enabled: boolean }) {
+  const pathname = useLocation().pathname;
+  const current = enabled ? pathname : undefined;
 
   return (
     <aside className="h-full flex flex-col justify-between border-r border-line-strong px-6 overflow-auto">
@@ -63,17 +76,20 @@ export function MainNav() {
             <li key={item.to} className="my-1 -mx-3">
               <Link
                 to={item.to}
-                aria-current={item.to === pathname ? "page" : undefined}
+                disabled={!enabled}
+                aria-current={item.to === current ? "page" : undefined}
                 className={twMerge(
                   "flex items-center gap-3 px-3 py-2.5 rounded-full text-sm transition-colors duration-300",
                   "hover:bg-card/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
-                  item.to === pathname && "bg-card font-semibold",
+                  item.to === current && "bg-card font-semibold",
+                  !enabled &&
+                    "text-gray-400 cursor-default hover:bg-transparent",
                 )}
               >
                 <item.icon
                   className={twMerge(
                     "size-5 transition-colors duration-300",
-                    item.to === pathname && "text-gold",
+                    item.to === current && "text-gold",
                   )}
                 />
                 {item.label}
@@ -89,8 +105,9 @@ export function MainNav() {
   );
 }
 
-export function BottomNav() {
-  const { pathname } = useLocation();
+export function BottomNav({ enabled }: { enabled: boolean }) {
+  const pathname = useLocation().pathname;
+  const current = enabled ? pathname : undefined;
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-10 grid grid-cols-4 border-t border-line bg-surface">
@@ -98,18 +115,22 @@ export function BottomNav() {
         <Link
           key={item.to}
           to={item.to}
-          className="h-16 flex flex-col items-center justify-center gap-1"
+          disabled={!enabled}
+          className={twMerge(
+            "h-16 flex flex-col items-center justify-center gap-1",
+            !enabled && "text-gray-400",
+          )}
         >
           <item.icon
             className={twMerge(
               "size-5 transition-all",
-              item.to === pathname && "text-gold",
+              item.to === current && "text-gold",
             )}
           />
           <span
             className={twMerge(
               "text-xs",
-              item.to === pathname && "font-semibold",
+              item.to === current && "font-semibold",
             )}
           >
             {item.label}
