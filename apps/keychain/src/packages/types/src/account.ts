@@ -45,6 +45,7 @@ export type DerivedAccount = {
   source?: "imported" | "generated";
   timestamp?: number;
   diversifierIndex?: number;
+  external: boolean;
 };
 
 export type Account = Pick<
@@ -57,6 +58,7 @@ export type Account = Pick<
   | "source"
   | "timestamp"
   | "diversifierIndex"
+  | "external"
 > & {
   viewingKey?: string;
 };

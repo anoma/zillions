@@ -65,7 +65,7 @@ export const ViewAccount = () => {
         ? parent.id
         : shieldedChild?.id;
 
-  const isMnemonic = parent.type === "mnemonic";
+  const isMnemonic = parent.type === "mnemonic" && !parent.external;
 
   return (
     <Stack gap={GapPatterns.TitleContent} full>
