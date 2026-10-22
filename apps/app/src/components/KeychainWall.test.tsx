@@ -55,12 +55,15 @@ const renderWall = () =>
     </QueryClientProvider>,
   );
 
-test("without a keychain it offers the download", () => {
+test("without a keychain it links to the extension and holds back Connect", () => {
   renderWall();
-  expect(screen.getByText("Keychain not installed")).toBeTruthy();
+  expect(screen.getByText("Connect Keychain")).toBeTruthy();
   expect(
-    screen.getByRole("button", { name: "Download Keychain" }),
-  ).toBeTruthy();
+    screen
+      .getByRole("link", { name: "Get the extension" })
+      .getAttribute("href"),
+  ).toBe("https://zillions.money/zillions-extension");
+  expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
 });
 
 test("an outdated keychain asks for a newer one", () => {

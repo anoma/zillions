@@ -4,6 +4,7 @@ import { AccountHeader } from "../components/AppHeader";
 import { AppLayout } from "../components/AppLayout";
 import { AppLoader } from "../components/AppLoader";
 import { KeychainWall } from "../components/KeychainWall";
+import { EnableNav } from "../components/MainNav";
 import { NotFound } from "../components/NotFound";
 import { WalletProvider } from "../components/WalletProvider";
 import { queryClient } from "../lib/queryClient";
@@ -19,6 +20,7 @@ function RootLayout() {
             <KeychainWall>
               <WalletProvider>
                 <AccountHeader />
+                <EnableNav />
                 <Outlet />
               </WalletProvider>
             </KeychainWall>
