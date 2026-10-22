@@ -75,7 +75,7 @@ export class ApprovalsService {
     protected readonly localStorage: LocalStorage,
     protected readonly vaultService: VaultService,
     protected readonly accounts: AccountRepository,
-    protected readonly keyring: Keyring
+    protected readonly keyring: Keyring,
   ) {}
 
   /** `tabs.onRemoved` handler, registered by the background entrypoint. */
@@ -114,7 +114,7 @@ export class ApprovalsService {
       return this.launchApprovalPopup(
         origin,
         approvalRoutes.approveConnection(),
-        { interfaceOrigin: origin }
+        { interfaceOrigin: origin },
       );
     }
   }
@@ -127,7 +127,7 @@ export class ApprovalsService {
       return this.launchApprovalPopup(
         origin,
         approvalRoutes.approveDisconnection(),
-        { interfaceOrigin: origin }
+        { interfaceOrigin: origin },
       );
     }
   }
@@ -140,13 +140,13 @@ export class ApprovalsService {
     await this.assertConnected(origin);
     const activeId = (await this.accounts.getActiveAccount())?.id;
     return (await this.accounts.findAll()).map((record) =>
-      toPublicAccount(record, isInActiveScope(record, activeId))
+      toPublicAccount(record, isInActiveScope(record, activeId)),
     );
   }
 
   /** The active account for a connected dapp, or null when none is set. */
   async dappDefaultAccount(
-    origin: string
+    origin: string,
   ): Promise<ZCashKeychainAccount | null> {
     await this.assertConnected(origin);
     const active = await this.accounts.getActiveAccount();
@@ -164,7 +164,7 @@ export class ApprovalsService {
   async approveSignTx(
     pczt: string,
     origin: string,
-    signer?: string
+    signer?: string,
   ): Promise<string> {
     if (await this.vaultService.isLocked()) {
       throw new Error("Keychain is locked");
@@ -172,6 +172,29 @@ export class ApprovalsService {
     await this.assertConnected(origin);
 
     const record = await this.activeSigner(signer);
+    // Resolve the signer/account type shown by the approval popup.
+    let signerAddress = signer;
+    let accountType: string;
+    let external: boolean;
+    if (signerAddress) {
+      const record = await this.accounts.findByAddress(signerAddress);
+      if (!record) {
+        throw new Error(`Account for ${signerAddress} not found!`);
+      }
+      accountType = record.type;
+      external = record.external;
+    } else {
+      const active = await this.accounts.getActiveAccount();
+      const record = active
+        ? await this.accounts.findById(active.id)
+        : undefined;
+      if (!record) {
+        throw new Error("No active account to sign with");
+      }
+      signerAddress = record.address;
+      accountType = record.type;
+      external = record.external;
+    }
 
     const msgId = uuid();
     // The resolved address, so the summary and the signature use one account.
@@ -184,14 +207,23 @@ export class ApprovalsService {
           msgId,
           encodeURIComponent(origin),
           record.type,
-          record.address
-        )
+          record.address,
+        ),
       );
     } finally {
       // Also covers a refused launch and a closed window, which never reach
       // submitSignTx/rejectSignTx.
       this.pendingTxs.delete(msgId);
     }
+    // return this.launchApprovalPopup(
+    //   approvalRoutes.approveSignTx(
+    //     external.toString(),
+    //     msgId,
+    //     encodeURIComponent(origin),
+    //     accountType,
+    //     signerAddress
+    //   )
+    // );
   }
 
   /**
@@ -201,7 +233,7 @@ export class ApprovalsService {
    */
   async approveUpdateDefaultAccount(
     origin: string,
-    address: string
+    address: string,
   ): Promise<void> {
     await this.assertConnected(origin);
     const record = await this.accounts.findByAddress(address);
@@ -211,7 +243,7 @@ export class ApprovalsService {
     return this.launchApprovalPopup(
       origin,
       approvalRoutes.approveUpdateDefaultAccount(),
-      { address, alias: record.alias }
+      { address, alias: record.alias },
     );
   }
 
@@ -245,7 +277,7 @@ export class ApprovalsService {
     popupTabId: number,
     msgId: string,
     signer: string,
-    ledgerSignatures?: LedgerSignatures
+    ledgerSignatures?: LedgerSignatures,
   ): Promise<void> {
     const pending = this.pendingTxs.get(msgId);
     const resolvers = this.getResolver(popupTabId);
@@ -266,7 +298,7 @@ export class ApprovalsService {
       const signed = await this.keyring.sign(
         pending.pczt,
         record.address,
-        ledgerSignatures
+        ledgerSignatures,
       );
       resolvers.resolve(signed);
     } catch (e) {
@@ -278,7 +310,7 @@ export class ApprovalsService {
   async submitSignedTx(
     popupTabId: number,
     msgId: string,
-    signed: string
+    signed: string,
   ): Promise<void> {
     const pending = this.pendingTxs.get(msgId);
     const resolvers = this.getResolver(popupTabId);
@@ -311,7 +343,7 @@ export class ApprovalsService {
    */
   async submitUpdateDefaultAccount(
     popupTabId: number,
-    address: string
+    address: string,
   ): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
     try {
@@ -321,7 +353,7 @@ export class ApprovalsService {
       }
       await this.accounts.setActiveAccount(
         record.id,
-        record.type as ActiveAccountStore["type"]
+        record.type as ActiveAccountStore["type"],
       );
       resolvers.resolve();
     } catch (e) {
@@ -333,7 +365,7 @@ export class ApprovalsService {
   async resolveConnection(
     popupTabId: number,
     origin: string,
-    allow: boolean
+    allow: boolean,
   ): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
 
@@ -357,7 +389,7 @@ export class ApprovalsService {
   async resolveDisconnection(
     popupTabId: number,
     origin: string,
-    revoke: boolean
+    revoke: boolean,
   ): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
 
@@ -386,7 +418,8 @@ export class ApprovalsService {
   // ---- internals ----
 
   private async isDomainApproved(origin: string): Promise<boolean> {
-    const approvedOrigins = (await this.localStorage.getApprovedOrigins()) || [];
+    const approvedOrigins =
+      (await this.localStorage.getApprovedOrigins()) || [];
     return approvedOrigins.includes(origin);
   }
 
@@ -443,7 +476,7 @@ export class ApprovalsService {
   private launchApprovalPopup = async <T>(
     origin: string,
     route: string,
-    params?: Record<string, string>
+    params?: Record<string, string>,
   ): Promise<T> => {
     if (this.popupWindowByOrigin.has(origin)) {
       const windowId = this.popupWindowByOrigin.get(origin);
@@ -456,7 +489,7 @@ export class ApprovalsService {
     }
     if (this.popupWindowByOrigin.size >= MAX_OPEN_APPROVALS) {
       throw new Error(
-        "Too many pending Keychain approvals; resolve one and try again"
+        "Too many pending Keychain approvals; resolve one and try again",
       );
     }
     // No await between the checks above and this reservation.
@@ -479,7 +512,7 @@ export class ApprovalsService {
     // with it; any extension API call resets that timer.
     const keepAlive = setInterval(
       () => void browser.runtime.getPlatformInfo(),
-      KEEPALIVE_INTERVAL_MS
+      KEEPALIVE_INTERVAL_MS,
     );
 
     return new Promise<T>((resolve, reject) => {

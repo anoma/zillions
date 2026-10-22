@@ -8,10 +8,11 @@ export default {
   approveDisconnection: (): string => "/approve-disconnection",
   approveUpdateDefaultAccount: (): string => "/approve-update-default-account",
   approveSignTx: (
+    external: string = ":external",
     msgId: string = ":msgId",
     origin: string = ":origin",
     accountType: string = ":accountType",
     signer: string = ":signer"
-  ): string => `/approve-sign-tx/${msgId}/${origin}/${accountType}/${signer}`,
-  confirmSignTx: (): string => "/confirm-sign-tx",
+  ): string => `/approve-sign-tx/${msgId}/${origin}/${accountType}/${signer}/${external}`,
+  confirmSignTx: (external: string = ":external"): string => `/confirm-sign-tx/${external}`,
 };

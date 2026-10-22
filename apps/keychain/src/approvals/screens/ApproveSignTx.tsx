@@ -41,10 +41,12 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
     origin: string;
     accountType: string;
     signer: string;
+    external: string;
   }>();
   const msgId = params.msgId ?? "";
   const origin = params.origin ?? "";
   const signer = params.signer ?? "";
+  const external = params.external === "true";
   const [displayTransactionData, setDisplayTransactionData] = useState(false);
   const [summaryError, setSummaryError] = useState<string>();
   const [walletName, setWalletName] = useState<string>();
@@ -79,7 +81,7 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
 
   const handleApproveSubmit = useCallback((e: React.FormEvent): void => {
     e.preventDefault();
-    navigate(routes.confirmSignTx());
+    navigate(routes.confirmSignTx("false"));
   }, []);
 
   const handleReject = useCallback(async (): Promise<void> => {

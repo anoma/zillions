@@ -28,8 +28,6 @@ import { closeCurrentTab } from "../closeCurrentTab";
 import { Status } from "../types";
 import { ApprovalActions } from "../ui/ApprovalActions";
 import { StatusBox } from "../ui/StatusBox";
-import { ZcashPCZT, ZcashUnifiedFullViewingKey } from "@keystonehq/bc-ur-registry-zcash";
-import { AnimatedQRScanner, Purpose } from '@keystonehq/animated-qr';
 
 type Props = {
   details: ApprovalDetails;
@@ -158,19 +156,6 @@ export const ConfirmSignTx = ({ details }: Props) => {
     if (status === Status.Completed) void closeCurrentTab();
   }, [status]);
 
-  const handleScan= useCallback(async ({type, cbor}: {type: string, cbor: string}) => {
-    const tx = ZcashPCZT.fromCBOR(Buffer.from(cbor, 'hex'));
-    console.log("onScanSuccess", tx);
-    setStatus(Status.Pending);
-    // A PCZT covers transparent + shielded in a single signing pass.
-    await client?.submitSignedTx(msgId, tx.getData().toBase64());
-    setStatus(Status.Completed);
-  }, [])
-
-  const handleError= useCallback((error: string) => {
-    console.log("onScanError", error)
-  }, [])
-
   return (
     <Stack className="h-full text-black pt-4 pb-6" gap={4}>
       <PageHeader title={requiresAuth ? "Verify" : "Signing transaction"} />
@@ -191,16 +176,6 @@ export const ConfirmSignTx = ({ details }: Props) => {
               variant="Password"
               label={"Password"}
               onChange={(e) => setPassword(e.target.value)}
-            />
-            <AnimatedQRScanner
-              purpose={Purpose.SYNC}
-              urTypes={["zcash-pczt"]}
-              handleScan={handleScan}
-              handleError={handleError}
-              options={{
-                width: 340,
-                blur: false
-              }}
             />
           </>
         )}
