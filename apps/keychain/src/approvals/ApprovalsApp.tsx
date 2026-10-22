@@ -23,8 +23,10 @@ import routes from "./routes";
 import { ApproveConnection } from "./screens/ApproveConnection";
 import { ApproveDisconnection } from "./screens/ApproveDisconnection";
 import { ApproveSignTx } from "./screens/ApproveSignTx";
+import { KeystoneApproveSignTx } from "./screens/KeystoneApproveSignTx";
 import { ApproveUpdateDefaultAccount } from "./screens/ApproveUpdateDefaultAccount";
 import { ConfirmSignTx } from "./screens/ConfirmSignTx";
+import { KeystoneConfirmSignTx } from "./screens/KeystoneConfirmSignTx";
 import { WithAuth } from "./WithAuth";
 
 export type ExtensionLockContextType = {
@@ -104,7 +106,7 @@ export const ApprovalsApp = () => {
                   }
                 />
                 <Route
-                  path={routes.approveSignTx()}
+                  path={routes.approveSignTx("false")}
                   element={
                     <WithAuth>
                       <ApproveSignTx details={details} setDetails={setDetails} />
@@ -112,8 +114,20 @@ export const ApprovalsApp = () => {
                   }
                 />
                 <Route
-                  path={routes.confirmSignTx()}
+                  path={routes.approveSignTx("true")}
+                  element={
+                    <WithAuth>
+                      <KeystoneApproveSignTx details={details} setDetails={setDetails} />
+                    </WithAuth>
+                  }
+                />
+                <Route
+                  path={routes.confirmSignTx("false")}
                   element={details && <ConfirmSignTx details={details} />}
+                />
+                <Route
+                  path={routes.confirmSignTx("true")}
+                  element={details && <KeystoneConfirmSignTx details={details} />}
                 />
               </Routes>
             </ErrorBoundary>

@@ -131,12 +131,14 @@ export class ApprovalsService {
     // Resolve the signer/account type shown by the approval popup.
     let signerAddress = signer;
     let accountType: string;
+    let external: boolean;
     if (signerAddress) {
       const record = await this.accounts.findByAddress(signerAddress);
       if (!record) {
         throw new Error(`Account for ${signerAddress} not found!`);
       }
       accountType = record.type;
+      external = record.external;
     } else {
       const active = await this.accounts.getActiveAccount();
       const record = active
@@ -147,6 +149,7 @@ export class ApprovalsService {
       }
       signerAddress = record.address;
       accountType = record.type;
+      external = record.external;
     }
 
     const msgId = uuid();
@@ -156,6 +159,7 @@ export class ApprovalsService {
 
     return this.launchApprovalPopup(
       approvalRoutes.approveSignTx(
+        external.toString(),
         msgId,
         encodeURIComponent(origin),
         accountType,
