@@ -17,11 +17,11 @@ export function FormPage({
   const Card = onSubmit ? "form" : "section";
 
   return (
-    <div className="p-10 pt-14 max-sm:px-6">
+    <div className="p-8 pt-10 max-sm:px-6">
       <Card
         aria-labelledby={titleId}
         // Isolated so ActionButton's fill, painted at z-index -1, stays above the card.
-        className="isolate mx-auto max-w-150 flex flex-col gap-8"
+        className="isolate mx-auto max-w-120 flex flex-col gap-4"
         onSubmit={
           onSubmit &&
           ((e) => {

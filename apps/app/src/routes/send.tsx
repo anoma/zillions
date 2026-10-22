@@ -210,7 +210,6 @@ function SendRoute() {
             }}
           />
         }
-        className="gap-3"
       >
         {isPaymentLink ? (
           <PaymentLinkFields />

@@ -30,7 +30,7 @@ export function MemoField({
         <button
           type="button"
           className={twMerge(
-            "self-start py-1 text-sm font-medium",
+            "self-start py-0.5 text-xs font-medium",
             textButtonClassName,
           )}
           onClick={() => onOpenChange(true)}
@@ -47,7 +47,9 @@ export function MemoField({
   return (
     <div>
       <div className="mb-2 flex justify-between text-xs font-medium">
-        <label htmlFor="send-memo">Message</label>
+        <label htmlFor="send-memo" className="text-gray-600">
+          Message
+        </label>
         <button
           type="button"
           aria-label="Remove message"
@@ -63,14 +65,14 @@ export function MemoField({
       <textarea
         id="send-memo"
         name="memo"
-        rows={3}
+        rows={2}
         autoFocus
         placeholder={placeholder}
         aria-invalid={Boolean(problem)}
         aria-describedby="send-memo-hint"
         className={twMerge(
           inputClassName,
-          "py-3 resize-none",
+          "py-2.5 text-base sm:text-sm resize-none",
           problem && "border-red-700 hover:border-red-700 focus:border-red-700",
         )}
         value={memo}
