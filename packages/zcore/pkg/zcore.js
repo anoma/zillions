@@ -287,9 +287,9 @@ export function plan_migration(network, wallet) {
 }
 
 /**
- * The next preparation's plan, for `parts` (each a transfer's amount) still
- * without a note: what it spends, its `bucket`, and how many parts it
- * `made`. Errors starting "not ready" mean waiting for older notes.
+ * The next preparation for `parts` (each a transfer's amount) still without
+ * a note: `{ plan, made }`, its plan as `plan_send` reports one and how many
+ * parts it makes. Errors starting "not ready" mean waiting for older notes.
  * @param {string} network
  * @param {any} wallet
  * @param {BigUint64Array} parts
@@ -897,10 +897,6 @@ function __wbg_get_imports() {
             const ret = new Uint8Array(arg0);
             return ret;
         },
-        __wbg_new_28744009d011f847: function() {
-            const ret = new Map();
-            return ret;
-        },
         __wbg_new_617a8cdb8bb1130e: function() {
             const ret = new Object();
             return ret;
@@ -939,10 +935,6 @@ function __wbg_get_imports() {
             const ret = module.require;
             return ret;
         }, arguments); },
-        __wbg_set_6ae97e73113c4f0b: function(arg0, arg1, arg2) {
-            const ret = arg0.set(arg1, arg2);
-            return ret;
-        },
         __wbg_set_6be42768c690e380: function(arg0, arg1, arg2) {
             arg0[arg1] = arg2;
         },

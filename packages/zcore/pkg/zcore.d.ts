@@ -90,9 +90,9 @@ export function pczt_summary(network: string, pczt: Uint8Array, ufvk: string): a
 export function plan_migration(network: string, wallet: any): any;
 
 /**
- * The next preparation's plan, for `parts` (each a transfer's amount) still
- * without a note: what it spends, its `bucket`, and how many parts it
- * `made`. Errors starting "not ready" mean waiting for older notes.
+ * The next preparation for `parts` (each a transfer's amount) still without
+ * a note: `{ plan, made }`, its plan as `plan_send` reports one and how many
+ * parts it makes. Errors starting "not ready" mean waiting for older notes.
  */
 export function plan_preparation(network: string, wallet: any, parts: BigUint64Array): any;
 

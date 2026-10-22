@@ -362,7 +362,6 @@ pub fn plan_migration(network: &str, wallet: JsValue) -> Result<JsValue, JsError
 
 #[derive(Serialize)]
 struct PreparationPlan {
-    #[serde(flatten)]
     plan: crate::send::PlanSummary,
     /// How many of the parts asked for it makes, from the first.
     made: usize,
@@ -374,9 +373,9 @@ fn read_wallet(network: &str, wallet: JsValue) -> Result<Wallet, String> {
     Wallet::new(network, &data)
 }
 
-/// The next preparation's plan, for `parts` (each a transfer's amount) still
-/// without a note: what it spends, its `bucket`, and how many parts it
-/// `made`. Errors starting "not ready" mean waiting for older notes.
+/// The next preparation for `parts` (each a transfer's amount) still without
+/// a note: `{ plan, made }`, its plan as `plan_send` reports one and how many
+/// parts it makes. Errors starting "not ready" mean waiting for older notes.
 #[wasm_bindgen]
 pub fn plan_preparation(
     network: &str,

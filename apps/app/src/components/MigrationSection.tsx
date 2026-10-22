@@ -35,7 +35,7 @@ export function MigrationSection() {
         {progress}{" "}
         {step
           ? tip >= step.height
-            ? "The next step is due: send it from the migration page."
+            ? "The next step is due."
             : `The next step is due ${fromNow(tip, step.height)}.`
           : next.kind === "mining"
             ? "Waiting for the last step to be mined."

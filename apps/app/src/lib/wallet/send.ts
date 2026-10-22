@@ -122,7 +122,7 @@ export async function planMigration(wallet: WalletData) {
 }
 
 /** A preparation's plan, and how many of the parts asked for it makes. */
-export type PreparationPlan = SendPlan & { made: number };
+export type PreparationPlan = { plan: SendPlan; made: number };
 
 const parts64 = (parts: number[]) => BigUint64Array.from(parts.map(BigInt));
 
@@ -142,7 +142,7 @@ export async function preparationPczt(
   ufvk: string,
   account: { seedFingerprint: string; hdIndex: number },
 ) {
-  const plan = await planPreparation(wallet, parts);
+  const { plan } = await planPreparation(wallet, parts);
   const trees = await fetchTrees(plan);
   const pczt: Uint8Array = preparation_pczt(
     NETWORK,
@@ -210,6 +210,11 @@ const treeState = (height: number) =>
 async function fetchTrees(plan: SendPlan) {
   const bucket =
     plan.bucket === undefined ? undefined : await treeState(plan.bucket);
+  if (bucket) {
+    console.log(
+      `[trees] anchored at bucket ${plan.bucket}: orchard ${treeSize(bucket.orchard)}, ironwood ${treeSize(bucket.ironwood)} notes`,
+    );
+  }
   const notes = plan.steps.flatMap((s) => s.notes);
   const flows = plan.steps.flatMap((s) => [
     ...s.inputs,
