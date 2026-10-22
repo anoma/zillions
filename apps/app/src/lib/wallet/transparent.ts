@@ -9,8 +9,12 @@ import initZcore, {
   gap_limits,
   parse_transaction,
 } from "@zillions/zcore";
+import { publicActivity } from "./activity";
 import {
   fetchAddressTransactions,
+  fetchBlock,
+  fetchLatestHeight,
+  fetchTransaction,
   fetchUtxos,
   type RawTransaction,
   type Utxo,
@@ -293,3 +297,20 @@ export const reserveInternalAddress = (
   ...cache,
   reserved: [...(cache.reserved ?? []), { index, expiryHeight }],
 });
+
+/** A transaction as anyone sees it, looked up by its txid: the server learns this viewer asked. */
+export async function lookupTransaction(txid: string) {
+  const [raw, tip] = await Promise.all([
+    fetchTransaction(txid),
+    fetchLatestHeight(),
+  ]);
+  await (ready ??= initZcore());
+  // One in the mempool is read under the rules of the block it would join.
+  const tx: ParsedTx = parse_transaction(
+    NETWORK,
+    raw.height || tip + 1,
+    raw.data,
+  );
+  const time = raw.height ? (await fetchBlock(raw.height)).time : undefined;
+  return publicActivity(tx, raw.height, time);
+}

@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { buildActivity, sendingTxs } from "./activity";
+import { buildActivity, publicActivity, sendingTxs } from "./activity";
 import type { Block } from "./chain/lightwalletd";
 import type { ParsedTx, TransparentTx } from "./transparent";
 import type { Note } from "./types";
@@ -279,4 +279,54 @@ test("a send from transparent coins to a shielded address counts its payment onc
   expect(
     entry([{ ...note(10, 5_000), pool: "ironwood", ...at }], 46_000n),
   ).toMatchObject({ value: -16_000n, fee: 25_000n });
+});
+
+test("a transaction not ours shows its transparent side, and the fee only when no coins paid in", () => {
+  const tx = (rest: Partial<ParsedTx>): ParsedTx => ({
+    txid: "ab",
+    inputs: [],
+    outputs: [],
+    value_balance: 0,
+    expiry_height: 0,
+    ...rest,
+  });
+  // Mainnet 61f4832b…37f9: three coins, two of one address, into Ironwood.
+  const shielding = publicActivity(
+    tx({
+      inputs: [
+        { txid: "a", index: 0, address: "t1Xur" },
+        { txid: "b", index: 0, address: "t1Y5b" },
+        { txid: "c", index: 1, address: "t1Xur" },
+      ],
+      value_balance: -16_000,
+    }),
+    3_519_095,
+    1_760_000_000,
+  );
+  expect(shielding).toEqual({
+    txid: "ab",
+    block_height: 3_519_095,
+    timestamp: 1_760_000_000,
+    from: { address: "t1Xur", more: [{ address: "t1Y5b" }] },
+    to: { pool: "shielded" },
+    fee: undefined,
+  });
+
+  const unshielding = publicActivity(
+    tx({
+      outputs: [
+        { index: 0, value: 30_000, address: "t1Pay" },
+        { index: 1, value: 20_000, address: "t1Pay" },
+      ],
+      value_balance: 60_000,
+    }),
+    0,
+  );
+  expect(unshielding).toMatchObject({
+    block_height: 0,
+    timestamp: undefined,
+    from: { pool: "shielded" },
+    to: { address: "t1Pay", value: 50_000n },
+    fee: 10_000n,
+  });
 });

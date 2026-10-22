@@ -1,6 +1,7 @@
 import { usePendingProgress } from "../hooks/usePendingProgress";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
+import type { PublicActivity } from "../lib/wallet/activity";
 import type { Activity, Party } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { CopyToClipboardControl } from "./CopyToClipboardControl";
@@ -66,6 +67,64 @@ function PartyList({ label, party }: { label: string; party: Party }) {
   );
 }
 
+function TimeAndParties({
+  tx,
+}: {
+  tx: Pick<Activity, "timestamp" | "from" | "to">;
+}) {
+  return (
+    <>
+      {tx.timestamp && (
+        <time className="text-xs text-gray-600">
+          {new Date(Number(tx.timestamp) * 1000).toLocaleString(undefined, {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </time>
+      )}
+      {/* An address pill doesn't fit half a phone-wide card: stack them there. */}
+      <div className="@container mt-3 w-full">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 @max-md:grid-cols-1 @max-md:gap-1">
+          <span className="sr-only">From</span>
+          <AddressBadge party={tx.from} copyable pill />
+          <span className="sr-only">to</span>
+          <span aria-hidden="true" className="text-black/50 @max-md:rotate-90">
+            →
+          </span>
+          <AddressBadge party={tx.to} copyable pill />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function TxHash({ txid, onExplorer }: { txid: string; onExplorer: boolean }) {
+  return (
+    <>
+      <CopyToClipboardControl value={txid} className={copyFieldClassName}>
+        <span className="text-xs font-medium">
+          <span className="block text-gray-600">Transaction hash</span>
+          <span className="block mt-0.5 tracking-tight wrap-anywhere">
+            {txid}
+          </span>
+        </span>
+      </CopyToClipboardControl>
+      {onExplorer && (
+        <a
+          href={explorerUrl(txid)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-2 self-center inline-flex items-center gap-1 text-xs font-medium rounded-sm underline decoration-transparent underline-offset-2 transition-colors duration-300 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+        >
+          View on explorer
+          <ExternalLinkIcon aria-hidden="true" className="size-3" />
+          <span className="sr-only">(opens in a new tab)</span>
+        </a>
+      )}
+    </>
+  );
+}
+
 export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
   // Unsigned: the type above already says which way it went.
   const { value } = transactionValue(tx);
@@ -117,23 +176,7 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
         >
           <ZecValue zat={value} />
         </div>
-        {tx.timestamp && (
-          <time className="text-xs text-gray-600">
-            {new Date(Number(tx.timestamp) * 1000).toLocaleString(undefined, {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
-          </time>
-        )}
-        <div className="mt-3 w-full grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <span className="sr-only">From</span>
-          <AddressBadge party={tx.from} copyable pill />
-          <span className="sr-only">to</span>
-          <span aria-hidden="true" className="text-black/50">
-            →
-          </span>
-          <AddressBadge party={tx.to} copyable pill />
-        </div>
+        <TimeAndParties tx={tx} />
       </section>
 
       {total && (
@@ -160,26 +203,42 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
             </span>
           </CopyToClipboardControl>
         )}
-        <CopyToClipboardControl value={tx.txid} className={copyFieldClassName}>
-          <span className="text-xs font-medium">
-            <span className="block text-gray-600">Transaction hash</span>
-            <span className="block mt-0.5 tracking-tight wrap-anywhere">
-              {tx.txid}
-            </span>
-          </span>
-        </CopyToClipboardControl>
-        {onExplorer && (
-          <a
-            href={explorerUrl(tx.txid)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 self-center inline-flex items-center gap-1 text-xs font-medium rounded-sm underline decoration-transparent underline-offset-2 transition-colors duration-300 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
-          >
-            View on explorer
-            <ExternalLinkIcon aria-hidden="true" className="size-3" />
-            <span className="sr-only">(opens in a new tab)</span>
-          </a>
+        <TxHash txid={tx.txid} onExplorer={onExplorer} />
+      </FormCard>
+    </FormPage>
+  );
+}
+
+export function PublicReceiptCard({ tx }: { tx: PublicActivity }) {
+  return (
+    <FormPage title="Transaction receipt">
+      <p className="px-4 py-3 rounded-lg border border-line bg-card text-xs text-center text-gray-600">
+        This transaction isn't in your wallet. Only its public details are
+        shown.
+      </p>
+      <section
+        aria-label="Transaction"
+        className="flex flex-col items-center gap-2 text-center"
+      >
+        {!tx.block_height && (
+          <div className="text-sm font-medium">Processing</div>
         )}
+        <TimeAndParties tx={tx} />
+      </section>
+
+      {tx.fee !== undefined && (
+        <section
+          aria-label="Summary"
+          className="flex flex-col gap-1.5 px-4 pt-4 border-t border-line"
+        >
+          <FeeRow fee={tx.fee} pending={false} />
+        </section>
+      )}
+
+      <FormCard heading="Details" headingId="receipt-details">
+        <PartyList label="Senders" party={tx.from} />
+        <PartyList label="Recipients" party={tx.to} />
+        <TxHash txid={tx.txid} onExplorer />
       </FormCard>
     </FormPage>
   );
