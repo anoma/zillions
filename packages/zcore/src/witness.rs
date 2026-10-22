@@ -162,19 +162,44 @@ pub(crate) struct Tip<'a, H> {
 
 impl<'a, H: Node> Tip<'a, H> {
     pub(crate) fn new(body: &'a TipBody) -> Result<Self, String> {
+        Self::at(body, body.tree_size, None)
+    }
+
+    /// The tree as it was when it held `tree_size` notes, such as at a ZIP
+    /// 318 bucket boundary, rebuilt from a later tip: leaves only append, so
+    /// the first `tree_size` are the same. If the chunk that was filling then
+    /// has frozen since, its heap is `frozen`.
+    pub(crate) fn at(
+        body: &'a TipBody,
+        tree_size: u64,
+        frozen: Option<&'a TreeChunkBody>,
+    ) -> Result<Self, String> {
         if body.active_chunk.len() != CHUNK_NODES * 32 {
             return Err("tip's active chunk has the wrong size".into());
         }
-        let frozen = body.tree_size / CHUNK_LEAVES;
-        if body.roots.len() as u64 != frozen {
+        if body.roots.len() as u64 != body.tree_size / CHUNK_LEAVES {
             return Err("tip's roots don't match its tree size".into());
         }
+        if tree_size > body.tree_size {
+            return Err("tree size is past this tip".into());
+        }
+        let chunk = tree_size / CHUNK_LEAVES;
+        // With no partial chunk at `tree_size`, the heap is never read.
+        let heap =
+            if chunk == body.tree_size / CHUNK_LEAVES || tree_size.is_multiple_of(CHUNK_LEAVES) {
+                &body.active_chunk
+            } else {
+                let body = frozen.ok_or("a past size in a frozen chunk needs its heap")?;
+                if body.data.len() != CHUNK_NODES * 32 {
+                    return Err("chunk heap has the wrong size".into());
+                }
+                &body.data
+            };
         let active = Chunk {
-            heap: &body.active_chunk,
-            filled: body.tree_size % CHUNK_LEAVES,
+            heap,
+            filled: tree_size % CHUNK_LEAVES,
         };
-        let mut leaves = body
-            .roots
+        let mut leaves = body.roots[..chunk as usize]
             .iter()
             .map(|r| H::read(r))
             .collect::<Result<Vec<_>, _>>()?;
@@ -182,7 +207,7 @@ impl<'a, H: Node> Tip<'a, H> {
             leaves.push(active.node(0, CHUNK_DEPTH)?);
         }
         Ok(Tip {
-            tree_size: body.tree_size,
+            tree_size,
             active,
             upper: Upper::new(leaves),
         })
@@ -330,6 +355,120 @@ pub(crate) mod tests {
             );
             println!("matches the chain's Sapling root");
         }
+    }
+
+    /// Real data for a ZIP 318 bucket anchor: the Orchard and Ironwood trees
+    /// at a bucket boundary, rebuilt from a later ziziphus tip, match the
+    /// chain's (lightwalletd `GetTreeState` at that height), and witnesses at
+    /// that size prove against the chain's root. `test-ziziphus.sh` saves
+    /// `{pool}_tip.bin`, `{pool}_bucket.hex` and the `{pool}_tree{chunk}.bin`
+    /// chunks frozen since.
+    #[test]
+    #[ignore]
+    fn real_ziziphus_bucket_anchor_matches_the_chain() {
+        let dir = std::env::var("ZIZIPHUS_DIR").expect("ZIZIPHUS_DIR");
+        let read = |name: String| std::fs::read(format!("{dir}/{name}"));
+        for pool in ["orchard", "ironwood"] {
+            let tip: TipBody =
+                postcard::from_bytes(&read(format!("{pool}_tip.bin")).unwrap()).unwrap();
+            let hex = String::from_utf8(read(format!("{pool}_bucket.hex")).unwrap()).unwrap();
+            let chain = zcash_primitives::merkle_tree::read_commitment_tree::<H, _, 32>(
+                &hex::decode(hex.trim()).unwrap()[..],
+            )
+            .unwrap();
+            let size = chain.size() as u64;
+            let chunk = |c: u64| {
+                read(format!("{pool}_tree{c}.bin"))
+                    .ok()
+                    .map(|b| postcard::from_bytes::<TreeChunkBody>(&b).unwrap())
+            };
+            let filling = chunk(size / CHUNK_LEAVES);
+            let past = Tip::<H>::at(&tip, size, filling.as_ref()).unwrap();
+            assert_eq!(past.root(), chain.root(), "{pool} root at size {size}");
+            println!(
+                "{pool}: tip {} notes, bucket {size} notes, root matches the chain's",
+                tip.tree_size
+            );
+
+            // The bucket's last note, and the last of the chunk before.
+            let before = chunk(size / CHUNK_LEAVES - 1).expect("the chunk before is frozen");
+            let anchor = orchard::Anchor::from(chain.root());
+            for position in [size - 1, size / CHUNK_LEAVES * CHUNK_LEAVES - 1] {
+                let heap = if position / CHUNK_LEAVES == size / CHUNK_LEAVES {
+                    past.active.heap
+                } else {
+                    &before.data[..]
+                };
+                let at = (CHUNK_LEAVES - 1 + position % CHUNK_LEAVES) as usize * 32;
+                let cmx = orchard::note::ExtractedNoteCommitment::from_bytes(
+                    &<[u8; 32]>::try_from(&heap[at..at + 32]).unwrap(),
+                )
+                .unwrap();
+                let path: [H; 32] = past
+                    .path(position, Some(&before))
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+                let merkle = orchard::tree::MerklePath::from_parts(position as u32, path);
+                assert_eq!(merkle.root(cmx), anchor, "{pool} witness at {position}");
+            }
+            println!("{pool}: witnesses at the bucket prove against its root");
+        }
+    }
+
+    #[test]
+    fn past_sizes_match_an_independent_tree() {
+        // Two frozen chunks and 500 leaves into the third.
+        let count = 2 * CHUNK_LEAVES + 500;
+        let leaves: Vec<H> = (0..count).map(leaf).collect();
+        let chunks: Vec<TreeChunkBody> = (0..2)
+            .map(|c| TreeChunkBody {
+                data: heap(&leaves[(c * CHUNK_LEAVES) as usize..((c + 1) * CHUNK_LEAVES) as usize]),
+            })
+            .collect();
+        let body = TipBody {
+            tree_size: count,
+            ommers: vec![],
+            roots: chunks
+                .iter()
+                .map(|c| H::read(&c.data[..32]).unwrap().to_bytes())
+                .collect(),
+            active_chunk: heap(&leaves[2 * CHUNK_LEAVES as usize..]),
+        };
+
+        // In a chunk frozen since, on a chunk boundary, and in the filling chunk.
+        for (size, filling) in [
+            (CHUNK_LEAVES + 300, Some(&chunks[1])),
+            (2 * CHUNK_LEAVES, None),
+            (2 * CHUNK_LEAVES + 100, None),
+        ] {
+            let mut frontier = Frontier::<H, 32>::empty();
+            leaves[..size as usize].iter().for_each(|l| {
+                frontier.append(*l);
+            });
+            let past = Tip::<H>::at(&body, size, filling).unwrap();
+            assert_eq!(past.root(), frontier.root(), "size {size}");
+
+            let anchor = orchard::Anchor::from(frontier.root());
+            for position in [0, size - 1] {
+                let frozen = &chunks[(position / CHUNK_LEAVES).min(1) as usize];
+                let path: [H; 32] = past
+                    .path(position, Some(frozen))
+                    .unwrap()
+                    .try_into()
+                    .unwrap();
+                let merkle = orchard::tree::MerklePath::from_parts(position as u32, path);
+                let cmx = orchard::note::ExtractedNoteCommitment::from_bytes(
+                    &leaves[position as usize].to_bytes(),
+                )
+                .unwrap();
+                assert_eq!(merkle.root(cmx), anchor, "size {size}, position {position}");
+            }
+            assert!(past.path(size, None).is_err());
+        }
+        // A frozen chunk's past size needs that chunk's heap.
+        assert!(Tip::<H>::at(&body, CHUNK_LEAVES + 300, None).is_err());
+        assert!(Tip::<H>::at(&body, count + 1, None).is_err());
     }
 
     #[test]
