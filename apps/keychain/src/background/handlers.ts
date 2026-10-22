@@ -26,6 +26,7 @@ const toStoredAccount = (a: KeyStoreType): StoredAccount => ({
   parentId: a.parentId,
   source: a.source as StoredAccount["source"],
   timestamp: a.timestamp,
+  external: a.external,
 });
 
 /**

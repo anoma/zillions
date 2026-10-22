@@ -7,7 +7,7 @@ import { AccountType, ZCashKeychainAccount } from "@zillions/types";
 import type { KeyStoreType } from "../../storage";
 
 export const toPublicAccount = (record: KeyStoreType): ZCashKeychainAccount => {
-  const { id, alias, address, parentId, owner } = record;
+  const { id, alias, address, parentId, owner, external } = record;
   const type = record.type as AccountType;
 
   const account: ZCashKeychainAccount = {
@@ -19,6 +19,7 @@ export const toPublicAccount = (record: KeyStoreType): ZCashKeychainAccount => {
     hdIndex: record.path.account,
     seedFingerprint: record.seedFingerprint,
     birthday: record.birthday,
+    external,
   };
 
   if (type === AccountType.ShieldedKeys) {

@@ -59,7 +59,7 @@ export const ViewAccount = () => {
   // spending-key import, otherwise its derived shielded child.
   const shieldedAccountId = isShieldedParent ? parent.id : shieldedChild?.id;
 
-  const isMnemonic = parent.type === "mnemonic";
+  const isMnemonic = parent.type === "mnemonic" && !parent.external;
 
   return (
     <Stack gap={GapPatterns.TitleContent} full>

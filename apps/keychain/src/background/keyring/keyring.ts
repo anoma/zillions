@@ -68,7 +68,7 @@ export class Keyring {
     if (!account) {
       throw new Error(`Account not found: ${accountId}`);
     }
-    if ((account.type as string) !== "mnemonic") {
+    if ((account.type as string) !== "mnemonic" || (account.external as boolean)) {
       throw new Error("Account was not created from a mnemonic");
     }
 
@@ -200,7 +200,7 @@ export class Keyring {
     if (!secretHolder) {
       throw new Error(`Parent account not found: ${record.parentId}`);
     }
-    if ((secretHolder.type as string) !== "mnemonic") {
+    if ((secretHolder.type as string) !== "mnemonic" || (secretHolder.external as boolean)) {
       throw new Error(
         "Only mnemonic-backed accounts are supported (imported raw keys are not supported yet)"
       );
@@ -240,10 +240,11 @@ export class Keyring {
     const timestamp = source === "generated" ? new Date().getTime() : 0;
 
     // Sensitive-data encoding: phrase / private key hex / `{"spendingKey": …}` JSON.
-    const { text, passphrase, accountType } = ((): {
+    const { text, passphrase, accountType, external } = ((): {
       text: string;
       passphrase: string;
       accountType: AccountType;
+      external: boolean;
     } => {
       switch (accountSecret.t) {
         case "Mnemonic":
@@ -251,24 +252,28 @@ export class Keyring {
             text: accountSecret.seedPhrase.join(" "),
             passphrase: accountSecret.passphrase,
             accountType: "mnemonic",
+            external: false,
           };
         case "PrivateKey":
           return {
             text: accountSecret.privateKey,
             passphrase: "",
             accountType: "private-key",
+            external: false,
           };
         case "ShieldedKeys":
           return {
             text: JSON.stringify({ spendingKey: accountSecret.spendingKey }),
             passphrase: "",
             accountType: "shielded-keys",
+            external: false,
           };
         case "ViewingKey":
           return {
             text: JSON.stringify({ viewingKey: accountSecret.viewingKey }),
             passphrase: "",
-            accountType: "viewing-key",
+            accountType: "mnemonic",
+            external: true,
           }
       }
     })();
@@ -287,7 +292,7 @@ export class Keyring {
     // create_account_ufvk (needs fingerprint + hdIndex to embed zip32_derivation
     // in the PCZT, enabling the extension to sign). Non-mnemonic accounts have
     // no seed, so the fingerprint is stored as an empty string.
-    if (accountType === "mnemonic") {
+    if (accountType === "mnemonic" && !external) {
       await initZillionsSdk();
       const seed = await mnemonicToSeed(text, passphrase);
       seedFingerprint = computeSeedFingerprint(seed);
@@ -329,6 +334,7 @@ export class Keyring {
       timestamp,
       seedFingerprint,
       birthday: input.birthday,
+      external,
     };
 
     // Check whether keys already exist for this account
@@ -358,6 +364,7 @@ export class Keyring {
       path,
       source,
       timestamp,
+      external,
     };
   }
 
@@ -374,11 +381,13 @@ export class Keyring {
     parentId: string;
     alias: string;
     path: Zip32Path;
-    source: AccountSource;
+    flow: AccountFlow;
     shieldedAddress: string;
     viewingKey: string;
     birthday: number;
   }): Promise<DerivedAccount> {
+    const source: AccountSource = input.flow === "create" ? "generated" : "imported";
+    const external: boolean = input.flow === "keystone";
     await this.vaultService.assertIsUnlocked();
 
     const parent = await this.accounts.findById(input.parentId);
@@ -400,7 +409,7 @@ export class Keyring {
       parent.id,
       input.path.account
     );
-    const timestamp = input.source === "generated" ? new Date().getTime() : 0;
+    const timestamp = source === "generated" ? new Date().getTime() : 0;
 
     const account: KeyStoreType = {
       id,
@@ -410,10 +419,11 @@ export class Keyring {
       path: input.path,
       parentId: parent.id,
       type: "shielded-keys" as KeyStoreType["type"],
-      source: input.source,
+      source,
       timestamp,
       seedFingerprint: parent.seedFingerprint,
       birthday: input.birthday,
+      external,
     };
 
     const sensitive = await this.vaultService.encryptSensitiveData({
@@ -431,6 +441,7 @@ export class Keyring {
       address: account.address,
       type: "shielded-keys",
       parentId: account.parentId,
+      external,
     };
   }
 }

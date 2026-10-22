@@ -61,6 +61,7 @@ export type AccountStore = {
   parentId?: string;
   source: "imported" | "generated";
   timestamp: number;
+  external: boolean;
 };
 
 /** A derived (child) account, e.g. the shielded account under a parent. */
@@ -70,6 +71,7 @@ export type DerivedAccount = {
   address: string;
   type: AccountType;
   parentId?: string;
+  external: boolean;
 };
 
 /**
@@ -89,6 +91,7 @@ export type StoredAccount = {
   parentId?: string;
   source: "imported" | "generated";
   timestamp: number;
+  external: boolean;
 };
 
 /** Pointer to the active (parent) account. */
@@ -201,7 +204,7 @@ export type IpcContract = {
       parentId: string;
       alias: string;
       path: Zip32Path;
-      source: "imported" | "generated";
+      flow: AccountFlow;
       /** Shielded (unified/orchard) receiver derived offline by the façade. */
       shieldedAddress: string;
       /** Encoded UFVK (`uview1…`) — stored as the derived account's owner. */

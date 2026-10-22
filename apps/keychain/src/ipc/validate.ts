@@ -35,7 +35,8 @@ const isAccountStore = (v: unknown): v is AccountStore =>
   typeof v.alias === "string" &&
   typeof v.address === "string" &&
   typeof v.owner === "string" &&
-  typeof v.type === "string";
+  typeof v.type === "string" &&
+  typeof v.external == "boolean";
 
 const isDerivedAccount = (v: unknown): v is DerivedAccount =>
   isRecord(v) &&
@@ -56,7 +57,8 @@ const isStoredAccount = (v: unknown): v is StoredAccount =>
   typeof v.alias === "string" &&
   typeof v.address === "string" &&
   typeof v.owner === "string" &&
-  typeof v.type === "string";
+  typeof v.type === "string" &&
+  typeof v.external == "boolean";
 
 const isStoredAccountArray = (v: unknown): v is StoredAccount[] =>
   Array.isArray(v) && v.every(isStoredAccount);

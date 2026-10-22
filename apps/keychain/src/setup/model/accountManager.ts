@@ -149,7 +149,7 @@ export const createAccount = async (
       parentId: parentAccount.id,
       alias,
       path: zip32Path,
-      source: flow === "create" ? "generated" : "imported",
+      flow,
       shieldedAddress,
       viewingKey,
       birthday: resolvedBirthday,
