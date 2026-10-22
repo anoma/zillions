@@ -8,13 +8,17 @@ import { queryOptions } from "@tanstack/react-query";
 import initZcore, {
   max_send,
   plan_migration,
+  plan_preparation,
   plan_send,
   plan_shield,
+  preparation_pczt,
   send_pczt,
   shield_pczt,
   spendable,
+  use_migration_test_amounts,
 } from "@zillions/zcore";
 import { queryClient } from "../queryClient";
+import { MIGRATION_TEST_AMOUNTS } from "../utils";
 import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./chain/indexer";
 import { fetchTreeState, treeSize } from "./chain/lightwalletd";
 import { NETWORK } from "./config";
@@ -61,13 +65,19 @@ export type WalletData = {
   utxos: (OwnUtxo & { height: number })[];
 };
 
+/** zcore, with the dev-only migration test amounts when they're on. */
+async function init() {
+  await initZcore();
+  use_migration_test_amounts(MIGRATION_TEST_AMOUNTS);
+}
+
 const request = (send: SendRequest) => ({
   ...send,
   amount: Number(send.amount),
 });
 
 export async function planSend(wallet: WalletData, send: SendRequest) {
-  await initZcore();
+  await init();
   return plan_send(NETWORK, wallet, request(send)) as SendPlan;
 }
 
@@ -77,7 +87,7 @@ export type Source = "shielded" | "transparent";
 export type Spendable = Record<Source, { now: bigint; later: bigint }>;
 
 export async function spendableNow(wallet: WalletData): Promise<Spendable> {
-  await initZcore();
+  await init();
   const of = (from: Source) => {
     const { now, later } = spendable(NETWORK, wallet, from);
     return { now: BigInt(now), later: BigInt(later) };
@@ -87,7 +97,7 @@ export async function spendableNow(wallet: WalletData): Promise<Spendable> {
 
 /** The most `send` (its amount ignored) can pay after fees. */
 export async function maxSend(wallet: WalletData, send: SendRequest) {
-  await initZcore();
+  await init();
   return BigInt(max_send(NETWORK, wallet, request(send)));
 }
 
@@ -107,8 +117,43 @@ export type MigrationPlan = {
 
 /** A fresh draw of the plan: each call shuffles the amounts and timing anew. */
 export async function planMigration(wallet: WalletData) {
-  await initZcore();
+  await init();
   return plan_migration(NETWORK, wallet) as MigrationPlan;
+}
+
+/** A preparation's plan, and how many of the parts asked for it makes. */
+export type PreparationPlan = SendPlan & { made: number };
+
+const parts64 = (parts: number[]) => BigUint64Array.from(parts.map(BigInt));
+
+/**
+ * The next preparation for `parts`, the transfers without a note yet. It
+ * throws "not ready…" while no Orchard note can anchor at a bucket boundary.
+ */
+export async function planPreparation(wallet: WalletData, parts: number[]) {
+  await init();
+  return plan_preparation(NETWORK, wallet, parts64(parts)) as PreparationPlan;
+}
+
+/** The unsigned PCZT of the preparation `planPreparation` plans, and its plan. */
+export async function preparationPczt(
+  wallet: WalletData,
+  parts: number[],
+  ufvk: string,
+  account: { seedFingerprint: string; hdIndex: number },
+) {
+  const plan = await planPreparation(wallet, parts);
+  const trees = await fetchTrees(plan);
+  const pczt: Uint8Array = preparation_pczt(
+    NETWORK,
+    ufvk,
+    account.seedFingerprint,
+    account.hdIndex,
+    wallet,
+    parts64(parts),
+    trees,
+  );
+  return { pczt, plan };
 }
 
 const SHIELDED: Pool[] = ["sapling", "orchard", "ironwood"];
@@ -251,7 +296,7 @@ export async function sendPczt(
 
 /** Plans shielding every transparent coin into Ironwood. */
 export async function planShield(wallet: WalletData) {
-  await initZcore();
+  await init();
   return plan_shield(NETWORK, wallet) as SendPlan;
 }
 

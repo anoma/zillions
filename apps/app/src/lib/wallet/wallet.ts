@@ -17,6 +17,7 @@ import {
 } from "./chain/lightwalletd";
 import { type ProveStage, submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
+import { type Migration, nextStep, startMigration } from "./migration";
 import {
   confirmedAt,
   pendingActivity,
@@ -26,8 +27,11 @@ import {
 } from "./pending";
 import {
   maxSend,
+  type MigrationPlan,
   planMigration,
+  planPreparation,
   planSend,
+  preparationPczt,
   sendPczt,
   type SendRequest,
   shieldPczt,
@@ -58,7 +62,13 @@ import {
   syncTransparent,
   type TransparentView,
 } from "./transparent";
-import type { Activity, PendingActivity, Pool, WalletState } from "./types";
+import type {
+  Activity,
+  Note,
+  PendingActivity,
+  Pool,
+  WalletState,
+} from "./types";
 
 export type SyncEventListener = (e: SyncProgress) => void;
 
@@ -553,7 +563,8 @@ export class Wallet {
    * What a send may spend at the chain tip. Throws before the tip is known, or
    * with `coins` before this session's transparent sync: they may have moved.
    */
-  #walletData = (coins: boolean) => {
+  /** What zcore plans from; `keep` limits the notes it may spend. */
+  #walletData = (coins: boolean, keep?: (note: Note) => boolean) => {
     const tip = this.#tip;
     invariant(tip !== undefined, "The wallet is still syncing");
     invariant(!coins || this.#transparentSynced, "The wallet is still syncing");
@@ -561,29 +572,91 @@ export class Wallet {
     const free = spendable(notes, this.#transparent?.utxos ?? [], pending);
     return walletData(
       tip,
-      { notes: free.notes, utxos: coins ? free.utxos : [] },
+      {
+        notes: keep ? free.notes.filter(keep) : free.notes,
+        utxos: coins ? free.utxos : [],
+      },
       blocks,
     );
   };
 
-  planSend = (send: SendRequest) =>
-    planSend(this.#walletData(send.from === "transparent"), send);
+  planSend = (send: SendRequest, keep?: (note: Note) => boolean) =>
+    planSend(this.#walletData(send.from === "transparent", keep), send);
 
   maxSend = (send: SendRequest) =>
     maxSend(this.#walletData(send.from === "transparent"), send);
 
   planMigration = () => planMigration(this.#walletData(false));
 
+  /** The migration in progress, if any, its next step, and what's pending. */
+  migration = () => {
+    const migration = this.#state.migration;
+    if (!migration) return null;
+    const { notes } = spendable(this.#state.notes, [], this.#state.pending);
+    const orchard = notes
+      .filter((n) => n.pool === "orchard")
+      .map((n) => n.value);
+    const pending = new Set(this.#state.pending.map((p) => p.txid));
+    return {
+      migration,
+      next: nextStep(migration, orchard, pending),
+      pending,
+      tip: this.#tip,
+    };
+  };
+
+  startMigration = (plan: MigrationPlan) => {
+    this.#state.migration = startMigration(plan);
+    this.#save();
+  };
+
+  stopMigration = () => {
+    delete this.#state.migration;
+    this.#save();
+  };
+
+  /** Records that a migration step went out as `txid`. */
+  migrationStepSent = (
+    kind: "preparation" | "transfer",
+    index: number,
+    txid: string,
+  ) => {
+    const migration: Migration | undefined = this.#state.migration;
+    invariant(migration, "No migration in progress");
+    const steps =
+      kind === "preparation" ? migration.preparations : migration.transfers;
+    steps[index].txid = txid;
+    this.#save();
+  };
+
+  planPreparation = (parts: number[]) =>
+    planPreparation(this.#walletData(false), parts);
+
+  /** The unsigned PCZT of the next preparation, for the keychain account that signs it. */
+  preparationPczt = async (parts: number[], account: Account) => ({
+    ...(await preparationPczt(
+      this.#walletData(false),
+      parts,
+      this.#ufvk,
+      account,
+    )),
+    changeTo: undefined,
+  });
+
   /**
    * The unsigned PCZT for `send`, for the keychain account that signs it, and
    * `changeTo`: the internal address index its transparent change goes to, to
    * record once it's sent.
    */
-  sendPczt = async (send: SendRequest, account: Account) => {
+  sendPczt = async (
+    send: SendRequest,
+    account: Account,
+    keep?: (note: Note) => boolean,
+  ) => {
     const coins = send.from === "transparent";
     const internal = coins ? await this.internalAddress() : null;
     const built = await sendPczt(
-      this.#walletData(coins),
+      this.#walletData(coins, keep),
       send,
       this.#ufvk,
       account,

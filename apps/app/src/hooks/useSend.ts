@@ -14,7 +14,7 @@ import {
   type SendPlan,
   type SendRequest,
 } from "../lib/wallet/send";
-import type { PendingActivity } from "../lib/wallet/types";
+import type { Note, PendingActivity } from "../lib/wallet/types";
 import { useAccount } from "./useAccount";
 import { internalAddress } from "./useAddresses";
 import { useDebouncedValue } from "./useDebouncedValue";
@@ -116,7 +116,9 @@ export function planProblem({
  * `toSelf` marks a payment to one of our own addresses (an unshield), shown
  * as pending with the change until it's mined; `shown` is how history lists
  * it meanwhile. Transparent change holds the internal address it went to, so
- * the next one goes elsewhere.
+ * the next one goes elsewhere. `keep` limits the notes it may spend; with
+ * `preparation`, it sends a migration's next preparation for those parts
+ * instead of `send`.
  */
 export function useSend() {
   const wallet = useWallet();
@@ -129,16 +131,19 @@ export function useSend() {
     mutationFn: async ({
       toSelf,
       shown,
+      keep,
+      preparation,
       ...send
     }: SendRequest & {
       toSelf?: boolean;
       shown: Omit<PendingActivity, "fee" | "timestamp">;
+      keep?: (note: Note) => boolean;
+      preparation?: number[];
     }) => {
       track("building");
-      const { pczt, plan, changeTo } = await wallet.sendPczt(
-        send,
-        account.shielded,
-      );
+      const { pczt, plan, changeTo } = preparation
+        ? await wallet.preparationPczt(preparation, account.shielded)
+        : await wallet.sendPczt(send, account.shielded, keep);
       prefetchSaplingParams(pczt);
       track("approval");
       const signed = await keychain().sign({

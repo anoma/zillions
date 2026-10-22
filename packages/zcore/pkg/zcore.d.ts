@@ -90,6 +90,13 @@ export function pczt_summary(network: string, pczt: Uint8Array, ufvk: string): a
 export function plan_migration(network: string, wallet: any): any;
 
 /**
+ * The next preparation's plan, for `parts` (each a transfer's amount) still
+ * without a note: what it spends, its `bucket`, and how many parts it
+ * `made`. Errors starting "not ready" mean waiting for older notes.
+ */
+export function plan_preparation(network: string, wallet: any, parts: BigUint64Array): any;
+
+/**
  * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
  * is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
  * change, fee }], fee, bucket? }`, values in zatoshis.
@@ -101,6 +108,13 @@ export function plan_send(network: string, wallet: any, send: any): any;
  * with the shielded value as change.
  */
 export function plan_shield(network: string, wallet: any): any;
+
+/**
+ * The unsigned PCZT of the preparation [`plan_preparation`] plans, for the
+ * seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`; `trees` as
+ * `send_pczt` takes them.
+ */
+export function preparation_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, wallet: any, parts: BigUint64Array, trees: any): Uint8Array;
 
 /**
  * Proves a signed PCZT and extracts its transaction: `{ txid, raw, expiry_height }`. The
@@ -190,6 +204,13 @@ export function try_decrypt_gpu(network: string, ufvk: string, pool: string, chu
 export function ufvk_pools(network: string, ufvk: string): string[];
 
 /**
+ * Dev only: plans and recognises migration amounts of 0.001–0.002 ZEC, so a
+ * wallet with little Orchard can try preparations and several transfers.
+ * Such transfers don't blend in with anyone's; never for real use.
+ */
+export function use_migration_test_amounts(on: boolean): void;
+
+/**
  * Builds the Halo2 proving and verifying keys now, for this instance's
  * proofs to skip; seconds of work, so call it off the UI thread.
  */
@@ -212,8 +233,10 @@ export interface InitOutput {
     readonly pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly plan_migration: (a: number, b: number, c: any) => [number, number, number];
+    readonly plan_preparation: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
     readonly plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
     readonly plan_shield: (a: number, b: number, c: any) => [number, number, number];
+    readonly preparation_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number, j: number, k: any) => [number, number, number, number];
     readonly prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly script_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
@@ -226,6 +249,7 @@ export interface InitOutput {
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
     readonly try_decrypt_gpu: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number, number];
     readonly ufvk_pools: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly use_migration_test_amounts: (a: number) => void;
     readonly warm_prover: () => void;
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;

@@ -287,6 +287,27 @@ export function plan_migration(network, wallet) {
 }
 
 /**
+ * The next preparation's plan, for `parts` (each a transfer's amount) still
+ * without a note: what it spends, its `bucket`, and how many parts it
+ * `made`. Errors starting "not ready" mean waiting for older notes.
+ * @param {string} network
+ * @param {any} wallet
+ * @param {BigUint64Array} parts
+ * @returns {any}
+ */
+export function plan_preparation(network, wallet, parts) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray64ToWasm0(parts, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.plan_preparation(ptr0, len0, wallet, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
  * is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
  * change, fee }], fee, bucket? }`, values in zatoshis.
@@ -320,6 +341,37 @@ export function plan_shield(network, wallet) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * The unsigned PCZT of the preparation [`plan_preparation`] plans, for the
+ * seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`; `trees` as
+ * `send_pczt` takes them.
+ * @param {string} network
+ * @param {string} ufvk
+ * @param {string} seed_fingerprint
+ * @param {number} hd_index
+ * @param {any} wallet
+ * @param {BigUint64Array} parts
+ * @param {any} trees
+ * @returns {Uint8Array}
+ */
+export function preparation_pczt(network, ufvk, seed_fingerprint, hd_index, wallet, parts, trees) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(seed_fingerprint, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passArray64ToWasm0(parts, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.preparation_pczt(ptr0, len0, ptr1, len1, ptr2, len2, hd_index, wallet, ptr3, len3, trees);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
 }
 
 /**
@@ -652,6 +704,16 @@ export function ufvk_pools(network, ufvk) {
 }
 
 /**
+ * Dev only: plans and recognises migration amounts of 0.001–0.002 ZEC, so a
+ * wallet with little Orchard can try preparations and several transfers.
+ * Such transfers don't blend in with anyone's; never for real use.
+ * @param {boolean} on
+ */
+export function use_migration_test_amounts(on) {
+    wasm.use_migration_test_amounts(on);
+}
+
+/**
  * Builds the Halo2 proving and verifying keys now, for this instance's
  * proofs to skip; seconds of work, so call it off the UI thread.
  */
@@ -835,6 +897,10 @@ function __wbg_get_imports() {
             const ret = new Uint8Array(arg0);
             return ret;
         },
+        __wbg_new_28744009d011f847: function() {
+            const ret = new Map();
+            return ret;
+        },
         __wbg_new_617a8cdb8bb1130e: function() {
             const ret = new Object();
             return ret;
@@ -873,6 +939,10 @@ function __wbg_get_imports() {
             const ret = module.require;
             return ret;
         }, arguments); },
+        __wbg_set_6ae97e73113c4f0b: function(arg0, arg1, arg2) {
+            const ret = arg0.set(arg1, arg2);
+            return ret;
+        },
         __wbg_set_6be42768c690e380: function(arg0, arg1, arg2) {
             arg0[arg1] = arg2;
         },
@@ -1035,6 +1105,14 @@ function getArrayU8FromWasm0(ptr, len) {
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 
+let cachedBigUint64ArrayMemory0 = null;
+function getBigUint64ArrayMemory0() {
+    if (cachedBigUint64ArrayMemory0 === null || cachedBigUint64ArrayMemory0.byteLength === 0) {
+        cachedBigUint64ArrayMemory0 = new BigUint64Array(wasm.memory.buffer);
+    }
+    return cachedBigUint64ArrayMemory0;
+}
+
 let cachedDataViewMemory0 = null;
 function getDataViewMemory0() {
     if (cachedDataViewMemory0 === null || cachedDataViewMemory0.buffer.detached === true || (cachedDataViewMemory0.buffer.detached === undefined && cachedDataViewMemory0.buffer !== wasm.memory.buffer)) {
@@ -1079,6 +1157,13 @@ function isLikeNone(x) {
 function passArray32ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 4, 4) >>> 0;
     getUint32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function passArray64ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 8, 8) >>> 0;
+    getBigUint64ArrayMemory0().set(arg, ptr / 8);
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }
@@ -1167,6 +1252,7 @@ function __wbg_finalize_init(instance, module) {
     wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
+    cachedBigUint64ArrayMemory0 = null;
     cachedDataViewMemory0 = null;
     cachedUint32ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;

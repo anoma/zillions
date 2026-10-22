@@ -116,7 +116,7 @@ fn propose(
         && request.payments().len() == 1
         && request.payments().values().all(|p| {
             p.amount()
-                .is_some_and(zcash_protocol::zip318::is_canonical_denomination)
+                .is_some_and(|v| crate::migration::Grid.is_canonical_denomination(v))
         });
     let canonical_fee =
         zcash_client_backend::fees::canonical_crossing_fee(&params, target_height.into()).ok();
@@ -153,8 +153,12 @@ fn propose(
         )
     }) {
         Some(Ok(proposal)) => (proposal.steps().len() == 1
-            && canonical_fee
-                .is_some_and(|fee| proposal.steps().first().is_canonical_crossing(&zip318, fee)))
+            && canonical_fee.is_some_and(|fee| {
+                proposal
+                    .steps()
+                    .first()
+                    .is_canonical_crossing(&crate::migration::Grid, fee)
+            }))
         .then_some(proposal),
         Some(Err(InputSelectorError::InsufficientFunds { .. })) | None => None,
         Some(Err(e)) => return Err(e.to_string()),
@@ -310,16 +314,16 @@ struct StepSummary {
 }
 
 #[derive(Serialize)]
-struct PlanSummary {
+pub(crate) struct PlanSummary {
     steps: Vec<StepSummary>,
     fee: u64,
     /// The bucket boundary a ZIP 318 crossing anchors to, whose trees the
     /// build needs from lightwalletd.
     #[serde(skip_serializing_if = "Option::is_none")]
-    bucket: Option<u32>,
+    pub(crate) bucket: Option<u32>,
 }
 
-fn summarize<N>(proposal: &Proposal<StandardFeeRule, N>) -> PlanSummary {
+pub(crate) fn summarize<N>(proposal: &Proposal<StandardFeeRule, N>) -> PlanSummary {
     let steps: Vec<_> = proposal
         .steps()
         .iter()

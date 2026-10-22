@@ -1,4 +1,4 @@
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { twMerge } from "tailwind-merge";
@@ -9,10 +9,19 @@ import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
+import { migrationQuery, useMigration } from "../hooks/useMigration";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
-import { MIGRATION_ENABLED, MIGRATION_MINIMUM } from "../lib/utils";
+import {
+  fromNow,
+  MIGRATION_ENABLED,
+  MIGRATION_MINIMUM,
+  zatoshiToZec,
+} from "../lib/utils";
+import { type Step, transfersDone } from "../lib/wallet/migration";
+import type { Note } from "../lib/wallet/types";
+import type { Wallet } from "../lib/wallet/wallet";
 
 export const Route = createFileRoute("/migrate")({
   beforeLoad: () => {
@@ -22,7 +31,7 @@ export const Route = createFileRoute("/migrate")({
 });
 
 type Mode = "private" | "immediate";
-type Step = "choose" | "how" | "network" | "review";
+type Screen = "choose" | "how" | "network" | "review";
 
 const ZIP_318 = "https://zips.z.cash/zip-0318";
 const NYM_VPN = "https://nym.com/blog/nymvpn-free-for-zcash-ironwood";
@@ -30,13 +39,15 @@ const NYM_VPN = "https://nym.com/blog/nymvpn-free-for-zcash-ironwood";
 /**
  * Moves Orchard funds to Ironwood following ZIP 318 (product.md 2.9).
  * Immediately sends every Orchard note to one of our own addresses, which
- * NU6.3 delivers into Ironwood; with privacy isn't built yet.
+ * NU6.3 delivers into Ironwood. With privacy saves a plan, and the user sends
+ * each of its steps when it's due ([MigrationSteps]).
  */
 function MigrateRoute() {
   const balance = useGetBalance();
+  const status = useMigration();
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<Mode>("private");
-  const [step, setStep] = useState<Step>("choose");
-  const [started, setStarted] = useState(false);
+  const [step, setStep] = useState<Screen>("choose");
   const [validationMessage, setValidationMessage] = useState("");
   const self = useFreshAddress() ?? "";
   const planned = useSendPlan(
@@ -66,10 +77,11 @@ function MigrateRoute() {
   if (send.data) {
     return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
   }
-  if (balance.isPending) return <PageLoader />;
+  if (balance.isPending || status.isPending) return <PageLoader />;
+  if (status.data) return <MigrationSteps status={status.data} />;
   const orchard = balance.data?.orchardBalance ?? 0n;
 
-  const steps: Step[] =
+  const steps: Screen[] =
     mode === "private"
       ? ["choose", "how", "network", "review"]
       : ["choose", "network", "review"];
@@ -141,13 +153,13 @@ function MigrateRoute() {
             Your balance is split into standard amounts that many other wallets
             move too, sent hours apart, so they're hard to link together.
           </Point>
-          <Point title="Approve once">
-            The Keychain signs the whole plan in one approval. Larger balances
-            may take a few batches.
+          <Point title="Send each step">
+            Nothing is sent on its own. Come back when each step is due and send
+            it; the Keychain asks you to approve each one.
           </Point>
-          <Point title="Keep Zillions open">
-            Transfers are sent while the wallet is open. One that comes due
-            while it's closed is sent when you next open it.
+          <Point title="Wait between steps">
+            Sending a step early makes the transfers easier to link. The wallet
+            shows when the next one is due.
           </Point>
         </dl>
         <Note>
@@ -211,8 +223,8 @@ function MigrateRoute() {
               Your balance moves as {p.transfers.length}{" "}
               {p.transfers.length === 1 ? "transfer" : "transfers"} over{" "}
               {fromNow(p.tip, last!)}. Their order and timing are random, for
-              privacy. Approve once; the wallet sends each transfer while it's
-              open.
+              privacy. Starting saves this plan; nothing is sent until you send
+              each step.
             </p>
             <div className="mt-8 rounded-2xl border border-line divide-y divide-line text-sm">
               {p.preparations.map((height, i) => (
@@ -244,13 +256,15 @@ function MigrateRoute() {
             </div>
           </>
         )}
-        {started && (
-          <Note>
-            Migrating with privacy is a work in progress and can't start yet.
-            Nothing was sent.
-          </Note>
-        )}
-        <Primary onClick={() => setStarted(true)}>Start migration</Primary>
+        <Primary
+          disabled={!p?.transfers.length}
+          onClick={() => {
+            wallet.startMigration(p!);
+            void queryClient.invalidateQueries(migrationQuery(wallet));
+          }}
+        >
+          Start migration
+        </Primary>
       </Page>
     );
   }
@@ -300,14 +314,225 @@ function MigrateRoute() {
   );
 }
 
-/** About when `height` comes, at 75 seconds a block. */
-function fromNow(tip: number, height: number) {
-  const minutes = ((height - tip) * 75) / 60;
-  if (minutes < 5) return "now";
-  if (minutes < 90) return `~${Math.round(minutes)} min`;
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? `~${hours} hours` : `~${Math.round(hours / 24)} days`;
+type Status = NonNullable<ReturnType<Wallet["migration"]>>;
+
+/** The notes a transfer may spend: its own, or any Orchard one with no preparation. */
+const notesFor =
+  (step: Extract<Step, { kind: "transfer" }>, fee: number) => (n: Note) =>
+    n.pool === "orchard" && (!step.exact || n.value === step.value + fee);
+
+/**
+ * A migration in progress: every step with its state, and the next one to
+ * send. A step can go once its notes can anchor at a ZIP 318 bucket
+ * boundary; before it's due, only by choice.
+ */
+function MigrationSteps({ status }: { status: Status }) {
+  const wallet = useWallet();
+  const queryClient = useQueryClient();
+  const self = useFreshAddress();
+  const send = useSend();
+  const { migration: m, next, pending, tip = m.tip } = status;
+  const step =
+    next.kind === "preparation" || next.kind === "transfer" ? next : undefined;
+  const refresh = () => queryClient.invalidateQueries(migrationQuery(wallet));
+
+  // Whether the step can be sent now: its notes anchor at a bucket boundary.
+  const ready = useQuery(
+    queryOptions({
+      queryKey: ["migrationStep", wallet.id, step, tip, self, m.transferFee],
+      queryFn: async () => {
+        if (step!.kind === "preparation") {
+          return wallet
+            .planPreparation(step!.parts)
+            .then(() => true)
+            .catch((e: Error) => {
+              if (e.message.startsWith("not ready")) return false;
+              throw e;
+            });
+        }
+        const plan = await wallet.planSend(
+          { from: "orchard", to: self!, amount: BigInt(step!.value) },
+          notesFor(step!, m.transferFee),
+        );
+        return plan.bucket !== undefined;
+      },
+      enabled: Boolean(step && (step.kind === "preparation" || self)),
+      retry: false,
+    }),
+  );
+  const problem = (send.error ?? ready.error)?.message;
+
+  const sendStep = async () => {
+    if (!step) return;
+    const sent =
+      step.kind === "preparation"
+        ? await send.mutateAsync({
+            from: "orchard",
+            to: "",
+            amount: 0n,
+            preparation: step.parts,
+            shown: {
+              tx_type: "Prepared",
+              value: BigInt(
+                step.parts.reduce((sum, p) => sum + p + m.transferFee, 0),
+              ),
+              from: { pool: "orchard" },
+              to: { pool: "orchard" },
+            },
+          })
+        : await send.mutateAsync({
+            from: "orchard",
+            to: self!,
+            amount: BigInt(step.value),
+            toSelf: true,
+            keep: notesFor(step, m.transferFee),
+            shown: {
+              tx_type: "Migrated",
+              value: BigInt(step.value),
+              from: { pool: "orchard" },
+              to: { pool: "ironwood" },
+            },
+          });
+    wallet.migrationStepSent(step.kind, step.index, sent.txid);
+    send.reset();
+    await refresh();
+  };
+  const stop = async () => {
+    if (
+      next.kind !== "done" &&
+      !confirm(
+        "Stop the migration? Steps not sent yet are dropped; their funds stay in Orchard.",
+      )
+    ) {
+      return;
+    }
+    wallet.stopMigration();
+    await refresh();
+  };
+
+  const state = (txid: string | undefined, at: number, isNext: boolean) =>
+    txid
+      ? pending.has(txid)
+        ? "Being mined"
+        : "Done"
+      : isNext
+        ? tip >= at
+          ? "Due now"
+          : `Due ${fromNow(tip, at)}`
+        : step?.kind === "transfer" && at <= step.height
+          ? "Not needed"
+          : fromNow(tip, at);
+  const done = transfersDone(m, pending);
+  const due = step && tip >= step.height;
+  const label = step?.kind === "preparation" ? "preparation" : "transfer";
+
+  return (
+    <Page title="Moving to Ironwood">
+      <p>
+        Transfer {done} of {m.transfers.length} complete. Nothing is sent until
+        you send it.
+      </p>
+      <div className="mt-8 rounded-2xl border border-line divide-y divide-line text-sm">
+        {m.preparations.map((p, i) => (
+          <Row
+            key={`p${i}`}
+            label={
+              m.preparations.length > 1
+                ? `Prepare the amounts ${i + 1}`
+                : "Prepare the amounts"
+            }
+          >
+            {state(
+              p.txid,
+              p.height,
+              step?.kind === "preparation" && step.index === i,
+            )}
+          </Row>
+        ))}
+        {m.transfers.map((t, i) => (
+          <Row
+            key={`t${i}`}
+            label={`Transfer ${i + 1} · ${zatoshiLabel(t.value)}`}
+          >
+            {state(
+              t.txid,
+              t.height,
+              step?.kind === "transfer" && step.index === i,
+            )}
+          </Row>
+        ))}
+      </div>
+
+      {next.kind === "mining" && (
+        <Note>
+          Waiting for the last step to be mined; the next one can go once it is.
+        </Note>
+      )}
+      {next.kind === "replan" && (
+        <>
+          <Note>
+            The Orchard funds this plan needs have changed, so its remaining
+            steps can't be sent. Plan again from what Orchard holds now.
+          </Note>
+          <Primary onClick={stop}>Plan again</Primary>
+        </>
+      )}
+      {next.kind === "done" && (
+        <>
+          <Note>
+            Every transfer is done. Less than{" "}
+            <ZecValue zat={MIGRATION_MINIMUM} /> stays in Orchard.
+          </Note>
+          <Primary onClick={stop}>Finish</Primary>
+        </>
+      )}
+      {step &&
+        (ready.isPending ? (
+          <Note>
+            <Waiting />
+          </Note>
+        ) : !ready.data ? (
+          <Note>
+            Not ready yet: the funds for the next {label} can be sent once
+            they're older than the last checkpoint, which comes every 144 blocks
+            (about 3 hours).
+          </Note>
+        ) : due ? (
+          <Primary onClick={sendStep} disabled={send.isPending}>
+            {send.isPending ? "Sending..." : `Send the next ${label}`}
+          </Primary>
+        ) : (
+          <>
+            <Note>
+              The next {label} is due {fromNow(tip, step.height)}. Sending it
+              before then makes the transfers easier to link.
+            </Note>
+            <button
+              type="button"
+              onClick={sendStep}
+              disabled={send.isPending}
+              className="mt-3 self-start text-xs underline cursor-pointer"
+            >
+              {send.isPending ? "Sending..." : "Send now anyway"}
+            </button>
+          </>
+        ))}
+      {problem && <FormError>{problem}</FormError>}
+      {send.isPending && <SubmitProgress stages={send.stages} />}
+      {next.kind !== "done" && (
+        <button
+          type="button"
+          onClick={stop}
+          className="mt-8 self-start text-xs text-neutral-600 underline cursor-pointer"
+        >
+          Stop migration
+        </button>
+      )}
+    </Page>
+  );
 }
+
+const zatoshiLabel = (zat: number) => `${zatoshiToZec(BigInt(zat))} ZEC`;
 
 function Waiting() {
   return <SpinnerIcon className="size-3" />;

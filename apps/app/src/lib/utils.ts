@@ -4,14 +4,33 @@ const ZATOSHI_PER_ZEC = 100_000_000n;
 const DECIMALS = 8;
 
 /**
+ * Dev only: migrations plan 0.001 and 0.002 ZEC amounts instead of ZIP 318's,
+ * so a wallet with little Orchard can try several steps. Such transfers don't
+ * blend in; `vite build` drops it.
+ */
+export const MIGRATION_TEST_AMOUNTS =
+  import.meta.env.DEV && import.meta.env.VITE_MIGRATION_TEST_AMOUNTS === "true";
+
+/**
  * ZIP 318's `MAX_RESIDUAL_VALUE` (0.01 ZEC): less than this stays in Orchard,
  * since moving a distinctive dust amount would single the wallet out.
  */
-export const MIGRATION_MINIMUM = ZATOSHI_PER_ZEC / 100n;
+export const MIGRATION_MINIMUM = MIGRATION_TEST_AMOUNTS
+  ? ZATOSHI_PER_ZEC / 1000n
+  : ZATOSHI_PER_ZEC / 100n;
 
 /** Hides Move to Ironwood (2.9) until it has been tested: `VITE_MIGRATION_ENABLED=true` shows it. */
 export const MIGRATION_ENABLED =
   import.meta.env.VITE_MIGRATION_ENABLED === "true";
+
+/** About how long until block `height`, from `tip`, at 75 seconds a block. */
+export function fromNow(tip: number, height: number) {
+  const minutes = ((height - tip) * 75) / 60;
+  if (minutes < 5) return "now";
+  if (minutes < 90) return `~${Math.round(minutes)} min`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `~${hours} hours` : `~${Math.round(hours / 24)} days`;
+}
 
 /**
  * CSS font size that fits `chars` characters in the nearest `@container`,

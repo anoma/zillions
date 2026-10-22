@@ -58,6 +58,7 @@ vi.mock("@zillions/zcore", () => ({
   send_pczt: vi.fn(),
   plan_shield: vi.fn(),
   shield_pczt: vi.fn(),
+  use_migration_test_amounts: vi.fn(),
   // A Ledger's viewing key holds Orchard and transparent keys only.
   ufvk_pools: vi.fn((_network: string, ufvk: string) =>
     ufvk === "uview-ledger"
