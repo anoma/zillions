@@ -531,7 +531,7 @@ function MigrationSteps({ status }: { status: Status }) {
         <button
           type="button"
           onClick={stop}
-          className="mt-8 self-start text-xs text-neutral-600 underline cursor-pointer"
+          className="mt-8 self-center text-xs text-neutral-600 underline cursor-pointer"
         >
           Stop migration
         </button>
