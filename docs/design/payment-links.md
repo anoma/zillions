@@ -1,38 +1,42 @@
 # Payment links
 
-Status: October 2026 design, not built. What it does for users is
+Status: October 2026 design; creating links is built, claiming isn't. What it does for users is
 [product.md 2.10](../product.md); this is how. It follows [ZIP 324] (draft,
 Sapling only, no wallet ships it) where it can; each departure is listed at
 the end, to propose upstream.
 
 ## Keys
 
-- **Path:** `m_Orchard/324'/coin_type'/r₁'/r₂'`, coin type 133 on mainnet and
-  1 on testnet. Ironwood uses Orchard keys; there is no `m_Ironwood`.
-- **r₁, r₂** are random 31-bit hardened indexes, not ZIP 324's counter: the
-  same recovery phrase in two browsers can't pick the same link (62 bits make
-  a clash between one wallet's links negligible), and no counter needs
-  keeping or recovering.
-- **Link secret:** BLAKE2b-256 of the derived extended spending key,
-  personalisation `Zcash_PaymentURI` (ZIP 324), used as an Orchard spending
-  key. The link's address is that key's default address.
-- **Keychain calls** (seed only there):
-  - link viewing key for (r₁, r₂): no approval, same trust as the UFVK;
-  - link secret for (r₁, r₂): approval each time (create, show again, cancel).
-- **The app stores** per link: r₁, r₂ and the viewing key. The secret is
-  ephemeral: held in memory only while the link is shown or a cancel is
-  signed, never written to IndexedDB, `localStorage` or any other storage.
-  On the claim page the link itself is the exception, kept in
-  `sessionStorage` until claimed, since the claimer has no other copy.
+- **Link key:** 32 random bytes from `crypto.getRandomValues`, used as an
+  Orchard spending key (Ironwood uses Orchard keys). Drawn again in the rare
+  case zcore rejects the bytes as a spending key. The link's address is that
+  key's default address: a throwaway account that holds one note. `nk` is
+  the link key's nullifier key, enough to tell whether its note was spent.
+- **Sealing key:** BLAKE2b-256 of the account's Orchard spending key,
+  personalisation `Zillions_PayLink`. Derived in the Keychain from the seed,
+  never leaves it. Permanent once a link exists.
+- **Sealed link key:** `link key ⊕ BLAKE2b-256(key = sealing key, nk)`. `nk`
+  is unique per link, so each pad is used once; opening is checked by
+  rederiving `nk` and the address from the result.
+- **Keychain calls:**
+  - seal (link key → sealed): no approval. Not for Ledger accounts, whose
+    seed never leaves the device. It can't open anything: unsealing
+    a link needs that link's key already.
+  - open (sealed, `nk` → link key): approval each time (show again, cancel).
+- **The only plain copy** is the link itself. The app holds the key in
+  memory while the link is shown or a cancel is signed, and never writes it
+  to IndexedDB, `localStorage` or any other storage. On the claim page the
+  link itself is the exception, kept in `sessionStorage` until claimed,
+  since the claimer has no other copy.
 
 ## The link
 
-`${VITE_APP_URL}claim#v=1&k=<secret>&a=<ZEC>&s=<size>&n=<main|test>&d=<description>`
+`<the app's URL>claim#v=1&k=<key>&a=<ZEC>&s=<size>&n=<main|test>&d=<description>`
 
 | Field | Meaning                                                                  |
 | ----- | ------------------------------------------------------------------------ |
 | `v`   | Format version, so a final ZIP 324 format can sit beside it              |
-| `k`   | Link secret, Bech32 as in ZIP 324                                        |
+| `k`   | Link key, unpadded base64url                                             |
 | `a`   | Amount the claimer receives                                              |
 | `s`   | Ironwood tree size when the link was made: the note lands at or after it |
 | `n`   | Network                                                                  |
@@ -50,29 +54,37 @@ with `history.replaceState`.
 - **Memo** ([ZIP 302] `0xFF` = application data):
 
   ```
-  0xFF | "PAYLINK" | version (1 byte) | r₁ (4 bytes BE) | r₂ (4 bytes BE) | description (UTF-8, optional)
+  0xFF | "PAYLINK" | version (1 byte) | nk (32 bytes) | sealed link key (32 bytes) | description (UTF-8, optional)
   ```
 
-  The claimer can read it too, but already holds the link.
+  The memo is encrypted with the note like any other, so the link key's
+  holder and our OVK can read it. With the UFVK alone that gives the
+  description and whether the link was claimed, but not the link: opening
+  the sealed key takes the seed.
 
 - No change is forced: it would cost an extra output's fee.
 
 ## Claim (no Keychain signature)
 
-1. `/ironwood/ciphertexts/⌊s / 2¹⁴⌋` (and the next chunk at a boundary):
-   trial-decrypt with the link's incoming viewing key, giving the note, its
-   position and rho.
+1. `/ironwood/ciphertexts/⌊s / 2¹⁴⌋` and onward to the tip (usually one
+   chunk; more if the funding was mined late): trial-decrypt with the link's
+   incoming viewing key, giving the note, its position and rho. No note yet
+   → "On its way": the funding isn't mined, so look again shortly.
 2. `/ironwood/nullifiers/⌊s / 2¹⁸⌋` up to the last chunk (an Ironwood
    nullifier's index equals its action's note position, confirmed by the
    indexer team): is the note's
    nullifier there? Usually one chunk, a few for an old link; full chunks are
    immutable, so the browser caches them. Whole chunks, so the indexer never
-   learns which link is checked. Spent → "Already claimed".
+   learns which link is checked. Spent → "Already claimed or cancelled":
+   the claimer can't tell which, and doesn't need to.
 3. Witness from the Ironwood tip and tree chunks, as for any spend.
 4. zcore builds the PCZT: the note → a fresh Ironwood address of the
    connected account, fee = the claim fee, **OVK = the claimer's own**. zcore
-   signs it with the link secret (the `pczt` Signer takes a spending key),
+   signs it with the link key (the `pczt` Signer takes a spending key),
    proves and broadcasts it.
+
+A broadcast that fails because the note was spent meanwhile (someone else
+claimed first) also ends at "Already claimed or cancelled".
 
 The claimer's own sync isn't needed: only the link's note and one address
 from the UFVK.
@@ -83,12 +95,12 @@ from the UFVK.
   transactions paid (`#applySent`, `#recoverSends`). One whose memo starts
   `0xFF "PAYLINK"` is a link; its row becomes "Payment link". This also
   recovers links made elsewhere or before a restore.
-- **Status:** with the link's viewing key (from the Keychain, no approval)
-  the note's nullifier joins the ones sync looks up (`checkSpends`). Spent by
-  a transaction of ours = Cancelled, by anyone else's = Claimed.
-- **Show again / Cancel:** the Keychain derives the secret (approval). Before
-  using it, check that its address equals, byte for byte, the address the
-  funding output paid. Cancel = the claim path, paid to our own address.
+- **Status:** the note's nullifier, from `nk` and the recovered note, joins
+  the ones sync looks up (`checkSpends`). Spent by a transaction of ours =
+  Cancelled, by anyone else's = Claimed.
+- **Show again / Cancel:** the Keychain opens the sealed key (approval).
+  Before using it, check that its address equals, byte for byte, the address
+  the funding output paid. Cancel = the claim path, paid to our own address.
 
 ## Departures from ZIP 324
 
@@ -96,8 +108,11 @@ from the UFVK.
   rho comes from the funding transaction, so it can't be derived from the key
   and amount as ZIP 324 does: the link carries `s` and the claimer
   trial-decrypts.
-- Random indexes in the memo instead of a counter with gap limit 3.
+- A random key, sealed in the memo, instead of one derived from the seed
+  with a counter and gap limit 3.
 - The link's amount is what the claimer receives; the claim fee is on top.
+- The key in base64url instead of Bech32: no new dependency, and a
+  damaged key fails the spending-key check or finds no note.
 - Our own URL instead of `pay.withzcash.com:65536`, which a web app can't
   catch.
 

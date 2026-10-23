@@ -3,11 +3,14 @@
 
 @source inline("{bg,text,border,before:bg,before:border}-neutral-{500,700,800}");
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: "Montserrat Variable", sans-serif;
 
   --color-surface: #ecebe7;
   --color-gold: #ceb462;
+  --color-on-gold: #000;
   --color-card: #f6f5f2;
   --color-line: #e6e4df;
   --color-line-strong: #cdcac2;
@@ -57,8 +60,40 @@
   --color-gold-button: oklch(0.8 0.11 92.18 / 1);
 }
 
+/*
+ * Dark mode swaps the palette rather than every class: `black` is the ink and
+ * `white` the paper, so `text-black`, `bg-black/5` and the grey ramps invert.
+ * Anything that must stay truly dark (text on gold, QR codes) opts out.
+ * Unlayered, so it wins over Tailwind's theme layer.
+ */
+:root.dark {
+  color-scheme: dark;
+
+  --color-surface: #161514;
+  --color-card: #1f1e1c;
+  --color-line: #2a2826;
+  --color-line-strong: #3b3835;
+  --color-on-gold: #161514;
+
+  --color-black: #ecebe7;
+  --color-white: #161514;
+
+  --color-gray-400: oklch(46% 0.01 56);
+  --color-gray-500: oklch(62% 0.012 58);
+  --color-gray-600: oklch(76% 0.01 70);
+
+  --color-neutral-300: oklch(36% 0.006 60);
+  --color-neutral-400: oklch(50% 0.008 60);
+  --color-neutral-500: oklch(60% 0.008 60);
+  --color-neutral-600: oklch(72% 0.008 60);
+  --color-neutral-700: oklch(82% 0.006 60);
+  --color-neutral-800: oklch(90% 0.006 60);
+
+  --color-red-700: oklch(70.4% 0.191 22.216);
+}
+
 body {
-  @apply bg-surface;
+  @apply bg-surface text-black;
 }
 
 /* Registered so ActionButton's colors (set as custom properties) can transition. */

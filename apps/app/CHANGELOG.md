@@ -1,80 +1,82 @@
 # Changelog
 
-## [1.12.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.11.0...zillions-app-v1.12.0) (2026-10-21)
-
+## [1.13.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.12.0...zillions-app-v1.13.0) (2026-10-23)
 
 ### Features
 
-* app shell without keychain ([#135](https://github.com/heliaxdev/zillions-interface/issues/135)) ([b97456d](https://github.com/heliaxdev/zillions-interface/commit/b97456df695dff6bf0aa882f7bcd1452abb4f599))
-* improvements on app drawer ([#134](https://github.com/heliaxdev/zillions-interface/issues/134)) ([8064197](https://github.com/heliaxdev/zillions-interface/commit/80641970e26e94199f038dd8d6b2e9554b9f7f16))
-* show pending funds in balances ([#124](https://github.com/heliaxdev/zillions-interface/issues/124)) ([c171500](https://github.com/heliaxdev/zillions-interface/commit/c171500a033153c386a064696757968f971218c2))
-* tx progress estimate ([#145](https://github.com/heliaxdev/zillions-interface/issues/145)) ([4e8b99e](https://github.com/heliaxdev/zillions-interface/commit/4e8b99e44ebdec11ff5aeacb708585bcde56b048))
+- add dark mode ([#157](https://github.com/heliaxdev/zillions-interface/issues/157)) ([ea35462](https://github.com/heliaxdev/zillions-interface/commit/ea354625018b3aa69cfa31305144b3964878a353))
+- add instructions to welcome screen ([#147](https://github.com/heliaxdev/zillions-interface/issues/147)) ([a078162](https://github.com/heliaxdev/zillions-interface/commit/a0781622f015cb356fef426373ad0f6cea2a8f8e))
+- improve qr code box ([#150](https://github.com/heliaxdev/zillions-interface/issues/150)) ([1ff6fb5](https://github.com/heliaxdev/zillions-interface/commit/1ff6fb5ae604420ccc556b128bad9bec63e5e6cd))
+- improve qr code box ([#151](https://github.com/heliaxdev/zillions-interface/issues/151)) ([b9c05de](https://github.com/heliaxdev/zillions-interface/commit/b9c05de3b68d90f98eea79fd5e598dabccd0635e))
+- payment links flow ([#158](https://github.com/heliaxdev/zillions-interface/issues/158)) ([a08dae8](https://github.com/heliaxdev/zillions-interface/commit/a08dae872ac35bcc95fea33e118b117eeb7a4abd))
+- public receipt links ([#153](https://github.com/heliaxdev/zillions-interface/issues/153)) ([464aa21](https://github.com/heliaxdev/zillions-interface/commit/464aa218c55b9fb607231ed79f8d0f7db7265a70))
+- reduce size of send form ([#149](https://github.com/heliaxdev/zillions-interface/issues/149)) ([c65a287](https://github.com/heliaxdev/zillions-interface/commit/c65a28774ffa0e597d23641344da173dae5628b7))
 
+## [1.12.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.11.0...zillions-app-v1.12.0) (2026-10-21)
+
+### Features
+
+- app shell without keychain ([#135](https://github.com/heliaxdev/zillions-interface/issues/135)) ([b97456d](https://github.com/heliaxdev/zillions-interface/commit/b97456df695dff6bf0aa882f7bcd1452abb4f599))
+- improvements on app drawer ([#134](https://github.com/heliaxdev/zillions-interface/issues/134)) ([8064197](https://github.com/heliaxdev/zillions-interface/commit/80641970e26e94199f038dd8d6b2e9554b9f7f16))
+- show pending funds in balances ([#124](https://github.com/heliaxdev/zillions-interface/issues/124)) ([c171500](https://github.com/heliaxdev/zillions-interface/commit/c171500a033153c386a064696757968f971218c2))
+- tx progress estimate ([#145](https://github.com/heliaxdev/zillions-interface/issues/145)) ([4e8b99e](https://github.com/heliaxdev/zillions-interface/commit/4e8b99e44ebdec11ff5aeacb708585bcde56b048))
 
 ### Bug Fixes
 
-* receipt nested div warning ([#131](https://github.com/heliaxdev/zillions-interface/issues/131)) ([7620a72](https://github.com/heliaxdev/zillions-interface/commit/7620a72e9a9350994e87d59687a0ab086c10a18e))
-* unsigned amount on receipt ([#136](https://github.com/heliaxdev/zillions-interface/issues/136)) ([89cbafc](https://github.com/heliaxdev/zillions-interface/commit/89cbafccd6ff02a69bcce49edfb29695f03c5a2d))
+- receipt nested div warning ([#131](https://github.com/heliaxdev/zillions-interface/issues/131)) ([7620a72](https://github.com/heliaxdev/zillions-interface/commit/7620a72e9a9350994e87d59687a0ab086c10a18e))
+- unsigned amount on receipt ([#136](https://github.com/heliaxdev/zillions-interface/issues/136)) ([89cbafc](https://github.com/heliaxdev/zillions-interface/commit/89cbafccd6ff02a69bcce49edfb29695f03c5a2d))
 
 ## [1.11.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.10.0...zillions-app-v1.11.0) (2026-10-20)
 
-
 ### Features
 
-* adding cog and nav on AppHeader ([#114](https://github.com/heliaxdev/zillions-interface/issues/114)) ([66d76e6](https://github.com/heliaxdev/zillions-interface/commit/66d76e65f1f42c29eeaff37fc17f8bfb56c592b9))
-* confirmation progress ([#111](https://github.com/heliaxdev/zillions-interface/issues/111)) ([8ad5496](https://github.com/heliaxdev/zillions-interface/commit/8ad54965ce884dd3f0aced43892ccb7f2f57e08f))
-* full transactions in history ([#102](https://github.com/heliaxdev/zillions-interface/issues/102)) ([25e1225](https://github.com/heliaxdev/zillions-interface/commit/25e12256fa4ff5056b3da85dd56421c1f1a15685))
-* GPU trial decryption ([#106](https://github.com/heliaxdev/zillions-interface/issues/106)) ([587fac3](https://github.com/heliaxdev/zillions-interface/commit/587fac3bbe1d9685fa102ba0638e64457504e4ad))
-* ledger shielded sync ([#118](https://github.com/heliaxdev/zillions-interface/issues/118)) ([5415802](https://github.com/heliaxdev/zillions-interface/commit/5415802f0e17c9f653a3bb5a5bf93d7ec12241a4))
-* redesign send with a payment link toggle, and a cleaner visual pass ([#103](https://github.com/heliaxdev/zillions-interface/issues/103)) ([6f80721](https://github.com/heliaxdev/zillions-interface/commit/6f8072127ff56ff43cdecf0ef5997a2f18ac555a))
-
+- adding cog and nav on AppHeader ([#114](https://github.com/heliaxdev/zillions-interface/issues/114)) ([66d76e6](https://github.com/heliaxdev/zillions-interface/commit/66d76e65f1f42c29eeaff37fc17f8bfb56c592b9))
+- confirmation progress ([#111](https://github.com/heliaxdev/zillions-interface/issues/111)) ([8ad5496](https://github.com/heliaxdev/zillions-interface/commit/8ad54965ce884dd3f0aced43892ccb7f2f57e08f))
+- full transactions in history ([#102](https://github.com/heliaxdev/zillions-interface/issues/102)) ([25e1225](https://github.com/heliaxdev/zillions-interface/commit/25e12256fa4ff5056b3da85dd56421c1f1a15685))
+- GPU trial decryption ([#106](https://github.com/heliaxdev/zillions-interface/issues/106)) ([587fac3](https://github.com/heliaxdev/zillions-interface/commit/587fac3bbe1d9685fa102ba0638e64457504e4ad))
+- ledger shielded sync ([#118](https://github.com/heliaxdev/zillions-interface/issues/118)) ([5415802](https://github.com/heliaxdev/zillions-interface/commit/5415802f0e17c9f653a3bb5a5bf93d7ec12241a4))
+- redesign send with a payment link toggle, and a cleaner visual pass ([#103](https://github.com/heliaxdev/zillions-interface/issues/103)) ([6f80721](https://github.com/heliaxdev/zillions-interface/commit/6f8072127ff56ff43cdecf0ef5997a2f18ac555a))
 
 ### Bug Fixes
 
-* abort kills in-flight workers ([#116](https://github.com/heliaxdev/zillions-interface/issues/116)) ([a599cb2](https://github.com/heliaxdev/zillions-interface/commit/a599cb2491cb394d6e634f7dcad9b7f69f09ed7f))
-* amount field validation ([#122](https://github.com/heliaxdev/zillions-interface/issues/122)) ([3dd968e](https://github.com/heliaxdev/zillions-interface/commit/3dd968e0eee916a68b91f203acec142f14443e83))
-
+- abort kills in-flight workers ([#116](https://github.com/heliaxdev/zillions-interface/issues/116)) ([a599cb2](https://github.com/heliaxdev/zillions-interface/commit/a599cb2491cb394d6e634f7dcad9b7f69f09ed7f))
+- amount field validation ([#122](https://github.com/heliaxdev/zillions-interface/issues/122)) ([3dd968e](https://github.com/heliaxdev/zillions-interface/commit/3dd968e0eee916a68b91f203acec142f14443e83))
 
 ### Performance Improvements
 
-* cache sapling params ([#108](https://github.com/heliaxdev/zillions-interface/issues/108)) ([58aa537](https://github.com/heliaxdev/zillions-interface/commit/58aa5374ba464831a82011aaf28da12cbf27f2ec))
+- cache sapling params ([#108](https://github.com/heliaxdev/zillions-interface/issues/108)) ([58aa537](https://github.com/heliaxdev/zillions-interface/commit/58aa5374ba464831a82011aaf28da12cbf27f2ec))
 
 ## [1.10.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.9.0...zillions-app-v1.10.0) (2026-10-15)
 
-
 ### Features
 
-* Ironwood migration flag ([#97](https://github.com/heliaxdev/zillions-interface/issues/97)) ([9a0adfe](https://github.com/heliaxdev/zillions-interface/commit/9a0adfef10826b2105b3a8efb6ac6a7c4b234514))
-* mobile layout ([#87](https://github.com/heliaxdev/zillions-interface/issues/87)) ([1329013](https://github.com/heliaxdev/zillions-interface/commit/1329013afdd3fcfef5fee152a1666899a9f4e384))
-* send memos ([#98](https://github.com/heliaxdev/zillions-interface/issues/98)) ([c6494e8](https://github.com/heliaxdev/zillions-interface/commit/c6494e8c044ea83a385abffdfe45e1ec805c0afc))
-* send progress steps ([#91](https://github.com/heliaxdev/zillions-interface/issues/91)) ([878f04d](https://github.com/heliaxdev/zillions-interface/commit/878f04dc85e49048dc457a28389b8295711f4e1f))
-* sync on tab focus and reconnect ([#94](https://github.com/heliaxdev/zillions-interface/issues/94)) ([25482d0](https://github.com/heliaxdev/zillions-interface/commit/25482d02fa9e477252828e6f1399483680e7aed0))
-
+- Ironwood migration flag ([#97](https://github.com/heliaxdev/zillions-interface/issues/97)) ([9a0adfe](https://github.com/heliaxdev/zillions-interface/commit/9a0adfef10826b2105b3a8efb6ac6a7c4b234514))
+- mobile layout ([#87](https://github.com/heliaxdev/zillions-interface/issues/87)) ([1329013](https://github.com/heliaxdev/zillions-interface/commit/1329013afdd3fcfef5fee152a1666899a9f4e384))
+- send memos ([#98](https://github.com/heliaxdev/zillions-interface/issues/98)) ([c6494e8](https://github.com/heliaxdev/zillions-interface/commit/c6494e8c044ea83a385abffdfe45e1ec805c0afc))
+- send progress steps ([#91](https://github.com/heliaxdev/zillions-interface/issues/91)) ([878f04d](https://github.com/heliaxdev/zillions-interface/commit/878f04dc85e49048dc457a28389b8295711f4e1f))
+- sync on tab focus and reconnect ([#94](https://github.com/heliaxdev/zillions-interface/issues/94)) ([25482d0](https://github.com/heliaxdev/zillions-interface/commit/25482d02fa9e477252828e6f1399483680e7aed0))
 
 ### Bug Fixes
 
-* left-align amount caret ([#96](https://github.com/heliaxdev/zillions-interface/issues/96)) ([043a37d](https://github.com/heliaxdev/zillions-interface/commit/043a37d2f5fa6aa668eed3db9d4520afc8f77a4f))
-* self-payment amount and fee ([#99](https://github.com/heliaxdev/zillions-interface/issues/99)) ([e198ff3](https://github.com/heliaxdev/zillions-interface/commit/e198ff321d5a5814fb7a7f2daa1e1e49e3b03a1e))
-* validate forms on submit ([#100](https://github.com/heliaxdev/zillions-interface/issues/100)) ([9455a08](https://github.com/heliaxdev/zillions-interface/commit/9455a084499972a9d454d34938793ad836b5bd8c))
-
+- left-align amount caret ([#96](https://github.com/heliaxdev/zillions-interface/issues/96)) ([043a37d](https://github.com/heliaxdev/zillions-interface/commit/043a37d2f5fa6aa668eed3db9d4520afc8f77a4f))
+- self-payment amount and fee ([#99](https://github.com/heliaxdev/zillions-interface/issues/99)) ([e198ff3](https://github.com/heliaxdev/zillions-interface/commit/e198ff321d5a5814fb7a7f2daa1e1e49e3b03a1e))
+- validate forms on submit ([#100](https://github.com/heliaxdev/zillions-interface/issues/100)) ([9455a08](https://github.com/heliaxdev/zillions-interface/commit/9455a084499972a9d454d34938793ad836b5bd8c))
 
 ### Performance Improvements
 
-* faster send submission ([#92](https://github.com/heliaxdev/zillions-interface/issues/92)) ([5d53ffd](https://github.com/heliaxdev/zillions-interface/commit/5d53ffda95643294f7d86359825c92048b160540))
+- faster send submission ([#92](https://github.com/heliaxdev/zillions-interface/issues/92)) ([5d53ffd](https://github.com/heliaxdev/zillions-interface/commit/5d53ffda95643294f7d86359825c92048b160540))
 
 ## [1.9.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.8.0...zillions-app-v1.9.0) (2026-10-13)
 
-
 ### Features
 
-* incremental catch-up decrypt ([#78](https://github.com/heliaxdev/zillions-interface/issues/78)) ([f36b2dc](https://github.com/heliaxdev/zillions-interface/commit/f36b2dc128e255a501ee37220489cd1c3c7d8ffe))
-* spam era on demand ([#76](https://github.com/heliaxdev/zillions-interface/issues/76)) ([1285997](https://github.com/heliaxdev/zillions-interface/commit/128599755dd3008ec65abc7aca2de59c13be9237))
-
+- incremental catch-up decrypt ([#78](https://github.com/heliaxdev/zillions-interface/issues/78)) ([f36b2dc](https://github.com/heliaxdev/zillions-interface/commit/f36b2dc128e255a501ee37220489cd1c3c7d8ffe))
+- spam era on demand ([#76](https://github.com/heliaxdev/zillions-interface/issues/76)) ([1285997](https://github.com/heliaxdev/zillions-interface/commit/128599755dd3008ec65abc7aca2de59c13be9237))
 
 ### Bug Fixes
 
-* **keychain:** limit approval windows and pending sign requests ([#74](https://github.com/heliaxdev/zillions-interface/issues/74)) ([3698f7b](https://github.com/heliaxdev/zillions-interface/commit/3698f7be6f4e7b28ab9356417eb8082a85851dd6))
-* **keychain:** scope viewing keys and signing to the active account ([#73](https://github.com/heliaxdev/zillions-interface/issues/73)) ([53258ed](https://github.com/heliaxdev/zillions-interface/commit/53258eda88ff551d1c090e5f36e68094f0b41b5e))
+- **keychain:** limit approval windows and pending sign requests ([#74](https://github.com/heliaxdev/zillions-interface/issues/74)) ([3698f7b](https://github.com/heliaxdev/zillions-interface/commit/3698f7be6f4e7b28ab9356417eb8082a85851dd6))
+- **keychain:** scope viewing keys and signing to the active account ([#73](https://github.com/heliaxdev/zillions-interface/issues/73)) ([53258ed](https://github.com/heliaxdev/zillions-interface/commit/53258eda88ff551d1c090e5f36e68094f0b41b5e))
 
 ## [1.8.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.7.3...zillions-app-v1.8.0) (2026-10-13)
 

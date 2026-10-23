@@ -324,6 +324,23 @@ export type IpcContract = {
     req: { pczt: string; signer?: string };
     res: string;
   };
+  /**
+   * Seal a payment link's key (base64) to the active account; no approval,
+   * as sealing opens nothing. Requires connection and an unlocked vault.
+   */
+  "dapp/sealLinkKey": {
+    req: { key: string };
+    res: string;
+  };
+  /**
+   * Open a payment link's sealed key (hex) once the user approves in the
+   * popup; resolves with the key, base64. Requires connection and an unlocked
+   * vault.
+   */
+  "dapp/openLinkKey": {
+    req: { sealed: string; nk: string };
+    res: string;
+  };
   // --- approvals (trusted UIs only: the approval popup + settings) ---
   /** Whether `origin` is already approved (approval popup auto-approve check). */
   "approvals/isConnectionApproved": {
@@ -380,6 +397,14 @@ export type IpcContract = {
    * Confirm the pending default-account change owned by the calling popup's
    * tab: sets `address` active and settles the dapp's request.
    */
+  /**
+   * Confirm the pending "show a payment link again" request `msgId`, owned by
+   * the calling popup's tab: opens the key and settles the dapp's request.
+   */
+  "approvals/submitOpenLinkKey": {
+    req: { msgId: string };
+    res: void;
+  };
   "approvals/submitUpdateDefaultAccount": {
     req: { address: string };
     res: void;

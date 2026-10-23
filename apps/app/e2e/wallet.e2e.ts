@@ -98,3 +98,37 @@ test("the nav reaches every page", async ({ page }) => {
   await nav.getByRole("link", { name: "Send" }).click();
   await expect(page.getByRole("heading", { name: "Send" })).toBeVisible();
 });
+
+test("dark mode toggles from the sidebar and sticks", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.goto("/");
+  const html = page.locator("html");
+  await expect(html).not.toHaveClass(/dark/);
+  await page.getByRole("switch", { name: "Dark mode" }).click();
+  await expect(html).toHaveClass(/dark/);
+  await page.reload();
+  await expect(html).toHaveClass(/dark/);
+  await expect(page.getByRole("switch", { name: "Dark mode" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+});
+
+test("dark mode follows the system until chosen", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveClass(/dark/);
+});
+
+test.describe("mobile", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("dark mode is in the more menu", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "light" });
+    await page.goto("/");
+    // The unlabelled kebab, the header's last button; it opens on hover.
+    await page.getByRole("banner").getByRole("button").last().hover();
+    await page.getByRole("switch", { name: "Dark mode" }).click();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+  });
+});

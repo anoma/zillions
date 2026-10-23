@@ -25,6 +25,8 @@ export type SendRequest = {
   to: string;
   amount: bigint;
   memo?: string;
+  /** A binary memo, hex, in place of `memo`: a payment link's. */
+  memoHex?: string;
   /**
    * Which balance pays; within the shielded one, the plan picks pools.
    * `orchard` spends Orchard notes alone: moving them to Ironwood.
@@ -61,9 +63,10 @@ export type WalletData = {
   utxos: (OwnUtxo & { height: number })[];
 };
 
-const request = (send: SendRequest) => ({
+const request = ({ memoHex, ...send }: SendRequest) => ({
   ...send,
   amount: Number(send.amount),
+  memo_hex: memoHex,
 });
 
 export async function planSend(wallet: WalletData, send: SendRequest) {
@@ -162,7 +165,7 @@ const treeState = (height: number) =>
  * zcore rebuilds the tips at the size lightwalletd's trees there give, which
  * needs the chunk then filling if it has frozen since.
  */
-async function fetchTrees(plan: SendPlan) {
+export async function fetchTrees(plan: SendPlan) {
   const bucket =
     plan.bucket === undefined ? undefined : await treeState(plan.bucket);
   const notes = plan.steps.flatMap((s) => s.notes);

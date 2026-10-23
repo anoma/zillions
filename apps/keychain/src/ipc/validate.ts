@@ -128,6 +128,7 @@ export const validateResponse = <K extends IpcKind>(
     case "dapp/connect":
     case "dapp/disconnect":
     case "dapp/updateDefaultAccount":
+    case "approvals/submitOpenLinkKey":
     case "approvals/resolveConnection":
     case "approvals/resolveDisconnection":
     case "approvals/revokeConnection":
@@ -154,6 +155,12 @@ export const validateResponse = <K extends IpcKind>(
     case "dapp/sign":
       if (typeof value !== "string")
         throw new ResponseShapeError(kind, "expected string (base64 PCZT)");
+      return value as IpcResponse<K>;
+
+    case "dapp/sealLinkKey":
+    case "dapp/openLinkKey":
+      if (typeof value !== "string")
+        throw new ResponseShapeError(kind, "expected string (base64 seal)");
       return value as IpcResponse<K>;
 
     case "approvals/queryPcztSummary":

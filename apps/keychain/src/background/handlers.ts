@@ -246,6 +246,26 @@ export const handlers: HandlerMap = {
     return approvals.approveSignTx(pczt, requireOrigin(ctx), signer);
   },
 
+  "dapp/sealLinkKey": async (payload, ctx) => {
+    // Crosses from an untrusted web page — validate before trusting the shape.
+    const { key } = payload as { key?: unknown };
+    if (typeof key !== "string") {
+      throw new Error("zc.sealLinkKey: invalid arguments");
+    }
+    const { approvals } = await getServices();
+    return approvals.sealLinkKey(key, requireOrigin(ctx));
+  },
+
+  "dapp/openLinkKey": async (payload, ctx) => {
+    // Crosses from an untrusted web page — validate before trusting the shape.
+    const { sealed, nk } = payload as { sealed?: unknown; nk?: unknown };
+    if (typeof sealed !== "string" || typeof nk !== "string") {
+      throw new Error("zc.openLinkKey: invalid arguments");
+    }
+    const { approvals } = await getServices();
+    return approvals.approveOpenLinkKey(requireOrigin(ctx), sealed, nk);
+  },
+
   // --- approvals (trusted UIs) ---
 
   "approvals/isConnectionApproved": async ({ origin }) => {
@@ -298,6 +318,11 @@ export const handlers: HandlerMap = {
   "approvals/rejectSignTx": async ({ msgId }, ctx) => {
     const { approvals } = await getServices();
     await approvals.rejectSignTx(requireTabId(ctx), msgId);
+  },
+
+  "approvals/submitOpenLinkKey": async ({ msgId }, ctx) => {
+    const { approvals } = await getServices();
+    await approvals.submitOpenLinkKey(requireTabId(ctx), msgId);
   },
 
   "approvals/submitUpdateDefaultAccount": async ({ address }, ctx) => {

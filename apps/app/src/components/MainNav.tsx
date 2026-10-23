@@ -1,7 +1,9 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { useContext, useEffect } from "react";
+import { LuMoon, LuSun } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { SetNavEnabledContext } from "../context/nav";
+import { useDarkMode } from "../hooks/useDarkMode";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { HouseIcon } from "../icons/HouseIcon";
@@ -10,6 +12,7 @@ import { XIcon } from "../icons/XLogo";
 import { ZillionsIcon } from "../icons/ZillionsIcon";
 import { helpUrl, privacyPolicyUrl, xUrl } from "../lib/urls";
 import { SmartLink } from "./SmartLink";
+import { Toggle } from "./Toggle";
 
 const navItems = [
   { label: "Wallet", to: "/", icon: HouseIcon },
@@ -31,7 +34,8 @@ export function EnableNav() {
 export function HelpLinks() {
   return (
     <>
-      <ul>
+      <DarkModeToggle />
+      <ul className="mt-6">
         {[
           { label: "Help", href: helpUrl },
           { label: "Privacy policy", href: privacyPolicyUrl },
@@ -56,6 +60,33 @@ export function HelpLinks() {
         <div className="text-xs text-neutral-500">v{__APP_VERSION__}</div>
       </div>
     </>
+  );
+}
+
+function DarkModeToggle() {
+  const [dark, setDark] = useDarkMode();
+  const icon = (active: boolean) =>
+    twMerge(
+      "size-[15px] transition-colors duration-300",
+      active ? "text-on-gold" : "text-gray-500",
+    );
+  return (
+    <Toggle
+      aria-label="Dark mode"
+      active={dark}
+      onChange={setDark}
+      className="mt-2 h-[31px] w-[62px]"
+    >
+      {/* Same padding and square as the thumb, so each icon centres on a resting spot. */}
+      <span className="h-full p-0.5 flex justify-between">
+        <span className="h-full aspect-square grid place-items-center">
+          <LuSun className={icon(!dark)} />
+        </span>
+        <span className="h-full aspect-square grid place-items-center">
+          <LuMoon className={icon(dark)} />
+        </span>
+      </span>
+    </Toggle>
   );
 }
 

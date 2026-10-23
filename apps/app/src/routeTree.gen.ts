@@ -15,6 +15,7 @@ import { Route as ShieldRouteImport } from './routes/shield'
 import { Route as SendRouteImport } from './routes/send'
 import { Route as ReceiveRouteImport } from './routes/receive'
 import { Route as MigrateRouteImport } from './routes/migrate'
+import { Route as ClaimRouteImport } from './routes/claim'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TxIdRouteImport } from './routes/tx.$id'
 
@@ -48,6 +49,11 @@ const MigrateRoute = MigrateRouteImport.update({
   path: '/migrate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClaimRoute = ClaimRouteImport.update({
+  id: '/claim',
+  path: '/claim',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -61,6 +67,7 @@ const TxIdRoute = TxIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/claim': typeof ClaimRoute
   '/migrate': typeof MigrateRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/claim': typeof ClaimRoute
   '/migrate': typeof MigrateRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
@@ -82,6 +90,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/claim': typeof ClaimRoute
   '/migrate': typeof MigrateRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/claim'
     | '/migrate'
     | '/receive'
     | '/send'
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/claim'
     | '/migrate'
     | '/receive'
     | '/send'
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/claim'
     | '/migrate'
     | '/receive'
     | '/send'
@@ -125,6 +137,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClaimRoute: typeof ClaimRoute
   MigrateRoute: typeof MigrateRoute
   ReceiveRoute: typeof ReceiveRoute
   SendRoute: typeof SendRoute
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MigrateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/claim': {
+      id: '/claim'
+      path: '/claim'
+      fullPath: '/claim'
+      preLoaderRoute: typeof ClaimRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -197,6 +217,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClaimRoute: ClaimRoute,
   MigrateRoute: MigrateRoute,
   ReceiveRoute: ReceiveRoute,
   SendRoute: SendRoute,

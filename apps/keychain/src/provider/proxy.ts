@@ -50,6 +50,19 @@ const relayMethod = async (
       }
       return client.send("dapp/sign", { pczt, signer });
     }
+    case "sealLinkKey": {
+      if (typeof args !== "string") {
+        throw new Error("zc.sealLinkKey: invalid arguments");
+      }
+      return client.send("dapp/sealLinkKey", { key: args });
+    }
+    case "openLinkKey": {
+      const { sealed, nk } = (args ?? {}) as { sealed?: unknown; nk?: unknown };
+      if (typeof sealed !== "string" || typeof nk !== "string") {
+        throw new Error("zc.openLinkKey: invalid arguments");
+      }
+      return client.send("dapp/openLinkKey", { sealed, nk });
+    }
     default:
       // Unsupported methods reject in the page provider before reaching here;
       // this also covers a hand-crafted postMessage.
