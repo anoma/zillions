@@ -73,9 +73,15 @@ standard amount into Ironwood; it waited only on anchors.
 ## Anchors
 
 A transfer anchors to the tree at a ZIP 318 bucket boundary (a multiple of
-144 blocks), the one before the most recent (upstream's `bucketed` policy),
-so 144–288 blocks behind the tip. Its note must already be mined at that
-boundary. Every wallet migrating in that window shares the anchor.
+144 blocks). Its age, in boundaries before the newest one under the
+confirmations, is drawn as the ZIP says: geometric with parameter 1/2, at
+least 1, at most 4 (`draw_crossing` in `send.rs`), so 144 to ~720 blocks
+behind the tip. A boundary the note wasn't mined by is outside the candidate
+set; every older one is too, so the draw is truncated below it. The plan
+reports the boundary it drew and the build uses it, since the app fetches
+the trees for it in between. A preparation takes the youngest boundary
+(age 1), upstream's `bucketed`. Every wallet migrating in that window shares
+the anchor.
 
 The indexer serves only the current tip, so the wallet rebuilds the past tree
 itself:
@@ -112,8 +118,12 @@ don't blend in; it exists to test the flow, never to use.
 ## Departures from ZIP 318
 
 - Steps are sent by the user, not pre-signed and sent on a timer (see Why).
-- The anchor is always age 1, upstream's choice, not drawn from 1–4.
-- One transfer skips the preparation.
+- One transfer skips the preparation even when its note holds more than
+  the amount and fee; the rest stays as Orchard change. ZIP 318 allows
+  skipping only when existing notes fund every part exactly.
+- Preparations anchor at a boundary too (age 1). ZIP 318 lets a later layer
+  use an ordinary near-tip anchor; upstream's `zip318::classify` expects one
+  on the grid, so we keep it there, at the cost of 2–6 hours between layers.
 - No Tor or Nym routing: a web page can't; the migration page recommends a
   VPN instead (product.md 2.9).
 
