@@ -4,6 +4,7 @@ import QRCode from "react-qr-code";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
 import { FormPage } from "../components/FormPage";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
+import { qrClassName } from "../components/ui/utils";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
@@ -39,7 +40,7 @@ function ReceiveRoute() {
               fgColor="#000000"
               level="M"
               title={`QR code of your ${isTransparent ? "transparent" : "shielded"} address`}
-              className="motion-safe:animate-fade-in"
+              className={qrClassName}
             />
           ) : (
             <div className="size-52 grid place-items-center">

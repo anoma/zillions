@@ -23,7 +23,7 @@ export function AccountDrawer({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50">
       <div
         className={twMerge(
-          "absolute inset-0 bg-black/20 backdrop-blur-sm",
+          "absolute inset-0 bg-black/20 dark:bg-surface/60 backdrop-blur-sm",
           "transition-opacity duration-500 starting:opacity-0",
           closing && "opacity-0 duration-300",
         )}
@@ -34,7 +34,7 @@ export function AccountDrawer({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-label="Account"
         className={twMerge(
-          "absolute inset-y-0 right-0 w-full max-w-96 flex flex-col overflow-y-auto border-l border-gray-300 bg-surface",
+          "absolute inset-y-0 right-0 w-full max-w-96 flex flex-col overflow-y-auto border-l border-line-strong bg-surface",
           "transition-transform duration-500 ease-out-circ starting:translate-x-full",
           closing && "translate-x-full duration-300 ease-in",
         )}
