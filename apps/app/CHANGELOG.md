@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.13.0...zillions-app-v1.14.0) (2026-10-23)
+
+
+### Features
+
+* bucket anchors for ZIP 318 crossings ([#155](https://github.com/heliaxdev/zillions-interface/issues/155)) ([3c7cc03](https://github.com/heliaxdev/zillions-interface/commit/3c7cc031446b0d9ebc9b40d21fe4e36ce5b4b59e))
+* private migration, step by step ([#156](https://github.com/heliaxdev/zillions-interface/issues/156)) ([ada022a](https://github.com/heliaxdev/zillions-interface/commit/ada022a91a98aae87ef116781ce4e10ccc375627))
+
 ## [1.13.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.12.0...zillions-app-v1.13.0) (2026-10-23)
 
 
