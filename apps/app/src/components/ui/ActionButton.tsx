@@ -112,7 +112,7 @@ const Button = <HtmlTag extends keyof HTMLElementTagNameMap = "button">({
 }: ActionButtonProps<HtmlTag>) => {
   const outlined = !!outlineColor;
 
-  const textColor = textColorProp || outlineColor || "black";
+  const textColor = textColorProp || outlineColor || "on-gold";
   const backgroundColor =
     backgroundColorProp || (outlineColor ? "transparent" : "gold");
   // Default hover for solid (non-outlined) buttons inverts to a black

@@ -48,3 +48,7 @@ export const cardClassName = twMerge(
   // Isolated so ActionButton's fill, painted at z-index -1, stays above the card.
   "isolate flex flex-col gap-4 p-6 rounded-3xl border border-line bg-card",
 );
+
+/** Dark QR modules keep a light tile in dark mode: not every scanner reads inverted codes. */
+export const qrClassName =
+  "motion-safe:animate-fade-in rounded-xs dark:bg-[#f6f5f2] dark:ring-8 dark:ring-[#f6f5f2]";
