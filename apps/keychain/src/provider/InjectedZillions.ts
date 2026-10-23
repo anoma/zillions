@@ -10,6 +10,7 @@
  */
 import type {
   ClearDisposableSignerProps,
+  OpenLinkKeyProps,
   GenDisposableSignerResponse,
   Zillions as IZillions,
   Signer as ISigner,
@@ -63,6 +64,20 @@ export class InjectedZillions implements IZillions {
   public async sign(props: SignProps): Promise<PcztBase64> {
     return await InjectedProxy.requestMethod<SignProps, PcztBase64>(
       "sign",
+      props,
+    );
+  }
+
+  public async sealLinkKey(key: string): Promise<string> {
+    return await InjectedProxy.requestMethod<string, string>(
+      "sealLinkKey",
+      key,
+    );
+  }
+
+  public async openLinkKey(props: OpenLinkKeyProps): Promise<string> {
+    return await InjectedProxy.requestMethod<OpenLinkKeyProps, string>(
+      "openLinkKey",
       props,
     );
   }

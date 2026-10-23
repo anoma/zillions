@@ -21,7 +21,7 @@ import { paramsToUrl } from "@zillions/utils";
 import approvalRoutes from "../../approvals/routes";
 import type { LedgerSignatures, LedgerSignTx } from "../../ipc/contract";
 import { LocalStorage, type KeyStoreType } from "../../storage";
-import { buildPcztSummary } from "../crypto/zillions";
+import { buildPcztSummary, linkAddress } from "../crypto/zillions";
 import { Keyring } from "../keyring";
 import { VaultService } from "../vault";
 import { AccountRepository } from "../vault/accounts";
@@ -60,6 +60,18 @@ export class ApprovalsService {
    * with the worker anyway (its resolver lives in `resolverMap`).
    */
   protected readonly pendingTxs = new Map<string, PendingSignTx>();
+
+  /**
+   * Addresses of the payment links sealed here, so their funding is titled
+   * as a link. In-memory: one lost with the worker shows as a plain send.
+   */
+  protected readonly sealedLinks = new Set<string>();
+
+  /** "Show a payment link again" requests awaiting approval, keyed by msgId. */
+  protected readonly pendingLinks = new Map<
+    string,
+    { sealed: string; nk: string; signer: string }
+  >();
 
   /**
    * Origins with an approval popup open, mapped to its window id. Reserved
@@ -195,6 +207,65 @@ export class ApprovalsService {
   }
 
   /**
+   * Seal a payment link's key to the active account. No popup: a seal opens
+   * nothing, since unsealing a link needs that link's key already.
+   */
+  async sealLinkKey(key: string, origin: string): Promise<string> {
+    if (await this.vaultService.isLocked()) {
+      throw new Error("Keychain is locked");
+    }
+    await this.assertConnected(origin);
+    const record = await this.activeSigner();
+    const sealed = await this.keyring.sealLinkKey(key, record.address);
+    this.sealedLinks.add(linkAddress(key));
+    return sealed;
+  }
+
+  /**
+   * Resolve an `openLinkKey` call: the popup asks before the site gets the
+   * link, which is as good as its money.
+   */
+  async approveOpenLinkKey(
+    origin: string,
+    sealed: string,
+    nk: string
+  ): Promise<string> {
+    if (await this.vaultService.isLocked()) {
+      throw new Error("Keychain is locked");
+    }
+    await this.assertConnected(origin);
+    const record = await this.activeSigner();
+    const msgId = uuid();
+    this.pendingLinks.set(msgId, { sealed, nk, signer: record.address });
+    try {
+      return await this.launchApprovalPopup<string>(
+        origin,
+        approvalRoutes.approveOpenLinkKey(),
+        { msgId, origin }
+      );
+    } finally {
+      this.pendingLinks.delete(msgId);
+    }
+  }
+
+  /** The popup approved: open the key and settle the dapp's promise. */
+  async submitOpenLinkKey(popupTabId: number, msgId: string): Promise<void> {
+    const pending = this.pendingLinks.get(msgId);
+    const resolvers = this.getResolver(popupTabId);
+    if (!pending) {
+      throw new Error(`Pending link request not found for ${msgId}`);
+    }
+    this.pendingLinks.delete(msgId);
+    try {
+      resolvers.resolve(
+        await this.keyring.openLinkKey(pending.sealed, pending.nk, pending.signer)
+      );
+    } catch (e) {
+      resolvers.reject(e);
+    }
+  }
+
+  /**
    * Resolve an `updateDefaultAccount(address)` call: require a connected,
    * unlocked origin and an existing account, then open the approval popup. The
    * popup confirms via `submitUpdateDefaultAccount`.
@@ -224,7 +295,17 @@ export class ApprovalsService {
       throw new Error(`Transaction data not found for ${msgId}`);
     }
     const ufvk = await this.keyring.viewingKey(pending.signer);
-    return buildPcztSummary(pending.pczt, ufvk);
+    const summary = await buildPcztSummary(pending.pczt, ufvk);
+    const paid = [
+      ...summary.transparentOutputs,
+      ...summary.saplingOutputs,
+      ...summary.orchardOutputs,
+      ...summary.ironwoodOutputs,
+    ].filter((o) => !o.mine);
+    const link = paid.length === 1 && paid[0].address;
+    return link && this.sealedLinks.has(link)
+      ? { ...summary, paymentLink: true }
+      : summary;
   }
 
   /**

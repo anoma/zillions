@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { FormPage } from "../components/FormPage";
 import { FeeRow, PlannedFee } from "../components/PlannedFee";
 import { MemoField } from "../components/send/MemoField";
+import { PaymentLinkCreated } from "../components/send/PaymentLinkCreated";
 import { PaymentLinkFields } from "../components/send/PaymentLinkFields";
 import { PaymentLinkToggle } from "../components/send/PaymentLinkToggle";
 import { PrivacyNotice } from "../components/send/PrivacyNotice";
@@ -20,6 +21,7 @@ import { TransferSuccess } from "../components/TransferSuccess";
 import { useAddressKind, useFreshAddress } from "../hooks/useAddresses";
 import { useAmountField } from "../hooks/useAmountField";
 import { useGetBalance } from "../hooks/useGetBalance";
+import { useCreateLink, useNewLink } from "../hooks/usePaymentLink";
 import {
   planProblem,
   shieldedChangeOf,
@@ -57,6 +59,7 @@ function SendRoute() {
   // The fee depends on the recipient. A payment link has none, and until an
   // address is entered our own stands in, so Max and the fee still work.
   const standInTo = useFreshAddress() ?? "";
+  const link = useNewLink();
 
   const memoBytes = isPaymentLink ? DESCRIPTION_BYTES : undefined;
   const memoError = memoProblem(memoText, transparentTo, memoBytes);
@@ -74,7 +77,7 @@ function SendRoute() {
         valid: Boolean(toKind),
         isMax,
         isPaymentLink,
-        standIn: standInTo,
+        standIn: (isPaymentLink && link?.address) || standInTo,
       }),
       amount: typed > 0n ? typed + extra : typed,
       memo,
@@ -85,6 +88,7 @@ function SendRoute() {
   const { maxAmount, ceiling } = planned;
   const amount = isMax ? withoutExtra(maxAmount.data ?? 0n, extra) : typed;
   const send = useSend();
+  const createLink = useCreateLink(send);
 
   const available = balance.data?.[from].available ?? 0n;
   const overBalance = Boolean(balance.data) && isOverBalance(amount, available);
@@ -99,6 +103,7 @@ function SendRoute() {
       memoError,
       to,
       toKind,
+      linkReady: Boolean(link),
     });
     // Memo and fee ceiling problems already show by their fields.
     if (found || memoError || ceiling) {
@@ -108,6 +113,10 @@ function SendRoute() {
       return;
     }
     setProblem(undefined);
+    if (isPaymentLink) {
+      createLink.mutate({ link: link!, from, amount, description: memoText });
+      return;
+    }
     send.mutate({
       from,
       to,
@@ -123,14 +132,22 @@ function SendRoute() {
     });
   };
 
-  if (send.data) {
+  if (createLink.data) {
+    return <PaymentLinkCreated {...createLink.data} />;
+  }
+  if (send.data && !isPaymentLink) {
     return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
   }
 
   const clear = () => setProblem(undefined);
   const amountError = amountErrorOf(problem, overBalance, planned);
   const toError = problem?.field === "to" ? problem.message : undefined;
-  const formError = formErrorOf(problem, overBalance, planned, send.error);
+  const formError = formErrorOf(
+    problem,
+    overBalance,
+    planned,
+    createLink.error ?? send.error,
+  );
   const planFee = planned.plan.data?.fee;
   const total =
     amount > 0n && planFee !== undefined
@@ -243,7 +260,7 @@ function SendRoute() {
 
       <SubmitBlock
         label={submitLabel(isPaymentLink, amount)}
-        pending={send.isPending}
+        pending={send.isPending || createLink.isPending}
         pendingLabel={isPaymentLink ? "Creating link..." : "Sending..."}
         color={transparent ? "black" : "gold-button"}
         stages={send.stages}
@@ -276,6 +293,7 @@ function submitProblem({
   memoError,
   to,
   toKind,
+  linkReady,
 }: {
   amount: bigint;
   missing: string;
@@ -285,12 +303,13 @@ function submitProblem({
   memoError: string | undefined;
   to: string;
   toKind: ReturnType<typeof useAddressKind>;
+  linkReady: boolean;
 }): SendProblem | undefined {
   if (amount <= 0n && !ceiling) return { field: "amount", message: missing };
   if (overBalance) return { field: "amount", message: "Insufficient balance" };
   if (isPaymentLink) {
-    if (memoError) return undefined;
-    return { field: "form", message: "Payment links aren't available yet" };
+    if (memoError || linkReady) return undefined;
+    return { field: "form", message: "The link is still being made" };
   }
   if (!to) return { field: "to", message: "Set a recipient" };
   if (toKind === null) {

@@ -65,6 +65,9 @@ export const transferAmount = (summary: PcztSummary): bigint => {
     : total(outputPools(summary).flatMap(({ outputs }) => outputs));
 };
 
+/** Funded with a payment link, so its claimer receives exactly the link's amount. */
+export const CLAIM_FEE = 10_000n;
+
 // ZIP 317 charges 5_000 zatoshi per logical action, so honest fees stay far below this.
 export const HIGH_FEE_ZATOSHI = 1_000_000n;
 
