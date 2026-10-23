@@ -17,7 +17,12 @@ import {
 } from "./chain/lightwalletd";
 import { type ProveStage, submitTransaction } from "./chain/submit";
 import { NETWORK } from "./config";
-import { type Migration, nextStep, startMigration } from "./migration";
+import {
+  type Migration,
+  nextStep,
+  startMigration,
+  stepSent,
+} from "./migration";
 import {
   confirmedAt,
   pendingActivity,
@@ -627,7 +632,7 @@ export class Wallet {
     const { notes } = spendable(this.#state.notes, [], this.#state.pending);
     const orchard = notes
       .filter((n) => n.pool === "orchard")
-      .map((n) => n.value);
+      .map(({ value, height }) => ({ value, height }));
     const pending = new Set(this.#state.pending.map((p) => p.txid));
     return {
       migration,
@@ -647,7 +652,7 @@ export class Wallet {
     this.#save();
   };
 
-  /** Records that a migration step went out as `txid`. */
+  /** Records that a migration step went out as `txid` (see `stepSent`). */
   migrationStepSent = (
     kind: "preparation" | "transfer",
     index: number,
@@ -655,9 +660,8 @@ export class Wallet {
   ) => {
     const migration: Migration | undefined = this.#state.migration;
     invariant(migration, "No migration in progress");
-    const steps =
-      kind === "preparation" ? migration.preparations : migration.transfers;
-    steps[index].txid = txid;
+    invariant(this.#tip !== undefined, "The wallet is still syncing");
+    stepSent(migration, kind, index, txid, this.#tip);
     this.#save();
   };
 

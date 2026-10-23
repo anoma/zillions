@@ -32,6 +32,18 @@ export function fromNow(tip: number, height: number) {
   return hours < 48 ? `~${hours} hours` : `~${Math.round(hours / 24)} days`;
 }
 
+/** The local clock time of block `height`, from `tip`, at 75 seconds a block; with the weekday when it isn't today. */
+export function clockAt(tip: number, height: number) {
+  const when = new Date(Date.now() + (height - tip) * 75_000);
+  const time = when.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return when.toDateString() === new Date().toDateString()
+    ? time
+    : `${when.toLocaleDateString([], { weekday: "short" })} ${time}`;
+}
+
 /**
  * CSS font size that fits `chars` characters in the nearest `@container`,
  * never above `max`. 0.65em is Montserrat's widest digit.

@@ -1,6 +1,12 @@
 import { expect, test } from "vitest";
 
-import { type Migration, nextStep, transfersDone } from "./migration";
+import {
+  type Migration,
+  nextStep,
+  readyAt,
+  stepSent,
+  transfersDone,
+} from "./migration";
 
 const FEE = 15_000;
 const CENT = 1_000_000;
@@ -18,38 +24,57 @@ const plan = (over: Partial<Migration> = {}): Migration => ({
   ...over,
 });
 
+/** Notes worth `values`, mined at `height`. */
+const at = (height: number, ...values: number[]) =>
+  values.map((value) => ({ value, height }));
+
+test("a note can anchor from a bucket past the boundary above it", () => {
+  // Mined at 1,000: boundary 1,008, anchorable once the newest boundary under
+  // three confirmations is 1,152, i.e. from tip 1,154.
+  expect(readyAt(1_000)).toBe(1_154);
+  expect(readyAt(1_008)).toBe(1_154);
+  expect(readyAt(1_009)).toBe(1_298);
+});
+
 test("prepares notes for every transfer that has none", () => {
-  expect(nextStep(plan(), [7 * CENT], new Set())).toEqual({
+  expect(nextStep(plan(), at(50, 7 * CENT), new Set())).toEqual({
     kind: "preparation",
     index: 0,
     height: 101,
     parts: [5 * CENT, CENT],
+    readyAt: readyAt(50),
   });
 });
 
 test("waits while a step sent is pending", () => {
   const m = plan({ preparations: [{ height: 101, txid: "p" }] });
-  expect(nextStep(m, [7 * CENT], new Set(["p"]))).toEqual({ kind: "mining" });
+  expect(nextStep(m, at(50, 7 * CENT), new Set(["p"]))).toEqual({
+    kind: "mining",
+  });
 });
 
-test("sends each transfer from its note, in order", () => {
+test("sends each transfer from its note, in order, once it can anchor", () => {
   const m = plan({ preparations: [{ height: 101, txid: "p" }] });
-  const notes = [CENT + FEE, 5 * CENT + FEE, 5_000];
-  expect(nextStep(m, notes, new Set())).toMatchObject({
+  const notes = [...at(110, CENT + FEE, 5 * CENT + FEE), ...at(50, 5_000)];
+  expect(nextStep(m, notes, new Set())).toEqual({
     kind: "transfer",
     index: 0,
+    height: 400,
     value: 5 * CENT,
     exact: true,
+    readyAt: readyAt(110),
   });
   m.transfers[0].txid = "t0";
-  expect(nextStep(m, [CENT + FEE, 5_000], new Set())).toMatchObject({
+  expect(nextStep(m, at(110, CENT + FEE), new Set())).toMatchObject({
     kind: "transfer",
     index: 1,
   });
   m.transfers[1].txid = "t1";
-  expect(nextStep(m, [5_000], new Set(["t1"]))).toEqual({ kind: "mining" });
+  expect(nextStep(m, at(50, 5_000), new Set(["t1"]))).toEqual({
+    kind: "mining",
+  });
   expect(transfersDone(m, new Set(["t1"]))).toBe(1);
-  expect(nextStep(m, [5_000], new Set())).toEqual({ kind: "done" });
+  expect(nextStep(m, at(50, 5_000), new Set())).toEqual({ kind: "done" });
 });
 
 test("one transfer with no preparation spends any note that covers it", () => {
@@ -57,13 +82,24 @@ test("one transfer with no preparation spends any note that covers it", () => {
     preparations: [],
     transfers: [{ value: CENT, height: 101 }],
   });
-  expect(nextStep(m, [1_130_714], new Set())).toMatchObject({
+  const notes = [...at(90, 1_130_714), ...at(20, 2 * CENT), ...at(10, 100)];
+  expect(nextStep(m, notes, new Set())).toMatchObject({
     kind: "transfer",
     exact: false,
+    readyAt: readyAt(20),
   });
 });
 
 test("asks to plan again once the notes are gone", () => {
   const m = plan({ preparations: [{ height: 101, txid: "p" }] });
-  expect(nextStep(m, [5_000], new Set())).toEqual({ kind: "replan" });
+  expect(nextStep(m, at(50, 5_000), new Set())).toEqual({ kind: "replan" });
+});
+
+test("a step sent late shifts the rest; one sent early doesn't", () => {
+  const m = plan();
+  stepSent(m, "preparation", 0, "p", 161);
+  expect(m.transfers.map((t) => t.height)).toEqual([460, 540]);
+  stepSent(m, "transfer", 0, "t0", 300);
+  expect(m.transfers.map((t) => t.height)).toEqual([460, 540]);
+  expect(m.preparations[0]).toEqual({ height: 101, txid: "p" });
 });

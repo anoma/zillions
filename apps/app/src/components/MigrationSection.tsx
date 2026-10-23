@@ -1,8 +1,13 @@
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useMigration } from "../hooks/useMigration";
 import { DatabaseArrowIcon } from "../icons/DatabaseArrowIcon";
-import { fromNow, MIGRATION_ENABLED, MIGRATION_MINIMUM } from "../lib/utils";
-import { transfersDone } from "../lib/wallet/migration";
+import {
+  clockAt,
+  fromNow,
+  MIGRATION_ENABLED,
+  MIGRATION_MINIMUM,
+} from "../lib/utils";
+import { stepName, transfersDone } from "../lib/wallet/migration";
 import { ActionButton } from "./ui/ActionButton";
 import { ZecValue } from "./ZecValue";
 
@@ -30,13 +35,19 @@ export function MigrationSection() {
     const step =
       next.kind === "preparation" || next.kind === "transfer" ? next : null;
     const progress = `Transfer ${transfersDone(m, pending)} of ${m.transfers.length} complete.`;
+    const name = step ? stepName(step) : "";
+    const Name = name.charAt(0).toUpperCase() + name.slice(1);
+    const at = (height: number) =>
+      `${clockAt(tip, height)} (${fromNow(tip, height)})`;
+    // Due once the plan has it and its funds can anchor.
+    const due = step && tip >= Math.max(step.readyAt, step.height);
     detail = (
       <>
         {progress}{" "}
         {step
-          ? tip >= step.height
-            ? "The next step is due."
-            : `The next step is due ${fromNow(tip, step.height)}.`
+          ? due
+            ? `It's time to send ${name}.`
+            : `${Name} is due about ${at(Math.max(step.readyAt, step.height))}.`
           : next.kind === "mining"
             ? "Waiting for the last step to be mined."
             : next.kind === "done"
@@ -44,7 +55,7 @@ export function MigrationSection() {
               : "The plan needs updating."}
       </>
     );
-    action = step && tip >= step.height ? "Send next step" : "View";
+    action = due ? `Send ${name}` : "View";
   }
 
   return (

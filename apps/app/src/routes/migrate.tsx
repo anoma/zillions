@@ -14,12 +14,13 @@ import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import {
+  clockAt,
   fromNow,
   MIGRATION_ENABLED,
   MIGRATION_MINIMUM,
   zatoshiToZec,
 } from "../lib/utils";
-import { type Step, transfersDone } from "../lib/wallet/migration";
+import { type Step, stepName, transfersDone } from "../lib/wallet/migration";
 import type { Note } from "../lib/wallet/types";
 import type { Wallet } from "../lib/wallet/wallet";
 
@@ -157,9 +158,10 @@ function MigrateRoute() {
             Nothing is sent on its own. Come back when each step is due and send
             it; the Keychain asks you to approve each one.
           </Point>
-          <Point title="Wait between steps">
-            Sending a step early makes the transfers easier to link. The wallet
-            shows when the next one is due.
+          <Point title="Come back for each step">
+            The wallet shows when each step can be sent and when it's planned.
+            Being late is fine; sending early makes the transfers easier to
+            link.
           </Point>
         </dl>
         <Note>
@@ -418,13 +420,17 @@ function MigrationSteps({ status }: { status: Status }) {
       : isNext
         ? tip >= at
           ? "Due now"
-          : `Due ${fromNow(tip, at)}`
+          : `Due ~${clockAt(tip, at)}`
         : step?.kind === "transfer" && at <= step.height
           ? "Not needed"
-          : fromNow(tip, at);
+          : `~${clockAt(tip, at)}`;
+  // About when block `height` comes: "15:40 (~2 hours)".
+  const when = (height: number) =>
+    `${clockAt(tip, height)} (${fromNow(tip, height)})`;
   const done = transfersDone(m, pending);
   const due = step && tip >= step.height;
-  const label = step?.kind === "preparation" ? "preparation" : "transfer";
+  const name = step ? stepName(step) : "";
+  const Name = name.charAt(0).toUpperCase() + name.slice(1);
 
   return (
     <Page title="Moving to Ironwood">
@@ -493,19 +499,21 @@ function MigrationSteps({ status }: { status: Status }) {
           </Note>
         ) : !ready.data ? (
           <Note>
-            Not ready yet: the funds for the next {label} can be sent once
-            they're older than the last checkpoint, which comes every 144 blocks
-            (about 3 hours).
+            {Name} can be sent from about{" "}
+            {when(Math.max(step.readyAt, tip + 1))}, once the funds it spends
+            are older than a network checkpoint (one every ~3 hours). It doesn't
+            need to be on time: come back any time after that.
           </Note>
         ) : due ? (
           <Primary onClick={sendStep} disabled={send.isPending}>
-            {send.isPending ? "Sending..." : `Send the next ${label}`}
+            {send.isPending ? "Sending..." : `Send ${name}`}
           </Primary>
         ) : (
           <>
             <Note>
-              The next {label} is due {fromNow(tip, step.height)}. Sending it
-              before then makes the transfers easier to link.
+              {Name} is planned for about {when(step.height)}. Sending it then
+              or any time later keeps the transfers hard to link; sending it
+              earlier makes them easier to link.
             </Note>
             <button
               type="button"
