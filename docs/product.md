@@ -290,8 +290,11 @@ due. How it's built is in [migration.md](design/migration.md).
   transactions, shown while Orchard holds at least 0.01 ZEC:
   - before it starts: the Orchard amount, one line on why it should move,
     and a **Migrate** button opening the migration page;
-  - while it runs: progress ("Transfer 3 of 8 complete") and either a
-    **Send next step** button, when one is due, or when the next one is due.
+  - while it runs: progress ("Transfer 3 of 8 complete") and either "It's
+    time to send transfer 4" with **Continue**, when a step is due, or
+    "Come back about 15:40 (~2 hours) to send transfer 4" with **View**.
+    While the user can only wait, the section is a quiet card rather than
+    the highlighted one.
 - **The migration page** walks through, in order:
   1. **What happens**: Orchard is closed, the funds go to Ironwood, the
      amounts moved become public while who holds them stays private, and
@@ -309,14 +312,17 @@ due. How it's built is in [migration.md](design/migration.md).
   4. **Review**: the whole plan (the preparation steps, each transfer's
      amount and when it's due) and the total fees. Starting it sends
      nothing; it saves the plan.
-  5. **Steps**: every step listed with its state. The step that is due has
-     a **Send** button and is approved in the Keychain like any transaction
-     (3.4). A step not yet due says when it will be, with a small **Send
-     now anyway** link and one line saying that sending early makes the
-     transfers easier to link. A step can't be sent before the notes it
-     spends exist on chain. **Stop migration** drops the remaining steps;
-     what wasn't sent stays in Orchard, already split into standard
-     amounts, and the section offers **Migrate** again.
+  5. **Steps**: a card at the top says what to do next, in a headline and
+     one line: "Transfer 4 is ready" with a **Send transfer 4** button, or
+     "Come back around 15:40" with when that is and that later is fine;
+     the wallet won't send it. Below it, every step is listed with its
+     state. A step is approved in the Keychain like any transaction (3.4),
+     and its receipt follows, with **Back to migration**. A step not yet due
+     but whose notes can already be spent has a small **Send now anyway
+     (easier to link)** link. A step can't be sent before the notes it
+     spends can anchor (3–6 hours after they're mined). **Stop migration**
+     drops the remaining steps; what wasn't sent stays in Orchard, already
+     split into standard amounts, and the section offers **Migrate** again.
 - Wording never calls the migration "automatic": nothing is sent unless the
   user sends it.
 - The plan is kept in this browser only. Another browser or device shows
