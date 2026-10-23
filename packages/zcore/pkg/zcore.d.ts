@@ -115,7 +115,7 @@ export function plan_migration(network: string, wallet: any): any;
 /**
  * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
  * is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
- * change, fee }], fee }`, values in zatoshis.
+ * change, fee }], fee, bucket? }`, values in zatoshis.
  */
 export function plan_send(network: string, wallet: any, send: any): any;
 
@@ -262,8 +262,8 @@ export interface InitOutput {
     readonly warm_prover: () => void;
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
-    readonly rustsecp256k1_v0_10_0_context_create: (a: number) => number;
     readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
+    readonly rustsecp256k1_v0_10_0_context_create: (a: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

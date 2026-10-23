@@ -18,7 +18,7 @@ use zcash_client_backend::fees::{DustOutputPolicy, StandardFeeRule, TransparentC
 use zcash_client_backend::proposal::Proposal;
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
 use zcash_primitives::transaction::fees::zip317::MARGINAL_FEE;
-use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
+use zcash_protocol::consensus::{BlockHeight, NetworkUpgrade, Parameters};
 use zcash_protocol::memo::{Memo, MemoBytes};
 use zcash_protocol::value::Zatoshis;
 use zcash_protocol::zip318::PoolMigrationConstants;
@@ -327,6 +327,10 @@ struct StepSummary {
 struct PlanSummary {
     steps: Vec<StepSummary>,
     fee: u64,
+    /// The bucket boundary a ZIP 318 crossing anchors to, whose trees the
+    /// build needs from lightwalletd.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bucket: Option<u32>,
 }
 
 fn summarize<N>(proposal: &Proposal<StandardFeeRule, N>) -> PlanSummary {
@@ -390,6 +394,7 @@ fn summarize<N>(proposal: &Proposal<StandardFeeRule, N>) -> PlanSummary {
     PlanSummary {
         fee: steps.iter().map(|s| s.fee).sum(),
         steps,
+        bucket: None,
     }
 }
 
@@ -402,14 +407,18 @@ fn inputs(network: &str, wallet: JsValue, send: JsValue) -> Result<(Wallet, Send
 
 /// Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
 /// is `{ to, amount, memo?, from }`. Returns `{ steps: [{ inputs, payments,
-/// change, fee }], fee }`, values in zatoshis.
+/// change, fee }], fee, bucket? }`, values in zatoshis.
 #[wasm_bindgen]
 pub fn plan_send(network: &str, wallet: JsValue, send: JsValue) -> Result<JsValue, JsError> {
     let (wallet, send) = inputs(network, wallet, send).map_err(|e| JsError::new(&e))?;
     let amount =
         Zatoshis::from_u64(send.amount).map_err(|_| JsError::new("amount out of range"))?;
     let proposal = propose(&wallet, &send, amount).map_err(|e| JsError::new(&e))?;
-    serde_wasm_bindgen::to_value(&summarize(&proposal)).map_err(|e| JsError::new(&e.to_string()))
+    let mut summary = summarize(&proposal);
+    let target = BlockHeight::from(proposal.min_target_height());
+    summary.bucket =
+        crate::build::bucket(proposal.steps().first(), &wallet.network, target).map(u32::from);
+    serde_wasm_bindgen::to_value(&summary).map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// The unsigned PCZT for `send`, planned as [`plan_send`] plans it, for the
@@ -838,6 +847,18 @@ pub(crate) mod tests {
         };
         let max = max_amount(wallet, &request).unwrap();
         propose(wallet, &request, Zatoshis::from_u64(max).unwrap()).unwrap()
+    }
+
+    /// Plans `amount` from Orchard to our own address.
+    pub(crate) fn plan_to_self(wallet: &Wallet, amount: u64) -> WalletProposal {
+        let request = SendRequest {
+            to: crate::keys::fresh(&wallet.network, &wallet_ufvk()).unwrap(),
+            amount,
+            memo: None,
+            memo_hex: None,
+            from: "orchard".into(),
+        };
+        propose(wallet, &request, Zatoshis::from_u64(amount).unwrap()).unwrap()
     }
 
     /// Plans `amount` from the transparent balance to `to`.

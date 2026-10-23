@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Runs the ignored real_ziziphus test against a live indexer: its Sapling tip
-# and first tree chunk, plus the chain's own Sapling tree from lightwalletd.
+# Runs the ignored real_ziziphus tests against a live indexer: its Sapling tip
+# and first tree chunk against the chain's own Sapling tree, and its Orchard
+# and Ironwood tips rebuilt at a ZIP 318 bucket boundary against the chain's
+# trees there, both from lightwalletd.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -10,13 +12,15 @@ export ZIZIPHUS_DIR=${ZIZIPHUS_DIR:-$(mktemp -d)}
 
 curl -sSfL -o "$ZIZIPHUS_DIR/sapling_tip.bin" "$INDEXER_URL/sapling/tip"
 curl -sSfL -o "$ZIZIPHUS_DIR/sapling_tree0.bin" "$INDEXER_URL/sapling/trees/0"
+curl -sSfL -o "$ZIZIPHUS_DIR/orchard_tip.bin" "$INDEXER_URL/orchard/tip"
+curl -sSfL -o "$ZIZIPHUS_DIR/ironwood_tip.bin" "$INDEXER_URL/ironwood/tip"
 
 # The chain's Sapling tree at the block holding exactly the tip's tree_size
 # notes, from lightwalletd's GetTreeState over grpc-web.
-python3 - "$GRPC_URL" "$ZIZIPHUS_DIR" <<'EOF'
+python3 - "$GRPC_URL" "$ZIZIPHUS_DIR" "$INDEXER_URL" <<'EOF'
 import sys, urllib.request
 
-url, out = sys.argv[1], sys.argv[2]
+url, out, indexer = sys.argv[1], sys.argv[2], sys.argv[3]
 SERVICE = "cash.z.wallet.sdk.rpc.CompactTxStreamer"
 
 
@@ -94,6 +98,26 @@ for h in range(height, height - 300, -1):
         break
 else:
     print("the indexer is 300+ blocks behind; skipping the chain check")
+
+# The Orchard and Ironwood trees at the latest ZIP 318 bucket boundary (a
+# multiple of 144 blocks) the indexer's tips have passed, and the chunks
+# frozen since that a witness at that size reads.
+CHUNK = 1 << 14
+for pool, field in (("orchard", 6), ("ironwood", 7)):
+    tip_size, _ = read_varint(open(f"{out}/{pool}_tip.bin", "rb").read(), 0)
+    h = height - height % 144
+    while True:
+        tree = fields(call("GetTreeState", b"\x08" + varint(h)))[field].decode()
+        size = tree_size(tree)
+        if size <= tip_size:
+            break
+        h -= 144
+    open(f"{out}/{pool}_bucket.hex", "w").write(tree)
+    for c in (size // CHUNK - 1, size // CHUNK):
+        if 0 <= c < tip_size // CHUNK:
+            body = urllib.request.urlopen(f"{indexer}/{pool}/trees/{c}", timeout=60).read()
+            open(f"{out}/{pool}_tree{c}.bin", "wb").write(body)
+    print(f"{pool} bucket: block {h}, {size} notes (tip {tip_size})")
 EOF
 
 ./patch-crates.sh

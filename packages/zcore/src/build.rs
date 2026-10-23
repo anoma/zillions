@@ -6,7 +6,9 @@
 //!
 //! Witnesses and anchors come from ziziphus ([`crate::witness`]): the tip's
 //! root anchors every pool with tree data, and each spent note's path is
-//! assembled offline.
+//! assembled offline. A ZIP 318 crossing anchors to a bucket boundary
+//! instead: lightwalletd's tree there says how many notes it held, and the
+//! tip is rebuilt at that size.
 
 use std::collections::HashMap;
 use std::convert::Infallible;
@@ -23,6 +25,7 @@ use zcash_client_backend::proposal::Proposal;
 use zcash_client_backend::wallet::Note;
 use zcash_keys::address::Address;
 use zcash_keys::keys::UnifiedFullViewingKey;
+use zcash_primitives::merkle_tree::{read_commitment_tree, HashSer};
 use zcash_primitives::transaction::builder::{BuildConfig, Builder, BundlePadding};
 use zcash_protocol::consensus::{
     BlockHeight, Network, NetworkConstants, NetworkUpgrade, Parameters,
@@ -38,12 +41,17 @@ const HARDENED: u32 = 0x8000_0000;
 
 /// One pool's tree data from ziziphus: the tip snapshot, and the frozen
 /// chunks holding the notes to spend, by chunk number. Raw response bodies.
+/// For a crossing, `bucket` is lightwalletd's tree at the plan's bucket
+/// anchor (`GetTreeState`, hex), and `chunks` also holds the chunk that was
+/// filling then if it has frozen since.
 #[derive(Deserialize, Default)]
 pub(crate) struct TreeData {
     #[serde(with = "serde_bytes")]
     tip: Vec<u8>,
     #[serde(default)]
     chunks: HashMap<u64, serde_bytes::ByteBuf>,
+    #[serde(default)]
+    bucket: Option<String>,
 }
 
 /// Tree data by pool name.
@@ -52,6 +60,7 @@ pub(crate) type Trees = HashMap<String, TreeData>;
 struct PoolTree {
     tip: TipBody,
     chunks: HashMap<u64, TreeChunkBody>,
+    bucket: Option<Vec<u8>>,
 }
 
 impl PoolTree {
@@ -67,12 +76,58 @@ impl PoolTree {
                 ))
             })
             .collect::<Result<_, String>>()?;
-        Ok(PoolTree { tip, chunks })
+        let bucket = data
+            .bucket
+            .as_deref()
+            .map(|h| hex::decode(h).map_err(|e| format!("bucket tree: {e}")))
+            .transpose()?;
+        Ok(PoolTree {
+            tip,
+            chunks,
+            bucket,
+        })
     }
 
-    fn tip<H: Node>(&self) -> Result<Tip<'_, H>, String> {
-        Tip::new(&self.tip)
+    /// The tree at ziziphus's tip, or at the bucket anchor when `bucketed`.
+    fn tip<H: Node + HashSer + PartialEq>(
+        &self,
+        pool: &str,
+        bucketed: bool,
+    ) -> Result<Tip<'_, H>, String> {
+        if !bucketed {
+            return Tip::new(&self.tip);
+        }
+        let state = self
+            .bucket
+            .as_ref()
+            .ok_or_else(|| format!("no {pool} tree at the bucket anchor"))?;
+        let chain = read_commitment_tree::<H, _, 32>(&state[..])
+            .map_err(|e| format!("{pool} bucket tree: {e}"))?;
+        let size = chain.size() as u64;
+        let tip = Tip::at(&self.tip, size, self.chunks.get(&(size >> 14)))?;
+        if tip.root() != chain.root() {
+            return Err(format!(
+                "the indexer's {pool} tree differs from the chain's at the bucket anchor"
+            ));
+        }
+        Ok(tip)
     }
+}
+
+/// The bucket boundary a step anchors to when it's a canonical ZIP 318
+/// crossing, which also takes the rolling expiry; `None` for any other step.
+pub(crate) fn bucket<N>(
+    step: &zcash_client_backend::proposal::Step<N>,
+    network: &Network,
+    target_height: BlockHeight,
+) -> Option<BlockHeight> {
+    let zip318 = zcash_client_backend::data_api::anchor_retention::PoolMigrationParams::new(
+        zcash_client_backend::data_api::anchor_retention::AnchorRetentionInterval::ZIP_318,
+    );
+    zcash_client_backend::fees::canonical_crossing_fee(network, target_height)
+        .is_ok_and(|fee| step.is_canonical_crossing(&zip318, fee))
+        .then(|| step.anchor_height())
+        .flatten()
 }
 
 /// Each pool's tree, and its tip read once: reading one hashes its whole upper tree.
@@ -81,17 +136,18 @@ struct PoolTip<'a, H> {
     tip: Tip<'a, H>,
 }
 
-impl<'a, H: Node> PoolTip<'a, H> {
+impl<'a, H: Node + HashSer + PartialEq> PoolTip<'a, H> {
     fn read(
         trees: &'a HashMap<&'static str, PoolTree>,
         pool: &str,
+        bucketed: bool,
     ) -> Result<Option<Self>, String> {
         trees
             .get(pool)
             .map(|tree| {
                 Ok(PoolTip {
                     tree,
-                    tip: tree.tip()?,
+                    tip: tree.tip(pool, bucketed)?,
                 })
             })
             .transpose()
@@ -195,16 +251,18 @@ pub(crate) fn pczt<N>(
         .map(|(pool, data)| Ok((pool, PoolTree::read(data)?)))
         .collect::<Result<_, String>>()?;
     // Every shielded pool the step spends from or pays into anchors to its
-    // tree's real root at ziziphus's tip. The builder wants an anchor for each
-    // pool; one with no actions has no bundle, so its anchor goes unused.
+    // tree's real root at ziziphus's tip, or a crossing's Orchard and Ironwood
+    // at its bucket. The builder wants an anchor for each pool; one with no
+    // actions has no bundle, so its anchor goes unused.
     for pool in touched_pools(step) {
         if !trees.contains_key(pool) {
             return Err(format!("no {pool} tree data for this transaction"));
         }
     }
-    let sapling_tip = PoolTip::<sapling::Node>::read(&trees, "sapling")?;
-    let orchard_tip = PoolTip::<MerkleHashOrchard>::read(&trees, "orchard")?;
-    let ironwood_tip = PoolTip::<MerkleHashOrchard>::read(&trees, "ironwood")?;
+    let bucketed = bucket(step, &network, target_height).is_some();
+    let sapling_tip = PoolTip::<sapling::Node>::read(&trees, "sapling", false)?;
+    let orchard_tip = PoolTip::<MerkleHashOrchard>::read(&trees, "orchard", bucketed)?;
+    let ironwood_tip = PoolTip::<MerkleHashOrchard>::read(&trees, "ironwood", bucketed)?;
     let orchard_root = |tip: &Option<PoolTip<MerkleHashOrchard>>| {
         tip.as_ref().map_or(orchard::Anchor::empty_tree(), |t| {
             orchard::Anchor::from(t.tip.root())
@@ -231,12 +289,7 @@ pub(crate) fn pczt<N>(
     );
     // A canonical ZIP 318 crossing takes the rolling expiry every migration
     // in its period shares (upstream refuses to override it).
-    let canonical_fee =
-        zcash_client_backend::fees::canonical_crossing_fee(&network, target_height).ok();
-    let zip318 = zcash_client_backend::data_api::anchor_retention::PoolMigrationParams::new(
-        zcash_client_backend::data_api::anchor_retention::AnchorRetentionInterval::ZIP_318,
-    );
-    if canonical_fee.is_some_and(|fee| step.is_canonical_crossing(&zip318, fee)) {
+    if bucketed {
         builder = builder.with_expiry_height(zcash_protocol::zip318::expiry_height(target_height));
     }
 
@@ -610,8 +663,8 @@ pub(crate) fn claim(
 
     let data = trees.get("ironwood").ok_or("no ironwood tree data")?;
     let trees = HashMap::from([("ironwood", PoolTree::read(data)?)]);
-    let ironwood =
-        PoolTip::<MerkleHashOrchard>::read(&trees, "ironwood")?.ok_or("no ironwood tree data")?;
+    let ironwood = PoolTip::<MerkleHashOrchard>::read(&trees, "ironwood", false)?
+        .ok_or("no ironwood tree data")?;
     let path: [MerkleHashOrchard; 32] = ironwood
         .path(position)?
         .try_into()
@@ -717,6 +770,7 @@ pub(crate) mod tests {
             TreeData {
                 tip: postcard::to_allocvec(&empty).unwrap(),
                 chunks: HashMap::new(),
+                bucket: None,
             },
         )]);
         trees.insert(
@@ -724,6 +778,7 @@ pub(crate) mod tests {
             TreeData {
                 tip: postcard::to_allocvec(&tip).unwrap(),
                 chunks: HashMap::new(),
+                bucket: None,
             },
         );
         let wallet = Wallet::new(
@@ -772,6 +827,7 @@ pub(crate) mod tests {
             TreeData {
                 tip: postcard::to_allocvec(&crate::witness::tests::snapshot(&leaves)).unwrap(),
                 chunks: HashMap::new(),
+                bucket: None,
             },
         )]);
         let claimer = wallet_ufvk();
@@ -845,6 +901,7 @@ pub(crate) mod tests {
             TreeData {
                 tip: postcard::to_allocvec(&tip).unwrap(),
                 chunks: HashMap::new(),
+                bucket: None,
             },
         )]);
         let mut data = crate::wallet::NoteData::for_tests(
@@ -1027,6 +1084,7 @@ pub(crate) mod tests {
             TreeData {
                 tip: postcard::to_allocvec(&tip).unwrap(),
                 chunks: HashMap::new(),
+                bucket: None,
             },
         )]);
         let ufvk = UnifiedFullViewingKey::decode(&network, &wallet_ufvk()).unwrap();
@@ -1143,6 +1201,115 @@ pub(crate) mod tests {
         assert_eq!(left, 200_000);
         assert_eq!(arrived + i64::try_from(fee).unwrap(), 200_000);
         assert!(tx.transparent_bundle().is_none() && tx.sapling_bundle().is_none());
+    }
+
+    /// A standard amount from an Orchard note into our own Ironwood is a ZIP
+    /// 318 crossing: anchored at a bucket boundary, where lightwalletd's
+    /// trees are smaller than ziziphus's tips, with the rolling expiry, and
+    /// it proves and verifies.
+    #[test]
+    fn crosses_at_a_bucket_anchor_end_to_end() {
+        use incrementalmerkletree::frontier::CommitmentTree;
+        use zcash_primitives::merkle_tree::write_commitment_tree;
+
+        // Mined below the bucket the plan anchors to (144–288 blocks back).
+        let data = orchard_family_note("orchard", zip32::Scope::External, 1_200_000, TIP - 400, 3);
+        let note =
+            crate::notes::decode_orchard(&data.note_hex(), orchard::NoteVersion::V2).unwrap();
+        let ours = MerkleHashOrchard::from_cmx(&ExtractedNoteCommitment::from(note.commitment()));
+        let leaves: Vec<_> = (0..8u64)
+            .map(|i| {
+                if i == 3 {
+                    ours
+                } else {
+                    crate::witness::tests::leaf(i)
+                }
+            })
+            .collect();
+        // The chain's trees at the bucket: five Orchard notes, no Ironwood.
+        let mut orchard_then = CommitmentTree::<MerkleHashOrchard, 32>::empty();
+        leaves[..5]
+            .iter()
+            .for_each(|l| orchard_then.append(*l).unwrap());
+        let hex_of = |tree: &CommitmentTree<MerkleHashOrchard, 32>| {
+            let mut bytes = vec![];
+            write_commitment_tree(tree, &mut bytes).unwrap();
+            hex::encode(bytes)
+        };
+        let tree = |tip: &crate::witness::TipBody, bucket| TreeData {
+            tip: postcard::to_allocvec(tip).unwrap(),
+            chunks: HashMap::new(),
+            bucket: Some(bucket),
+        };
+        let trees = Trees::from([
+            (
+                "orchard".to_string(),
+                tree(
+                    &crate::witness::tests::snapshot(&leaves),
+                    hex_of(&orchard_then),
+                ),
+            ),
+            (
+                "ironwood".to_string(),
+                tree(
+                    &crate::witness::tests::snapshot::<MerkleHashOrchard>(&[]),
+                    hex_of(&CommitmentTree::empty()),
+                ),
+            ),
+        ]);
+        let wallet = Wallet::new(
+            Network::MainNetwork,
+            &WalletData {
+                tip: TIP,
+                notes: vec![data],
+                utxos: vec![],
+            },
+        )
+        .unwrap();
+        let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+
+        let proposal = crate::send::tests::plan_to_self(&wallet, 1_000_000);
+        let step = proposal.steps().first();
+        let target = BlockHeight::from(proposal.min_target_height());
+        let bucket = bucket(step, &Network::MainNetwork, target).expect("a crossing");
+        assert_eq!(u32::from(bucket) % 144, 0);
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
+        assert_eq!(
+            unsigned.orchard().anchor(),
+            &Some(orchard::Anchor::from(orchard_then.root()).to_bytes())
+        );
+
+        let signed = crate::roles::sign(&Network::MainNetwork, unsigned, &SEED, 0).unwrap();
+        let (_, raw) = crate::roles::prove(signed, None).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(
+            &raw[..],
+            zcash_protocol::consensus::BranchId::Nu6_3,
+        )
+        .unwrap();
+        assert_eq!(
+            tx.expiry_height(),
+            zcash_protocol::zip318::expiry_height(target)
+        );
+        assert_eq!(
+            -i64::from(*tx.ironwood_bundle().unwrap().value_balance()),
+            1_000_000
+        );
+
+        // An indexer that disagrees with the chain is refused.
+        let mut wrong = trees;
+        wrong.get_mut("orchard").unwrap().bucket = Some(hex_of(&{
+            let mut t = CommitmentTree::<MerkleHashOrchard, 32>::empty();
+            (10..15).for_each(|i| t.append(crate::witness::tests::leaf(i)).unwrap());
+            t
+        }));
+        assert!(
+            pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &wrong, None)
+                .unwrap_err()
+                .contains("differs from the chain's")
+        );
     }
 
     /// Plan → PCZT → keychain signature → proof → a transaction whose
