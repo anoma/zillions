@@ -18,8 +18,10 @@ export const parse_transaction: (a: number, b: number, c: number, d: number, e: 
 export const pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const plan_migration: (a: number, b: number, c: any) => [number, number, number];
+export const plan_preparation: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];
 export const plan_send: (a: number, b: number, c: any, d: any) => [number, number, number];
 export const plan_shield: (a: number, b: number, c: any) => [number, number, number];
+export const preparation_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number, j: number, k: any) => [number, number, number, number];
 export const prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
 export const script_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const seal_link_key: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
@@ -33,6 +35,7 @@ export const try_decrypt: (a: number, b: number, c: number, d: number, e: number
 export const try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
 export const try_decrypt_gpu: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number, number];
 export const ufvk_pools: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+export const use_migration_test_amounts: (a: number) => void;
 export const warm_prover: () => void;
 export const rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
 export const rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;

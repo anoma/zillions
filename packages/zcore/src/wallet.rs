@@ -509,6 +509,34 @@ impl InputSource for Wallet {
 
 impl Wallet {
     /// The values of the Orchard notes a transaction could spend now.
+    /// The Orchard notes a transaction at `target` under `policy` can spend,
+    /// largest first.
+    pub(crate) fn orchard_notes(
+        &self,
+        target: TargetHeight,
+        policy: ConfirmationsPolicy,
+    ) -> Vec<ReceivedNote<u32, Note>> {
+        let mut notes = select(
+            &self.orchard,
+            orchard_value,
+            ShieldedPool::Orchard,
+            TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable),
+            target,
+            policy,
+            &[],
+        );
+        notes.sort_by_key(|n| std::cmp::Reverse(orchard_value(n.note())));
+        notes
+            .into_iter()
+            .map(|n| {
+                n.map_note(|note| Note::Orchard {
+                    note,
+                    pool: orchard::ValuePool::Orchard,
+                })
+            })
+            .collect()
+    }
+
     pub(crate) fn spendable_orchard(&self) -> Vec<u64> {
         select(
             &self.orchard,

@@ -67,7 +67,7 @@ export function TransactionTypeIcon({
           ? ShieldCheckIcon
           : tx_type === "Unshielded"
             ? ShieldSlashIcon
-            : tx_type === "Migrated"
+            : tx_type === "Migrated" || tx_type === "Prepared"
               ? DatabaseArrowIcon
               : null;
   return Icon && <Icon className={twMerge("size-4", className)} />;

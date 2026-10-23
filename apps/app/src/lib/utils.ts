@@ -3,15 +3,42 @@ import type { Activity } from "./wallet/types";
 const ZATOSHI_PER_ZEC = 100_000_000n;
 const DECIMALS = 8;
 
+/** Dev only: migrations plan 0.001/0.002 ZEC test amounts instead of ZIP 318's; such transfers don't blend in. */
+export const MIGRATION_TEST_AMOUNTS =
+  import.meta.env.DEV && import.meta.env.VITE_MIGRATION_TEST_AMOUNTS === "true";
+
 /**
  * ZIP 318's `MAX_RESIDUAL_VALUE` (0.01 ZEC): less than this stays in Orchard,
  * since moving a distinctive dust amount would single the wallet out.
  */
-export const MIGRATION_MINIMUM = ZATOSHI_PER_ZEC / 100n;
+export const MIGRATION_MINIMUM = MIGRATION_TEST_AMOUNTS
+  ? ZATOSHI_PER_ZEC / 1000n
+  : ZATOSHI_PER_ZEC / 100n;
 
 /** Hides Move to Ironwood (2.9) until it has been tested: `VITE_MIGRATION_ENABLED=true` shows it. */
 export const MIGRATION_ENABLED =
   import.meta.env.VITE_MIGRATION_ENABLED === "true";
+
+/** About how long until block `height`, from `tip`, at 75 seconds a block. */
+export function fromNow(tip: number, height: number) {
+  const minutes = ((height - tip) * 75) / 60;
+  if (minutes < 5) return "now";
+  if (minutes < 90) return `~${Math.round(minutes)} min`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `~${hours} hours` : `~${Math.round(hours / 24)} days`;
+}
+
+/** The local clock time of block `height`, from `tip`, at 75 seconds a block; with the weekday when it isn't today. */
+export function clockAt(tip: number, height: number) {
+  const when = new Date(Date.now() + (height - tip) * 75_000);
+  const time = when.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return when.toDateString() === new Date().toDateString()
+    ? time
+    : `${when.toLocaleDateString([], { weekday: "short" })} ${time}`;
+}
 
 /**
  * CSS font size that fits `chars` characters in the nearest `@container`,

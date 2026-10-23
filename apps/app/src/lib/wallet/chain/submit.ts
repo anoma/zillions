@@ -33,6 +33,9 @@ const hex = (bytes: Uint8Array) =>
  * only: `vite build` ignores it.
  */
 const DRY_RUN = import.meta.env.DEV && import.meta.env.VITE_DRY_RUN === "true";
+if (DRY_RUN) {
+  console.log("[submit] dry run is on: sends are proven, never broadcast");
+}
 
 async function fetchVerified({ url, sha256 }: { url: string; sha256: string }) {
   const res = await fetch(url);

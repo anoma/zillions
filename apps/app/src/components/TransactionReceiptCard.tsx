@@ -154,6 +154,11 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
         ["Transaction fee", tx.fee],
         ["Total spent", tx.value + tx.fee],
       ],
+      Prepared: [
+        ["Split into standard amounts", tx.value],
+        ["Transaction fee", tx.fee],
+        ["Total spent", tx.value + tx.fee],
+      ],
     } as const
   )[tx.tx_type];
   const total = rows.at(-1);

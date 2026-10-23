@@ -1,4 +1,5 @@
 import type { Block } from "./chain/lightwalletd";
+import type { Migration } from "./migration";
 import type { ParsedTx, TransparentCache } from "./transparent";
 
 export type Pool = "sapling" | "orchard" | "ironwood";
@@ -179,12 +180,21 @@ export interface WalletState {
   blocks: Map<number, Block>;
   /** History's transactions read in full, by txid. */
   txs: Map<string, ParsedTx>;
+  /** A migration to Ironwood in progress (2.9). */
+  migration?: Migration;
 }
 
 /** One transaction as history shows it. */
 export type Activity = {
   txid: string;
-  tx_type: "Received" | "Sent" | "Shielded" | "Unshielded" | "Migrated";
+  tx_type:
+    | "Received"
+    | "Sent"
+    | "Shielded"
+    | "Unshielded"
+    | "Migrated"
+    /** A migration's preparation: Orchard split into standard amounts. */
+    | "Prepared";
   value: bigint;
   fee: bigint;
   block_height: number;

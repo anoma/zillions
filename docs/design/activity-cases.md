@@ -57,6 +57,7 @@ transaction is ours. A shielded payment received is never asked for.
 | `o-xt` | Sent −10,000 · fee 15,000 | Shielded → t1theirs | Indexer + RPC by txid | sent 25,000 · fee 15,000 | sent 10,000 · fee 15,000 | sent 10,000 · fee 15,000 | Sent −25,000 · fee 15,000 |
 | `o-i` | Migrated 30,000 · fee 20,000 | Orchard → Ironwood | Indexer + RPC by txid | sent 80,000 · fee 20,000 | migration 30,000 · fee 20,000 | migration 30,000 · fee 20,000 | Migration −20,000 · fee 20,000 |
 | `o-i-nc` | Migrated 80,000 · fee 20,000 | Orchard → Ironwood | Indexer + RPC by txid | sent 80,000 · fee 20,000 | migration 80,000 · fee 20,000 | migration 80,000 · fee 20,000 | Migration −20,000 · fee 20,000 |
+| `o-o` | Prepared 220,000 · fee 80,000 | Orchard → Orchard | Indexer + RPC by txid | not checked | not checked | not checked | not checked |
 | `o-s` | Migrated 10,000 · fee 20,000 | Orchard → Sapling | Indexer + RPC by txid | sent 80,000 · fee 20,000 | send-to-self 80,000 · fee 20,000 | sent 10,000 · fee 20,000 + received 10,000 | Self Transfer −20,000 · fee 20,000 |
 | `o-t` | Unshielded 10,000 · fee 15,000 | Shielded → Transparent | Indexer + RPC by address | sent 15,000 · fee 15,000 | send-to-self 85,000 · fee 15,000 | no row | Unshield −15,000 · fee 15,000 |
 
@@ -66,6 +67,7 @@ transaction is ours. A shielded payment received is never asked for.
 - `o-xt` to someone's transparent address: Orchard 100,000 → them t1theirs 10,000 · change Orchard 75,000 · fee 15,000.
 - `o-i` part of it to our own Ironwood (Move to Ironwood): Orchard 100,000 → own Ironwood 30,000 · change Orchard 50,000 · fee 20,000. zcash_client_sqlite: pool_crossing_value 30,000. Zodl shows everything that came back, change included.
 - `o-i-nc` all of it to our own Ironwood (Move to Ironwood): Orchard 100,000 → own Ironwood 80,000 · fee 20,000.
+- `o-o` split into standard amounts (a migration's preparation): Orchard 300,000 → own Orchard 120,000 + 100,000 · fee 80,000. ZIP 318 pads it to 16 actions, so the fee is 80,000 whatever it splits.
 - `o-s` to our own Sapling address: Orchard 100,000 → own Sapling 10,000 · change Orchard 70,000 · fee 20,000. zcash_client_sqlite: pool_crossing_value 10,000.
 - `o-t` to a new transparent address of our own (Unshield): Orchard 100,000 → own t1internal 10,000 · change Orchard 75,000 · fee 15,000. Vizor hides outputs to internal addresses as change, which leaves nothing to show.
 

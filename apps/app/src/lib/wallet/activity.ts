@@ -141,6 +141,25 @@ function shieldedSide({ received, spent, sent, paid, lost }: TxGroup) {
       to: one(to),
     };
   }
+  // Only a migration's preparation still makes Orchard notes since NU6.3.
+  const prepared =
+    spent.length > 0 &&
+    !out.length &&
+    received.length > 1 &&
+    [...spent, ...received].every((n) => n.pool === "orchard") &&
+    received.every((n) => n.scope === "internal");
+  if (prepared) {
+    return {
+      migrated: false,
+      prepared: true,
+      from: { pool: "orchard" } as Party,
+      value: sum(received),
+      fee: max0(sum(spent) - sum(received)),
+      pool: "orchard" as const,
+      memo,
+      to: { pool: "orchard" } as Party,
+    };
+  }
   return {
     migrated: false,
     self: self.length > 0,
@@ -201,10 +220,16 @@ function derived(
     return {
       ...base,
       ...side!,
-      tx_type: s!.migrated ? "Migrated" : s!.value < 0n ? "Sent" : "Received",
+      tx_type: s!.migrated
+        ? "Migrated"
+        : "prepared" in s!
+          ? "Prepared"
+          : s!.value < 0n
+            ? "Sent"
+            : "Received",
       value: s!.value,
       fee: s!.fee,
-      ...(!s!.migrated && s!.self && { self: true as const }),
+      ...("self" in s! && s!.self && { self: true as const }),
     };
   }
 
