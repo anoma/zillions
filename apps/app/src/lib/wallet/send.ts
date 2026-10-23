@@ -24,6 +24,8 @@ export type SendRequest = {
   to: string;
   amount: bigint;
   memo?: string;
+  /** A binary memo, hex, in place of `memo`: a payment link's. */
+  memoHex?: string;
   /**
    * Which balance pays; within the shielded one, the plan picks pools.
    * `orchard` spends Orchard notes alone: moving them to Ironwood.
@@ -55,9 +57,10 @@ export type WalletData = {
   utxos: (OwnUtxo & { height: number })[];
 };
 
-const request = (send: SendRequest) => ({
+const request = ({ memoHex, ...send }: SendRequest) => ({
   ...send,
   amount: Number(send.amount),
+  memo_hex: memoHex,
 });
 
 export async function planSend(wallet: WalletData, send: SendRequest) {
@@ -144,7 +147,7 @@ const treeChunk = (pool: Pool, chunk: number) =>
  * The tree tip of every shielded pool a plan spends from or pays into (each
  * anchors to its real root), plus the frozen chunks holding its notes.
  */
-async function fetchTrees(plan: SendPlan) {
+export async function fetchTrees(plan: SendPlan) {
   const notes = plan.steps.flatMap((s) => s.notes);
   const flows = plan.steps.flatMap((s) => [
     ...s.inputs,

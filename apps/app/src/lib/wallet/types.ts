@@ -91,7 +91,10 @@ export type PendingActivity = Pick<
 > & { memo?: string };
 
 /** An output this wallet created, recovered with its outgoing viewing key. */
-export type SentOutput = Output;
+export type SentOutput = Output & {
+  /** What shows the payment link it funds again, hex; the seal opens only with our seed. */
+  link?: { nk: string; sealed: string };
+};
 
 export type Sent = SentOutput & {
   /** `accountId_pool_position` — positions are unique within a pool. */

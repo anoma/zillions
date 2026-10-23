@@ -88,7 +88,13 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
 
   return (
     <Stack className="h-full text-black pt-4 pb-6" gap={4}>
-      <PageHeader title="Confirm Transaction" />
+      <PageHeader
+        title={
+          details?.summary.paymentLink
+            ? "Confirm Payment Link"
+            : "Confirm Transaction"
+        }
+      />
       <main className="flex flex-col flex-1 gap-4 overflow-y-auto">
         {summaryError && (
           <Alert type="error" title="This transaction can't be shown">

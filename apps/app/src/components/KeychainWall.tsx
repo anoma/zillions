@@ -103,7 +103,13 @@ function Account({ children }: { children: ReactNode }) {
   );
 }
 
-function Connect({ children }: { children: ReactNode }) {
+type WallProps = {
+  children: ReactNode;
+  /** Arrived from a payment link: the setup ends by claiming it. */
+  claiming?: boolean;
+};
+
+function Connect({ children, claiming }: WallProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isConnected, setIsConnected] = useState<boolean | undefined>(
@@ -143,6 +149,7 @@ function Connect({ children }: { children: ReactNode }) {
     return (
       <Setup
         installed
+        claiming={claiming}
         onConnect={async () => {
           await keychain().connect();
           setIsConnected(await keychain().isConnected());
@@ -154,9 +161,9 @@ function Connect({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function Download({ children }: { children: ReactNode }) {
+function Download({ children, claiming }: WallProps) {
   if (!isKeychainAvailable()) {
-    return <Setup installed={false} />;
+    return <Setup installed={false} claiming={claiming} />;
   }
 
   if (!isKeychainVersionSupported()) {
@@ -239,9 +246,11 @@ function SetupStep({
 
 function Setup({
   installed,
+  claiming,
   onConnect,
 }: {
   installed: boolean;
+  claiming?: boolean;
   onConnect?: () => Promise<void>;
 }) {
   return (
@@ -283,16 +292,21 @@ function Setup({
               </div>
             )}
           </SetupStep>
+          {claiming && (
+            <SetupStep number={3} title="Claim funds" status="upcoming">
+              Move the money from the payment link into your wallet.
+            </SetupStep>
+          )}
         </ol>
       </div>
     </div>
   );
 }
 
-export function KeychainWall({ children }: { children: ReactNode }) {
+export function KeychainWall({ children, claiming }: WallProps) {
   return (
-    <Download>
-      <Connect>
+    <Download claiming={claiming}>
+      <Connect claiming={claiming}>
         <Account>{children}</Account>
       </Connect>
     </Download>

@@ -46,6 +46,41 @@ export function apply_ledger_signatures(pczt, signatures) {
 }
 
 /**
+ * A link's claim, signed and ready to prove: its one note (as sync encodes
+ * notes, hex) at `position` → `to`, less the claim fee. `trees` are the
+ * Ironwood tree data, as for a send; `claimer_ufvk` keeps the creator from
+ * seeing where it went. `tip` is the chain's height now.
+ * @param {string} network
+ * @param {Uint8Array} key
+ * @param {string} note
+ * @param {bigint} position
+ * @param {any} trees
+ * @param {string} to
+ * @param {string} claimer_ufvk
+ * @param {number} tip
+ * @returns {Uint8Array}
+ */
+export function claim_pczt(network, key, note, position, trees, to, claimer_ufvk, tip) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(note, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(to, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ptr4 = passStringToWasm0(claimer_ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ret = wasm.claim_pczt(ptr0, len0, ptr1, len1, ptr2, len2, position, trees, ptr3, len3, ptr4, len4, tip);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v6 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v6;
+}
+
+/**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  * @param {string} network
  * @param {Uint8Array} seed
@@ -170,6 +205,24 @@ export function gpu_inputs(network, ufvk, pool, body, from, tried) {
 }
 
 /**
+ * The link's address and nullifier key: `{ address, nk }`.
+ * @param {string} network
+ * @param {Uint8Array} key
+ * @returns {any}
+ */
+export function link_info(network, key) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.link_info(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
  * @param {string} network
  * @param {any} wallet
@@ -199,6 +252,44 @@ export function needs_sapling_params(pczt) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return ret[0] !== 0;
+}
+
+/**
+ * 32 random bytes that make an Orchard spending key: a new link.
+ * @returns {Uint8Array}
+ */
+export function new_link_key() {
+    const ret = wasm.new_link_key();
+    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v1;
+}
+
+/**
+ * The link key back from its seal and nullifier key, both from the memo.
+ * @param {string} network
+ * @param {Uint8Array} seed
+ * @param {number} hd_index
+ * @param {Uint8Array} sealed
+ * @param {Uint8Array} nk
+ * @returns {Uint8Array}
+ */
+export function open_link_key(network, seed, hd_index, sealed, nk) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(seed, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(sealed, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passArray8ToWasm0(nk, wasm.__wbindgen_malloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.open_link_key(ptr0, len0, ptr1, len1, hd_index, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
 }
 
 /**
@@ -371,6 +462,30 @@ export function script_address(network, script) {
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     }
     return v3;
+}
+
+/**
+ * The link key sealed to the account at `hd_index`, for the funding memo.
+ * @param {string} network
+ * @param {Uint8Array} seed
+ * @param {number} hd_index
+ * @param {Uint8Array} key
+ * @returns {Uint8Array}
+ */
+export function seal_link_key(network, seed, hd_index, key) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(seed, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(key, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.seal_link_key(ptr0, len0, ptr1, len1, hd_index, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
 }
 
 /**
