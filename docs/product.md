@@ -322,8 +322,8 @@ due. How it's built is in [migration.md](design/migration.md).
 - The plan is kept in this browser only. Another browser or device shows
   the Orchard balance and **Migrate**, not the plan. If the notes a step
   needs were spent elsewhere, the remaining steps are planned again.
-- When only one transfer fits, it spends an Orchard note directly and
-  needs no preparation step.
+- Every migration starts with a preparation step, even one that moves a
+  single transfer.
 - In history (2.6), transfers show as Migrated, Orchard → Ironwood; the
   preparation steps that split the funds into standard amounts show as
   such, not as payments.

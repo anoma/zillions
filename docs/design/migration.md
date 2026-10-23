@@ -31,9 +31,9 @@ closed. Fees are the same either way: the same transactions are sent.
   and caps). A step is due once the notes it spends can anchor at a bucket
   boundary (see Anchors): the first transfer, 3–6 hours after the last
   preparation.
-- **One transfer only.** When the plan has a single amount and one note
-  covers it and its fee, there is no preparation: the transfer spends that
-  note and keeps the change in Orchard.
+- **Always a preparation first,** even for one transfer or notes that
+  already fit: every migration runs the same steps, and a transfer only ever
+  spends the note made for it.
 
 The plan is saved per account in the wallet's encrypted IndexedDB store
 (`lib/wallet/store.ts`) with each step's state (planned, sent with its txid,
@@ -118,9 +118,6 @@ don't blend in; it exists to test the flow, never to use.
 ## Departures from ZIP 318
 
 - Steps are sent by the user, not pre-signed and sent on a timer (see Why).
-- One transfer skips the preparation even when its note holds more than
-  the amount and fee; the rest stays as Orchard change. ZIP 318 allows
-  skipping only when existing notes fund every part exactly.
 - Preparations anchor at a boundary too (age 1). ZIP 318 lets a later layer
   use an ordinary near-tip anchor; upstream's `zip318::classify` expects one
   on the grid, so we keep it there, at the cost of 3–6 hours between layers.
