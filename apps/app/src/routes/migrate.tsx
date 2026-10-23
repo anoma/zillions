@@ -238,15 +238,15 @@ function MigrateRoute() {
                       : "Prepare the amounts"
                   }
                 >
-                  {fromNow(p.tip, height)}
+                  {stepTime(p.tip, height)}
                 </Row>
               ))}
               {p.transfers.map(({ value, height }, i) => (
                 <Row
                   key={`t${i}`}
-                  label={`Transfer ${i + 1} · ${fromNow(p.tip, height)}`}
+                  label={`Transfer ${i + 1} · ${zatoshiLabel(value)}`}
                 >
-                  <ZecValue zat={BigInt(value)} />
+                  {stepTime(p.tip, height)}
                 </Row>
               ))}
               <Row label="Fees">
@@ -423,7 +423,7 @@ function MigrationSteps({ status }: { status: Status }) {
           : `Due ~${clockAt(tip, at)}`
         : step?.kind === "transfer" && at <= step.height
           ? "Not needed"
-          : `~${clockAt(tip, at)}`;
+          : stepTime(tip, at);
   // About when block `height` comes: "15:40 (~2 hours)".
   const when = (height: number) =>
     `${clockAt(tip, height)} (${fromNow(tip, height)})`;
@@ -541,6 +541,10 @@ function MigrationSteps({ status }: { status: Status }) {
 }
 
 const zatoshiLabel = (zat: number) => `${zatoshiToZec(BigInt(zat))} ZEC`;
+
+/** When a step is planned, as both the review and the steps list show it. */
+const stepTime = (tip: number, height: number) =>
+  tip + 1 >= height ? "Now" : `~${clockAt(tip, height)}`;
 
 function Waiting() {
   return <SpinnerIcon className="size-3" />;
