@@ -1,3 +1,4 @@
+import { twMerge } from "tailwind-merge";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useMigration } from "../hooks/useMigration";
 import { DatabaseArrowIcon } from "../icons/DatabaseArrowIcon";
@@ -35,6 +36,8 @@ export function MigrationSection() {
     </>
   );
   let action = "Migrate";
+  // Only waiting: a quiet banner instead of the highlight.
+  let waiting = false;
   if (status) {
     const { migration: m, next, pending, tip = m.tip } = status;
     const step =
@@ -55,28 +58,44 @@ export function MigrationSection() {
             ? "Waiting for the last step to be mined."
             : next.kind === "done"
               ? "Every transfer is done."
-              : "The plan needs updating."}
+              : "The plan needs to be made again."}
       </>
     );
     action = due ? "Continue" : "View";
+    waiting = !due && (step !== null || next.kind === "mining");
   }
 
   return (
     <div className="px-10 pt-4 pb-10 max-sm:px-6">
       <section
         aria-label="Move to Ironwood"
-        className="p-5 flex max-sm:flex-col sm:items-center gap-4 rounded-3xl bg-neutral-800 text-white dark:bg-card dark:text-black dark:border dark:border-line-strong"
+        className={twMerge(
+          "p-5 flex max-sm:flex-col sm:items-center gap-4 rounded-3xl",
+          waiting
+            ? "border border-line bg-card dark:text-black"
+            : "bg-neutral-800 text-white dark:bg-card dark:text-black dark:border dark:border-line-strong",
+        )}
       >
         <DatabaseArrowIcon aria-hidden="true" className="size-6 shrink-0" />
         <div className="flex-1">
           <div className="font-medium">
             {status ? "Moving to Ironwood" : "Move to Ironwood"}
           </div>
-          <div className="text-sm text-neutral-300 dark:text-neutral-600">
+          <div
+            className={twMerge(
+              "text-sm dark:text-neutral-600",
+              waiting ? "text-neutral-600" : "text-neutral-300",
+            )}
+          >
             {detail}
           </div>
         </div>
-        <ActionButton href="/migrate" size="sm" className="w-40 isolate">
+        <ActionButton
+          href="/migrate"
+          size="sm"
+          className="w-40 isolate"
+          outlineColor={waiting ? "black" : undefined}
+        >
           {action}
         </ActionButton>
       </section>

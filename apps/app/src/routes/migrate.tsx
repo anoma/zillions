@@ -115,7 +115,8 @@ function MigrateRoute() {
         <p>
           The latest Zcash network upgrade closed the Orchard pool to new funds.
           Move your <ZecValue zat={orchard} className="font-medium" /> from
-          Orchard to the new Ironwood pool. Your funds are safe meanwhile.{" "}
+          Orchard to the new Ironwood pool. They stay safe in Orchard until
+          then.{" "}
           <a
             href={ZIP_318}
             target="_blank"
@@ -159,14 +160,13 @@ function MigrateRoute() {
             Your balance is split into standard amounts that many other wallets
             move too, sent hours apart, so they're hard to link together.
           </Point>
-          <Point title="Send each step">
-            Nothing is sent on its own. Come back when each step is due and send
-            it; the Keychain asks you to approve each one.
+          <Point title="You send each step">
+            Zillions doesn't send them for you. When a step is due, come back
+            and send it; the Keychain asks you to approve each one.
           </Point>
-          <Point title="Come back for each step">
-            The wallet shows when each step can be sent and when it's planned.
-            Being late is fine; sending early makes the transfers easier to
-            link.
+          <Point title="Late is fine, early isn't">
+            The wallet shows when each step is due. Sending later is fine;
+            sending earlier makes the transfers easier to link.
           </Point>
         </dl>
         <Note>
@@ -193,7 +193,7 @@ function MigrateRoute() {
           >
             NymVPN
           </a>{" "}
-          (free for the Ironwood migration), before you start.
+          (free for the Ironwood migration) before you start.
         </p>
         <Note>You can continue without one; the choice is yours.</Note>
         <Primary onClick={next}>Continue</Primary>
@@ -230,8 +230,8 @@ function MigrateRoute() {
               Your balance moves as {p.transfers.length}{" "}
               {p.transfers.length === 1 ? "transfer" : "transfers"} over{" "}
               {fromNow(p.tip, last!)}. Their order and timing are random, for
-              privacy. Starting saves this plan; nothing is sent until you send
-              each step.
+              privacy. Starting saves this plan; you then send each step
+              yourself when it's due.
             </p>
             <div className="mt-8 rounded-2xl border border-line divide-y divide-line text-sm">
               {p.preparations.map((height, i) => (
@@ -280,7 +280,7 @@ function MigrateRoute() {
   const fee = planned.plan.data?.fee;
   const error = send.error?.message ?? planProblem(planned);
   const confirm = () => {
-    setValidationMessage(amount ? "" : "Wait for the amount and fee");
+    setValidationMessage(amount ? "" : "Wait for the amount and fee to load.");
     if (!amount) return;
     send.mutate({
       from: "orchard",
@@ -428,12 +428,13 @@ function MigrationSteps({ status }: { status: Status }) {
         : step?.kind === "transfer" && at <= step.height
           ? "Not needed"
           : stepTime(tip, at);
-  // About when block `height` comes: "15:40 (~2 hours)".
-  const when = (height: number) =>
-    `${clockAt(tip, height)} (${fromNow(tip, height)})`;
   const done = transfersDone(m, pending);
   const due = step && tip + 1 >= step.height;
   const name = step ? stepName(step) : "";
+  const Name = name.charAt(0).toUpperCase() + name.slice(1);
+  // The block to come back for the next step.
+  const comeBack = step ? Math.max(sendAt(step), tip + 1) : tip + 1;
+  const soon = fromNow(tip, comeBack);
 
   if (send.data) {
     return (
@@ -445,9 +446,67 @@ function MigrationSteps({ status }: { status: Status }) {
   return (
     <Page title="Moving to Ironwood">
       <p>
-        Transfer {done} of {m.transfers.length} complete. Zillions doesn't send
-        the steps for you: come back and send each one when it's due.
+        Transfer {done} of {m.transfers.length} complete.
       </p>
+      {next.kind === "mining" && (
+        <NextCard title="Your last step is being mined">
+          Usually a few minutes. Then the next step's time shows here.
+        </NextCard>
+      )}
+      {next.kind === "replan" && (
+        <NextCard
+          title="This plan can't continue"
+          action={<Primary onClick={stop}>Plan again</Primary>}
+        >
+          The Orchard funds it needs were spent or changed outside it.
+        </NextCard>
+      )}
+      {next.kind === "done" && (
+        <NextCard
+          title="Migration complete"
+          action={<Primary onClick={stop}>Finish</Primary>}
+        >
+          Less than <ZecValue zat={MIGRATION_MINIMUM} /> stays in Orchard.
+        </NextCard>
+      )}
+      {step &&
+        (ready.isPending ? (
+          <NextCard title={<Waiting />} />
+        ) : ready.data && due ? (
+          <NextCard
+            title={`${Name} is ready`}
+            action={
+              <Primary onClick={sendStep} disabled={send.isPending}>
+                {send.isPending ? "Sending..." : `Send ${name}`}
+              </Primary>
+            }
+          >
+            Send it now, or any time later.
+          </NextCard>
+        ) : (
+          <NextCard
+            title={`Come back around ${clockAt(tip, comeBack)}`}
+            action={
+              ready.data && (
+                <button
+                  type="button"
+                  onClick={sendStep}
+                  disabled={send.isPending}
+                  className="mt-3 self-start text-xs underline cursor-pointer"
+                >
+                  {send.isPending
+                    ? "Sending..."
+                    : "Send now anyway (easier to link)"}
+                </button>
+              )
+            }
+          >
+            {`To send ${name}${soon === "now" ? "" : `, in ${soon}`}. `}
+            Later is fine; Zillions won't send it for you.
+          </NextCard>
+        ))}
+      {problem && <FormError>{problem}</FormError>}
+      {send.isPending && <SubmitProgress stages={send.stages} />}
       <div className="mt-8 rounded-2xl border border-line divide-y divide-line text-sm">
         {m.preparations.map((p, i) => (
           <Row
@@ -478,65 +537,6 @@ function MigrationSteps({ status }: { status: Status }) {
           </Row>
         ))}
       </div>
-
-      {next.kind === "mining" && (
-        <Note>
-          Waiting for the last step to be mined; the next one can go once it is.
-        </Note>
-      )}
-      {next.kind === "replan" && (
-        <>
-          <Note>
-            The Orchard funds this plan needs have changed, so its remaining
-            steps can't be sent. Plan again from what Orchard holds now.
-          </Note>
-          <Primary onClick={stop}>Plan again</Primary>
-        </>
-      )}
-      {next.kind === "done" && (
-        <>
-          <Note>
-            Every transfer is done. Less than{" "}
-            <ZecValue zat={MIGRATION_MINIMUM} /> stays in Orchard.
-          </Note>
-          <Primary onClick={stop}>Finish</Primary>
-        </>
-      )}
-      {step &&
-        (ready.isPending ? (
-          <Note>
-            <Waiting />
-          </Note>
-        ) : !ready.data ? (
-          <Note>
-            Come back at about {when(Math.max(sendAt(step), tip + 1))} to send
-            {name}. It can't go before its funds pass a network checkpoint (one
-            every ~3 hours), and it doesn't need to be on time: any time after
-            that works.
-          </Note>
-        ) : due ? (
-          <Primary onClick={sendStep} disabled={send.isPending}>
-            {send.isPending ? "Sending..." : `Send ${name}`}
-          </Primary>
-        ) : (
-          <>
-            <Note>
-              Come back at about {when(sendAt(step))} to send {name}. Sending it
-              then or any time later keeps the transfers hard to link; sending
-              it earlier makes them easier to link.
-            </Note>
-            <button
-              type="button"
-              onClick={sendStep}
-              disabled={send.isPending}
-              className="mt-3 self-start text-xs underline cursor-pointer"
-            >
-              {send.isPending ? "Sending..." : "Send now anyway"}
-            </button>
-          </>
-        ))}
-      {problem && <FormError>{problem}</FormError>}
-      {send.isPending && <SubmitProgress stages={send.stages} />}
       {next.kind !== "done" && (
         <button
           type="button"
@@ -636,6 +636,28 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
       <div>{label}</div>
       <div className="font-medium">{children}</div>
     </div>
+  );
+}
+
+/** What the user does next: a headline, one line, and its action. */
+function NextCard({
+  title,
+  action,
+  children,
+}: {
+  title: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <section
+      aria-label="Next step"
+      className="isolate mt-6 p-5 flex flex-col rounded-2xl border border-line bg-card"
+    >
+      <div className="text-lg font-semibold">{title}</div>
+      {children && <div className="mt-1 text-neutral-600">{children}</div>}
+      {action}
+    </section>
   );
 }
 
