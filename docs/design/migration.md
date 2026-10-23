@@ -29,7 +29,7 @@ closed. Fees are the same either way: the same transactions are sent.
   balance.
 - **Timing.** Transfers are ~90 minutes apart (ZIP 318's exponential delays
   and caps). A step is due once the notes it spends can anchor at a bucket
-  boundary (see Anchors): the first transfer, 2–6 hours after the last
+  boundary (see Anchors): the first transfer, 3–6 hours after the last
   preparation.
 - **One transfer only.** When the plan has a single amount and one note
   covers it and its fee, there is no preparation: the transfer spends that
@@ -59,7 +59,7 @@ exactly one note.
   then: the largest ones that can anchor, at most 14, so there is room for an
   amount and the change. It makes as many amounts as fit, in plan order;
   the next preparation spends its change, so it waits until that change can
-  anchor (2–6 hours). Upstream builds it from a `Proposal` whose amounts are
+  anchor (3–6 hours). Upstream builds it from a `Proposal` whose amounts are
   Orchard change, which `build.rs` carries out like any send.
 
 ## Transfers
@@ -123,7 +123,7 @@ don't blend in; it exists to test the flow, never to use.
   skipping only when existing notes fund every part exactly.
 - Preparations anchor at a boundary too (age 1). ZIP 318 lets a later layer
   use an ordinary near-tip anchor; upstream's `zip318::classify` expects one
-  on the grid, so we keep it there, at the cost of 2–6 hours between layers.
+  on the grid, so we keep it there, at the cost of 3–6 hours between layers.
 - No Tor or Nym routing: a web page can't; the migration page recommends a
   VPN instead (product.md 2.9).
 
