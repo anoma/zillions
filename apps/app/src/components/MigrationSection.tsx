@@ -51,14 +51,16 @@ export function MigrationSection() {
     <div className="px-10 pt-4 pb-10 max-sm:px-6">
       <section
         aria-label="Move to Ironwood"
-        className="p-5 flex max-sm:flex-col sm:items-center gap-4 rounded-3xl bg-neutral-800 text-white"
+        className="p-5 flex max-sm:flex-col sm:items-center gap-4 rounded-3xl bg-neutral-800 text-white dark:bg-card dark:text-black dark:border dark:border-line-strong"
       >
         <DatabaseArrowIcon aria-hidden="true" className="size-6 shrink-0" />
         <div className="flex-1">
           <div className="font-medium">
             {status ? "Moving to Ironwood" : "Move to Ironwood"}
           </div>
-          <div className="text-sm text-neutral-300">{detail}</div>
+          <div className="text-sm text-neutral-300 dark:text-neutral-600">
+            {detail}
+          </div>
         </div>
         <ActionButton href="/migrate" size="sm" className="w-40 isolate">
           {action}
