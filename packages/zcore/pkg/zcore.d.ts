@@ -16,6 +16,14 @@ export function address_kind(network: string, address: string): string | undefin
 export function apply_ledger_signatures(pczt: Uint8Array, signatures: any): Uint8Array;
 
 /**
+ * A link's claim, signed and ready to prove: its one note (as sync encodes
+ * notes, hex) at `position` → `to`, less the claim fee. `trees` are the
+ * Ironwood tree data, as for a send; `claimer_ufvk` keeps the creator from
+ * seeing where it went. `tip` is the chain's height now.
+ */
+export function claim_pczt(network: string, key: Uint8Array, note: string, position: bigint, trees: any, to: string, claimer_ufvk: string, tip: number): Uint8Array;
+
+/**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  */
 export function derive_account(network: string, seed: Uint8Array, hd_index: number): any;
@@ -50,6 +58,11 @@ export function gap_limits(): any;
 export function gpu_inputs(network: string, ufvk: string, pool: string, body: Uint8Array, from: number, tried: Uint8Array): Uint8Array;
 
 /**
+ * The link's address and nullifier key: `{ address, nk }`.
+ */
+export function link_info(network: string, key: Uint8Array): any;
+
+/**
  * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
  */
 export function max_send(network: string, wallet: any, send: any): bigint;
@@ -58,6 +71,16 @@ export function max_send(network: string, wallet: any, send: any): bigint;
  * Whether proving `pczt` needs the Sapling parameters (~51 MB to fetch).
  */
 export function needs_sapling_params(pczt: Uint8Array): boolean;
+
+/**
+ * 32 random bytes that make an Orchard spending key: a new link.
+ */
+export function new_link_key(): Uint8Array;
+
+/**
+ * The link key back from its seal and nullifier key, both from the memo.
+ */
+export function open_link_key(network: string, seed: Uint8Array, hd_index: number, sealed: Uint8Array, nk: Uint8Array): Uint8Array;
 
 /**
  * The transparent side of a raw transaction mined at `height`, which fixes
@@ -131,6 +154,11 @@ export function prove_pczt(pczt: Uint8Array, sapling_spend?: Uint8Array | null, 
  * P2PKH or P2SH.
  */
 export function script_address(network: string, script: Uint8Array): string | undefined;
+
+/**
+ * The link key sealed to the account at `hd_index`, for the funding memo.
+ */
+export function seal_link_key(network: string, seed: Uint8Array, hd_index: number, key: Uint8Array): Uint8Array;
 
 /**
  * The seed's ZIP-32 fingerprint, hex. Names the seed without revealing it.
@@ -222,13 +250,17 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly apply_ledger_signatures: (a: number, b: number, c: any) => [number, number, number, number];
+    readonly claim_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: bigint, h: any, i: number, j: number, k: number, l: number, m: number) => [number, number, number, number];
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly gap_limits: () => [number, number, number];
     readonly gpu_inputs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number, number, number];
+    readonly link_info: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
     readonly needs_sapling_params: (a: number, b: number) => [number, number, number];
+    readonly new_link_key: () => [number, number];
+    readonly open_link_key: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
@@ -239,6 +271,7 @@ export interface InitOutput {
     readonly preparation_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number, j: number, k: any) => [number, number, number, number];
     readonly prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly script_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly seal_link_key: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly seed_fingerprint: (a: number, b: number) => [number, number, number, number];
     readonly send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any, k: number) => [number, number, number, number];
     readonly shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any) => [number, number, number, number];

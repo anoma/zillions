@@ -13,6 +13,11 @@ export type SignProps = {
   pczt: PcztBase64;
 };
 
+export type OpenLinkKeyProps = {
+  sealed: string;
+  nk: string;
+};
+
 export type BalancesProps = {
   owner: string;
   tokens: string[];
@@ -37,6 +42,16 @@ export interface Zillions {
    * Sign a PCZT. Returns the signed PCZT as base64 (postcard bytes).
    */
   sign(props: SignProps): Promise<PcztBase64>;
+  /**
+   * Seal a payment link's key (base64, 32 bytes) to the active account, for
+   * the link's funding memo. Only that account's seed opens it again.
+   */
+  sealLinkKey(key: string): Promise<string>;
+  /**
+   * Open a payment link's sealed key (hex, from its funding memo, with the
+   * memo's `nk`) after the user approves; resolves with the key, base64.
+   */
+  openLinkKey(props: OpenLinkKeyProps): Promise<string>;
   genDisposableKeypair(): Promise<GenDisposableSignerResponse | undefined>;
   persistDisposableKeypair(props: PersistDisposableSignerProps): Promise<void>;
   clearDisposableKeypair(props: ClearDisposableSignerProps): Promise<void>;

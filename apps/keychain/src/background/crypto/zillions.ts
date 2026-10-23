@@ -7,8 +7,11 @@ import initZcore, {
   apply_ledger_signatures,
   derive_account,
   fresh_address,
+  link_info,
+  open_link_key,
   pczt_ledger_transaction,
   pczt_summary,
+  seal_link_key,
   seed_fingerprint,
   sign_pczt,
   spending_keys,
@@ -111,6 +114,32 @@ const bytesToBase64 = (bytes: Uint8Array): string => {
 
 const base64ToBytes = (s: string): Uint8Array =>
   Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+
+/** The address a payment link's key (base64) holds its note at. */
+export const linkAddress = (key: string): string =>
+  (link_info(getNetwork(), base64ToBytes(key)) as { address: string }).address;
+
+/** A payment link's key (base64) sealed to the seed's account `hdIndex`. */
+export const sealLinkKey = (
+  key: string,
+  seed: Uint8Array,
+  hdIndex: number
+): string =>
+  bytesToBase64(seal_link_key(getNetwork(), seed, hdIndex, base64ToBytes(key)));
+
+const hexToBytes = (hex: string): Uint8Array =>
+  Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16));
+
+/** A payment link's key, base64, from its seal and `nk` (both hex). */
+export const openLinkKey = (
+  sealed: string,
+  nk: string,
+  seed: Uint8Array,
+  hdIndex: number
+): string =>
+  bytesToBase64(
+    open_link_key(getNetwork(), seed, hdIndex, hexToBytes(sealed), hexToBytes(nk))
+  );
 
 /**
  * Signs every input of `pczt` (base64) that the seed's account `hdIndex`

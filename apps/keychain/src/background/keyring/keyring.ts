@@ -25,6 +25,8 @@ import {
   computeSeedFingerprint,
   deriveAccount,
   initZillionsSdk,
+  openLinkKey,
+  sealLinkKey,
   signPczt,
   spendingKeys,
   type SpendingKeys,
@@ -150,6 +152,33 @@ export class Keyring {
     }
     const { seed, hdIndex } = await this.resolveSeed(record);
     return signPczt(pczt, seed, hdIndex);
+  }
+
+  /**
+   * A payment link's key (base64) sealed to the `signer` account's seed.
+   * Ledger accounts can't: their seed never leaves the device.
+   */
+  public async sealLinkKey(key: string, signer: string): Promise<string> {
+    await this.vaultService.assertIsUnlocked();
+    await initZillionsSdk();
+
+    const record = await this.signingAccount(signer);
+    const { seed, hdIndex } = await this.resolveSeed(record);
+    return sealLinkKey(key, seed, hdIndex);
+  }
+
+  /** A payment link's key (base64) from its seal, by the `signer` account's seed. */
+  public async openLinkKey(
+    sealed: string,
+    nk: string,
+    signer: string
+  ): Promise<string> {
+    await this.vaultService.assertIsUnlocked();
+    await initZillionsSdk();
+
+    const record = await this.signingAccount(signer);
+    const { seed, hdIndex } = await this.resolveSeed(record);
+    return openLinkKey(sealed, nk, seed, hdIndex);
   }
 
   /**

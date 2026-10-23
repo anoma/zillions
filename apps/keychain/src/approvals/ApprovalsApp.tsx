@@ -23,6 +23,7 @@ import routes from "./routes";
 import { ApproveConnection } from "./screens/ApproveConnection";
 import { ApproveDisconnection } from "./screens/ApproveDisconnection";
 import { ApproveSignTx } from "./screens/ApproveSignTx";
+import { ApproveOpenLinkKey } from "./screens/ApproveOpenLinkKey";
 import { ApproveUpdateDefaultAccount } from "./screens/ApproveUpdateDefaultAccount";
 import { ConfirmSignTx } from "./screens/ConfirmSignTx";
 import { WithAuth } from "./WithAuth";
@@ -92,6 +93,14 @@ export const ApprovalsApp = () => {
                   element={
                     <WithAuth>
                       <ApproveDisconnection />
+                    </WithAuth>
+                  }
+                />
+                <Route
+                  path={routes.approveOpenLinkKey()}
+                  element={
+                    <WithAuth>
+                      <ApproveOpenLinkKey />
                     </WithAuth>
                   }
                 />

@@ -46,10 +46,10 @@ function Wallet() {
   return <p>Wallet for {useAccount().shielded.viewingKey}</p>;
 }
 
-const renderWall = () =>
+const renderWall = (claiming?: boolean) =>
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <KeychainWall>
+      <KeychainWall claiming={claiming}>
         <Wallet />
       </KeychainWall>
     </QueryClientProvider>,
@@ -64,6 +64,14 @@ test("without a keychain it links to the extension and holds back Connect", () =
       .getAttribute("href"),
   ).toBe("https://zillions.money/zillions-extension");
   expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
+});
+
+test("only a payment link adds the claim as a third step", () => {
+  renderWall();
+  expect(screen.queryByText("Claim funds")).toBeNull();
+  cleanup();
+  renderWall(true);
+  expect(screen.getByText("Claim funds")).toBeTruthy();
 });
 
 test("an outdated keychain asks for a newer one", () => {

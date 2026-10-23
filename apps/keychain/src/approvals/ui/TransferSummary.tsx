@@ -3,7 +3,13 @@ import type { PcztSummary } from "@zillions/types";
 import { shortenAddress } from "@zillions/utils";
 
 import { formatZec } from "../utils/format";
-import { isHighFee, keptByPool, payments, transferAmount } from "../utils/pczt";
+import {
+  CLAIM_FEE,
+  isHighFee,
+  keptByPool,
+  payments,
+  transferAmount,
+} from "../utils/pczt";
 import { SummaryCard } from "./SummaryCard";
 import { SummaryHeader } from "./SummaryHeader";
 import { SummaryRow } from "./SummaryRow";
@@ -31,18 +37,20 @@ export const TransferSummary = ({
   const paid = payments(summary);
   const kept = keptByPool(summary);
   const moving = paid.length === 0;
+  const link = summary.paymentLink === true;
+  const amount = transferAmount(summary) - (link ? CLAIM_FEE : 0n);
 
   return (
     <Stack gap={3}>
       <SummaryHeader
-        label={moving ? "Moving" : "Sending"}
+        label={link ? "Payment link" : moving ? "Moving" : "Sending"}
         detail={
           <span className={isHighFee(summary) ? "font-bold text-red-500" : ""}>
             + {formatZec(summary.fee)} fee
           </span>
         }
       >
-        {formatZec(transferAmount(summary))}
+        {formatZec(amount)}
       </SummaryHeader>
       <SummaryCard>
         <SummaryRow
@@ -54,7 +62,9 @@ export const TransferSummary = ({
         >
           {signer ? shortenAddress(signer) : "Active account"}
         </SummaryRow>
-        {moving ? (
+        {link ? (
+          <SummaryRow label="To">Whoever claims the link</SummaryRow>
+        ) : moving ? (
           <SummaryRow label="To">
             {kept.length === 1
               ? `Your wallet, in ${kept[0].pool}`
@@ -85,6 +95,14 @@ export const TransferSummary = ({
             {formatZec(summary.fee)}
           </span>
         </div>
+        {link && (
+          <div className="flex items-center justify-between gap-4 px-4 py-3">
+            <span className="text-xs text-neutral-600">Claim fee</span>
+            <span className="text-base text-sm text-black">
+              {formatZec(CLAIM_FEE)}
+            </span>
+          </div>
+        )}
       </SummaryCard>
     </Stack>
   );

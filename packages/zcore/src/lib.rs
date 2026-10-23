@@ -17,6 +17,7 @@ mod build;
 mod gpu;
 mod keys;
 mod ledger;
+mod link;
 mod migration;
 mod notes;
 mod roles;
@@ -174,6 +175,9 @@ struct SentOutput {
     recipient: String,
     /// The memo as text, or `None` when it carries none.
     memo: Option<String>,
+    /// What shows the payment link it funds again, if it funds one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    link: Option<link::MemoLink>,
     height: u32,
     tx_index: u16,
     position: u64,
@@ -219,10 +223,14 @@ pub(crate) fn hex_n<const N: usize>(s: &str) -> Result<[u8; N], String> {
     v.try_into().map_err(|_| format!("expected {N} bytes"))
 }
 
-/// A memo's text, upstream's ZIP 302 reading; non-text memos as hex. Empty
-/// text is no memo, as upstream encodes it, which drops the all-zero memo
-/// Orchard's padding notes carry.
+/// A memo's text, upstream's ZIP 302 reading; non-text memos as hex, except
+/// a payment link's, which reads as its description. Empty text is no memo,
+/// as upstream encodes it, which drops the all-zero memo Orchard's padding
+/// notes carry.
 fn memo_text(memo: &[u8]) -> Option<String> {
+    if let Some(description) = link::memo_description(memo) {
+        return description;
+    }
     let bytes = MemoBytes::from_bytes(memo).ok()?;
     match Memo::try_from(&bytes).ok()? {
         Memo::Empty => None,
@@ -665,6 +673,7 @@ where
                     value: note.value().inner(),
                     recipient: encode_orchard(network, &addr),
                     memo: memo_text(&memo),
+                    link: link::memo_link(&memo),
                     height: notes[i].height,
                     tx_index: notes[i].tx_index,
                     position: notes[i].position,
@@ -798,6 +807,7 @@ fn decrypt_full(
                         value: note.value().inner(),
                         recipient: encode_sapling(&network, &addr),
                         memo: memo_text(&memo),
+                        link: link::memo_link(&memo),
                         height: notes[i].height,
                         tx_index: notes[i].tx_index,
                         position: notes[i].position,
@@ -1644,5 +1654,13 @@ mod tests {
 
         // Orchard's padding notes: all zeros, empty text, so no memo.
         assert_eq!(memo_text(&[0u8; 512]), None);
+
+        // A payment link's reads as its description, keys left out.
+        let mut link = [0u8; 512];
+        link[..9].copy_from_slice(b"\xffPAYLINK\x01");
+        link[9..73].fill(0xab);
+        assert_eq!(memo_text(&link), None);
+        link[73..78].copy_from_slice(b"Lunch");
+        assert_eq!(memo_text(&link).as_deref(), Some("Lunch"));
     }
 }

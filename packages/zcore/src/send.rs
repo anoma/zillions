@@ -36,6 +36,8 @@ pub(crate) struct SendRequest {
     to: String,
     amount: u64,
     memo: Option<String>,
+    /// A binary memo, hex (a payment link's), instead of a text one.
+    memo_hex: Option<String>,
     /// The bucket boundary `plan_send` drew for a crossing, so the build
     /// anchors where the plan fetched trees for.
     #[serde(default)]
@@ -66,7 +68,7 @@ fn spend_policy(from: &str) -> Result<SpendPolicy, String> {
 fn request(send: &SendRequest, amount: Zatoshis) -> Result<TransactionRequest, String> {
     let to = ZcashAddress::try_from_encoded(&send.to)
         .map_err(|e| format!("not a Zcash address: {e}"))?;
-    let memo = send
+    let text = send
         .memo
         .as_deref()
         .filter(|m| !m.is_empty())
@@ -76,6 +78,18 @@ fn request(send: &SendRequest, amount: Zatoshis) -> Result<TransactionRequest, S
                 .map_err(|e| format!("{e:?}"))
         })
         .transpose()?;
+    let binary = send
+        .memo_hex
+        .as_deref()
+        .map(|m| {
+            let bytes = hex::decode(m).map_err(|e| format!("memo isn't hex: {e}"))?;
+            MemoBytes::from_bytes(&bytes).map_err(|e| format!("{e:?}"))
+        })
+        .transpose()?;
+    let memo = match (text, binary) {
+        (Some(_), Some(_)) => return Err("a send carries one memo".into()),
+        (text, binary) => text.or(binary),
+    };
     let payment =
         Payment::new(to, Some(amount), memo, None, None, vec![]).map_err(|e| format!("{e}"))?;
     TransactionRequest::new(vec![payment]).map_err(|e| format!("{e}"))
@@ -675,6 +689,7 @@ pub(crate) mod tests {
             to: to.into(),
             amount,
             memo: None,
+            memo_hex: None,
             from: "shielded".into(),
         }
     }
@@ -769,6 +784,7 @@ pub(crate) mod tests {
             to: derive(5),
             amount: 0,
             memo: None,
+            memo_hex: None,
             from: "transparent".into(),
         };
         // 190,000 + the 10,000 fee is the whole coin: no change, no shielded
@@ -794,6 +810,7 @@ pub(crate) mod tests {
             to: crate::keys::fresh(&Network::MainNetwork, &wallet_ufvk()).unwrap(),
             amount: 0,
             memo: None,
+            memo_hex: None,
             from: "orchard".into(),
         };
         let max = max_amount(&wallet, &request).unwrap();
@@ -805,6 +822,34 @@ pub(crate) mod tests {
         assert_eq!(step.payments[0].pool, "ironwood");
         assert!(step.change.iter().all(|c| c.value == 0));
         assert_eq!(max + plan.fee, 150_000);
+    }
+
+    #[test]
+    fn a_payment_link_is_funded_in_ironwood_with_its_binary_memo() {
+        let key = crate::link::tests::key();
+        let link = crate::link::tests::address(&key);
+        let memo = format!("ff{}", hex::encode(b"PAYLINK"));
+        // Even when only Orchard money pays for it.
+        let wallet = wallet(vec![orchard_family_note(
+            "orchard",
+            Scope::External,
+            200_000,
+            TIP - 100,
+            1,
+        )]);
+        let mut request = send(&link, 60_000);
+        request.memo_hex = Some(memo.clone());
+        let proposal = propose(&wallet, &request, Zatoshis::from_u64(60_000).unwrap()).unwrap();
+        let step = &summarize(&proposal).steps[0];
+        assert_eq!(step.payments[0].pool, "ironwood");
+        let payment = proposal.steps().first().transaction_request().payments()[&0].clone();
+        assert_eq!(
+            &payment.memo().unwrap().as_slice()[..8],
+            &hex::decode(&memo).unwrap()[..]
+        );
+
+        request.memo = Some("hi".into());
+        assert!(propose(&wallet, &request, Zatoshis::from_u64(60_000).unwrap()).is_err());
     }
 
     #[test]
@@ -840,6 +885,7 @@ pub(crate) mod tests {
             to,
             amount: 50_000,
             memo: None,
+            memo_hex: None,
             from: "transparent".into(),
         };
         let plan =
@@ -871,6 +917,7 @@ pub(crate) mod tests {
             to: crate::keys::fresh(&wallet.network, &wallet_ufvk()).unwrap(),
             amount: 0,
             memo: None,
+            memo_hex: None,
             from: "orchard".into(),
         };
         let max = max_amount(wallet, &request).unwrap();
@@ -884,6 +931,7 @@ pub(crate) mod tests {
             to: crate::keys::fresh(&wallet.network, &wallet_ufvk()).unwrap(),
             amount,
             memo: None,
+            memo_hex: None,
             from: "orchard".into(),
         };
         propose(wallet, &request, Zatoshis::from_u64(amount).unwrap()).unwrap()
@@ -896,6 +944,7 @@ pub(crate) mod tests {
             to: to.into(),
             amount,
             memo: None,
+            memo_hex: None,
             from: "transparent".into(),
         };
         propose(wallet, &request, Zatoshis::from_u64(amount).unwrap()).unwrap()

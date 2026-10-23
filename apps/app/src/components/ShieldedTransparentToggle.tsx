@@ -64,7 +64,7 @@ export function ShieldedTransparentToggle({
               selected
                 ? twMerge(
                     "cursor-default",
-                    option.isTransparent && "text-white",
+                    option.isTransparent ? "text-white" : "text-on-gold",
                   )
                 : "cursor-pointer hover:bg-black/5",
             )}

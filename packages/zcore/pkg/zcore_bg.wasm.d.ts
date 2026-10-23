@@ -3,13 +3,17 @@
 export const memory: WebAssembly.Memory;
 export const address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const apply_ledger_signatures: (a: number, b: number, c: any) => [number, number, number, number];
+export const claim_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: bigint, h: any, i: number, j: number, k: number, l: number, m: number) => [number, number, number, number];
 export const derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
 export const fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
 export const gap_limits: () => [number, number, number];
 export const gpu_inputs: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number, number, number];
+export const link_info: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const max_send: (a: number, b: number, c: any, d: any) => [bigint, number, number];
 export const needs_sapling_params: (a: number, b: number) => [number, number, number];
+export const new_link_key: () => [number, number];
+export const open_link_key: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number, number];
 export const parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
@@ -20,6 +24,7 @@ export const plan_shield: (a: number, b: number, c: any) => [number, number, num
 export const preparation_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: number, j: number, k: any) => [number, number, number, number];
 export const prove_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
 export const script_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+export const seal_link_key: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
 export const seed_fingerprint: (a: number, b: number) => [number, number, number, number];
 export const send_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any, j: any, k: number) => [number, number, number, number];
 export const shield_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: any, i: any) => [number, number, number, number];

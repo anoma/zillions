@@ -227,6 +227,43 @@ test("places a note's spend from the indexer, and reads what it paid into anothe
   expect((await wallet.getBalance()).shielded.balance).toBe(0n);
 });
 
+test("finds the payment link a send funded by reading its output again", async () => {
+  chain.sizes = { sapling: 0, orchard: 3 * 16_384 + 10, ironwood: 16_384 + 10 };
+  chain.hits.set("orchard:1", [note("orchard", 16_387, nf("aa"))]);
+  chain.spentAt.set(nf("aa"), { height: 3_100, tx_index: 2 });
+  chain.blocks.set(
+    3_100,
+    block({
+      txids: new Map([[2, "tx2"]]),
+      outputs: new Map([[2, { sapling: 0, orchard: 1, ironwood: 1 }]]),
+    }),
+  );
+  const funding = {
+    pool: "ironwood" as const,
+    value: 11_000,
+    recipient: "u1link",
+    memo: "Lunch",
+    height: 3_100,
+    tx_index: 2,
+    position: 16_390,
+  };
+  // Synced before sends carried their link.
+  chain.sent.set("ironwood:1", [funding as Sent]);
+  const wallet = new Wallet({ id: "a", ufvk: "uview" });
+  await wallet.sync();
+  expect(await wallet.linkOf("tx1")).toBeUndefined();
+
+  const link = { nk: "ab".repeat(32), sealed: "cd".repeat(32) };
+  chain.sent.set("ironwood:1", [{ ...funding, link } as Sent]);
+  lookup.mockClear();
+  expect(await wallet.linkOf("tx2")).toEqual(
+    expect.objectContaining({ ...funding, link }),
+  );
+  expect(lookup).toHaveBeenCalledWith(
+    expect.objectContaining({ pool: "ironwood", chunk: 1, sends: true }),
+  );
+});
+
 test("never reads a pool the viewing key has no key for, and still finishes", async () => {
   chain.sizes = { sapling: 2 * 16_384, orchard: 3 * 16_384, ironwood: 10 };
   // Setup ends at chunk 1: chunk 0 is history.

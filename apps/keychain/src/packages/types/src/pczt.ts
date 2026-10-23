@@ -62,6 +62,11 @@ export type PcztSummary = {
   ironwoodOutputs: PcztShieldedIo[];
   /** Fee in zatoshis, derived from the PCZT's bundle balances. */
   fee: string;
+  /**
+   * Its one payment funds a payment link this Keychain sealed: the amount
+   * includes the claim fee.
+   */
+  paymentLink?: boolean;
   /** The full `to_json()` structure for the raw expandable view. */
   raw: unknown;
 };

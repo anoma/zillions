@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Zillions</title>
+    <!-- Before first paint, so a dark page never flashes light. Kept in step with useDarkMode. -->
+    <script>
+      if (
+        (localStorage.getItem("theme") ??
+          (matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light")) === "dark"
+      )
+        document.documentElement.classList.add("dark");
+    </script>
   </head>
   <body>
     <div id="root"></div>

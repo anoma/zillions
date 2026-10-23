@@ -200,6 +200,11 @@ export class BackgroundClient {
     return this.send("approvals/rejectSignTx", { msgId });
   }
 
+  /** Confirm the pending "show a payment link again" request `msgId`. */
+  submitOpenLinkKey(msgId: string): Promise<void> {
+    return this.send("approvals/submitOpenLinkKey", { msgId });
+  }
+
   /** Confirm the pending default-account change owned by this popup's tab. */
   submitUpdateDefaultAccount(address: string): Promise<void> {
     return this.send("approvals/submitUpdateDefaultAccount", { address });

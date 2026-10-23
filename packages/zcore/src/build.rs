@@ -655,6 +655,108 @@ pub(crate) fn pczt<N>(
         .map_err(|e| format!("{e:?}"))
 }
 
+/// What a claim pays besides the note's value, as the link's creator funded it:
+/// one Ironwood spend and one output, two logical actions under ZIP 317.
+pub(crate) const CLAIM_FEE: u64 = 10_000;
+
+/// A payment link's claim, signed by the link itself: its one Ironwood note
+/// at `position` → `to`, less the claim fee. The outgoing copy is encrypted to
+/// `claimer_ufvk`'s key, not the link's, so its creator, who can rebuild the
+/// link key, never learns where the money went. `to` is the claimer's own
+/// address; a cancel pays the creator's.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn claim(
+    network: &Network,
+    key: &[u8],
+    note: &str,
+    position: u64,
+    trees: &Trees,
+    to: &str,
+    claimer_ufvk: &str,
+    tip: u32,
+) -> Result<Pczt, String> {
+    let sk = crate::link::spending_key(key)?;
+    let fvk = orchard::keys::FullViewingKey::from(&sk);
+    let note = crate::notes::decode_orchard(note, orchard::NoteVersion::V3)?;
+    let value = note.value().inner();
+    let paid = value
+        .checked_sub(CLAIM_FEE)
+        .filter(|v| *v > 0)
+        .ok_or("the link holds no more than its claim fee")?;
+
+    let data = trees.get("ironwood").ok_or("no ironwood tree data")?;
+    let trees = HashMap::from([("ironwood", PoolTree::read(data)?)]);
+    let ironwood = PoolTip::<MerkleHashOrchard>::read(&trees, "ironwood", false)?
+        .ok_or("no ironwood tree data")?;
+    let path: [MerkleHashOrchard; 32] = ironwood
+        .path(position)?
+        .try_into()
+        .map_err(|_| "ironwood path is not 32 long")?;
+    let path = orchard::tree::MerklePath::from_parts(position as u32, path);
+
+    let to = match Address::decode(network, to) {
+        Some(Address::Unified(ua)) => *ua.orchard().ok_or("no Orchard receiver")?,
+        _ => return Err("claims go to a unified address".into()),
+    };
+    let ovk = UnifiedFullViewingKey::decode(network, claimer_ufvk)?
+        .orchard()
+        .ok_or("the claimer's viewing key has no Orchard part")?
+        .to_ovk(Scope::External);
+
+    let mut builder = Builder::new(
+        *network,
+        BlockHeight::from(tip + 1),
+        BuildConfig::Standard {
+            sapling_anchor: Some(sapling::Anchor::empty_tree()),
+            orchard_anchor: Some(orchard::Anchor::empty_tree()),
+            ironwood_anchor: Some(orchard::Anchor::from(ironwood.tip.root())),
+            orchard_padding: BundlePadding::DEFAULT,
+            ironwood_padding: BundlePadding::DEFAULT,
+        },
+    );
+    builder
+        .add_ironwood_spend::<Infallible>(fvk, note, path)
+        .map_err(|e| format!("{e:?}"))?;
+    builder
+        .add_ironwood_output::<Infallible>(
+            Some(ovk),
+            to,
+            zcash_protocol::value::Zatoshis::from_u64(paid).map_err(|_| "value out of range")?,
+            MemoBytes::empty(),
+        )
+        .map_err(|e| format!("{e:?}"))?;
+    let built = builder
+        .build_for_pczt(OsRng, &StandardFeeRule::Zip317)
+        .map_err(|e| format!("{e:?}"))?;
+    let pczt = Creator::build_from_parts(built.pczt_parts)
+        .ok_or("transaction version has no PCZT form")?;
+    let pczt = IoFinalizer::new(pczt)
+        .finalize_io()
+        .map_err(|e| format!("{e:?}"))?;
+
+    // The builder signs its own dummy spends; the real one is left to the link.
+    let mut real = Vec::new();
+    let pczt = pczt::roles::verifier::Verifier::new(pczt)
+        .with_ironwood::<Infallible, _>(|bundle| {
+            for (i, action) in bundle.actions().iter().enumerate() {
+                if action.spend().spend_auth_sig().is_none() {
+                    real.push(i);
+                }
+            }
+            Ok(())
+        })
+        .map_err(|e| format!("{e:?}"))?
+        .finish();
+    let ask = orchard::keys::SpendAuthorizingKey::from(&sk);
+    let mut signer = pczt::roles::signer::Signer::new(pczt).map_err(|e| format!("{e:?}"))?;
+    for i in real {
+        signer
+            .sign_ironwood(i, &ask)
+            .map_err(|e| format!("{e:?}"))?;
+    }
+    Ok(signer.finish())
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -712,6 +814,72 @@ pub(crate) mod tests {
         )
         .unwrap();
         (wallet, trees, anchor)
+    }
+
+    /// A link's note claimed into another wallet: proven and extracted, paying
+    /// the note less the claim fee, its outgoing copy readable by the
+    /// claimer's key and not by the link's.
+    #[test]
+    fn claims_a_payment_link_end_to_end() {
+        use orchard::note::{RandomSeed, Rho};
+        let network = Network::MainNetwork;
+        let key = crate::link::tests::key();
+        let link_fvk =
+            orchard::keys::FullViewingKey::from(&crate::link::spending_key(&key).unwrap());
+        let rho = Rho::from_bytes(&[9u8; 32].map(|b| b & 0x3f)).unwrap();
+        let note = orchard::Note::from_parts(
+            link_fvk.address_at(0u32, Scope::External),
+            orchard::value::NoteValue::from_raw(60_000),
+            rho,
+            RandomSeed::from_bytes([4u8; 32], &rho).unwrap(),
+            orchard::NoteVersion::V3,
+        )
+        .unwrap();
+        let ours = MerkleHashOrchard::from_cmx(&ExtractedNoteCommitment::from(note.commitment()));
+        let leaves: Vec<_> = (0..5u64)
+            .map(|i| {
+                if i == 2 {
+                    ours
+                } else {
+                    crate::witness::tests::leaf(i)
+                }
+            })
+            .collect();
+        let trees = Trees::from([(
+            "ironwood".to_string(),
+            TreeData {
+                tip: postcard::to_allocvec(&crate::witness::tests::snapshot(&leaves)).unwrap(),
+                chunks: HashMap::new(),
+                bucket: None,
+            },
+        )]);
+        let claimer = wallet_ufvk();
+        let to = crate::keys::fresh(&network, &claimer).unwrap();
+        let note_hex = crate::notes::encode_orchard(&note);
+
+        // Signing with any other key is refused.
+        let other = crate::link::tests::key();
+        assert!(claim(&network, &other, &note_hex, 2, &trees, &to, &claimer, TIP).is_err());
+
+        let signed = claim(&network, &key, &note_hex, 2, &trees, &to, &claimer, TIP).unwrap();
+        let (_, raw) = crate::roles::prove(signed, None).unwrap();
+        let tx = zcash_primitives::transaction::Transaction::read(
+            &raw[..],
+            zcash_protocol::consensus::BranchId::Nu6_3,
+        )
+        .unwrap();
+        let bundle = tx.ironwood_bundle().unwrap();
+        assert_eq!(i64::from(*bundle.value_balance()), CLAIM_FEE as i64);
+        let claimer_ovk = UnifiedFullViewingKey::decode(&network, &claimer)
+            .unwrap()
+            .orchard()
+            .unwrap()
+            .to_ovk(Scope::External);
+        let recovered = bundle.recover_outputs_with_ovks(&[claimer_ovk]);
+        assert_eq!(recovered.len(), 1);
+        assert_eq!(recovered[0].2.value().inner(), 60_000 - CLAIM_FEE);
+        let link_ovks = [Scope::External, Scope::Internal].map(|s| link_fvk.to_ovk(s));
+        assert!(bundle.recover_outputs_with_ovks(&link_ovks).is_empty());
     }
 
     /// The hex `CommitmentTree` lightwalletd's `GetTreeState` returns.
