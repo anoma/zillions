@@ -3,6 +3,7 @@
 //! and reports the plan.
 
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU32;
 use wasm_bindgen::prelude::*;
 use zcash_address::ZcashAddress;
 use zcash_client_backend::data_api::anchor_retention::{
@@ -21,12 +22,13 @@ use zcash_primitives::transaction::fees::zip317::MARGINAL_FEE;
 use zcash_protocol::consensus::{BlockHeight, NetworkUpgrade, Parameters};
 use zcash_protocol::memo::{Memo, MemoBytes};
 use zcash_protocol::value::Zatoshis;
-use zcash_protocol::zip318::PoolMigrationConstants;
+
+use rand_core::{OsRng, RngCore};
+use zcash_protocol::zip318::{AnchorBucketInterval, PoolMigrationConstants, ANCHOR_AGE_CAP};
 use zcash_protocol::{PoolType, ShieldedPool};
 
 use crate::parse_network;
 use crate::wallet::{Wallet, WalletData, ACCOUNT};
-use zcash_client_backend::data_api::InputSource;
 
 /// What the user asked to send.
 #[derive(Deserialize)]
@@ -34,6 +36,10 @@ pub(crate) struct SendRequest {
     to: String,
     amount: u64,
     memo: Option<String>,
+    /// The bucket boundary `plan_send` drew for a crossing, so the build
+    /// anchors where the plan fetched trees for.
+    #[serde(default)]
+    bucket: Option<u32>,
     /// `"shielded"` or `"transparent"`: which balance pays. Within the
     /// shielded one, upstream picks the pools.
     from: String,
@@ -73,6 +79,61 @@ fn request(send: &SendRequest, amount: Zatoshis) -> Result<TransactionRequest, S
     let payment =
         Payment::new(to, Some(amount), memo, None, None, vec![]).map_err(|e| format!("{e}"))?;
     TransactionRequest::new(vec![payment]).map_err(|e| format!("{e}"))
+}
+
+/// The confirmations policy anchoring a transaction at `target` to
+/// `boundary`, as upstream's `ConfirmationsPolicy::bucketed` builds one.
+fn at_boundary(
+    policy: ConfirmationsPolicy,
+    target: TargetHeight,
+    boundary: BlockHeight,
+) -> Option<ConfirmationsPolicy> {
+    let trusted =
+        NonZeroU32::new(u32::from(BlockHeight::from(target)).checked_sub(u32::from(boundary))?)?;
+    ConfirmationsPolicy::new(
+        trusted,
+        trusted.max(policy.untrusted()),
+        policy.allow_zero_conf_shielding(),
+    )
+    .ok()
+}
+
+/// An anchor age, in bucket boundaries: ZIP 318's geometric draw with
+/// parameter 1/2, at least 1, redrawn above `cap`.
+fn draw_age(rng: &mut impl RngCore, cap: u32) -> u32 {
+    loop {
+        let age = 1 + rng.next_u32().trailing_ones();
+        if age <= cap {
+            return age;
+        }
+    }
+}
+
+/// ZIP 318's anchor for a crossing: a boundary `age` buckets below `newest`,
+/// the newest one under the confirmations, with `age` drawn by [`draw_age`]
+/// up to `ANCHOR_AGE_CAP`. A boundary at or below `activation`, or one its
+/// note wasn't mined by, is outside the candidate set: as every older one is
+/// too, the draw is truncated below it and redrawn. `crossing_at` tries one.
+fn draw_crossing(
+    rng: &mut impl RngCore,
+    newest: BlockHeight,
+    activation: BlockHeight,
+    mut crossing_at: impl FnMut(BlockHeight) -> Result<Option<WalletProposal>, String>,
+) -> Result<Option<WalletProposal>, String> {
+    let bucket = AnchorBucketInterval::ZIP_318.block_count().get();
+    let mut cap = ANCHOR_AGE_CAP;
+    while cap > 0 {
+        let age = draw_age(rng, cap);
+        let boundary = u32::from(newest)
+            .checked_sub(age * bucket)
+            .map(BlockHeight::from)
+            .filter(|b| *b > activation);
+        if let Some(proposal) = boundary.map(&mut crossing_at).transpose()?.flatten() {
+            return Ok(Some(proposal));
+        }
+        cap = age - 1;
+    }
+    Ok(None)
 }
 
 /// Upstream's `propose_transfer` with our wallet in place of its storage.
@@ -120,29 +181,19 @@ fn propose(
         });
     let canonical_fee =
         zcash_client_backend::fees::canonical_crossing_fee(&params, target_height.into()).ok();
-    let bucketed = candidate
-        .then_some(nu6_3)
-        .flatten()
-        .and_then(|activation| {
-            policy.bucketed(zip318.anchor_bucket_interval(), target_height, activation)
-        })
-        .filter(|_| spend_policy.permits_shielded(ShieldedPool::Orchard));
-    // Only if the tree root at the bucket boundary can be had.
-    let bucketed = match bucketed {
-        Some(b) => wallet
-            .anchor_computable(ShieldedPool::Orchard, b.anchor_height(target_height))?
-            .then_some(b),
-        None => None,
-    };
-    let canonical = match bucketed.map(|bucketed| {
-        let orchard_only = SpendPolicy::shielded_pools([ShieldedPool::Orchard])
-            .with_locked_input_policy(spend_policy.locked_input_policy().clone())
-            .with_note_selection(NoteSelection::PreferSingle);
-        selector.propose_transaction(
+    let orchard_only = SpendPolicy::shielded_pools([ShieldedPool::Orchard])
+        .with_locked_input_policy(spend_policy.locked_input_policy().clone())
+        .with_note_selection(NoteSelection::PreferSingle);
+    // A crossing anchored at `boundary`, if one note mined by then funds it.
+    let crossing_at = |boundary: BlockHeight| -> Result<Option<WalletProposal>, String> {
+        let Some(bucketed) = at_boundary(policy, target_height, boundary) else {
+            return Ok(None);
+        };
+        match selector.propose_transaction(
             &params,
             wallet,
             target_height,
-            bucketed.anchor_height(target_height),
+            boundary,
             &zip318,
             bucketed,
             ACCOUNT,
@@ -150,18 +201,33 @@ fn propose(
             &change,
             &orchard_only,
             None,
-        )
-    }) {
-        Some(Ok(proposal)) => (proposal.steps().len() == 1
-            && canonical_fee.is_some_and(|fee| {
-                proposal
-                    .steps()
-                    .first()
-                    .is_canonical_crossing(&crate::migration::Grid, fee)
-            }))
-        .then_some(proposal),
-        Some(Err(InputSelectorError::InsufficientFunds { .. })) | None => None,
-        Some(Err(e)) => return Err(e.to_string()),
+        ) {
+            Ok(proposal) => Ok((proposal.steps().len() == 1
+                && canonical_fee.is_some_and(|fee| {
+                    proposal
+                        .steps()
+                        .first()
+                        .is_canonical_crossing(&crate::migration::Grid, fee)
+                }))
+            .then_some(proposal)),
+            Err(InputSelectorError::InsufficientFunds { .. }) => Ok(None),
+            Err(e) => Err(e.to_string()),
+        }
+    };
+    let canonical = match nu6_3 {
+        Some(activation) if candidate && spend_policy.permits_shielded(ShieldedPool::Orchard) => {
+            match send.bucket {
+                // Built as planned: the anchor the plan drew.
+                Some(boundary) => crossing_at(BlockHeight::from(boundary))?,
+                None => {
+                    let newest = zip318
+                        .anchor_bucket_interval()
+                        .boundary_at_or_below(policy.anchor_height(target_height));
+                    draw_crossing(&mut OsRng, newest, activation, crossing_at)?
+                }
+            }
+        }
+        _ => None,
     };
 
     let proposal = match canonical {
@@ -605,6 +671,7 @@ pub(crate) mod tests {
 
     fn send(to: &str, amount: u64) -> SendRequest {
         SendRequest {
+            bucket: None,
             to: to.into(),
             amount,
             memo: None,
@@ -698,6 +765,7 @@ pub(crate) mod tests {
         };
         let wallet = Wallet::new(Network::MainNetwork, &data).unwrap();
         let request = SendRequest {
+            bucket: None,
             to: derive(5),
             amount: 0,
             memo: None,
@@ -722,6 +790,7 @@ pub(crate) mod tests {
             orchard_family_note("orchard", Scope::Internal, 50_000, TIP - 80, 3),
         ]);
         let request = SendRequest {
+            bucket: None,
             to: crate::keys::fresh(&Network::MainNetwork, &wallet_ufvk()).unwrap(),
             amount: 0,
             memo: None,
@@ -767,6 +836,7 @@ pub(crate) mod tests {
             .unwrap()
             .remove(0);
         let request = SendRequest {
+            bucket: None,
             to,
             amount: 50_000,
             memo: None,
@@ -797,6 +867,7 @@ pub(crate) mod tests {
     /// Plans moving every Orchard note to one of our own addresses: a migration.
     pub(crate) fn plan_migration(wallet: &Wallet) -> WalletProposal {
         let request = SendRequest {
+            bucket: None,
             to: crate::keys::fresh(&wallet.network, &wallet_ufvk()).unwrap(),
             amount: 0,
             memo: None,
@@ -809,6 +880,7 @@ pub(crate) mod tests {
     /// Plans `amount` from Orchard to our own address.
     pub(crate) fn plan_to_self(wallet: &Wallet, amount: u64) -> WalletProposal {
         let request = SendRequest {
+            bucket: None,
             to: crate::keys::fresh(&wallet.network, &wallet_ufvk()).unwrap(),
             amount,
             memo: None,
@@ -820,12 +892,64 @@ pub(crate) mod tests {
     /// Plans `amount` from the transparent balance to `to`.
     pub(crate) fn plan_from_transparent(wallet: &Wallet, to: &str, amount: u64) -> WalletProposal {
         let request = SendRequest {
+            bucket: None,
             to: to.into(),
             amount,
             memo: None,
             from: "transparent".into(),
         };
         propose(wallet, &request, Zatoshis::from_u64(amount).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn draws_anchor_ages_as_zip_318_says() {
+        let draws: Vec<u32> = (0..20_000).map(|_| draw_age(&mut OsRng, 4)).collect();
+        assert!(draws.iter().all(|a| (1..=4).contains(a)));
+        // Geometric(1/2) truncated at 4: 8/15 of draws are age 1.
+        let ones = draws.iter().filter(|a| **a == 1).count() as f64 / 20_000.0;
+        assert!((ones - 8.0 / 15.0).abs() < 0.02, "{ones}");
+        assert!(draws.contains(&4));
+    }
+
+    #[test]
+    fn redraws_below_a_boundary_the_note_missed() {
+        // Only the newest two candidates hold the note: any older draw
+        // fails, and the redraw stays below it, so it always lands.
+        let newest = BlockHeight::from(144 * 1_000);
+        let mined = u32::from(newest) - 2 * 144;
+        let mut tried = vec![];
+        for _ in 0..200 {
+            let found = draw_crossing(&mut OsRng, newest, BlockHeight::from(0), |b| {
+                tried.push(u32::from(newest) - u32::from(b));
+                Ok((u32::from(b) >= mined).then(|| plan_migration(&wallet_one(1_000_000))))
+            })
+            .unwrap();
+            assert!(found.is_some());
+        }
+        assert!(tried
+            .iter()
+            .all(|d| d % 144 == 0 && (144..=576).contains(d)));
+        // Never one past activation.
+        let none = draw_crossing(&mut OsRng, newest, newest, |_| unreachable!()).unwrap();
+        assert!(none.is_none());
+    }
+
+    fn wallet_one(value: u64) -> Wallet {
+        Wallet::new(
+            Network::MainNetwork,
+            &WalletData {
+                tip: TIP,
+                notes: vec![orchard_family_note(
+                    "orchard",
+                    Scope::External,
+                    value,
+                    TIP - 400,
+                    1,
+                )],
+                utxos: vec![],
+            },
+        )
+        .unwrap()
     }
 
     pub(crate) fn wallet_ufvk() -> String {

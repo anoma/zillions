@@ -48,7 +48,7 @@ export function MigrationSection() {
   }
 
   return (
-    <div className="px-10 pt-4 max-sm:px-6">
+    <div className="px-10 pt-4 pb-10 max-sm:px-6">
       <section
         aria-label="Move to Ironwood"
         className="p-5 flex max-sm:flex-col sm:items-center gap-4 rounded-3xl bg-neutral-800 text-white"

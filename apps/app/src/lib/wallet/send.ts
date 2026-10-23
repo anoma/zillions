@@ -288,7 +288,8 @@ export async function sendPczt(
     account.seedFingerprint,
     account.hdIndex,
     wallet,
-    request(send),
+    // A crossing anchors where the plan drew, which the trees are for.
+    { ...request(send), bucket: plan.bucket },
     trees,
     changeIndex,
   );
