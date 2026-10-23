@@ -287,7 +287,7 @@ Moves shielded funds to one of the account's own transparent addresses.
   wallets.
 - Links: Help, Privacy policy, X (Twitter).
 
-### 2.9 Move to Ironwood — Built (immediately), Planned (with privacy)
+### 2.9 Move to Ironwood — Built
 
 Orchard is closed to new funds since NU6.3; its funds can only leave. The
 wallet moves them to Ironwood following [ZIP 318], the standard other
@@ -314,8 +314,8 @@ due. How it's built is in [migration.md](design/migration.md).
   2. **How**: _With added privacy_ (recommended): the funds move as several
      standard amounts, spread over hours, so they look like everyone
      else's; or _Immediately_: one transfer, faster, its full amount public
-     at once. Each shows the number of steps, the time it takes and the
-     fees.
+     at once. Each shows the number of transfers, the time they take and
+     the fees.
   3. **Network privacy**: a recommendation to turn on a trusted VPN such as
      NymVPN (free for the migration), with a warning that the IP address can
      link the transfers; the user may continue without. A web page can't
@@ -345,9 +345,6 @@ due. How it's built is in [migration.md](design/migration.md).
 - In history (2.6), transfers show as Migrated, Orchard → Ironwood; the
   preparation steps that split the funds into standard amounts show as
   such, not as payments.
-- _Immediately_ is built: its review shows the amount and fee of one
-  transfer of every Orchard note to the account's own Ironwood, and confirming
-  sends it.
 - _To confirm_: recommending Tor Browser too, once the Keychain installs and
   is tested there (signed add-on, WebAssembly at its security levels).
 - _Later_: locking the leftover under 0.01 ZEC so nothing spends it by

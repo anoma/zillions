@@ -1,5 +1,5 @@
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { PageLoader } from "../components/PageLoader";
@@ -16,7 +16,6 @@ import { SpinnerIcon } from "../icons/SpinnerIcon";
 import {
   clockAt,
   fromNow,
-  MIGRATION_ENABLED,
   MIGRATION_MINIMUM,
   zatoshiToZec,
 } from "../lib/utils";
@@ -26,13 +25,11 @@ import {
   stepName,
   transfersDone,
 } from "../lib/wallet/migration";
+import type { MigrationPlan } from "../lib/wallet/send";
 import type { Note } from "../lib/wallet/types";
 import type { Wallet } from "../lib/wallet/wallet";
 
 export const Route = createFileRoute("/migrate")({
-  beforeLoad: () => {
-    if (!MIGRATION_ENABLED) throw redirect({ to: "/" });
-  },
   component: MigrateRoute,
 });
 
@@ -57,7 +54,7 @@ function MigrateRoute() {
   const planned = useSendPlan(
     {
       from: "orchard",
-      to: mode === "immediate" && step === "review" ? self : "",
+      to: step === "choose" || mode === "immediate" ? self : "",
       amount: 0n,
     },
     true,
@@ -72,7 +69,7 @@ function MigrateRoute() {
         balance.data?.orchardBalance.toString(),
       ],
       queryFn: () => wallet.planMigration(),
-      enabled: mode === "private" && step === "review",
+      enabled: step === "choose" || (mode === "private" && step === "review"),
       // Each run draws a new order and timing: keep the one on screen.
       staleTime: Infinity,
     }),
@@ -129,13 +126,20 @@ function MigrateRoute() {
             selected={mode === "private"}
             onSelect={() => setMode("private")}
             title="Migrate with privacy (recommended)"
-            detail="Split into standard amounts · Spread over hours · Most private"
+            detail={privateDetail(plan.data)}
           />
           <Option
             selected={mode === "immediate"}
             onSelect={() => setMode("immediate")}
             title="Migrate immediately"
-            detail="One transfer · Sent now · Less private"
+            detail={[
+              "1 transfer",
+              "Sent now",
+              ...(planned.plan.data
+                ? [`${zatoshiLabel(planned.plan.data.fee)} fee`]
+                : []),
+              "Less private",
+            ].join(" · ")}
           />
         </div>
         <Note>
@@ -201,12 +205,7 @@ function MigrateRoute() {
 
   if (mode === "private") {
     const p = plan.data;
-    const fees =
-      p &&
-      BigInt(
-        p.transfers.length * p.transferFee +
-          p.preparations.length * p.preparationFee,
-      );
+    const fees = p && BigInt(planFees(p));
     const last = p?.transfers.at(-1)?.height;
     return (
       <Page title="Confirm transfer plan" onBack={back}>
@@ -544,6 +543,22 @@ function MigrationSteps({ status }: { status: Status }) {
 }
 
 const zatoshiLabel = (zat: number) => `${zatoshiToZec(BigInt(zat))} ZEC`;
+
+const planFees = (p: MigrationPlan) =>
+  p.transfers.length * p.transferFee + p.preparations.length * p.preparationFee;
+
+/** The private option's summary: its transfers, how long they take and the fees, once planned. */
+function privateDetail(p: MigrationPlan | undefined) {
+  if (!p)
+    return "Split into standard amounts · Spread over hours · Most private";
+  if (!p.transfers.length) return "Too little to move with privacy";
+  return [
+    `${p.transfers.length} ${p.transfers.length === 1 ? "transfer" : "transfers"}`,
+    `Over ${fromNow(p.tip, p.transfers.at(-1)!.height)}`,
+    `${zatoshiLabel(planFees(p))} fees`,
+    "Most private",
+  ].join(" · ");
+}
 
 /** When a step is planned, as both the review and the steps list show it. */
 const stepTime = (tip: number, height: number) =>

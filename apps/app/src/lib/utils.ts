@@ -15,10 +15,6 @@ export const MIGRATION_MINIMUM = MIGRATION_TEST_AMOUNTS
   ? ZATOSHI_PER_ZEC / 1000n
   : ZATOSHI_PER_ZEC / 100n;
 
-/** Hides Move to Ironwood (2.9) until it has been tested: `VITE_MIGRATION_ENABLED=true` shows it. */
-export const MIGRATION_ENABLED =
-  import.meta.env.VITE_MIGRATION_ENABLED === "true";
-
 /** About how long until block `height`, from `tip`, at 75 seconds a block. */
 export function fromNow(tip: number, height: number) {
   const minutes = ((height - tip) * 75) / 60;
