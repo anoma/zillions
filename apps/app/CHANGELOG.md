@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.13.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.12.0...zillions-app-v1.13.0) (2026-10-23)
+
+
+### Features
+
+* add dark mode ([#157](https://github.com/heliaxdev/zillions-interface/issues/157)) ([ea35462](https://github.com/heliaxdev/zillions-interface/commit/ea354625018b3aa69cfa31305144b3964878a353))
+* add instructions to welcome screen ([#147](https://github.com/heliaxdev/zillions-interface/issues/147)) ([a078162](https://github.com/heliaxdev/zillions-interface/commit/a0781622f015cb356fef426373ad0f6cea2a8f8e))
+* improve qr code box ([#150](https://github.com/heliaxdev/zillions-interface/issues/150)) ([1ff6fb5](https://github.com/heliaxdev/zillions-interface/commit/1ff6fb5ae604420ccc556b128bad9bec63e5e6cd))
+* improve qr code box ([#151](https://github.com/heliaxdev/zillions-interface/issues/151)) ([b9c05de](https://github.com/heliaxdev/zillions-interface/commit/b9c05de3b68d90f98eea79fd5e598dabccd0635e))
+* payment links flow ([#158](https://github.com/heliaxdev/zillions-interface/issues/158)) ([a08dae8](https://github.com/heliaxdev/zillions-interface/commit/a08dae872ac35bcc95fea33e118b117eeb7a4abd))
+* public receipt links ([#153](https://github.com/heliaxdev/zillions-interface/issues/153)) ([464aa21](https://github.com/heliaxdev/zillions-interface/commit/464aa218c55b9fb607231ed79f8d0f7db7265a70))
+* reduce size of send form ([#149](https://github.com/heliaxdev/zillions-interface/issues/149)) ([c65a287](https://github.com/heliaxdev/zillions-interface/commit/c65a28774ffa0e597d23641344da173dae5628b7))
+
 ## [1.12.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.11.0...zillions-app-v1.12.0) (2026-10-21)
 
 
