@@ -97,7 +97,7 @@ test("asks to plan again once the notes are gone", () => {
 
 test("a step sent late shifts the rest; one sent early doesn't", () => {
   const m = plan();
-  stepSent(m, "preparation", 0, "p", 161);
+  stepSent(m, "preparation", 0, "p", 160);
   expect(m.transfers.map((t) => t.height)).toEqual([460, 540]);
   stepSent(m, "transfer", 0, "t0", 300);
   expect(m.transfers.map((t) => t.height)).toEqual([460, 540]);

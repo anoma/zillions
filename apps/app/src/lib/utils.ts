@@ -36,7 +36,7 @@ export function fromNow(tip: number, height: number) {
 export function clockAt(tip: number, height: number) {
   const when = new Date(Date.now() + (height - tip) * 75_000);
   const time = when.toLocaleTimeString([], {
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
   });
   return when.toDateString() === new Date().toDateString()

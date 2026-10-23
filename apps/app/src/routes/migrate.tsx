@@ -418,7 +418,7 @@ function MigrationSteps({ status }: { status: Status }) {
         ? "Being mined"
         : "Done"
       : isNext
-        ? tip >= at
+        ? tip + 1 >= at
           ? "Due now"
           : `Due ~${clockAt(tip, at)}`
         : step?.kind === "transfer" && at <= step.height
@@ -428,7 +428,7 @@ function MigrationSteps({ status }: { status: Status }) {
   const when = (height: number) =>
     `${clockAt(tip, height)} (${fromNow(tip, height)})`;
   const done = transfersDone(m, pending);
-  const due = step && tip >= step.height;
+  const due = step && tip + 1 >= step.height;
   const name = step ? stepName(step) : "";
   const Name = name.charAt(0).toUpperCase() + name.slice(1);
 

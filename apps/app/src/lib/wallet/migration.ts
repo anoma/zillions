@@ -141,12 +141,19 @@ export function stepSent(
   tip: number,
 ) {
   const step = (kind === "preparation" ? m.preparations : m.transfers)[index];
-  const late = Math.max(0, tip - step.height);
+  const late = Math.max(0, tip + 1 - step.height);
   step.txid = txid;
   for (const s of [...m.preparations, ...m.transfers]) {
     if (!s.txid) s.height += late;
   }
 }
+
+/**
+ * Whether the plan has `step` due at `tip` and its funds can anchor. A
+ * plan's heights are of the block a step goes into, one past the tip.
+ */
+export const isDue = (step: Step, tip: number) =>
+  tip + 1 >= step.height && tip >= step.readyAt;
 
 /** What a step is called, as the steps list names it. */
 export const stepName = (step: Step) =>

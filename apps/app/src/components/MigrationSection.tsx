@@ -7,7 +7,7 @@ import {
   MIGRATION_ENABLED,
   MIGRATION_MINIMUM,
 } from "../lib/utils";
-import { stepName, transfersDone } from "../lib/wallet/migration";
+import { isDue, stepName, transfersDone } from "../lib/wallet/migration";
 import { ActionButton } from "./ui/ActionButton";
 import { ZecValue } from "./ZecValue";
 
@@ -39,8 +39,7 @@ export function MigrationSection() {
     const Name = name.charAt(0).toUpperCase() + name.slice(1);
     const at = (height: number) =>
       `${clockAt(tip, height)} (${fromNow(tip, height)})`;
-    // Due once the plan has it and its funds can anchor.
-    const due = step && tip >= Math.max(step.readyAt, step.height);
+    const due = step && isDue(step, tip);
     detail = (
       <>
         {progress}{" "}
