@@ -141,8 +141,7 @@ function shieldedSide({ received, spent, sent, paid, lost }: TxGroup) {
       to: one(to),
     };
   }
-  // Orchard split into notes of our own and nothing paid: a migration's
-  // preparation, as nothing else makes Orchard notes since NU6.3.
+  // Only a migration's preparation still makes Orchard notes since NU6.3.
   const prepared =
     spent.length > 0 &&
     !out.length &&

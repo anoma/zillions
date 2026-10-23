@@ -25,7 +25,6 @@ const plan = (over: Partial<Migration> = {}): Migration => ({
   ...over,
 });
 
-/** Notes worth `values`, mined at `height`. */
 const at = (height: number, ...values: number[]) =>
   values.map((value) => ({ value, height }));
 

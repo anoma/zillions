@@ -123,11 +123,9 @@ fn draw_age(rng: &mut impl RngCore, cap: u32) -> u32 {
     }
 }
 
-/// ZIP 318's anchor for a crossing: a boundary `age` buckets below `newest`,
-/// the newest one under the confirmations, with `age` drawn by [`draw_age`]
-/// up to `ANCHOR_AGE_CAP`. A boundary at or below `activation`, or one its
-/// note wasn't mined by, is outside the candidate set: as every older one is
-/// too, the draw is truncated below it and redrawn. `crossing_at` tries one.
+/// ZIP 318's anchor for a crossing, [`draw_age`] boundaries below `newest`. A
+/// boundary at or below `activation`, or one `crossing_at` finds no note mined
+/// by, truncates the draw below it and redraws.
 fn draw_crossing(
     rng: &mut impl RngCore,
     newest: BlockHeight,

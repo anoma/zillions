@@ -17,10 +17,7 @@ import {
 import { ActionButton } from "./ui/ActionButton";
 import { ZecValue } from "./ZecValue";
 
-/**
- * Home's prompt to move Orchard funds to Ironwood while there are any worth
- * moving, and a migration's progress while one runs.
- */
+/** Home's migration prompt and progress; nothing while the flag is off or Orchard holds too little. */
 export function MigrationSection() {
   const balance = useGetBalance();
   const status = useMigration().data;
@@ -36,7 +33,6 @@ export function MigrationSection() {
     </>
   );
   let action = "Migrate";
-  // Only waiting: a quiet banner instead of the highlight.
   let waiting = false;
   if (status) {
     const { migration: m, next, pending, tip = m.tip } = status;

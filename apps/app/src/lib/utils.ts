@@ -3,11 +3,7 @@ import type { Activity } from "./wallet/types";
 const ZATOSHI_PER_ZEC = 100_000_000n;
 const DECIMALS = 8;
 
-/**
- * Dev only: migrations plan 0.001 and 0.002 ZEC amounts instead of ZIP 318's,
- * so a wallet with little Orchard can try several steps. Such transfers don't
- * blend in; `vite build` drops it.
- */
+/** Dev only: migrations plan 0.001/0.002 ZEC test amounts instead of ZIP 318's; such transfers don't blend in. */
 export const MIGRATION_TEST_AMOUNTS =
   import.meta.env.DEV && import.meta.env.VITE_MIGRATION_TEST_AMOUNTS === "true";
 

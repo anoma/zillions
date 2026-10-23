@@ -43,10 +43,8 @@ const ZIP_318 = "https://zips.z.cash/zip-0318";
 const NYM_VPN = "https://nym.com/blog/nymvpn-free-for-zcash-ironwood";
 
 /**
- * Moves Orchard funds to Ironwood following ZIP 318 (product.md 2.9).
- * Immediately sends every Orchard note to one of our own addresses, which
- * NU6.3 delivers into Ironwood. With privacy saves a plan, and the user sends
- * each of its steps when it's due ([MigrationSteps]).
+ * Moves Orchard funds to Ironwood following ZIP 318 (product.md 2.9): at once
+ * to our own address, or with privacy as a saved plan of steps the user sends.
  */
 function MigrateRoute() {
   const balance = useGetBalance();
@@ -328,11 +326,6 @@ const notesFor =
   (step: Extract<Step, { kind: "transfer" }>, fee: number) => (n: Note) =>
     n.pool === "orchard" && n.value === step.value + fee;
 
-/**
- * A migration in progress: every step with its state, and the next one to
- * send. A step can go once its notes can anchor at a ZIP 318 bucket
- * boundary; before it's due, only by choice.
- */
 function MigrationSteps({ status }: { status: Status }) {
   const wallet = useWallet();
   const queryClient = useQueryClient();
@@ -432,7 +425,7 @@ function MigrationSteps({ status }: { status: Status }) {
   const due = step && tip + 1 >= step.height;
   const name = step ? stepName(step) : "";
   const Name = name.charAt(0).toUpperCase() + name.slice(1);
-  // The block to come back for the next step.
+  // Never before the next block, however far behind the estimate is.
   const comeBack = step ? Math.max(sendAt(step), tip + 1) : tip + 1;
   const soon = fromNow(tip, comeBack);
 
@@ -639,7 +632,6 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** What the user does next: a headline, one line, and its action. */
 function NextCard({
   title,
   action,
