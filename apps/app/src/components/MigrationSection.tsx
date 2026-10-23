@@ -54,7 +54,7 @@ export function MigrationSection() {
               : "The plan needs updating."}
       </>
     );
-    action = due ? `Send ${name}` : "View";
+    action = due ? "Continue" : "View";
   }
 
   return (
