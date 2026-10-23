@@ -4,6 +4,7 @@ import {
   type Migration,
   nextStep,
   readyAt,
+  sendAt,
   stepSent,
   transfersDone,
 } from "./migration";
@@ -88,4 +89,10 @@ test("a step sent late shifts the rest; one sent early doesn't", () => {
   stepSent(m, "transfer", 0, "t0", 300);
   expect(m.transfers.map((t) => t.height)).toEqual([460, 540]);
   expect(m.preparations[0]).toEqual({ height: 101, txid: "p" });
+});
+
+test("a step is due when planned or once its funds anchor, whichever is later", () => {
+  const step = { kind: "transfer", index: 0, value: CENT } as const;
+  expect(sendAt({ ...step, height: 2_000, readyAt: 1_154 })).toBe(2_000);
+  expect(sendAt({ ...step, height: 1_100, readyAt: 1_154 })).toBe(1_155);
 });

@@ -1,10 +1,12 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { TransactionReceiptCard } from "./TransactionReceiptCard";
 
+/** `children` go under the receipt, e.g. a way back to where the user was. */
 export function TransferSuccess({
   tx,
-}: ComponentProps<typeof TransactionReceiptCard>) {
+  children,
+}: ComponentProps<typeof TransactionReceiptCard> & { children?: ReactNode }) {
   return (
     <>
       <div className="px-10 max-sm:px-6 mt-10">
@@ -25,6 +27,13 @@ export function TransferSuccess({
         </div>
       </div>
       <TransactionReceiptCard tx={tx} />
+      {children && (
+        <div className="px-8 pb-10 max-sm:px-6">
+          <div className="isolate mx-auto max-w-120 flex flex-col">
+            {children}
+          </div>
+        </div>
+      )}
     </>
   );
 }

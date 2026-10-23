@@ -140,11 +140,14 @@ export function stepSent(
 }
 
 /**
- * Whether the plan has `step` due at `tip` and its funds can anchor. A
- * plan's heights are of the block a step goes into, one past the tip.
+ * The block `step` is due in: the plan's, or the first its funds can anchor
+ * in, whichever is later. A plan's heights are of the block a step goes into,
+ * one past the tip.
  */
-export const isDue = (step: Step, tip: number) =>
-  tip + 1 >= step.height && tip >= step.readyAt;
+export const sendAt = (step: Step) => Math.max(step.height, step.readyAt + 1);
+
+/** Whether `step` is due at `tip`. */
+export const isDue = (step: Step, tip: number) => tip + 1 >= sendAt(step);
 
 /** What a step is called, as the steps list names it. */
 export const stepName = (step: Step) =>

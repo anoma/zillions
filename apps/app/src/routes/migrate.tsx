@@ -20,7 +20,12 @@ import {
   MIGRATION_MINIMUM,
   zatoshiToZec,
 } from "../lib/utils";
-import { type Step, stepName, transfersDone } from "../lib/wallet/migration";
+import {
+  type Step,
+  sendAt,
+  stepName,
+  transfersDone,
+} from "../lib/wallet/migration";
 import type { Note } from "../lib/wallet/types";
 import type { Wallet } from "../lib/wallet/wallet";
 
@@ -396,7 +401,6 @@ function MigrationSteps({ status }: { status: Status }) {
             },
           });
     wallet.migrationStepSent(step.kind, step.index, sent.txid);
-    send.reset();
     await refresh();
   };
   const stop = async () => {
@@ -418,9 +422,9 @@ function MigrationSteps({ status }: { status: Status }) {
         ? "Being mined"
         : "Done"
       : isNext
-        ? tip + 1 >= at
-          ? "Due now"
-          : `Due ~${clockAt(tip, at)}`
+        ? tip + 1 >= sendAt(step!)
+          ? "Ready to send"
+          : `Send at ~${clockAt(tip, sendAt(step!))}`
         : step?.kind === "transfer" && at <= step.height
           ? "Not needed"
           : stepTime(tip, at);
@@ -430,13 +434,19 @@ function MigrationSteps({ status }: { status: Status }) {
   const done = transfersDone(m, pending);
   const due = step && tip + 1 >= step.height;
   const name = step ? stepName(step) : "";
-  const Name = name.charAt(0).toUpperCase() + name.slice(1);
 
+  if (send.data) {
+    return (
+      <TransferSuccess tx={{ ...send.data, status: "Pending" }}>
+        <Primary onClick={() => send.reset()}>Back to migration</Primary>
+      </TransferSuccess>
+    );
+  }
   return (
     <Page title="Moving to Ironwood">
       <p>
-        Transfer {done} of {m.transfers.length} complete. Nothing is sent until
-        you send it.
+        Transfer {done} of {m.transfers.length} complete. Zillions doesn't send
+        the steps for you: come back and send each one when it's due.
       </p>
       <div className="mt-8 rounded-2xl border border-line divide-y divide-line text-sm">
         {m.preparations.map((p, i) => (
@@ -499,10 +509,10 @@ function MigrationSteps({ status }: { status: Status }) {
           </Note>
         ) : !ready.data ? (
           <Note>
-            {Name} can be sent from about{" "}
-            {when(Math.max(step.readyAt, tip + 1))}, once the funds it spends
-            are older than a network checkpoint (one every ~3 hours). It doesn't
-            need to be on time: come back any time after that.
+            Come back at about {when(Math.max(sendAt(step), tip + 1))} to send
+            {name}. It can't go before its funds pass a network checkpoint (one
+            every ~3 hours), and it doesn't need to be on time: any time after
+            that works.
           </Note>
         ) : due ? (
           <Primary onClick={sendStep} disabled={send.isPending}>
@@ -511,9 +521,9 @@ function MigrationSteps({ status }: { status: Status }) {
         ) : (
           <>
             <Note>
-              {Name} is planned for about {when(step.height)}. Sending it then
-              or any time later keeps the transfers hard to link; sending it
-              earlier makes them easier to link.
+              Come back at about {when(sendAt(step))} to send {name}. Sending it
+              then or any time later keeps the transfers hard to link; sending
+              it earlier makes them easier to link.
             </Note>
             <button
               type="button"

@@ -7,7 +7,12 @@ import {
   MIGRATION_ENABLED,
   MIGRATION_MINIMUM,
 } from "../lib/utils";
-import { isDue, stepName, transfersDone } from "../lib/wallet/migration";
+import {
+  isDue,
+  sendAt,
+  stepName,
+  transfersDone,
+} from "../lib/wallet/migration";
 import { ActionButton } from "./ui/ActionButton";
 import { ZecValue } from "./ZecValue";
 
@@ -36,7 +41,6 @@ export function MigrationSection() {
       next.kind === "preparation" || next.kind === "transfer" ? next : null;
     const progress = `Transfer ${transfersDone(m, pending)} of ${m.transfers.length} complete.`;
     const name = step ? stepName(step) : "";
-    const Name = name.charAt(0).toUpperCase() + name.slice(1);
     const at = (height: number) =>
       `${clockAt(tip, height)} (${fromNow(tip, height)})`;
     const due = step && isDue(step, tip);
@@ -46,7 +50,7 @@ export function MigrationSection() {
         {step
           ? due
             ? `It's time to send ${name}.`
-            : `${Name} is due about ${at(Math.max(step.readyAt, step.height))}.`
+            : `Come back about ${at(sendAt(step))} to send ${name}.`
           : next.kind === "mining"
             ? "Waiting for the last step to be mined."
             : next.kind === "done"
