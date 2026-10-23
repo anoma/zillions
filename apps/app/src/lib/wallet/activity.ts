@@ -423,3 +423,34 @@ export function sendingTxs(
   }
   return txs;
 }
+
+/** What anyone can read of a transaction, without its owner's keys. */
+export type PublicActivity = Pick<
+  Activity,
+  "txid" | "block_height" | "timestamp" | "from" | "to"
+> & {
+  /** Absent when transparent coins paid in: their values aren't in the transaction. */
+  fee?: bigint;
+};
+
+/** `tx` as anyone sees it, mined at `height` (0 while it isn't). */
+export function publicActivity(
+  tx: ParsedTx,
+  height: number,
+  time?: number,
+): PublicActivity {
+  const recipients = tx.outputs.map(({ value, address }) => ({
+    value,
+    recipient: address,
+  }));
+  return {
+    txid: tx.txid,
+    block_height: height,
+    timestamp: time,
+    from: senders(tx, new Set()) ?? (tx.inputs.length ? TRANSPARENT : SHIELDED),
+    to: payees(recipients) ?? (tx.outputs.length ? TRANSPARENT : SHIELDED),
+    fee: tx.inputs.length
+      ? undefined
+      : BigInt(tx.value_balance) - sum(tx.outputs),
+  };
+}

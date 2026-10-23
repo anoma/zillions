@@ -217,7 +217,7 @@ function SetupStep({
       <span
         className={twMerge(
           "size-8 shrink-0 flex items-center justify-center rounded-full border text-sm font-medium",
-          status === "done" && "border-gold bg-gold",
+          status === "done" && "border-gold bg-gold text-on-gold",
           status === "current" && "border-black",
           status === "upcoming" && "border-line-strong text-gray-400",
         )}

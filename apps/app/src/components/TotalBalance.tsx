@@ -67,7 +67,7 @@ export function TotalBalance() {
           {/* The numbers below say the same; the bar only shows the split at a glance. */}
           <div
             aria-hidden="true"
-            className="h-1 flex rounded-full overflow-hidden bg-black/10"
+            className="h-1 flex rounded-full overflow-hidden bg-black/10 dark:bg-black/25"
           >
             <div
               className="bg-gold transition-[width] duration-500 ease-out"
@@ -85,7 +85,7 @@ export function TotalBalance() {
             <PoolBalance
               label="Transparent"
               zat={transparentBalance}
-              dotClassName="bg-black/10"
+              dotClassName="bg-black/10 dark:bg-black/25"
               action={{ href: "/shield", label: "Shield" }}
             />
           </div>

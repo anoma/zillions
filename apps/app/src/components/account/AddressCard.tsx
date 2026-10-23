@@ -6,6 +6,7 @@ import { SpinnerIcon } from "../../icons/SpinnerIcon";
 import { shortenAddress } from "../../lib/utils";
 import { CopyToClipboardControl } from "../CopyToClipboardControl";
 import { ShieldedTransparentToggle } from "../ShieldedTransparentToggle";
+import { qrClassName } from "../ui/utils";
 
 export function AddressCard() {
   const account = useAccount();
@@ -34,7 +35,7 @@ export function AddressCard() {
             fgColor="#000000"
             level="M"
             title={`QR code of your ${isTransparent ? "transparent" : "shielded"} address`}
-            className="motion-safe:animate-fade-in"
+            className={qrClassName}
           />
         ) : (
           <div className="size-44 grid place-items-center">

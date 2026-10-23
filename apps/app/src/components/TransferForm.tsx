@@ -33,7 +33,9 @@ export function PoolRoute({
       title={title}
       className={twMerge(
         "h-10 flex items-center justify-center rounded-full text-sm font-medium",
-        pool === "shielded" ? "bg-gold" : "border border-line bg-card",
+        pool === "shielded"
+          ? "bg-gold text-on-gold"
+          : "border border-line bg-card",
       )}
     >
       {POOL_LABEL[pool]}

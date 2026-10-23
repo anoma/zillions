@@ -11,6 +11,7 @@ import { zatoshiToZec } from "../../lib/utils";
 import { CopyToClipboardControl } from "../CopyToClipboardControl";
 import { FormPage } from "../FormPage";
 import { ActionButton } from "../ui/ActionButton";
+import { qrClassName } from "../ui/utils";
 
 type Props = {
   tx: PendingTx;
@@ -38,7 +39,7 @@ export function PaymentLinkCreated({ tx, url, amount, description }: Props) {
       <FormPage title="Link not created">
         <div
           role="alert"
-          className="px-5 py-4 flex items-start gap-3 rounded-lg bg-red-50"
+          className="px-5 py-4 flex items-start gap-3 rounded-lg bg-red-700/10"
         >
           <GoAlert
             aria-hidden="true"
@@ -139,7 +140,7 @@ export function LinkShare({
             fgColor="#000000"
             level="M"
             title="QR code of the payment link"
-            className="motion-safe:animate-fade-in"
+            className={qrClassName}
           />
           {description && (
             <p className="max-w-52 text-center text-sm text-neutral-700 break-words">

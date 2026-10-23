@@ -26,7 +26,7 @@ export function AddressBadge({
       aria-hidden="true"
       className={twMerge(
         "size-2 shrink-0 rounded-full",
-        pool === "transparent" ? "bg-black/10" : "bg-gold",
+        pool === "transparent" ? "bg-black/10 dark:bg-black/25" : "bg-gold",
       )}
     />
   );
@@ -35,7 +35,9 @@ export function AddressBadge({
     pill &&
       twMerge(
         "h-12 justify-center rounded-full text-base",
-        pool === "transparent" ? "border border-line bg-card" : "bg-gold",
+        pool === "transparent"
+          ? "border border-line bg-card"
+          : "bg-gold text-on-gold",
       ),
     className,
   );
