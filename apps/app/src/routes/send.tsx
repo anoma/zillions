@@ -35,6 +35,9 @@ export const Route = createFileRoute("/send")({
   component: SendRoute,
 });
 
+type SendProblem = Problem<"amount" | "to">;
+type Planned = ReturnType<typeof useSendPlan>;
+
 function SendRoute() {
   const balance = useGetBalance();
   const [transparentFrom, setTransparentFrom] = useState(false);
@@ -44,7 +47,7 @@ function SendRoute() {
   const [memoOpen, setMemoOpen] = useState(false);
   // With a payment link, the message is the link's description.
   const [memoText, setMemoText] = useState("");
-  const [problem, setProblem] = useState<Problem<"amount" | "to">>();
+  const [problem, setProblem] = useState<SendProblem>();
   const amountRef = useRef<HTMLInputElement>(null);
   const toRef = useRef<HTMLInputElement>(null);
 
@@ -80,28 +83,23 @@ function SendRoute() {
     extra,
   );
   const { maxAmount, ceiling } = planned;
-  const max = maxAmount.data ?? 0n;
-  const amount = isMax ? (max > extra ? max - extra : 0n) : typed;
+  const amount = isMax ? withoutExtra(maxAmount.data ?? 0n, extra) : typed;
   const send = useSend();
 
   const available = balance.data?.[from].available ?? 0n;
   const overBalance = Boolean(balance.data) && isOverBalance(amount, available);
 
   const onSubmit = () => {
-    const found: Problem<"amount" | "to"> | undefined =
-      amount <= 0n && !ceiling
-        ? { field: "amount", message: amountField.missing }
-        : overBalance
-          ? { field: "amount", message: "Insufficient balance" }
-          : isPaymentLink
-            ? memoError
-              ? undefined
-              : { field: "form", message: "Payment links aren't available yet" }
-            : !to
-              ? { field: "to", message: "Set a recipient" }
-              : toKind === null
-                ? { field: "to", message: "Not a valid Zcash address" }
-                : undefined;
+    const found = submitProblem({
+      amount,
+      missing: amountField.missing,
+      ceiling,
+      overBalance,
+      isPaymentLink,
+      memoError,
+      to,
+      toKind,
+    });
     // Memo and fee ceiling problems already show by their fields.
     if (found || memoError || ceiling) {
       setProblem(found);
@@ -130,19 +128,9 @@ function SendRoute() {
   }
 
   const clear = () => setProblem(undefined);
-  const amountError =
-    problem?.field === "amount"
-      ? problem.message
-      : overBalance
-        ? "Insufficient balance"
-        : ceiling
-          ? planProblem(planned)
-          : undefined;
+  const amountError = amountErrorOf(problem, overBalance, planned);
   const toError = problem?.field === "to" ? problem.message : undefined;
-  const formError =
-    send.error?.message ??
-    (problem?.field === "form" ? problem.message : undefined) ??
-    (ceiling || overBalance ? undefined : planProblem(planned));
+  const formError = formErrorOf(problem, overBalance, planned, send.error);
   const planFee = planned.plan.data?.fee;
   const total =
     amount > 0n && planFee !== undefined
@@ -254,13 +242,7 @@ function SendRoute() {
       </Breakdown>
 
       <SubmitBlock
-        label={
-          isPaymentLink
-            ? "Create payment link"
-            : amount > 0n
-              ? `Send ${zatoshiToZec(amount)} ZEC`
-              : "Send"
-        }
+        label={submitLabel(isPaymentLink, amount)}
         pending={send.isPending}
         pendingLabel={isPaymentLink ? "Creating link..." : "Sending..."}
         color={transparent ? "black" : "gold-button"}
@@ -277,4 +259,72 @@ function SendRoute() {
       </SubmitBlock>
     </FormPage>
   );
+}
+
+/** What's left of `max` once `extra` is set aside. */
+function withoutExtra(max: bigint, extra: bigint) {
+  return max > extra ? max - extra : 0n;
+}
+
+/** The problem blocking a send, unless only the memo or fee ceiling block it: those show by their fields. */
+function submitProblem({
+  amount,
+  missing,
+  ceiling,
+  overBalance,
+  isPaymentLink,
+  memoError,
+  to,
+  toKind,
+}: {
+  amount: bigint;
+  missing: string;
+  ceiling: Planned["ceiling"];
+  overBalance: boolean;
+  isPaymentLink: boolean;
+  memoError: string | undefined;
+  to: string;
+  toKind: ReturnType<typeof useAddressKind>;
+}): SendProblem | undefined {
+  if (amount <= 0n && !ceiling) return { field: "amount", message: missing };
+  if (overBalance) return { field: "amount", message: "Insufficient balance" };
+  if (isPaymentLink) {
+    if (memoError) return undefined;
+    return { field: "form", message: "Payment links aren't available yet" };
+  }
+  if (!to) return { field: "to", message: "Set a recipient" };
+  if (toKind === null) {
+    return { field: "to", message: "Not a valid Zcash address" };
+  }
+  return undefined;
+}
+
+function amountErrorOf(
+  problem: SendProblem | undefined,
+  overBalance: boolean,
+  planned: Planned,
+) {
+  if (problem?.field === "amount") return problem.message;
+  if (overBalance) return "Insufficient balance";
+  if (planned.ceiling) return planProblem(planned);
+  return undefined;
+}
+
+/** A plan error the amount field doesn't already show. */
+function formErrorOf(
+  problem: SendProblem | undefined,
+  overBalance: boolean,
+  planned: Planned,
+  sendError: Error | null,
+) {
+  if (sendError) return sendError.message;
+  if (problem?.field === "form") return problem.message;
+  if (planned.ceiling || overBalance) return undefined;
+  return planProblem(planned);
+}
+
+function submitLabel(isPaymentLink: boolean, amount: bigint) {
+  if (isPaymentLink) return "Create payment link";
+  if (amount > 0n) return `Send ${zatoshiToZec(amount)} ZEC`;
+  return "Send";
 }
