@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.8.0...zillions-keychain-v0.9.0) (2026-10-23)
+
+
+### Features
+
+* payment links flow ([#158](https://github.com/heliaxdev/zillions-interface/issues/158)) ([a08dae8](https://github.com/heliaxdev/zillions-interface/commit/a08dae872ac35bcc95fea33e118b117eeb7a4abd))
+
 ## [0.8.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.7.0...zillions-keychain-v0.8.0) (2026-10-21)
 
 
