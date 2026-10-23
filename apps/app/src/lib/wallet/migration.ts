@@ -52,11 +52,8 @@ export type OrchardNote = { value: number; height: number };
 export type Step = { index: number; height: number; readyAt: number } &
   /** Makes notes for `parts`, the transfers that have none yet. */
   (| { kind: "preparation"; parts: number[] }
-    /**
-     * Spends a note worth `value` and the transfer fee, or with `exact` false
-     * any Orchard note that covers it (a plan with no preparation).
-     */
-    | { kind: "transfer"; value: number; exact: boolean }
+    /** Spends the note worth `value` and the transfer fee. */
+    | { kind: "transfer"; value: number }
   );
 
 export type Next =
@@ -90,8 +87,6 @@ export function nextStep(
 
   // Oldest first: a transfer takes the first of its notes to be ready.
   const notes = [...orchard].sort((a, b) => a.height - b.height);
-  const earliest = (of: OrchardNote[]) =>
-    Math.min(...of.map((n) => readyAt(n.height)));
   const funding = new Map<number, OrchardNote>();
   const unfunded = unsent.filter((t) => {
     const at = notes.findIndex((n) => n.value === t.value + m.transferFee);
@@ -99,17 +94,16 @@ export function nextStep(
     funding.set(t.index, notes.splice(at, 1)[0]);
     return false;
   });
-  const transfer = (t: (typeof unsent)[number], exact: boolean): Step => ({
-    kind: "transfer",
-    index: t.index,
-    height: t.height,
-    value: t.value,
-    exact,
-    readyAt: exact
-      ? readyAt(funding.get(t.index)!.height)
-      : earliest(orchard.filter((n) => n.value >= t.value + m.transferFee)),
-  });
-  if (!unfunded.length) return transfer(unsent[0], true);
+  if (!unfunded.length) {
+    const [t] = unsent;
+    return {
+      kind: "transfer",
+      index: t.index,
+      height: t.height,
+      value: t.value,
+      readyAt: readyAt(funding.get(t.index)!.height),
+    };
+  }
 
   const index = m.preparations.findIndex((p) => !p.txid);
   if (index >= 0) {
@@ -118,11 +112,8 @@ export function nextStep(
       index,
       height: m.preparations[index].height,
       parts: unfunded.map((t) => t.value),
-      readyAt: earliest(orchard),
+      readyAt: Math.min(...orchard.map((n) => readyAt(n.height))),
     };
-  }
-  if (!m.preparations.length && unsent.length === 1) {
-    return transfer(unsent[0], false);
   }
   return { kind: "replan" };
 }

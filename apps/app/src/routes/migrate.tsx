@@ -318,10 +318,10 @@ function MigrateRoute() {
 
 type Status = NonNullable<ReturnType<Wallet["migration"]>>;
 
-/** The notes a transfer may spend: its own, or any Orchard one with no preparation. */
+/** The notes a transfer may spend: the ones made for it. */
 const notesFor =
   (step: Extract<Step, { kind: "transfer" }>, fee: number) => (n: Note) =>
-    n.pool === "orchard" && (!step.exact || n.value === step.value + fee);
+    n.pool === "orchard" && n.value === step.value + fee;
 
 /**
  * A migration in progress: every step with its state, and the next one to

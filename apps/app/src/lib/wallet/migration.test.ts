@@ -61,7 +61,6 @@ test("sends each transfer from its note, in order, once it can anchor", () => {
     index: 0,
     height: 400,
     value: 5 * CENT,
-    exact: true,
     readyAt: readyAt(110),
   });
   m.transfers[0].txid = "t0";
@@ -75,19 +74,6 @@ test("sends each transfer from its note, in order, once it can anchor", () => {
   });
   expect(transfersDone(m, new Set(["t1"]))).toBe(1);
   expect(nextStep(m, at(50, 5_000), new Set())).toEqual({ kind: "done" });
-});
-
-test("one transfer with no preparation spends any note that covers it", () => {
-  const m = plan({
-    preparations: [],
-    transfers: [{ value: CENT, height: 101 }],
-  });
-  const notes = [...at(90, 1_130_714), ...at(20, 2 * CENT), ...at(10, 100)];
-  expect(nextStep(m, notes, new Set())).toMatchObject({
-    kind: "transfer",
-    exact: false,
-    readyAt: readyAt(20),
-  });
 });
 
 test("asks to plan again once the notes are gone", () => {

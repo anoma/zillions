@@ -200,19 +200,14 @@ pub(crate) fn plan(
     let preparation_fee = preparation_fee(&wallet.network, target)?;
 
     // The fees come out of the balance before it's split: shrink what's
-    // split until the parts, their fees and the preparations' fit. One part
-    // a note already covers needs no preparation.
+    // split until the parts, their fees and the preparations' fit.
     let mut value = orchard;
     let (parts, preps) = loop {
         let parts = quantize(value, grid);
         if parts.is_empty() {
             break (parts, 0);
         }
-        let preps = if parts.len() == 1 && notes.iter().any(|n| *n >= parts[0] + transfer_fee) {
-            0
-        } else {
-            preparations(notes.len(), parts.len())
-        };
+        let preps = preparations(notes.len(), parts.len());
         let cost = parts.iter().sum::<u64>()
             + parts.len() as u64 * transfer_fee
             + preps as u64 * preparation_fee;
@@ -476,14 +471,16 @@ mod tests {
     }
 
     #[test]
-    fn plans_a_small_balance_as_one_cent_with_no_preparation() {
-        // The test account's case: 0.01130714 ZEC in Orchard, one note.
+    fn plans_a_small_balance_as_one_cent_after_a_preparation() {
+        // Even one transfer spends a note made for it.
         let plan = plan(&wallet(&[1_130_714]), &mut OsRng, &Grid).unwrap();
         assert_eq!(plan.transfers.len(), 1);
         assert_eq!(plan.transfers[0].value, CENT);
-        assert!(plan.preparations.is_empty());
-        assert_eq!(plan.transfers[0].height, TIP + 1);
-        assert_eq!(plan.left, 1_130_714 - CENT - plan.transfer_fee);
+        assert_eq!(plan.preparations, [TIP + 1]);
+        assert_eq!(
+            plan.left,
+            1_130_714 - CENT - plan.transfer_fee - plan.preparation_fee
+        );
     }
 
     #[test]
