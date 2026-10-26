@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { EnableNav } from "../components/MainNav";
 import { legalEmail } from "../lib/urls";
 
 export const Route = createFileRoute("/privacy-policy")({
@@ -9,6 +10,8 @@ export const Route = createFileRoute("/privacy-policy")({
 function PrivacyPolicyRoute() {
   return (
     <article className="p-8 pt-10 pb-20 max-sm:px-6 mx-auto max-w-160 flex flex-col gap-8 text-sm leading-relaxed">
+      {/* Outside WalletProvider, which is what enables the nav on other pages. */}
+      <EnableNav />
       <header className="text-center">
         <h1 className="text-lg font-semibold tracking-tight">Privacy Policy</h1>
         <p className="mt-1 text-xs text-neutral-500">
