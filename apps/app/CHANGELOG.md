@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.16.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.15.0...zillions-app-v1.16.0) (2026-10-26)
+
+
+### Features
+
+* add privacy policy ([#165](https://github.com/heliaxdev/zillions-interface/issues/165)) ([b2e39ba](https://github.com/heliaxdev/zillions-interface/commit/b2e39ba9773f5e3ca4d33474097bfe9300300b4b))
+
+
+### Bug Fixes
+
+* privacy policy menu is now enabled ([#168](https://github.com/heliaxdev/zillions-interface/issues/168)) ([7631230](https://github.com/heliaxdev/zillions-interface/commit/7631230e354c6e3cfdfd21da166ad5f164a8e616))
+
 ## [1.15.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.14.0...zillions-app-v1.15.0) (2026-10-26)
 
 
