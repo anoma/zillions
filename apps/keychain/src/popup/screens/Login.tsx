@@ -4,7 +4,7 @@
 import React, { useState } from "react";
 
 import { ActionButton, Heading, Input, Stack } from "@zillions/components";
-import { Logo } from "@zillions/components/assets/Logo";
+import { ZEmblem } from "@zillions/components/assets/ZEmblem";
 
 enum Status {
   Idle,
@@ -39,9 +39,15 @@ export const Login = ({ onLogin }: LoginProps) => {
         : "";
 
   return (
-    <Stack as="form" className="py-6" gap={16} onSubmit={handleSubmit} full>
+    <Stack
+      as="form"
+      className="py-6 w-full max-w-[500px] mx-auto"
+      gap={16}
+      onSubmit={handleSubmit}
+      full
+    >
       <div className="flex flex-col justify-center flex-1 text-center pt-14">
-        <Logo className="max-w-[80%] mx-auto" />
+        <ZEmblem className="w-[80%] mx-auto" />
       </div>
       <Stack gap={2}>
         <Heading className="text-lg text-center text-black">

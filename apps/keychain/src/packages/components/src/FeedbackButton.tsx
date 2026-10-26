@@ -1,7 +1,6 @@
 import { Badge } from "@zillions/components";
 import clsx from "clsx";
-import { AnimatePresence, motion } from "framer-motion";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { GoCheckCircleFill, GoXCircleFill } from "react-icons/go";
 
 type Props = {
@@ -23,7 +22,6 @@ export const FeedbackButton = ({
   const [displaySuccess, setDisplaySuccess] = useState(false);
   const [displayError, setDisplayError] = useState(false);
   const [feedbackKey, setFeedbackKey] = useState("");
-  const timeoutRef = useRef<number>(0);
 
   const reset = (): void => {
     setDisplaySuccess(false);
@@ -60,36 +58,24 @@ export const FeedbackButton = ({
       >
         {children}
       </button>
-      <AnimatePresence>
-        {(displaySuccess || displayError) && (
-          <motion.div
-            initial={{
-              opacity: 0,
-              translateY: "0",
-            }}
-            key={feedbackKey}
-            animate={{ opacity: 1, translateY: "-50%" }}
-            transition={{ duration: 0.25 }}
-            exit={{ opacity: 0 }}
-            onAnimationComplete={() => {
-              if (timeoutRef.current) clearTimeout(timeoutRef.current);
-              timeoutRef.current = Number(setTimeout(() => reset(), 2000));
-            }}
-            className="absolute left-1/2 top-1/2 -translate-x-1/2"
+      {(displaySuccess || displayError) && (
+        <div
+          key={feedbackKey}
+          onAnimationEnd={reset}
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 animate-feedback"
+        >
+          <Badge
+            icon={icon}
+            className={clsx({
+              "bg-success": displaySuccess,
+              "bg-fail": displayError,
+            })}
           >
-            <Badge
-              icon={icon}
-              className={clsx({
-                "bg-success": displaySuccess,
-                "bg-fail": displayError,
-              })}
-            >
-              {displaySuccess && successMessage}
-              {displayError && errorMessage}
-            </Badge>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            {displaySuccess && successMessage}
+            {displayError && errorMessage}
+          </Badge>
+        </div>
+      )}
     </div>
   );
 };

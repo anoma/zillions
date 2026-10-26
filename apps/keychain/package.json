@@ -24,7 +24,6 @@
     "@zillions/zcore": "workspace:*",
     "clsx": "^2.1.1",
     "fp-ts": "^2.16.1",
-    "framer-motion": "^11.18.2",
     "gsap": "^3.13.0",
     "io-ts": "^2.2.21",
     "js-sha256": "^0.11",
