@@ -16,17 +16,19 @@ import { queryClient } from "../lib/queryClient";
 
 export const Route = createRootRoute({ component: RootLayout });
 
+// A payment link says what it holds before anyone connects: the claim page
+// puts the wall around its Claim button only. The privacy policy needs no wallet.
+const publicPaths = ["/claim", "/privacy-policy"];
+
 function RootLayout() {
-  // A payment link says what it holds before anyone connects: the claim page
-  // puts the wall around its Claim button only.
-  const claiming = useRouterState({
-    select: (s) => s.location.pathname === "/claim",
+  const isPublic = useRouterState({
+    select: (s) => publicPaths.includes(s.location.pathname),
   });
   return (
     <CatchNotFound fallback={NotFound}>
       <QueryClientProvider client={queryClient}>
         <AppLayout>
-          {claiming ? (
+          {isPublic ? (
             <Outlet />
           ) : (
             <AppLoader>
