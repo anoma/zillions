@@ -14,6 +14,7 @@ import { Route as TransactionsRouteImport } from './routes/transactions'
 import { Route as ShieldRouteImport } from './routes/shield'
 import { Route as SendRouteImport } from './routes/send'
 import { Route as ReceiveRouteImport } from './routes/receive'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as MigrateRouteImport } from './routes/migrate'
 import { Route as ClaimRouteImport } from './routes/claim'
 import { Route as IndexRouteImport } from './routes/index'
@@ -44,6 +45,11 @@ const ReceiveRoute = ReceiveRouteImport.update({
   path: '/receive',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MigrateRoute = MigrateRouteImport.update({
   id: '/migrate',
   path: '/migrate',
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/claim': typeof ClaimRoute
   '/migrate': typeof MigrateRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/shield': typeof ShieldRoute
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/claim': typeof ClaimRoute
   '/migrate': typeof MigrateRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/shield': typeof ShieldRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/claim': typeof ClaimRoute
   '/migrate': typeof MigrateRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/shield': typeof ShieldRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/'
     | '/claim'
     | '/migrate'
+    | '/privacy-policy'
     | '/receive'
     | '/send'
     | '/shield'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/'
     | '/claim'
     | '/migrate'
+    | '/privacy-policy'
     | '/receive'
     | '/send'
     | '/shield'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/claim'
     | '/migrate'
+    | '/privacy-policy'
     | '/receive'
     | '/send'
     | '/shield'
@@ -139,6 +151,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ClaimRoute: typeof ClaimRoute
   MigrateRoute: typeof MigrateRoute
+  PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   ReceiveRoute: typeof ReceiveRoute
   SendRoute: typeof SendRoute
   ShieldRoute: typeof ShieldRoute
@@ -184,6 +197,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReceiveRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/migrate': {
       id: '/migrate'
       path: '/migrate'
@@ -219,6 +239,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ClaimRoute: ClaimRoute,
   MigrateRoute: MigrateRoute,
+  PrivacyPolicyRoute: PrivacyPolicyRoute,
   ReceiveRoute: ReceiveRoute,
   SendRoute: SendRoute,
   ShieldRoute: ShieldRoute,
