@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.16.0...zillions-app-v1.16.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* extension page link ([#169](https://github.com/heliaxdev/zillions-interface/issues/169)) ([d367d5a](https://github.com/heliaxdev/zillions-interface/commit/d367d5a95da06e25366c7b95b837e55a9017c8f9))
+
 ## [1.16.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.15.0...zillions-app-v1.16.0) (2026-10-26)
 
 
