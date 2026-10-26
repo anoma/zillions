@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.9.0...zillions-keychain-v0.10.0) (2026-10-26)
+
+
+### Features
+
+* add animation on Z for extension ([#167](https://github.com/heliaxdev/zillions-interface/issues/167)) ([99118ca](https://github.com/heliaxdev/zillions-interface/commit/99118ca39f1b07dea3152466bebfe43493740874))
+
 ## [0.9.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.8.0...zillions-keychain-v0.9.0) (2026-10-23)
 
 

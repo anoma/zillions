@@ -1,6 +1,6 @@
 {
   "name": "zillions-keychain",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Zillions Keychain — a Zcash wallet browser extension.",
   "author": "Heliax Dev <info@heliax.dev>",
   "license": "MIT",
