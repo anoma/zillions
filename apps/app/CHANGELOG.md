@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.14.0...zillions-app-v1.15.0) (2026-10-26)
+
+
+### Features
+
+* moving sync indicator elsewhere ([#162](https://github.com/heliaxdev/zillions-interface/issues/162)) ([38412aa](https://github.com/heliaxdev/zillions-interface/commit/38412aae9317eb6ab80cea602d98ae255e18ba1f))
+
 ## [1.14.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.13.0...zillions-app-v1.14.0) (2026-10-23)
 
 
