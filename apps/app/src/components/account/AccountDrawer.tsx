@@ -4,6 +4,7 @@ import { GoX } from "react-icons/go";
 import { twMerge } from "tailwind-merge";
 import { ExitIcon } from "../../icons/ExitIcon";
 import { keychain } from "../../lib/keychain/keychain";
+import { SyncIndicator } from "../SyncIndicator";
 import { ActionButton } from "../ui/ActionButton";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { AddressCard } from "./AddressCard";
@@ -44,7 +45,14 @@ export function AccountDrawer({ onClose }: { onClose: () => void }) {
       >
         {/* Same height and inset as AppHeader, so the X lands where the avatar was. */}
         <div className="shrink-0 h-16 flex items-center justify-between border-b border-line-strong pl-8 pr-6">
-          <span className="text-sm font-medium">Account</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Account</span>
+            {/* Opens rightward: centered, it would be clipped by the panel's scroll overflow. */}
+            <SyncIndicator
+              className="h-auto p-1"
+              tooltipClassName="left-0 translate-x-0"
+            />
+          </div>
           <button
             className="size-7 grid place-items-center rounded-full border border-current transition-colors duration-300 hover:bg-gold/15 cursor-pointer"
             aria-label="Close"
