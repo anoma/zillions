@@ -62,7 +62,7 @@ test("without a keychain it links to the extension and holds back Connect", () =
     screen
       .getByRole("link", { name: "Get the extension" })
       .getAttribute("href"),
-  ).toBe("https://zillions.money/zillions-extension");
+  ).toBe("https://zillions.money/zillions-keychain");
   expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
 });
 
