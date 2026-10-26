@@ -2,7 +2,7 @@
  * Landing step: choose Create, Import or Connect to Hardware Wallet.
  */
 import { ActionButton, Stack } from "@zillions/components";
-import { Logo } from "@zillions/components/assets/Logo";
+import { ZEmblem } from "@zillions/components/assets/ZEmblem";
 import { useRef, useState } from "react";
 
 import {
@@ -52,7 +52,7 @@ export const Start = () => {
   return (
     <div className="flex flex-col flex-1 justify-center">
       <div className="w-[320px] mx-auto mb-18 text-center">
-        <Logo className="w-full" />
+        <ZEmblem className="w-full" />
       </div>
       {step ?
         <LedgerProgress
