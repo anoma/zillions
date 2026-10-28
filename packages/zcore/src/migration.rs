@@ -600,6 +600,19 @@ mod tests {
             zcash_protocol::zip318::expiry_height(target)
         );
         assert!(tx.ironwood_bundle().is_none() && tx.sapling_bundle().is_none());
+
+        // A made note, worth its part and the fee, crosses with no change.
+        let (made, _, _) = crate::build::tests::bucketed_wallet(5 * CENT + fee);
+        let transfer = crate::send::tests::plan_to_self(&made, 5 * CENT);
+        let step = transfer.steps().first();
+        let target = BlockHeight::from(transfer.min_target_height());
+        assert!(crate::build::bucket(step, &Network::MainNetwork, target).is_some());
+        assert_eq!(u64::from(step.balance().fee_required()), fee);
+        assert!(step
+            .balance()
+            .proposed_change()
+            .iter()
+            .all(|c| c.value().is_zero()));
     }
 
     #[test]

@@ -115,6 +115,12 @@ production builds) plans amounts from 0.001 to 0.002 ZEC through a custom
 `PoolMigrationConstants`. Those transfers aren't standard amounts, so they
 don't blend in; it exists to test the flow, never to use.
 
+It covers preparations, the steps page and history, not transfers: upstream's
+input selector judges a canonical crossing by ZIP 318's own bounds (from
+0.01 ZEC) and takes no other constants, so a test transfer plans as an
+ordinary send, with no bucket anchor, and never reads as ready. A full run
+needs an account with about 0.011 ZEC in Orchard.
+
 ## Departures from ZIP 318
 
 - Steps are sent by the user, not pre-signed and sent on a timer (see Why).

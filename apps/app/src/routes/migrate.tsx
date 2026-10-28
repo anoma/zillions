@@ -408,24 +408,26 @@ function MigrationSteps({ status }: { status: Status }) {
     await refresh();
   };
 
+  const due = step && tip + 1 >= step.height;
+  // The card and the next step's row both go by zcore's answer, not the estimate.
+  const sendable = Boolean(ready.data && due);
+  // Never before the next block, however far behind the estimate is.
+  const comeBack = step ? Math.max(sendAt(step), tip + 1) : tip + 1;
   const state = (txid: string | undefined, at: number, isNext: boolean) =>
     txid
       ? pending.has(txid)
         ? "Being mined"
         : "Done"
       : isNext
-        ? tip + 1 >= sendAt(step!)
+        ? sendable
           ? "Ready to send"
-          : `Send at ~${clockAt(tip, sendAt(step!))}`
+          : `Send at ~${clockAt(tip, comeBack)}`
         : step?.kind === "transfer" && at <= step.height
           ? "Not needed"
           : stepTime(tip, at);
   const done = transfersDone(m, pending);
-  const due = step && tip + 1 >= step.height;
   const name = step ? stepName(step) : "";
   const Name = name.charAt(0).toUpperCase() + name.slice(1);
-  // Never before the next block, however far behind the estimate is.
-  const comeBack = step ? Math.max(sendAt(step), tip + 1) : tip + 1;
   const soon = fromNow(tip, comeBack);
 
   if (send.data) {
@@ -464,7 +466,7 @@ function MigrationSteps({ status }: { status: Status }) {
       {step &&
         (ready.isPending ? (
           <NextCard title={<Waiting />} />
-        ) : ready.data && due ? (
+        ) : sendable ? (
           <NextCard
             title={`${Name} is ready`}
             action={
