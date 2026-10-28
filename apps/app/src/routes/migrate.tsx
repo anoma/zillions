@@ -413,6 +413,9 @@ function MigrationSteps({ status }: { status: Status }) {
   const sendable = Boolean(ready.data && due);
   // Never before the next block, however far behind the estimate is.
   const comeBack = step ? Math.max(sendAt(step), tip + 1) : tip + 1;
+  // Past the estimate, yet zcore finds no bucket anchor for it.
+  const late = Boolean(step && !ready.data && tip + 1 >= sendAt(step));
+  const name = step ? stepName(step) : "";
   const state = (txid: string | undefined, at: number, isNext: boolean) =>
     txid
       ? pending.has(txid)
@@ -421,12 +424,15 @@ function MigrationSteps({ status }: { status: Status }) {
       : isNext
         ? sendable
           ? "Ready to send"
-          : `Send at ~${clockAt(tip, comeBack)}`
+          : late
+            ? "Not ready yet"
+            : `Send at ~${clockAt(tip, comeBack)}`
         : step?.kind === "transfer" && at <= step.height
           ? "Not needed"
-          : stepTime(tip, at);
+          : tip + 1 >= at
+            ? `After ${name}`
+            : stepTime(tip, at);
   const done = transfersDone(m, pending);
-  const name = step ? stepName(step) : "";
   const Name = name.charAt(0).toUpperCase() + name.slice(1);
   const soon = fromNow(tip, comeBack);
 
@@ -476,6 +482,11 @@ function MigrationSteps({ status }: { status: Status }) {
             }
           >
             Send it now, or any time later.
+          </NextCard>
+        ) : late ? (
+          <NextCard title={`${Name} isn't ready yet`}>
+            Its funds can't be spent at a network checkpoint yet. Check again
+            later; Zillions won't send it for you.
           </NextCard>
         ) : (
           <NextCard
