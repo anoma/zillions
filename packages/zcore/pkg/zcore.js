@@ -819,16 +819,6 @@ export function ufvk_pools(network, ufvk) {
 }
 
 /**
- * Dev only: plans and recognises migration amounts of 0.001–0.002 ZEC, so a
- * wallet with little Orchard can try preparations and several transfers.
- * Such transfers don't blend in with anyone's; never for real use.
- * @param {boolean} on
- */
-export function use_migration_test_amounts(on) {
-    wasm.use_migration_test_amounts(on);
-}
-
-/**
  * Builds the Halo2 proving and verifying keys now, for this instance's
  * proofs to skip; seconds of work, so call it off the UI thread.
  */

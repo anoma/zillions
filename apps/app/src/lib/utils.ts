@@ -3,17 +3,11 @@ import type { Activity } from "./wallet/types";
 const ZATOSHI_PER_ZEC = 100_000_000n;
 const DECIMALS = 8;
 
-/** Dev only: migrations plan 0.001/0.002 ZEC test amounts instead of ZIP 318's; such transfers don't blend in. */
-export const MIGRATION_TEST_AMOUNTS =
-  import.meta.env.DEV && import.meta.env.VITE_MIGRATION_TEST_AMOUNTS === "true";
-
 /**
  * ZIP 318's `MAX_RESIDUAL_VALUE` (0.01 ZEC): less than this stays in Orchard,
  * since moving a distinctive dust amount would single the wallet out.
  */
-export const MIGRATION_MINIMUM = MIGRATION_TEST_AMOUNTS
-  ? ZATOSHI_PER_ZEC / 1000n
-  : ZATOSHI_PER_ZEC / 100n;
+export const MIGRATION_MINIMUM = ZATOSHI_PER_ZEC / 100n;
 
 /** About how long until block `height`, from `tip`, at 75 seconds a block. */
 export function fromNow(tip: number, height: number) {

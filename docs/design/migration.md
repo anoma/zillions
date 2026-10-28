@@ -108,18 +108,12 @@ paid. Since NU6.3 nothing else makes Orchard notes.
 
 ## Testing
 
-The test account holds about 0.008 ZEC in Orchard, under ZIP 318's 0.01
-ZEC minimum, so it can't migrate at all. To exercise preparations and
-several transfers on it, a dev-only setting (`VITE_MIGRATION_TEST_AMOUNTS=true`, ignored in
-production builds) plans amounts from 0.001 to 0.002 ZEC through a custom
-`PoolMigrationConstants`. Those transfers aren't standard amounts, so they
-don't blend in; it exists to test the flow, never to use.
-
-It covers preparations, the steps page and history, not transfers: upstream's
-input selector judges a canonical crossing by ZIP 318's own bounds (from
-0.01 ZEC) and takes no other constants, so a test transfer plans as an
-ordinary send, with no bucket anchor, and never reads as ready. A full run
-needs an account with about 0.011 ZEC in Orchard.
+A full run needs about 0.011 ZEC in Orchard: ZIP 318's 0.01 ZEC minimum,
+plus the fees. Upstream's input selector judges a canonical crossing by
+ZIP 318's own bounds and takes no other constants, so a smaller account
+can't be tested by changing ours. The `backup/migration-test-threshold`
+branch, never merged, patches `zcash_protocol`'s `MAX_RESIDUAL_VALUE` to
+0.001 ZEC instead; the test account's live run used it.
 
 ## Departures from ZIP 318
 

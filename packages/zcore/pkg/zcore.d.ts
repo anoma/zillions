@@ -232,13 +232,6 @@ export function try_decrypt_gpu(network: string, ufvk: string, pool: string, chu
 export function ufvk_pools(network: string, ufvk: string): string[];
 
 /**
- * Dev only: plans and recognises migration amounts of 0.001–0.002 ZEC, so a
- * wallet with little Orchard can try preparations and several transfers.
- * Such transfers don't blend in with anyone's; never for real use.
- */
-export function use_migration_test_amounts(on: boolean): void;
-
-/**
  * Builds the Halo2 proving and verifying keys now, for this instance's
  * proofs to skip; seconds of work, so call it off the UI thread.
  */
@@ -282,7 +275,6 @@ export interface InitOutput {
     readonly try_decrypt_full: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number) => [number, number, number];
     readonly try_decrypt_gpu: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number, number];
     readonly ufvk_pools: (a: number, b: number, c: number, d: number) => [number, number, number, number];
-    readonly use_migration_test_amounts: (a: number) => void;
     readonly warm_prover: () => void;
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
