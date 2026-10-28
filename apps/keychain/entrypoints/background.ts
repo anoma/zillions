@@ -1,5 +1,6 @@
 import browser from "webextension-polyfill";
 
+import { startAutoLock } from "../src/background/autoLock";
 import { startBackgroundServer } from "../src/background/server";
 import { getServices } from "../src/background/services";
 
@@ -22,6 +23,7 @@ export default defineBackground(() => {
   });
 
   startBackgroundServer();
+  startAutoLock();
 
   browser.tabs.onRemoved.addListener((tabId) => {
     void getServices()

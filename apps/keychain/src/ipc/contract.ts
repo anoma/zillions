@@ -133,6 +133,31 @@ export type ResetPasswordResult =
   | { ok: true }
   | { ok: false; error: "bad-password" | "keystore" };
 
+/** What an approval request asked for. */
+export type ApprovalKind =
+  | "connect"
+  | "disconnect"
+  | "sign"
+  | "default-account"
+  | "open-link";
+
+/** One decision taken in an approval window, as the Keychain recorded it. */
+export type ApprovalLogEntry = {
+  id: string;
+  /** Milliseconds since the epoch. */
+  at: number;
+  origin: string;
+  kind: ApprovalKind;
+  /** "closed": the window was closed without an answer. */
+  outcome: "approved" | "rejected" | "closed" | "failed";
+  /** Zatoshi leaving the account, for a signed transaction. */
+  amount?: string;
+  /** First recipient's address, for a signed transaction. */
+  to?: string;
+  /** The account the request concerned, by name. */
+  account?: string;
+};
+
 export type MnemonicValidation = {
   isValid: boolean;
   /** Present when invalid. `invalidWordIndex` is set for a bad word. */
@@ -181,6 +206,17 @@ export type IpcContract = {
   "vault/requiresAuth": {
     req: Record<string, never>;
     res: boolean;
+  };
+
+  // --- settings ---
+  /** Minutes of system idle time before the Keychain locks; 0 never. */
+  "settings/getAutoLock": {
+    req: Record<string, never>;
+    res: number;
+  };
+  "settings/setAutoLock": {
+    req: { minutes: number };
+    res: void;
   };
 
   // --- keyring ---
@@ -407,6 +443,15 @@ export type IpcContract = {
   };
   "approvals/submitUpdateDefaultAccount": {
     req: { address: string };
+    res: void;
+  };
+  /** Approval decisions, newest first (vault must be unlocked). */
+  "approvals/log": {
+    req: Record<string, never>;
+    res: ApprovalLogEntry[];
+  };
+  "approvals/clearLog": {
+    req: Record<string, never>;
     res: void;
   };
 };

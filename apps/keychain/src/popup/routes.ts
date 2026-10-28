@@ -16,6 +16,10 @@ export default {
     `/accounts/${accountId}/rename`,
   deleteAccount: (accountId: string = ":accountId"): string =>
     `/accounts/${accountId}/delete`,
+  settings: (): string => "/settings",
   changePassword: (): string => "/settings/change-password",
   connectedSites: (): string => "/settings/connected-sites",
+  autoLock: (): string => "/settings/auto-lock",
+  theme: (): string => "/settings/theme",
+  approvalLog: (): string => "/settings/approval-log",
 };

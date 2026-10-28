@@ -1,20 +1,33 @@
 /**
  * Connection approval screen: the dapp at `interfaceOrigin` asked to connect.
- * If the origin turns out to be already approved (the popup was opened only
- * because the vault was locked), the request auto-approves after login.
+ * Says what a connected site can see and do, and which account it will see
+ * first (switchable here). If the origin turns out to be already approved
+ * (the popup was opened only because the vault was locked), the request
+ * auto-approves after login.
  */
 import { useContext, useEffect, useState } from "react";
+import { GoCheck, GoX } from "react-icons/go";
 import { useSearchParams } from "react-router-dom";
 
-import { Stack } from "@zillions/components";
-
-import { PageHeader } from "../../popup/ui/PageHeader";
+import { Avatar, siteHost, SiteIcon } from "../../popup/ui/Avatar";
+import { ActionBar, Button } from "../../popup/ui/Button";
+import { Eyebrow, Row } from "../../popup/ui/Row";
+import { ScreenHeader } from "../../popup/ui/ScreenHeader";
+import { Tag } from "../../popup/ui/Tag";
 import { ClientContext, ExtensionLockContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
-import { ApprovalActions } from "../ui/ApprovalActions";
-import { SummaryCard } from "../ui/SummaryCard";
-import { SummaryHeader } from "../ui/SummaryHeader";
-import { SummaryRow } from "../ui/SummaryRow";
+import { useWallets } from "../ui/useWallets";
+
+const Ability = ({ allowed, children }: { allowed: boolean; children: React.ReactNode }) => (
+  <li className="flex items-center gap-3 py-2 border-b border-line last:border-b-0 text-[12.5px] font-medium">
+    {allowed ? (
+      <GoCheck className="size-4 shrink-0 text-muted" />
+    ) : (
+      <GoX className="size-4 shrink-0 text-muted" />
+    )}
+    {children}
+  </li>
+);
 
 export const ApproveConnection = () => {
   const client = useContext(ClientContext);
@@ -22,6 +35,8 @@ export const ApproveConnection = () => {
   const [params] = useSearchParams();
   const interfaceOrigin = params.get("interfaceOrigin") ?? "";
   const [isApproved, setIsApproved] = useState<boolean>();
+  const [picking, setPicking] = useState(false);
+  const { wallets, active, setActive } = useWallets(isUnlocked);
 
   const handleResponse = async (allowConnection: boolean): Promise<void> => {
     await client?.resolveConnection(interfaceOrigin, allowConnection);
@@ -43,23 +58,64 @@ export const ApproveConnection = () => {
       .catch(console.error);
   }, [isUnlocked]);
 
+  if (isApproved !== false) return null;
+
   return (
-    <Stack className="h-full text-black pt-4 pb-6" gap={4}>
-      {typeof isApproved !== "undefined" && !isApproved && (
-        <>
-          <PageHeader title="Approve Request" />
-          <main className="flex flex-col flex-1 gap-4">
-            <SummaryHeader label="Request">Connect</SummaryHeader>
-            <SummaryCard>
-              <SummaryRow label="Requested By">{interfaceOrigin}</SummaryRow>
-            </SummaryCard>
-          </main>
-          <ApprovalActions
-            onApprove={() => void handleResponse(true)}
-            onReject={() => void handleResponse(false)}
-          />
-        </>
+    <>
+      <ScreenHeader title="Connect" />
+      <section className="flex flex-col items-center gap-2 pt-6 pb-1 text-center">
+        <SiteIcon origin={interfaceOrigin} size="lg" />
+        <p className="m-0 mt-1 text-base font-semibold" title={interfaceOrigin}>
+          {siteHost(interfaceOrigin)}
+        </p>
+        <p className="m-0 text-xs text-muted">wants to connect to your Keychain</p>
+      </section>
+
+      <Eyebrow>It will be able to</Eyebrow>
+      <ul className="m-0 p-0 list-none">
+        <Ability allowed>See your account names and addresses</Ability>
+        <Ability allowed>See the active account&apos;s balance and history</Ability>
+        <Ability allowed>Ask you to approve transactions</Ability>
+        <Ability allowed={false}>Spend without your approval</Ability>
+      </ul>
+
+      <Eyebrow>Active account</Eyebrow>
+      {active && (
+        <Row
+          lead={<Avatar accountId={active.id} alias={active.alias} />}
+          title={active.alias}
+          trail={
+            wallets.length > 1 && (
+              <Button variant="secondary" size="sm" onClick={() => setPicking(!picking)}>
+                {picking ? "Done" : "Change"}
+              </Button>
+            )
+          }
+        />
       )}
-    </Stack>
+      {picking &&
+        wallets
+          .filter((w) => w.id !== active?.id)
+          .map((wallet) => (
+            <Row
+              key={wallet.id}
+              className="animate-fade-in"
+              lead={<Avatar accountId={wallet.id} alias={wallet.alias} />}
+              title={wallet.alias}
+              trail={<Tag>Use</Tag>}
+              onClick={() => {
+                void setActive(wallet);
+                setPicking(false);
+              }}
+            />
+          ))}
+
+      <ActionBar>
+        <Button variant="secondary" onClick={() => void handleResponse(false)}>
+          Reject
+        </Button>
+        <Button onClick={() => void handleResponse(true)}>Connect</Button>
+      </ActionBar>
+    </>
   );
 };

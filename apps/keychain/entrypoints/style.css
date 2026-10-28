@@ -1,6 +1,6 @@
 /*
  * Tailwind + theme entry for z-extension HTML entrypoints. Loads the shared
- * Zillions design system (gold/light theme + Space Grotesk fonts) from
+ * Zillions design system (gold/light theme + Montserrat) from
  * @zillions/components so the new app matches the existing visual identity.
  */
 @import "tailwindcss";
@@ -17,14 +17,89 @@
 
 @source inline("rounded-buttonBorderRadius");
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Popup and approval window palette, shared with the wallet app. */
+@theme {
+  --color-surface: #ecebe7;
+  --color-card: #f6f5f2;
+  --color-line: #e3e1db;
+  --color-line-strong: #cdcac2;
+  --color-ink-2: #4b4842;
+  --color-muted: #7a766c;
+  --color-gold: #ceb462;
+  --color-gold-soft: #f1e9cf;
+  /* The app button's outline and text: ink in light, gold in dark. */
+  --color-app-accent: #5e5a52;
+  --color-on-gold-soft: #5a4a12;
+  --color-danger: #b4342c;
+  --color-danger-soft: #f6e3e1;
+  --color-on-danger-soft: #7a2a24;
+
+  /* The shared theme's `rounded-full` is 100%, an ellipse on wide boxes. */
+  --radius-pill: 9999px;
+
+  --animate-screen-forward: screen-forward 260ms var(--ease-out-quart) both;
+  --animate-screen-back: screen-back 260ms var(--ease-out-quart) both;
+  --animate-screen-fade: fadeIn 200ms ease-out both;
+
+  @keyframes screen-forward {
+    from {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+  }
+
+  @keyframes screen-back {
+    from {
+      opacity: 0;
+      transform: translateX(-24px);
+    }
+  }
+}
+
+/*
+ * Dark swaps the palette rather than every class, like the wallet app:
+ * `black` is the ink and `white` the paper. Unlayered, so it wins over
+ * Tailwind's theme layer.
+ */
+:root.dark {
+  color-scheme: dark;
+
+  --color-surface: #161514;
+  --color-card: #1f1e1c;
+  --color-line: #2a2826;
+  --color-line-strong: #3b3835;
+  --color-ink-2: #c9c5bb;
+  --color-muted: #8e8a80;
+  --color-gold-soft: #3a3320;
+  --color-app-accent: #ceb462;
+  --color-on-gold-soft: #e8d9a6;
+  --color-danger: #e5847c;
+  --color-danger-soft: #3a1f1d;
+  --color-on-danger-soft: #f1b9b4;
+
+  --color-black: #ecebe7;
+  --color-white: #161514;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-screen-forward,
+  .animate-screen-back,
+  .animate-screen-fade {
+    animation: none;
+  }
+}
+
 body,
 html {
   min-width: 380px;
   min-height: 420px;
-  background-color: #ecebe7;
+  background-color: var(--color-surface);
 }
 
 body {
   min-width: 360px;
   overflow-x: hidden;
+  color: var(--color-black);
 }

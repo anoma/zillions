@@ -5,15 +5,12 @@
 import { useContext } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { Stack } from "@zillions/components";
-
-import { PageHeader } from "../../popup/ui/PageHeader";
+import { ActionBar, Button } from "../../popup/ui/Button";
+import { Notice } from "../../popup/ui/Notice";
+import { ScreenHeader } from "../../popup/ui/ScreenHeader";
 import { ClientContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
-import { ApprovalActions } from "../ui/ApprovalActions";
-import { SummaryCard } from "../ui/SummaryCard";
-import { SummaryHeader } from "../ui/SummaryHeader";
-import { SummaryRow } from "../ui/SummaryRow";
+import { RequestCard } from "../ui/RequestCard";
 
 export const ApproveDisconnection = () => {
   const client = useContext(ClientContext);
@@ -28,18 +25,19 @@ export const ApproveDisconnection = () => {
   };
 
   return (
-    <Stack className="h-full text-black pt-4 pb-6" gap={4}>
-      <PageHeader title="Approve Request" />
-      <main className="flex flex-col flex-1 gap-4">
-        <SummaryHeader label="Request">Disconnect</SummaryHeader>
-        <SummaryCard>
-          <SummaryRow label="Requested By">{interfaceOrigin}</SummaryRow>
-        </SummaryCard>
-      </main>
-      <ApprovalActions
-        onApprove={() => void handleResponse(true)}
-        onReject={() => void handleResponse(false)}
-      />
-    </Stack>
+    <>
+      <ScreenHeader title="Disconnect" />
+      <RequestCard origin={interfaceOrigin} />
+      <Notice tone="neutral" className="mt-4">
+        The site asks to disconnect. It will no longer see your accounts until
+        you connect it again.
+      </Notice>
+      <ActionBar>
+        <Button variant="secondary" onClick={() => void handleResponse(false)}>
+          Keep connected
+        </Button>
+        <Button onClick={() => void handleResponse(true)}>Disconnect</Button>
+      </ActionBar>
+    </>
   );
 };

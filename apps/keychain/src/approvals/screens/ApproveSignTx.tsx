@@ -1,30 +1,26 @@
 /**
- * PCZT approval screen: what the pending sign request does (amount, from, to,
- * requesting site, fee), then its every input and output (or the raw summary
- * data), with Approve → ConfirmSignTx and Reject → fail the dapp promise + close.
+ * PCZT approval screen: who asks and with which account, what the
+ * transaction does (amount, recipients, fee, change), then its every input
+ * and output, with Approve → ConfirmSignTx and Reject → fail the dapp
+ * promise + close.
  */
 import { useCallback, useContext, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { Alert, Checkbox, Stack } from "@zillions/components";
-
-import { PageHeader } from "../../popup/ui/PageHeader";
+import { ActionBar, Button } from "../../popup/ui/Button";
+import { Notice } from "../../popup/ui/Notice";
+import { ScreenHeader } from "../../popup/ui/ScreenHeader";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 import routes from "../routes";
-import { ApprovalActions } from "../ui/ApprovalActions";
-import { ApprovalPanelHeader } from "../ui/ApprovalPanelHeader";
-import { Commitment } from "../ui/Commitment";
-import { TransactionDataPanel } from "../ui/TransactionDataPanel";
+import { NetworkTag } from "../ui/NetworkTag";
+import { RequestCard } from "../ui/RequestCard";
+import { TransactionDetails } from "../ui/TransactionDetails";
 import { TransferSummary } from "../ui/TransferSummary";
-import { walletNameFor } from "../utils/accounts";
+import { useWallets } from "../ui/useWallets";
+import { walletFor } from "../utils/accounts";
 import { formatZec } from "../utils/format";
-import {
-  flowCount,
-  HIGH_FEE_ZATOSHI,
-  isHighFee,
-  summaryAsText,
-} from "../utils/pczt";
+import { HIGH_FEE_ZATOSHI, isHighFee } from "../utils/pczt";
 
 type Props = {
   details?: ApprovalDetails;
@@ -43,10 +39,10 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const msgId = params.msgId ?? "";
   const origin = params.origin ?? "";
   const signer = params.signer ?? "";
-  const [displayTransactionData, setDisplayTransactionData] = useState(false);
   const [summaryError, setSummaryError] = useState<string>();
-  const [walletName, setWalletName] = useState<string>();
   const [highFeeAccepted, setHighFeeAccepted] = useState(false);
+  const { accounts } = useWallets();
+  const wallet = walletFor(accounts, signer);
   const highFee = details ? isHighFee(details.summary) : false;
 
   useEffect(() => {
@@ -62,11 +58,6 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
       console.error(e);
       setSummaryError(e instanceof Error ? e.message : String(e));
     });
-
-    client
-      ?.queryAccounts()
-      .then((accounts) => setWalletName(walletNameFor(accounts, signer)))
-      .catch((e) => console.error(e));
   }, []);
 
   const handleApproveSubmit = useCallback((e: React.FormEvent): void => {
@@ -87,72 +78,53 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   }, [msgId]);
 
   return (
-    <Stack className="h-full text-black pt-4 pb-6" gap={4}>
-      <PageHeader
+    <form className="flex flex-col flex-1" onSubmit={handleApproveSubmit}>
+      <ScreenHeader
         title={
-          details?.summary.paymentLink
-            ? "Confirm Payment Link"
-            : "Confirm Transaction"
+          details?.summary.paymentLink ? "Confirm payment link" : "Confirm transaction"
         }
+        right={<NetworkTag network={details?.summary.network} />}
       />
-      <main className="flex flex-col flex-1 gap-4 overflow-y-auto">
-        {summaryError && (
-          <Alert type="error" title="This transaction can't be shown">
-            {summaryError}
-          </Alert>
-        )}
-        {details && (
-          <>
-            <TransferSummary
-              summary={details.summary}
-              walletName={walletName}
-              signer={signer}
-              origin={origin}
+      <RequestCard
+        origin={origin}
+        accountLabel="Signing with"
+        account={wallet}
+      />
+      {summaryError && (
+        <Notice tone="danger" title="This transaction can't be shown" className="mt-4">
+          {summaryError}
+        </Notice>
+      )}
+      {details && (
+        <>
+          <TransferSummary summary={details.summary} walletName={wallet?.alias} />
+          <TransactionDetails summary={details.summary} />
+        </>
+      )}
+      {details && highFee && (
+        <Notice tone="danger" title="Unusually high fee" className="mt-4">
+          This transaction pays {formatZec(details.summary.fee)} in fees, more
+          than {formatZec(HIGH_FEE_ZATOSHI)}. The fee goes to miners, not to
+          the recipient, and can&apos;t be recovered.
+          <label className="flex items-center gap-2 mt-2 font-bold cursor-pointer">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--color-danger)]"
+              checked={highFeeAccepted}
+              onChange={(e) => setHighFeeAccepted(e.target.checked)}
             />
-            <section className="mt-2">
-              <ApprovalPanelHeader
-                numberOfTransactions={flowCount(details.summary)}
-                onChangeViewData={setDisplayTransactionData}
-                viewTransactionData={displayTransactionData}
-              />
-              {displayTransactionData ? (
-                <TransactionDataPanel data={summaryAsText(details.summary)} />
-              ) : (
-                <Stack gap={2}>
-                  <Commitment summary={details.summary} />
-                </Stack>
-              )}
-            </section>
-          </>
-        )}
-      </main>
-      <form onSubmit={handleApproveSubmit}>
-        {details && highFee && (
-          <Alert
-            type="error"
-            title="Unusually high fee"
-            className="mb-3 text-xs"
-          >
-            This transaction pays {formatZec(details.summary.fee)} in fees, more
-            than {formatZec(HIGH_FEE_ZATOSHI)}. The fee goes to miners, not to
-            the recipient, and cannot be recovered.
-            <div className="flex items-center gap-3 mt-3">
-              <Checkbox
-                id="accept-high-fee"
-                checked={highFeeAccepted}
-                onChange={(e) => setHighFeeAccepted(e.target.checked)}
-              />
-              <label htmlFor="accept-high-fee" className="text-xs font-bold">
-                I understand and want to pay this fee
-              </label>
-            </div>
-          </Alert>
-        )}
-        <ApprovalActions
-          onReject={() => void handleReject()}
-          approveDisabled={!details || (highFee && !highFeeAccepted)}
-        />
-      </form>
-    </Stack>
+            I understand and want to pay this fee
+          </label>
+        </Notice>
+      )}
+      <ActionBar>
+        <Button variant="secondary" onClick={() => void handleReject()}>
+          Reject
+        </Button>
+        <Button type="submit" disabled={!details || (highFee && !highFeeAccepted)}>
+          Approve
+        </Button>
+      </ActionBar>
+    </form>
   );
 };

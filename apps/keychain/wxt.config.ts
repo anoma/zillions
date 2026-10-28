@@ -138,8 +138,9 @@ export default defineConfig({
       "The Zillions Keychain manages a user's wallet for the Zcash ecosystem.",
     version: pkg.version,
     // `tabs` lets the background find/focus an already-open Setup tab by URL
-    // (browser.tabs.query({ url })) instead of opening duplicates.
-    permissions: ["storage", "tabs"],
+    // (browser.tabs.query({ url })) instead of opening duplicates. `idle`
+    // drives auto-lock and shows no install warning.
+    permissions: ["storage", "tabs", "idle"],
     // Toolbar action opens the popup (`entrypoints/popup`). WXT fills in
     // `default_popup` from that entrypoint; we only set the title here. The
     // popup itself redirects to the Setup tab when no wallet exists yet.

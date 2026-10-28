@@ -9,6 +9,7 @@ import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 
 import type {
   AccountStore,
+  ApprovalLogEntry,
   ActiveAccount,
   DerivedAccount,
   IpcKind,
@@ -107,6 +108,14 @@ const isPcztSummary = (v: unknown): v is PcztSummary =>
   Array.isArray(v.ironwoodInputs) &&
   isOutputArray(v.ironwoodOutputs);
 
+const isApprovalLogEntry = (v: unknown): v is ApprovalLogEntry =>
+  isRecord(v) &&
+  typeof v.id === "string" &&
+  typeof v.at === "number" &&
+  typeof v.origin === "string" &&
+  typeof v.kind === "string" &&
+  typeof v.outcome === "string";
+
 /**
  * Validate (and narrow) a raw response for a given channel. Throws
  * `ResponseShapeError` if the background returned something off-contract.
@@ -135,8 +144,20 @@ export const validateResponse = <K extends IpcKind>(
     case "approvals/submitSignTx":
     case "approvals/rejectSignTx":
     case "approvals/submitUpdateDefaultAccount":
+    case "approvals/clearLog":
+    case "settings/setAutoLock":
       // void — accept undefined/null
       return undefined as IpcResponse<K>;
+
+    case "settings/getAutoLock":
+      if (typeof value !== "number")
+        throw new ResponseShapeError(kind, "expected number");
+      return value as IpcResponse<K>;
+
+    case "approvals/log":
+      if (!Array.isArray(value) || !value.every(isApprovalLogEntry))
+        throw new ResponseShapeError(kind, "expected ApprovalLogEntry[]");
+      return value as IpcResponse<K>;
 
     case "vault/lockState":
       if (!isLockState(value))

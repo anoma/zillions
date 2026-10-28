@@ -19,18 +19,34 @@ import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
-import type { LedgerSignatures, LedgerSignTx } from "../../ipc/contract";
+import { payments, transferAmount } from "../../approvals/utils/pczt";
+import type {
+  ApprovalKind,
+  ApprovalLogEntry,
+  LedgerSignatures,
+  LedgerSignTx,
+} from "../../ipc/contract";
 import { LocalStorage, type KeyStoreType } from "../../storage";
 import { buildPcztSummary, linkAddress } from "../crypto/zillions";
 import { Keyring } from "../keyring";
 import { VaultService } from "../vault";
 import { AccountRepository } from "../vault/accounts";
 import type { ActiveAccountStore } from "../vault/types";
+import type { ApprovalLog } from "./log";
 import { toPublicAccount } from "./publicAccount";
+
+/** What the log needs to know about a request beyond its outcome. */
+type RequestMeta = {
+  origin: string;
+  kind: ApprovalKind;
+  /** Read at decision time, once the popup has loaded what it shows. */
+  describe?: () => Promise<Partial<ApprovalLogEntry>>;
+};
 
 type Resolver = {
   resolve: (result?: unknown) => void;
   reject: (error?: unknown) => void;
+  meta: RequestMeta;
 };
 
 const MAX_OPEN_APPROVALS = 3;
@@ -47,6 +63,8 @@ const isInActiveScope = (record: KeyStoreType, activeId?: string): boolean =>
 type PendingSignTx = {
   pczt: string;
   signer?: string;
+  /** Kept once the popup asked for it, so the log can name amount and payee. */
+  summary?: PcztSummary;
 };
 
 const KEEPALIVE_INTERVAL_MS = 20_000;
@@ -87,13 +105,15 @@ export class ApprovalsService {
     protected readonly localStorage: LocalStorage,
     protected readonly vaultService: VaultService,
     protected readonly accounts: AccountRepository,
-    protected readonly keyring: Keyring
+    protected readonly keyring: Keyring,
+    protected readonly log: ApprovalLog
   ) {}
 
   /** `tabs.onRemoved` handler, registered by the background entrypoint. */
   handleTabRemoved(tabId: number): void {
     const resolver = this.resolverMap[tabId];
     if (resolver) {
+      void this.record(resolver.meta, "closed");
       resolver.reject(new Error("Window closed"));
       this.removeResolver(tabId);
     }
@@ -124,7 +144,7 @@ export class ApprovalsService {
 
     if (needsApproval || isLocked) {
       return this.launchApprovalPopup(
-        origin,
+        { origin, kind: "connect" },
         approvalRoutes.approveConnection(),
         { interfaceOrigin: origin }
       );
@@ -137,7 +157,7 @@ export class ApprovalsService {
 
     if (isConnected) {
       return this.launchApprovalPopup(
-        origin,
+        { origin, kind: "disconnect" },
         approvalRoutes.approveDisconnection(),
         { interfaceOrigin: origin }
       );
@@ -187,11 +207,22 @@ export class ApprovalsService {
 
     const msgId = uuid();
     // The resolved address, so the summary and the signature use one account.
-    this.pendingTxs.set(msgId, { pczt, signer: record.address });
+    const pending: PendingSignTx = { pczt, signer: record.address };
+    this.pendingTxs.set(msgId, pending);
+
+    const describe = async (): Promise<Partial<ApprovalLogEntry>> => {
+      const account = await this.walletName(record);
+      if (!pending.summary) return { account };
+      return {
+        account,
+        amount: transferAmount(pending.summary).toString(),
+        to: payments(pending.summary)[0]?.address,
+      };
+    };
 
     try {
       return await this.launchApprovalPopup<string>(
-        origin,
+        { origin, kind: "sign", describe },
         approvalRoutes.approveSignTx(
           msgId,
           encodeURIComponent(origin),
@@ -239,7 +270,7 @@ export class ApprovalsService {
     this.pendingLinks.set(msgId, { sealed, nk, signer: record.address });
     try {
       return await this.launchApprovalPopup<string>(
-        origin,
+        { origin, kind: "open-link" },
         approvalRoutes.approveOpenLinkKey(),
         { msgId, origin }
       );
@@ -260,7 +291,9 @@ export class ApprovalsService {
       resolvers.resolve(
         await this.keyring.openLinkKey(pending.sealed, pending.nk, pending.signer)
       );
+      void this.record(resolvers.meta, "approved");
     } catch (e) {
+      void this.record(resolvers.meta, "failed");
       resolvers.reject(e);
     }
   }
@@ -280,9 +313,13 @@ export class ApprovalsService {
       throw new Error(`Account for ${address} not found!`);
     }
     return this.launchApprovalPopup(
-      origin,
+      {
+        origin,
+        kind: "default-account",
+        describe: async () => ({ account: record.alias }),
+      },
       approvalRoutes.approveUpdateDefaultAccount(),
-      { address, alias: record.alias }
+      { address, alias: record.alias, origin }
     );
   }
 
@@ -296,6 +333,7 @@ export class ApprovalsService {
     }
     const ufvk = await this.keyring.viewingKey(pending.signer);
     const summary = await buildPcztSummary(pending.pczt, ufvk);
+    pending.summary = summary;
     const paid = [
       ...summary.transparentOutputs,
       ...summary.saplingOutputs,
@@ -349,8 +387,10 @@ export class ApprovalsService {
         record.address,
         ledgerSignatures
       );
+      void this.record(resolvers.meta, "approved");
       resolvers.resolve(signed);
     } catch (e) {
+      void this.record(resolvers.meta, "failed");
       resolvers.reject(e);
     }
   }
@@ -358,6 +398,7 @@ export class ApprovalsService {
   /** The approval popup rejected: drop the PCZT and fail the dapp's promise. */
   async rejectSignTx(popupTabId: number, msgId: string): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
+    await this.record(resolvers.meta, "rejected");
     this.pendingTxs.delete(msgId);
     resolvers.reject(new Error("Sign Tx rejected"));
   }
@@ -380,8 +421,10 @@ export class ApprovalsService {
         record.id,
         record.type as ActiveAccountStore["type"]
       );
+      void this.record(resolvers.meta, "approved");
       resolvers.resolve();
     } catch (e) {
+      void this.record(resolvers.meta, "failed");
       resolvers.reject(e);
     }
   }
@@ -395,13 +438,16 @@ export class ApprovalsService {
     const resolvers = this.getResolver(popupTabId);
 
     if (!allow) {
+      await this.record(resolvers.meta, "rejected");
       resolvers.reject(new Error("Connection request rejected"));
       return;
     }
 
     try {
+      // An approved origin only opened the window to log in: no new decision.
       if (!(await this.localStorage.getApprovedOrigins())?.includes(origin)) {
         await this.localStorage.addApprovedOrigin(origin);
+        await this.record(resolvers.meta, "approved");
       }
     } catch (e) {
       resolvers.reject(e);
@@ -419,17 +465,27 @@ export class ApprovalsService {
     const resolvers = this.getResolver(popupTabId);
 
     if (!revoke) {
+      await this.record(resolvers.meta, "rejected");
       resolvers.reject(new Error("Disconnection request rejected"));
       return;
     }
 
     try {
       await this.revokeConnection(origin);
+      await this.record(resolvers.meta, "approved");
     } catch (e) {
       resolvers.reject(e);
       return;
     }
     resolvers.resolve();
+  }
+
+  approvalLog(): Promise<ApprovalLogEntry[]> {
+    return this.log.entries();
+  }
+
+  clearApprovalLog(): Promise<void> {
+    return this.log.clear();
   }
 
   async approvedOrigins(): Promise<string[]> {
@@ -441,6 +497,30 @@ export class ApprovalsService {
   }
 
   // ---- internals ----
+
+  private async record(
+    meta: RequestMeta,
+    outcome: ApprovalLogEntry["outcome"]
+  ): Promise<void> {
+    let details: Partial<ApprovalLogEntry> = {};
+    try {
+      details = (await meta.describe?.()) ?? {};
+    } catch {
+      // The entry still says who asked for what.
+    }
+    await this.log.record({
+      ...details,
+      origin: meta.origin,
+      kind: meta.kind,
+      outcome,
+    });
+  }
+
+  /** A shielded account is named after the wallet (its parent) it belongs to. */
+  private async walletName(record: KeyStoreType): Promise<string> {
+    if (!record.parentId) return record.alias;
+    return (await this.accounts.findById(record.parentId))?.alias ?? record.alias;
+  }
 
   private async isDomainApproved(origin: string): Promise<boolean> {
     const approvedOrigins = (await this.localStorage.getApprovedOrigins()) || [];
@@ -498,10 +578,11 @@ export class ApprovalsService {
   };
 
   private launchApprovalPopup = async <T>(
-    origin: string,
+    meta: RequestMeta,
     route: string,
     params?: Record<string, string>
   ): Promise<T> => {
+    const { origin } = meta;
     if (this.popupWindowByOrigin.has(origin)) {
       const windowId = this.popupWindowByOrigin.get(origin);
       if (windowId !== undefined) {
@@ -541,6 +622,7 @@ export class ApprovalsService {
 
     return new Promise<T>((resolve, reject) => {
       this.resolverMap[popupTabId] = {
+        meta,
         resolve: (args) => {
           this.removeResolver(popupTabId);
           this.popupWindowByOrigin.delete(origin);
