@@ -18,8 +18,8 @@ import type {
 } from "../../ipc/contract";
 import { mnemonicToSeed } from "../../background/crypto/mnemonic";
 import { deriveAccount, getNetwork } from "../../background/crypto/zillions";
-import type { DeviceKeys } from "../../hardware";
-import { LEDGER_BIP44_PATH, LEDGER_ZIP32_PATH } from "../../hardware/ledger-session";
+import type { DeviceKind, DeviceKeys } from "../../hardware";
+import { engines } from "../../hardware/engines";
 
 export type CreateAccountInput = {
   accountSecret: AccountSecret;
@@ -131,17 +131,22 @@ export const createAccount = async (
   }
 };
 
-export type CreateLedgerAccountResult =
+export type CreateDeviceAccountResult =
   | (CreateAccountResult & { ok: true; alreadyImported: boolean })
   | { ok: false; error: string };
 
 /** Store a connected device's public keys, setting the password first if needed. */
-export const createLedgerAccount = async (
+export const createDeviceAccount = async (
   client: BackgroundClient,
-  input: { keys: DeviceKeys; passwordRequired: boolean; password?: string },
+  input: {
+    device: DeviceKind;
+    keys: DeviceKeys;
+    passwordRequired: boolean;
+    password?: string;
+  },
   onProgress: (info: string) => void
-): Promise<CreateLedgerAccountResult> => {
-  const { keys, passwordRequired, password } = input;
+): Promise<CreateDeviceAccountResult> => {
+  const { device, keys, passwordRequired, password } = input;
   try {
     if (passwordRequired && !password) {
       return { ok: false, error: "Password is required and was not provided" };
@@ -151,12 +156,12 @@ export const createLedgerAccount = async (
       await client.createPassword(password);
     }
 
-    onProgress("Storing your Ledger account.");
+    onProgress(`Storing your ${engines[device].name} account.`);
     const result = await client.saveDeviceAccount({
-      device: "ledger",
+      device,
       alias: keys.alias,
-      bip44Path: LEDGER_BIP44_PATH,
-      zip32Path: LEDGER_ZIP32_PATH,
+      bip44Path: { account: keys.hdIndex, change: 0, index: 0 },
+      zip32Path: { account: keys.hdIndex },
       transparentAddress: keys.transparentAddress,
       shieldedAddress: keys.shieldedAddress,
       viewingKey: keys.viewingKey,

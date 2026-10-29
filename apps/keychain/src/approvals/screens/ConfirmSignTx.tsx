@@ -2,27 +2,16 @@
  * Final sign confirmation: re-verifies the password when the 30-minute auth
  * window expired, then submits the approved sign request (the background
  * decrypts the seed and signs the PCZT) and closes. A hardware-wallet
- * account's PCZT is signed on the device from here instead, as the device's
- * transport needs a page, and its engine puts the signing output into the
- * PCZT keyring-side.
+ * account's PCZT is signed on the device from here instead — the device's
+ * own Sign view runs the session and hands over its opaque signing output,
+ * which its engine verifies and folds into the PCZT keyring-side.
  */
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert, Input, Stack } from "@zillions/components";
 
-import {
-  initZillionsSdk,
-  ledgerTransaction,
-} from "../../background/crypto/zillions";
-import { engines } from "../../hardware";
-import { DeviceProgress } from "../../hardware/device-progress";
-import {
-  LEDGER_STEPS,
-  signLedgerPczt,
-  withLedger,
-  type LedgerStep,
-} from "../../hardware/ledger-session";
+import { wallets } from "../../hardware";
 import type { DeviceSignTx } from "../../ipc/contract";
 import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
@@ -30,8 +19,6 @@ import { closeCurrentTab } from "../closeCurrentTab";
 import { Status } from "../types";
 import { ApprovalActions } from "../ui/ApprovalActions";
 import { StatusBox } from "../ui/StatusBox";
-
-const SIGN_STEPS: LedgerStep[] = ["connect", "unlock", "open-app", "sign"];
 
 type Props = {
   details: ApprovalDetails;
@@ -49,9 +36,6 @@ export const ConfirmSignTx = ({ details }: Props) => {
   const [statusInfo, setStatusInfo] = useState("");
   // Undefined until known; null when the keys aren't on a device.
   const [device, setDevice] = useState<DeviceSignTx | null>();
-  /** Set while the device signs or after it failed. */
-  const [ledgerStep, setLedgerStep] = useState<LedgerStep>();
-  const abortLedger = useRef<AbortController>(undefined);
 
   // The background consumes the request on the first submit, and StrictMode
   // runs the auto-submit effect twice: a ref survives both, state would not.
@@ -71,39 +55,27 @@ export const ConfirmSignTx = ({ details }: Props) => {
     }
   };
 
-  const signOnDevice = async (): Promise<void> => {
-    if (submitted.current || !device) return;
-    submitted.current = true;
-    setError(undefined);
-    setStatus(Status.Pending);
-    abortLedger.current = new AbortController();
-    const { signal } = abortLedger.current;
-    try {
-      const signatures = await withLedger(
-        setLedgerStep,
-        async (ledger) => {
-          await initZillionsSdk();
-          const transaction = ledgerTransaction(device.pczt, device.hdIndex);
-          return signLedgerPczt(ledger, transaction, setLedgerStep);
-        },
-        signal,
-      );
-      // Opaque to the contract; the Ledger engine decodes keyring-side.
-      await client?.submitSignTx(msgId, signer, JSON.stringify(signatures));
-      setStatus(Status.Completed);
-    } catch (e) {
-      // The request stays pending until the background takes the signatures.
-      submitted.current = false;
-      if (signal.aborted) return;
-      setError(engines.ledger.describeError(e));
-      setStatus(Status.Failed);
-    }
-  };
-
-  const cancelLedger = async () => {
-    abortLedger.current?.abort();
+  const rejectSignTx = async () => {
     await client?.rejectSignTx(msgId);
     await closeCurrentTab();
+  };
+
+  /** The signing device's own screen: session, progress and retries included. */
+  const signOnDeviceView = (input: DeviceSignTx) => {
+    const Sign = wallets[input.device].views.Sign;
+    return (
+      <Sign
+        input={input}
+        onResult={async (deviceData) => {
+          // Opaque to the contract; the device's engine decodes it
+          // keyring-side. Throws on a failed submit, which re-arms the
+          // view's retry.
+          await client?.submitSignTx(msgId, signer, deviceData);
+          setStatus(Status.Completed);
+        }}
+        onCancel={() => void rejectSignTx()}
+      />
+    );
   };
 
   const handleApproveSignTx = useCallback(
@@ -152,9 +124,8 @@ export const ConfirmSignTx = ({ details }: Props) => {
 
   useEffect(() => {
     // User is authenticated with a valid session, so submit signed Tx:
-    if (requiresAuth !== false || device === undefined) return;
-    if (device) void signOnDevice();
-    else void signTx();
+    if (requiresAuth !== false || device === undefined || device) return;
+    void signTx();
   }, [requiresAuth, device]);
 
   useEffect(() => {
@@ -184,15 +155,7 @@ export const ConfirmSignTx = ({ details }: Props) => {
             />
           </>
         )}
-        {!requiresAuth && device && (
-          <DeviceProgress
-            steps={SIGN_STEPS.map((key) => LEDGER_STEPS[key])}
-            current={ledgerStep ?? "connect"}
-            error={status === Status.Failed ? error : undefined}
-            onCancel={() => void cancelLedger()}
-            onRetry={() => void signOnDevice()}
-          />
-        )}
+        {!requiresAuth && device && signOnDeviceView(device)}
         {!requiresAuth &&
           !device &&
           (status === Status.Failed ? (

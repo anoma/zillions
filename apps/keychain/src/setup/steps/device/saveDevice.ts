@@ -1,23 +1,28 @@
 /**
- * Persist the connected Ledger and report progress to the completion step.
- * Shared by Start (password already set) and LedgerPassword.
+ * Persist the connected device and report progress to the completion step.
+ * Shared by DeviceConnect (password already set) and NameAndPassword.
  */
 import type { Dispatch } from "react";
 
 import type { BackgroundClient } from "../../../ipc/client";
-import { createLedgerAccount } from "../../model/accountManager";
-import type { DeviceKeys } from "../../../hardware";
+import type { DeviceKind, DeviceKeys } from "../../../hardware";
+import { createDeviceAccount } from "../../model/accountManager";
 import type { WizardEvent } from "../../model/wizard";
 
-export const saveLedger = async (
+export const saveDevice = async (
   client: BackgroundClient,
   dispatch: Dispatch<WizardEvent>,
-  input: { keys: DeviceKeys; passwordRequired: boolean; password?: string }
+  input: {
+    device: DeviceKind;
+    keys: DeviceKeys;
+    passwordRequired: boolean;
+    password?: string;
+  }
 ): Promise<void> => {
-  dispatch({ type: "goToStep", step: "ledger.complete" });
+  dispatch({ type: "goToStep", step: "device.complete" });
   dispatch({ type: "completionStarted", info: "Starting…" });
 
-  const result = await createLedgerAccount(client, input, (info) =>
+  const result = await createDeviceAccount(client, input, (info) =>
     dispatch({ type: "completionInfo", info })
   );
 

@@ -26,6 +26,7 @@ export const STEP_META: Record<Step, StepMeta> = {
   "import.name": { title: "Set Up Your Imported Keys", index: 2, total: 3 },
   "import.complete": { title: "Keys Imported", index: 3, total: 3 },
 
-  "ledger.password": { title: "Set Up Your Ledger", index: 1, total: 2 },
-  "ledger.complete": { title: "Ledger Connected", index: 2, total: 2 },
+  "device.connect": { title: "Connect Your Device", index: 1, total: 3 },
+  "device.name": { title: "Set Up Your Device", index: 2, total: 3 },
+  "device.complete": { title: "Device Connected", index: 3, total: 3 },
 };
