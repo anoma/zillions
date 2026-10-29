@@ -5,14 +5,14 @@ import { ActionButton, Stack } from "@zillions/components";
 import { ZEmblem } from "@zillions/components/assets/ZEmblem";
 import { useRef, useState } from "react";
 
+import { engines } from "../../hardware";
+import { DeviceProgress } from "../../hardware/device-progress";
 import {
-  canUseLedger,
   connectLedger,
-  ledgerErrorMessage,
+  LEDGER_STEPS,
   type LedgerStep,
-} from "../model/ledger";
+} from "../../hardware/ledger-session";
 import { useWizard } from "../SetupContext";
-import { LedgerProgress } from "../ui/LedgerProgress";
 import { saveLedger } from "./ledger/saveLedger";
 
 const STEPS: LedgerStep[] = ["connect", "unlock", "open-app", "confirm-key"];
@@ -33,7 +33,7 @@ export const Start = () => {
     try {
       keys = await connectLedger(setStep, signal);
     } catch (e) {
-      if (!signal.aborted) setError(ledgerErrorMessage(e));
+      if (!signal.aborted) setError(engines.ledger.describeError(e));
       return;
     }
     dispatch({ type: "ledgerConnected", keys });
@@ -55,8 +55,8 @@ export const Start = () => {
         <ZEmblem className="w-full" />
       </div>
       {step ?
-        <LedgerProgress
-          steps={STEPS}
+        <DeviceProgress
+          steps={STEPS.map((key) => LEDGER_STEPS[key])}
           current={step}
           error={error}
           onCancel={onCancel}
@@ -82,7 +82,7 @@ export const Start = () => {
           >
             Import existing keys
           </ActionButton>
-          {canUseLedger() && (
+          {engines.ledger.isSupported() && (
             <ActionButton
               size="lg"
               outlineColor="black"

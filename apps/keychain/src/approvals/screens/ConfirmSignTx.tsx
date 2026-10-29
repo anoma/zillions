@@ -14,20 +14,22 @@ import {
   initZillionsSdk,
   ledgerTransaction,
 } from "../../background/crypto/zillions";
-import type { LedgerSignTx } from "../../ipc/contract";
-import { PageHeader } from "../../popup/ui/PageHeader";
+import { engines } from "../../hardware";
+import { DeviceProgress } from "../../hardware/device-progress";
 import {
-  ledgerErrorMessage,
+  LEDGER_STEPS,
   signLedgerPczt,
   withLedger,
   type LedgerStep,
-} from "../../setup/model/ledger";
-import { LedgerProgress } from "../../setup/ui/LedgerProgress";
+} from "../../hardware/ledger-session";
+import type { LedgerSignTx } from "../../ipc/contract";import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 import { Status } from "../types";
 import { ApprovalActions } from "../ui/ApprovalActions";
 import { StatusBox } from "../ui/StatusBox";
+
+const SIGN_STEPS: LedgerStep[] = ["connect", "unlock", "open-app", "sign"];
 
 type Props = {
   details: ApprovalDetails;
@@ -90,7 +92,7 @@ export const ConfirmSignTx = ({ details }: Props) => {
       // The request stays pending until the background takes the signatures.
       submitted.current = false;
       if (signal.aborted) return;
-      setError(ledgerErrorMessage(e));
+      setError(engines.ledger.describeError(e));
       setStatus(Status.Failed);
     }
   };
@@ -180,8 +182,8 @@ export const ConfirmSignTx = ({ details }: Props) => {
           </>
         )}
         {!requiresAuth && ledger && (
-          <LedgerProgress
-            steps={["connect", "unlock", "open-app", "sign"]}
+          <DeviceProgress
+            steps={SIGN_STEPS.map((key) => LEDGER_STEPS[key])}
             current={ledgerStep ?? "connect"}
             error={status === Status.Failed ? error : undefined}
             onCancel={() => void cancelLedger()}

@@ -12,7 +12,7 @@ import type {
   DerivedAccount,
   Zip32Path,
 } from "../../ipc/contract";
-import type { LedgerKeys } from "./ledger";
+import type { DeviceKeys } from "../../hardware";
 import type { MnemonicLength, SecretKind } from "./secrets";
 
 /** Which onboarding branch the user is in. */
@@ -67,8 +67,8 @@ export type WizardState = {
   parentAccount?: AccountStore;
   shieldedAccount?: DerivedAccount;
 
-  // --- ledger ---
-  ledgerKeys?: LedgerKeys;
+  // --- hardware wallet ---
+  ledgerKeys?: DeviceKeys;
 };
 
 export const initialWizardState = (passwordRequired: boolean): WizardState => ({
@@ -94,7 +94,7 @@ export type WizardEvent =
   | { type: "passwordRequirementResolved"; required: boolean }
   | { type: "chooseFlow"; flow: Extract<Flow, "create" | "import"> }
   | { type: "goToStep"; step: Step }
-  | { type: "ledgerConnected"; keys: LedgerKeys }
+  | { type: "ledgerConnected"; keys: DeviceKeys }
   | { type: "setMnemonic"; mnemonic: string[] }
   | { type: "setMnemonicLength"; length: MnemonicLength }
   | { type: "setSecretKind"; kind: SecretKind }

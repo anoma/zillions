@@ -18,7 +18,8 @@ import type {
 } from "../../ipc/contract";
 import { mnemonicToSeed } from "../../background/crypto/mnemonic";
 import { deriveAccount, getNetwork } from "../../background/crypto/zillions";
-import { LEDGER_BIP44_PATH, LEDGER_ZIP32_PATH, type LedgerKeys } from "./ledger";
+import type { DeviceKeys } from "../../hardware";
+import { LEDGER_BIP44_PATH, LEDGER_ZIP32_PATH } from "../../hardware/ledger-session";
 
 export type CreateAccountInput = {
   accountSecret: AccountSecret;
@@ -134,10 +135,10 @@ export type CreateLedgerAccountResult =
   | (CreateAccountResult & { ok: true; alreadyImported: boolean })
   | { ok: false; error: string };
 
-/** Store a connected Ledger's public keys, setting the password first if needed. */
+/** Store a connected device's public keys, setting the password first if needed. */
 export const createLedgerAccount = async (
   client: BackgroundClient,
-  input: { keys: LedgerKeys; passwordRequired: boolean; password?: string },
+  input: { keys: DeviceKeys; passwordRequired: boolean; password?: string },
   onProgress: (info: string) => void
 ): Promise<CreateLedgerAccountResult> => {
   const { keys, passwordRequired, password } = input;
@@ -152,7 +153,7 @@ export const createLedgerAccount = async (
 
     onProgress("Storing your Ledger account.");
     const result = await client.saveLedgerAccount({
-      alias: keys.deviceName,
+      alias: keys.alias,
       bip44Path: LEDGER_BIP44_PATH,
       zip32Path: LEDGER_ZIP32_PATH,
       transparentAddress: keys.transparentAddress,
