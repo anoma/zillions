@@ -29,7 +29,6 @@ export const StepTransition = ({ stepKey, children }: Props) => {
       { autoAlpha: 1, y: 0, duration: 0.15, ease: "power3.out" }
     );
     // first-mount only
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // On step change: fade out current, swap content, fade in.
@@ -58,7 +57,6 @@ export const StepTransition = ({ stepKey, children }: Props) => {
     return () => {
       tl.kill();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepKey, children]);
 
   return (

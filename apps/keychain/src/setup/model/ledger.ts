@@ -179,14 +179,14 @@ const runAction = <
   });
 
 /**
- * Run `use` on a connected Zcash app, closing the session after; rejects if
+ * Run `run` on a connected Zcash app, closing the session after; rejects if
  * the app is older than `MIN_ZCASH_APP_VERSION` or `signal` aborts. Must be
  * called from a user gesture: WebHID only shows the device picker in
  * response to one.
  */
 export const withLedger = async <T>(
   onStep: (step: LedgerStep) => void,
-  use: (signer: SignerZcash, device: DiscoveredDevice) => Promise<T>,
+  run: (signer: SignerZcash, device: DiscoveredDevice) => Promise<T>,
   signal?: AbortSignal,
 ): Promise<T> => {
   const dmk = new DeviceManagementKitBuilder()
@@ -208,7 +208,7 @@ export const withLedger = async <T>(
         `Update the Zcash app on your Ledger to ${MIN_ZCASH_APP_VERSION} or later (it has ${version}).`,
       );
     }
-    return use(signer, device);
+    return run(signer, device);
   };
   const aborted = new Promise<never>((_, reject) =>
     signal?.addEventListener("abort", () =>
