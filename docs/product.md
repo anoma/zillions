@@ -515,6 +515,8 @@ Challenges to check, one by one:
   open the Zcash app, approve) with a way to cancel or try again.
 - The recovery phrase and spending keys can't be revealed: they never leave
   the device.
+- How the device code is laid out (and how a second device slots in) is in
+  [hardware-wallets.md](design/hardware-wallets.md).
 
 ## 4. Network
 
