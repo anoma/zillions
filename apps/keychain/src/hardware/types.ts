@@ -1,5 +1,5 @@
 /**
- * The hardware-wallet abstraction. Every device (Ledger today; Keystone next)
+ * The hardware-wallet abstraction. Every device (Ledger and Keystone today)
  * plugs in as one engine (background-safe logic) plus one set of views (the
  * interactive halves the setup wizard and the approval popup render).
  *

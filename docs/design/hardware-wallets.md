@@ -1,10 +1,11 @@
 # Hardware wallets
 
-Status: built in October 2026 on `tiago/generic-hw-wallet`. Behaviour
+Status: built in October 2026 on `tiago/generic-hw-wallet` (the
+abstraction) and `tiago/keystone-support` (the second device). Behaviour
 doesn't change; the Ledger-only code became a device abstraction so the
-next device (Keystone) slots in without touching the IPC contract or the
-keyring. What the user sees stays in
-[product.md](../product.md) (§3.6); this is how the code is laid out.
+next device slots in without touching the IPC contract or the keyring.
+What the user sees stays in [product.md](../product.md) (§3.6, §3.7); this
+is how the code is laid out.
 
 ## Why
 
@@ -50,9 +51,51 @@ and the wizard.
 - **Storage.** Account records gained an optional `device` field
   (vault schema V2 takes new fields without a migration). The parent of
   a Ledger account keeps the legacy `"ledger"` type; a device that only
-  exports a viewing key will parent a `"viewing-key"` account.
-  Projections normalize old records written before the field existed
-  (`deviceOf` in `background/keyring/types.ts`).
+  exports a viewing key parents a `"viewing-key"` account (the
+  Keystone's). Projections normalize old records written before the
+  field existed (`deviceOf` in `background/keyring/types.ts`).
+
+### The Keystone module
+
+The second device proves the abstraction: no contract change, no keyring
+change, no wizard change — just a kind, an engine, views.
+
+- **QR is the transport.** The device has no browser transport to drive:
+  `AnimatedQRCode`/`AnimatedQRScanner` (`@keystonehq/animated-qr`) turn
+  the PCZT into an animated UR (`zcash-pczt`, from
+  `@keystonehq/bc-ur-registry-zcash` — no Keystone SDK needed, its
+  `RegistryItem.toUR()` is enough) for the device's camera, and scan the
+  device's animated response back. The Sign view shows both at once:
+  the request's code above, the camera below. Camera access is the whole
+  posture — Firefox and Safari work, unlike the Ledger's WebHID.
+- **The response combines, it doesn't replace.** A Keystone signs and
+  strips the proof keys it holds no use for, so its PCZT alone can't
+  prove. `assembleSignedPczt` (`keystone.ts`) merges the response into
+  the keychain's full copy with the pczt crate's `Combiner`
+  (zcore's `combine_pczts`), which compares every global, input and
+  output field pairwise and refuses conflicting values — a response for
+  any other transaction is refused, and the signatures are checked
+  against the combined transaction when the app extracts it.
+- **The device proves its firmware.** Signed responses stamp
+  `keystone:fw_version` (three raw bytes, major/minor/build) into the
+  global's proprietary map. `assembleSignedPczt` refuses anything
+  without a readable stamp of at least 3.0.8 — the first release that
+  stamps at all (and signs Ironwood), so a stamp-less response is
+  indistinguishable from an unsupported one. The stamp reader is
+  `pczt_keystone_fw_version` in zcore; the device displays major minus
+  10, so raw `13.0.8` is what the user sees as "3.0.8".
+- **Connect derives what the device doesn't show.** A Keystone exports
+  keys only (a `zcash-accounts` UR: seed fingerprint, accounts with
+  name, index, UFVK): its Connect view derives the addresses from the
+  UFVK (`deriveAccountFromUfvk` in the zcore façade) before handing
+  over `DeviceKeys` — the same turn every account's keys go through.
+  The keyring's only knowledge is generic: an account identifies by its
+  transparent address, or the unified one when its keys name no
+  transparent receiver.
+- **Errors and retries stay in view.** Unlike the Ledger's step
+  machine, the camera keeps running; the views render the scanner's
+  errors through the engine's `describeError` and re-mount it to
+  re-ask for the camera.
 
 ## Layout
 
@@ -61,6 +104,8 @@ and the wizard.
   transport: discover, connect, app version, read keys, sign.
 - `src/hardware/ledger.ts` — the Ledger engine.
 - `src/hardware/ledger-views.tsx` — the Ledger screens.
+- `src/hardware/keystone.ts` — the Keystone engine.
+- `src/hardware/keystone-views.tsx` — the Keystone screens.
 - `src/hardware/device-progress.tsx` — the shared progress screen.
 - `src/hardware/engines.ts` / `index.ts` — the registries.
 
