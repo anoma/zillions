@@ -459,15 +459,16 @@ export class Keyring {
   }> {
     await this.vaultService.assertIsUnlocked();
 
-    // Today's devices hand over their addresses; deriving them from the
-    // viewing key (for devices that don't) arrives with those devices.
-    if (!input.transparentAddress || !input.shieldedAddress) {
+    // Every device account names a shielded side; its keys may have no
+    // transparent receiver, and the unified address identifies the
+    // account then.
+    const shieldedAddress = input.shieldedAddress;
+    if (!shieldedAddress) {
       throw new Error("Device did not provide its addresses");
     }
+    const address = input.transparentAddress ?? shieldedAddress;
 
-    const existing = await this.accounts.findByAddress(
-      input.transparentAddress
-    );
+    const existing = await this.accounts.findByAddress(address);
     if (existing) {
       const parent = existing.parentId
         ? await this.accounts.findById(existing.parentId)
@@ -504,8 +505,8 @@ export class Keyring {
     const accountStore: KeyStoreType = {
       id,
       alias: input.alias,
-      address: input.transparentAddress,
-      owner: input.transparentAddress,
+      address,
+      owner: address,
       path: input.bip44Path,
       type: parentType as KeyStoreType["type"],
       device: input.device,
@@ -525,7 +526,7 @@ export class Keyring {
       alias: input.alias,
       path: input.zip32Path,
       source: "imported",
-      shieldedAddress: input.shieldedAddress,
+      shieldedAddress,
       viewingKey: input.viewingKey,
       birthday: input.birthday,
       device: input.device,

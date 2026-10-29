@@ -16,6 +16,7 @@ import { useMemo, useState } from "react";
 
 import { ActionButton, Alert, Stack } from "@zillions/components";
 
+import { deriveAccountFromUfvk } from "../background/crypto/zillions";
 import { engines } from "./engines";
 import type { DeviceKeys, DeviceSignTx, DeviceViews } from "./types";
 
@@ -39,18 +40,24 @@ export const KeystoneConnect = ({
   // Remounts the scanner, re-asking for the camera after a denial.
   const [attempt, setAttempt] = useState(0);
 
-  const handleScan = ({ cbor }: { cbor: string }) => {
+  const handleScan = async ({ cbor }: { cbor: string }) => {
     try {
       const accounts = ZcashAccounts.fromCBOR(Buffer.from(cbor, "hex"));
       // The device may sync several accounts; take the first.
       const account = accounts.getAccounts()[0];
       if (!account) throw new Error("The Keystone exported no accounts");
-      void onKeys({
+      const viewingKey = account.getUfvk();
+      // The device exports keys only: derive the addresses it names here,
+      // like any account's keys are turned into addresses.
+      const addresses = await deriveAccountFromUfvk(viewingKey);
+      await onKeys({
         device: "keystone",
         alias: account.getName() || "Keystone",
-        viewingKey: account.getUfvk(),
+        viewingKey,
         seedFingerprint: accounts.getSeedFingerprint().toHex(),
         hdIndex: account.getIndex(),
+        transparentAddress: addresses.transparent,
+        shieldedAddress: addresses.unified,
       });
     } catch (e) {
       setError(engines.keystone.describeError(e));
