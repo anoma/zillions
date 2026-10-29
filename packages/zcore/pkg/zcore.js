@@ -81,6 +81,28 @@ export function claim_pczt(network, key, note, position, trees, to, claimer_ufvk
 }
 
 /**
+ * The second PCZT's signatures and proofs merged into the first: the
+ * keychain's copy (every input but the device's still unsigned) plus the
+ * device's signed-and-redacted export makes the complete signed PCZT.
+ * @param {Uint8Array} pczt0
+ * @param {Uint8Array} pczt1
+ * @returns {Uint8Array}
+ */
+export function combine_pczts(pczt0, pczt1) {
+    const ptr0 = passArray8ToWasm0(pczt0, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(pczt1, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.combine_pczts(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  * @param {string} network
  * @param {Uint8Array} seed
@@ -93,6 +115,25 @@ export function derive_account(network, seed, hd_index) {
     const ptr1 = passArray8ToWasm0(seed, wasm.__wbindgen_malloc);
     const len1 = WASM_VECTOR_LEN;
     const ret = wasm.derive_account(ptr0, len0, ptr1, len1, hd_index);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * The account at unified full viewing key `ufvk` (a device's export):
+ * `{ ufvk, transparent, unified }`.
+ * @param {string} network
+ * @param {string} ufvk
+ * @returns {any}
+ */
+export function derive_account_from_ufvk(network, ufvk) {
+    const ptr0 = passStringToWasm0(network, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(ufvk, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.derive_account_from_ufvk(ptr0, len0, ptr1, len1);
     if (ret[2]) {
         throw takeFromExternrefTable0(ret[1]);
     }

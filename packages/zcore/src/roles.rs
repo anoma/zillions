@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use orchard::circuit::{OrchardCircuitVersion, ProvingKey, VerifyingKey};
 use pczt::roles::verifier::OrchardError;
 use pczt::roles::{
-    prover::Prover, signer::Signer, spend_finalizer::SpendFinalizer,
+    combiner::Combiner, prover::Prover, signer::Signer, spend_finalizer::SpendFinalizer,
     tx_extractor::TransactionExtractor, updater::Updater, verifier::Verifier,
 };
 use pczt::Pczt;
@@ -562,6 +562,17 @@ pub fn sign_pczt(
     serialize(signed)
 }
 
+/// The second PCZT's signatures and proofs merged into the first: the
+/// keychain's copy (every input but the device's still unsigned) plus the
+/// device's signed-and-redacted export makes the complete signed PCZT.
+#[wasm_bindgen]
+pub fn combine_pczts(pczt0: &[u8], pczt1: &[u8]) -> Result<Vec<u8>, JsError> {
+    let combined = Combiner::new(vec![parse(pczt0)?, parse(pczt1)?])
+        .combine()
+        .map_err(|e| JsError::new(&format!("{e:?}")))?;
+    serialize(combined)
+}
+
 /// What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
 /// (`transparent`, `sapling`, `orchard`, `ironwood`), values in zatoshis as
 /// strings. Each output says whether it's `mine`, by the signing account's
@@ -622,4 +633,58 @@ pub fn prove_pczt(
 pub fn warm_prover() {
     PROVING_KEY.get_or_init(|| ProvingKey::build(CIRCUIT));
     VERIFYING_KEY.get_or_init(|| VerifyingKey::build(CIRCUIT));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::build::tests::wallet_and_trees;
+    use crate::send::tests::{plan, wallet_ufvk, SEED};
+    use pczt::roles::redactor::Redactor;
+
+    const MAIN: Network = Network::MainNetwork;
+
+    fn ufvk() -> UnifiedFullViewingKey {
+        UnifiedFullViewingKey::decode(&MAIN, &wallet_ufvk()).unwrap()
+    }
+
+    /// 50,000 from a 200,000 Ironwood note to a transparent address.
+    fn ironwood_send() -> Pczt {
+        let (wallet, trees, _) = wallet_and_trees("ironwood", 200_000);
+        let to = crate::transparent_tx::derive(&MAIN, &wallet_ufvk(), "external", 5, 1)
+            .unwrap()
+            .remove(0);
+        let proposal = plan(&wallet, &to, 50_000);
+        crate::build::pczt(
+            &wallet,
+            &ufvk(),
+            SeedFingerprint::from_seed(&SEED).unwrap().to_bytes(),
+            0,
+            &proposal,
+            &trees,
+            None,
+        )
+        .unwrap()
+    }
+
+    /// The device signs and strips the proof keys; combining restores them
+    /// from the keyring's copy, so proving succeeds and the extractor's
+    /// every-signature check passes.
+    #[test]
+    fn combines_a_devices_output_back_with_the_keychains_copy() {
+        let unsigned = ironwood_send();
+        let signed = sign(&MAIN, unsigned.clone(), &SEED, 0).unwrap();
+        let from_device = Redactor::new(signed)
+            .redact_ironwood_with(|mut bundle| {
+                bundle.redact_actions(|mut action| action.clear_spend_fvk())
+            })
+            .finish()
+            .serialize()
+            .unwrap();
+        assert!(prove(parse(&from_device).unwrap(), None).is_err());
+
+        let combined =
+            parse(&combine_pczts(&unsigned.serialize().unwrap(), &from_device).unwrap()).unwrap();
+        prove(combined, None).unwrap();
+    }
 }

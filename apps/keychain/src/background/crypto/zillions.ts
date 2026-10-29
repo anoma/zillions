@@ -5,7 +5,9 @@
  */
 import initZcore, {
   apply_ledger_signatures,
+  combine_pczts,
   derive_account,
+  derive_account_from_ufvk,
   fresh_address,
   link_info,
   open_link_key,
@@ -56,6 +58,14 @@ export const deriveAccount = async (
 ): Promise<DerivedKeys> => {
   await initZillionsSdk();
   return derive_account(getNetwork(), seed, hdIndex);
+};
+
+/** The account a device's UFVK export names: same keys, no seed. */
+export const deriveAccountFromUfvk = async (
+  ufvk: string
+): Promise<DerivedKeys> => {
+  await initZillionsSdk();
+  return derive_account_from_ufvk(getNetwork(), ufvk);
 };
 
 /**
@@ -200,3 +210,18 @@ export const applyDeviceSignatures = (
   signatures: LedgerSignatures
 ): string =>
   bytesToBase64(apply_ledger_signatures(base64ToBytes(pczt), signatures));
+
+/**
+ * `pczt1` (base64, what a Keystone scanned back: signatures, but not the
+ * proof keys) merged into `pczt0` (the keyring's full copy). Throws if they
+ * aren't the same transaction.
+ */
+export const combinePczts = async (
+  pczt0: string,
+  pczt1: string
+): Promise<string> => {
+  await initZillionsSdk();
+  return bytesToBase64(
+    combine_pczts(base64ToBytes(pczt0), base64ToBytes(pczt1))
+  );
+};

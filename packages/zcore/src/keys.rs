@@ -37,8 +37,7 @@ struct Account {
     unified: String,
 }
 
-fn account(network: &Network, seed: &[u8], hd_index: u32) -> Result<Account, String> {
-    let ufvk = spending_key(network, seed, hd_index)?.to_unified_full_viewing_key();
+fn account_from_ufvk(network: &Network, ufvk: &UnifiedFullViewingKey) -> Result<Account, String> {
     // Requiring every receiver skips the indices Sapling can't use, so this
     // lands on the same index as the shielded default below.
     let (all, _) = ufvk
@@ -52,6 +51,22 @@ fn account(network: &Network, seed: &[u8], hd_index: u32) -> Result<Account, Str
         transparent: all.transparent().map(|addr| addr.encode(network)),
         unified: shielded.encode(network),
     })
+}
+
+fn account(network: &Network, seed: &[u8], hd_index: u32) -> Result<Account, String> {
+    let ufvk = spending_key(network, seed, hd_index)?.to_unified_full_viewing_key();
+    account_from_ufvk(network, &ufvk)
+}
+
+/// The account at unified full viewing key `ufvk` (a device's export):
+/// `{ ufvk, transparent, unified }`.
+#[wasm_bindgen]
+pub fn derive_account_from_ufvk(network: &str, ufvk: &str) -> Result<JsValue, JsError> {
+    let network = parse_network(network).map_err(|e| JsError::new(&e))?;
+    let ufvk =
+        UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| JsError::new(&e.to_string()))?;
+    let account = account_from_ufvk(&network, &ufvk).map_err(|e| JsError::new(&e))?;
+    serde_wasm_bindgen::to_value(&account).map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
@@ -230,6 +245,20 @@ mod tests {
             account.ufvk,
             super::account(&network, &seed, 1).unwrap().ufvk
         );
+    }
+
+    #[test]
+    fn derives_the_same_account_from_a_devices_viewing_key() {
+        let network = Network::MainNetwork;
+        let account = account(&network, &[7u8; 32], 0).unwrap();
+        let from_key = account_from_ufvk(
+            &network,
+            &UnifiedFullViewingKey::decode(&network, &account.ufvk).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(from_key.ufvk, account.ufvk);
+        assert_eq!(from_key.transparent, account.transparent);
+        assert_eq!(from_key.unified, account.unified);
     }
 
     #[test]
