@@ -520,10 +520,13 @@ Challenges to check, one by one:
 
 ### 3.7 Keystone hardware wallet — Built
 
-- **Connect a Keystone** from the Keychain's first screen, like a Ledger. Its
-  keys never leave the device: the Keychain keeps only what lets the wallet
-  see the account (its viewing key and the addresses it names), which the
-  user approves on the device.
+- **Connect a Keystone 3 Pro running the Cypherpunk firmware** from the
+  Keychain's first screen, like a Ledger. Its keys never leave the device:
+  the Keychain keeps only what lets the wallet see the account (its viewing
+  key and the addresses it names), which the user approves on the device.
+  The Zcash app ships only in the Cypherpunk firmware — a Keystone on the
+  multi-coin or BTC-only firmware can't connect, and the connect screen
+  says so.
 - **The wallet supports what Keystone's Zcash app supports.** Its viewing key
   carries every pool — transparent, Orchard, Sapling and Ironwood — so a
   Keystone account can also see and spend Sapling, which a Ledger's can't.
@@ -534,9 +537,9 @@ Challenges to check, one by one:
   hardware it needs, so a Keystone works in Firefox and Safari too, where a
   Ledger needs a Chromium-based browser.
 - **The device proves its firmware.** Keystone's signed responses carry its
-  firmware version; the Keychain refuses devices older than 3.0.8 (the first
-  release that reports it and signs Ironwood transactions) with an update
-  prompt.
+  Cypherpunk firmware version; the Keychain refuses devices older than 3.0.8
+  (the first release that reports it and signs Ironwood transactions) with
+  an update prompt.
 - A send is approved in the Keychain as usual, then reviewed and approved on
   the device; what the device shows is what gets signed. The device may sync
   several accounts; the Keychain connects the first.

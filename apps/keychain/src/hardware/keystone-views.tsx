@@ -71,8 +71,13 @@ export const KeystoneConnect = ({
           Scan the account QR on the Keystone with the camera below
         </p>
         <p className="text-sm text-neutral-600">
-          On the Keystone, choose the account to connect and open its sync
-          QR. Addresses are derived from the viewing key after scanning.
+          On the Keystone (Cypherpunk firmware), choose the account to
+          connect and open its sync QR. Addresses are derived from the
+          viewing key after scanning.
+        </p>
+        <p className="text-sm text-neutral-600">
+          Don&apos;t see a Zcash account on the device? The Zcash app ships
+          in Keystone&apos;s Cypherpunk firmware.
         </p>
       </Stack>
       <AnimatedQRScanner

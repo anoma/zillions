@@ -9,9 +9,9 @@ import { combinePczts, keystoneFwVersion } from "../background/crypto/zillions";
 import type { DeviceEngine } from "./types";
 
 /**
- * `[major, minor, build]` raw, 3.0.8: the first release that stamps its
- * firmware version into signed responses (and signs Ironwood). Devices too
- * old to stamp can't prove what they run.
+ * `[major, minor, build]` raw, 3.0.8: the first Cypherpunk release that
+ * stamps its firmware version into signed responses (and signs Ironwood).
+ * Devices too old to stamp can't prove what they run.
  */
 const MIN_FW = [13, 0, 8];
 
@@ -31,10 +31,11 @@ const tooOldError = (version?: string): Error => {
   const display = version && `${major - 10}.${minor}.${build}`;
   return new Error(
     display
-      ? `This Keystone runs firmware ${display}. Update it to 3.0.8 or ` +
-        "later and sign again."
-      : "This Keystone doesn't report its firmware version. Update it to " +
-        "3.0.8 or later and sign again."
+      ? `This Keystone runs Cypherpunk firmware ${display}. Update it to ` +
+        "Cypherpunk firmware 3.0.8 or later and sign again."
+      : "This Keystone doesn't report its firmware version. The Zcash app " +
+        "ships in its Cypherpunk firmware; update it to 3.0.8 or later and " +
+        "sign again."
   );
 };
 
@@ -52,7 +53,9 @@ const keystoneErrorMessage = (e: unknown): string => {
 
 export const keystoneEngine: DeviceEngine = {
   kind: "keystone",
-  name: "Keystone",
+  // The Zcash app ships only in the Cypherpunk firmware; the name says so
+  // wherever the device is offered.
+  name: "Keystone (Cypherpunk)",
   // Everything runs over the camera: no WebHID, so no Chromium-only posture.
   isSupported: () => typeof navigator.mediaDevices?.getUserMedia === "function",
   describeError: keystoneErrorMessage,

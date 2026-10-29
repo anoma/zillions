@@ -60,6 +60,14 @@ and the wizard.
 The second device proves the abstraction: no contract change, no keyring
 change, no wizard change — just a kind, an engine, views.
 
+- **Cypherpunk firmware only.** The Zcash app ships only in Keystone's
+  Cypherpunk firmware: the `zcash-accounts` sync our Connect view scans and
+  the stamped, redacted `zcash-pczt` responses are generated from the
+  firmware's `cypherpunk_wallet/zcash.rs`, and the 2.x/3.x version line the
+  firmware gate reads is the Cypherpunk line. The multi-coin and BTC-only
+  editions expose neither, so a device running them never answers — there
+  is nothing to detect, only to explain, which the engine's name
+  ("Keystone (Cypherpunk)") and the Connect screen's copy do.
 - **QR is the transport.** The device has no browser transport to drive:
   `AnimatedQRCode`/`AnimatedQRScanner` (`@keystonehq/animated-qr`) turn
   the PCZT into an animated UR (`zcash-pczt`, from
@@ -78,8 +86,8 @@ change, no wizard change — just a kind, an engine, views.
   against the combined transaction when the app extracts it.
 - **The device proves its firmware.** Signed responses stamp
   `keystone:fw_version` (three raw bytes, major/minor/build) into the
-  global's proprietary map. `assembleSignedPczt` refuses anything
-  without a readable stamp of at least 3.0.8 — the first release that
+  global's proprietary map. `assembleSignedPczt` refuses anything without
+  a readable stamp of at least 3.0.8 — the first Cypherpunk release that
   stamps at all (and signs Ironwood), so a stamp-less response is
   indistinguishable from an unsupported one. The stamp reader is
   `pczt_keystone_fw_version` in zcore; the device displays major minus
