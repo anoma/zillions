@@ -131,12 +131,12 @@ export const KeystoneSign = ({
     [input.pczt]
   );
 
-  const handleScan = ({ cbor }: { cbor: string }) => {
+  const handleScan = async ({ cbor }: { cbor: string }) => {
     try {
       const signed = ZcashPCZT.fromCBOR(Buffer.from(cbor, "hex"));
-      void onResult(signed.getData().toBase64());
-    } catch (e) {
       // A failed submit re-arms the view: the scanner keeps running.
+      await onResult(signed.getData().toBase64());
+    } catch (e) {
       setError(engines.keystone.describeError(e));
     }
   };
