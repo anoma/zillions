@@ -21,6 +21,7 @@ import { AutoLock } from "./screens/AutoLock";
 import { ChangePassword } from "./screens/ChangePassword";
 import { ConnectedSites } from "./screens/ConnectedSites";
 import { DeleteAccount } from "./screens/DeleteAccount";
+import { ExportBackup } from "./screens/ExportBackup";
 import { Login } from "./screens/Login";
 import { RenameAccount } from "./screens/RenameAccount";
 import { Settings } from "./screens/Settings";
@@ -66,6 +67,7 @@ const PopupShell = () => {
             <Route path={routes.deleteAccount()} element={<DeleteAccount />} />
             <Route path={routes.settings()} element={<Settings />} />
             <Route path={routes.changePassword()} element={<ChangePassword />} />
+            <Route path={routes.exportBackup()} element={<ExportBackup />} />
             <Route path={routes.connectedSites()} element={<ConnectedSites />} />
             <Route path={routes.autoLock()} element={<AutoLock />} />
             <Route path={routes.theme()} element={<ThemeSetting />} />

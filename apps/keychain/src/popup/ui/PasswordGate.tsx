@@ -9,12 +9,19 @@ type PasswordGateProps = {
   /** What the password unlocks, e.g. "your seed phrase". */
   what: string;
   submitLabel: string;
+  /** Replaces the "Enter your password to show …" notice. */
+  notice?: React.ReactNode;
   /** Runs once the password checks out. */
-  onVerified: () => Promise<void>;
+  onVerified: (password: string) => Promise<void>;
 };
 
 /** Asks for the password again before a secret is shown. */
-export const PasswordGate = ({ what, submitLabel, onVerified }: PasswordGateProps) => {
+export const PasswordGate = ({
+  what,
+  submitLabel,
+  notice,
+  onVerified,
+}: PasswordGateProps) => {
   const { checkPassword } = useVault();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>();
@@ -29,7 +36,7 @@ export const PasswordGate = ({ what, submitLabel, onVerified }: PasswordGateProp
         setError("Incorrect password");
         return;
       }
-      await onVerified();
+      await onVerified(password);
     } catch (err) {
       setError(`${err}`);
     } finally {
@@ -39,9 +46,11 @@ export const PasswordGate = ({ what, submitLabel, onVerified }: PasswordGateProp
 
   return (
     <form className="flex flex-col flex-1" onSubmit={(e) => void handleSubmit(e)}>
-      <Notice tone="neutral" className="mt-3.5">
-        Enter your password to show {what}.
-      </Notice>
+      {notice ?? (
+        <Notice tone="neutral" className="mt-3.5">
+          Enter your password to show {what}.
+        </Notice>
+      )}
       <div className="mt-4">
         <PasswordField
           autoFocus

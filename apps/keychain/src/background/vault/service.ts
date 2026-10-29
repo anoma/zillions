@@ -193,6 +193,15 @@ export class VaultService {
     return this.crypto.encrypt(JSON.stringify(sensitiveData), key);
   }
 
+  /** Opens what `encryptSensitiveData(data, password)` sealed; throws on a wrong password. */
+  public async revealWithPassword<T>(
+    sensitive: CryptoRecord,
+    password: string
+  ): Promise<T> {
+    const json = this.crypto.decrypt(sensitive, await this.hashPassword(password));
+    return JSON.parse(json) as T;
+  }
+
   private async getSessionKeyOrFail(): Promise<string> {
     const key = await this.getPassword();
     if (!key) {

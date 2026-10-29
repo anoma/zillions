@@ -19,7 +19,12 @@ import { ApprovalLog, ApprovalsService } from "./approvals";
 import { Broadcaster } from "./broadcaster";
 import { initCrypto } from "./crypto/crypto";
 import { Keyring } from "./keyring";
-import { AccountRepository, UtilityStore, VaultService } from "./vault";
+import {
+  AccountRepository,
+  BackupService,
+  UtilityStore,
+  VaultService,
+} from "./vault";
 
 // Key prefixes for the backing stores.
 const PREFIX_INDEXEDDB = "Zillions::IndexedDB";
@@ -34,6 +39,7 @@ export type Services = {
   // The account-record repository, exposed for read/query handlers (list,
   // active-account) that are storage concerns rather than key semantics.
   accounts: AccountRepository;
+  backup: BackupService;
   approvals: ApprovalsService;
   approvalLog: ApprovalLog;
   localStorage: LocalStorage;
@@ -59,6 +65,7 @@ export const getServices = (): Promise<Services> => {
 
       const accounts = new AccountRepository(vaultStorage, utilityStore);
       const keyring = new Keyring(vaultService, accounts);
+      const backup = new BackupService(vaultService, accounts);
 
       const area = browser.storage.local;
       const localStorage = new LocalStorage(
@@ -86,6 +93,7 @@ export const getServices = (): Promise<Services> => {
         vaultService,
         keyring,
         accounts,
+        backup,
         approvals,
         approvalLog,
         localStorage,

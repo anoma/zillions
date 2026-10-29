@@ -8,6 +8,7 @@
  */
 import type {
   AccountStore,
+  BackupSummary,
   Bip44Path,
   DerivedAccount,
   Zip32Path,
@@ -56,6 +57,9 @@ export type WizardState = {
   privateKey: string;
   spendingKey: string;
   bip39Passphrase: string;
+  /** A backup file's JSON and the password it was exported under. */
+  backupFile: string;
+  backupPassword: string;
 
   // --- derivation paths ---
   bip44Path: Bip44Path;
@@ -66,6 +70,7 @@ export type WizardState = {
   completionInfo: string;
   parentAccount?: AccountStore;
   shieldedAccount?: DerivedAccount;
+  backupSummary?: BackupSummary;
 
   // --- ledger ---
   ledgerKeys?: LedgerKeys;
@@ -83,6 +88,8 @@ export const initialWizardState = (passwordRequired: boolean): WizardState => ({
   privateKey: "",
   spendingKey: "",
   bip39Passphrase: "",
+  backupFile: "",
+  backupPassword: "",
   bip44Path: { account: 0, change: 0, index: 0 },
   zip32Path: { account: 0 },
   completion: "idle",
@@ -101,6 +108,7 @@ export type WizardEvent =
   | { type: "setPrivateKey"; value: string }
   | { type: "setSpendingKey"; value: string }
   | { type: "setBip39Passphrase"; value: string }
+  | { type: "setBackup"; file: string; password: string }
   | { type: "setBip44Path"; path: Bip44Path }
   | { type: "setZip32Path"; path: Zip32Path }
   | { type: "setAlias"; alias: string }
@@ -111,6 +119,7 @@ export type WizardEvent =
       type: "completionSucceeded";
       parentAccount?: AccountStore;
       shieldedAccount?: DerivedAccount;
+      backupSummary?: BackupSummary;
     }
   | { type: "completionFailed"; info: string }
   | { type: "reset" };
@@ -159,6 +168,9 @@ export const wizardReducer = (
     case "setBip39Passphrase":
       return { ...state, bip39Passphrase: event.value };
 
+    case "setBackup":
+      return { ...state, backupFile: event.file, backupPassword: event.password };
+
     case "setBip44Path":
       return { ...state, bip44Path: event.path };
 
@@ -184,6 +196,7 @@ export const wizardReducer = (
         completionInfo: "Done!",
         parentAccount: event.parentAccount ?? state.parentAccount,
         shieldedAccount: event.shieldedAccount ?? state.shieldedAccount,
+        backupSummary: event.backupSummary ?? state.backupSummary,
       };
 
     case "completionFailed":

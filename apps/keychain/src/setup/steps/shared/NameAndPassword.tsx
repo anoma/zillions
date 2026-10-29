@@ -13,6 +13,7 @@ import { createAccount } from "../../model/accountManager";
 import { toAccountSecret } from "../../model/secrets";
 import type { Step } from "../../model/wizard";
 import { PasswordFields } from "../../ui/PasswordFields";
+import { saveBackup } from "../import/saveBackup";
 
 type Props = {
   /** Where to go once persistence starts (the completion step of the branch). */
@@ -26,12 +27,27 @@ export const NameAndPassword = ({ nextStep }: Props) => {
   const [password, setPassword] = useState<string | undefined>(state.password);
   const [submitting, setSubmitting] = useState(false);
 
-  const invalid = !alias || (state.passwordRequired && !password) || submitting;
+  // A backup brings its accounts' names.
+  const isBackup = state.secretKind === "backup";
+  const invalid =
+    (!isBackup && !alias) ||
+    (state.passwordRequired && !password) ||
+    submitting;
 
   const onSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     if (invalid) return;
     setSubmitting(true);
+
+    if (state.secretKind === "backup") {
+      await saveBackup(client, dispatch, {
+        file: state.backupFile,
+        backupPassword: state.backupPassword,
+        passwordRequired: state.passwordRequired,
+        password,
+      });
+      return;
+    }
 
     dispatch({ type: "setAlias", alias });
     dispatch({ type: "setPassword", password });
@@ -78,15 +94,17 @@ export const NameAndPassword = ({ nextStep }: Props) => {
       className="justify-between flex-1"
     >
       <Stack gap={GapPatterns.FormFields} className="justify-center flex-1">
-        <Input
-          data-testid="setup-seed-phrase-alias-input"
-          label="Keys Name"
-          placeholder="e.g Zillions Shielded Wallet"
-          value={alias}
-          error={aliasError}
-          onChange={(e) => setAlias(e.target.value)}
-          onBlur={() => setAliasError(alias === "" ? "Required field" : "")}
-        />
+        {!isBackup && (
+          <Input
+            data-testid="setup-seed-phrase-alias-input"
+            label="Keys Name"
+            placeholder="e.g Zillions Shielded Wallet"
+            value={alias}
+            error={aliasError}
+            onChange={(e) => setAlias(e.target.value)}
+            onBlur={() => setAliasError(alias === "" ? "Required field" : "")}
+          />
+        )}
         {state.passwordRequired && (
           <Stack gap={GapPatterns.FormFields}>
             <PasswordFields onValidPassword={setPassword} />

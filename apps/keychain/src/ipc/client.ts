@@ -13,6 +13,7 @@ import {
   type AccountType,
   type ApprovalLogEntry,
   type ActiveAccount,
+  type BackupSummary,
   type DerivedAccount,
   type IpcKind,
   type IpcRequest,
@@ -85,6 +86,22 @@ export class BackgroundClient {
   /** Whether the 30-minute auth window expired (password re-check needed). */
   requiresAuth(): Promise<boolean> {
     return this.send("vault/requiresAuth", {});
+  }
+
+  // ---- backup ----
+
+  /** The encrypted backup file's JSON, sealed under the extension password. */
+  exportBackup(password: string): Promise<string> {
+    return this.send("backup/export", { password });
+  }
+
+  /** How many accounts `file` holds; throws if it doesn't open with `password`. */
+  inspectBackup(file: string, password: string): Promise<number> {
+    return this.send("backup/inspect", { file, password });
+  }
+
+  restoreBackup(file: string, password: string): Promise<BackupSummary> {
+    return this.send("backup/restore", { file, password });
   }
 
   // ---- settings ----

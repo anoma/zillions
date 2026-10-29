@@ -12,6 +12,7 @@ import type { BackgroundClient } from "../../ipc/client";
 import type {
   AccountSecret,
   AccountStore,
+  BackupSummary,
   Bip44Path,
   DerivedAccount,
   Zip32Path,
@@ -162,6 +163,35 @@ export const createLedgerAccount = async (
       birthday: 0,
     });
     return { ok: true, ...result };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+};
+
+/** Add a backup's accounts, setting the extension password first if needed. */
+export const restoreBackup = async (
+  client: BackgroundClient,
+  input: {
+    file: string;
+    backupPassword: string;
+    passwordRequired: boolean;
+    password?: string;
+  },
+  onProgress: (info: string) => void
+): Promise<{ ok: true; summary: BackupSummary } | { ok: false; error: string }> => {
+  const { file, backupPassword, passwordRequired, password } = input;
+  try {
+    if (passwordRequired && !password) {
+      return { ok: false, error: "Password is required and was not provided" };
+    }
+    if (password) {
+      onProgress("Setting a password for the extension.");
+      await client.createPassword(password);
+    }
+
+    onProgress("Restoring your accounts.");
+    const summary = await client.restoreBackup(file, backupPassword);
+    return { ok: true, summary };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

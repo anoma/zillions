@@ -158,6 +158,12 @@ export type ApprovalLogEntry = {
   account?: string;
 };
 
+/** What a backup restore added; `skipped` were already in the Keychain. */
+export type BackupSummary = {
+  accounts: number;
+  skipped: number;
+};
+
 export type MnemonicValidation = {
   isValid: boolean;
   /** Present when invalid. `invalidWordIndex` is set for a bad word. */
@@ -206,6 +212,23 @@ export type IpcContract = {
   "vault/requiresAuth": {
     req: Record<string, never>;
     res: boolean;
+  };
+
+  // --- backup ---
+  /** The encrypted backup file's JSON; `password` is the extension's, re-checked. */
+  "backup/export": {
+    req: { password: string };
+    res: string;
+  };
+  /** How many accounts a backup holds; throws if it doesn't open with `password`. */
+  "backup/inspect": {
+    req: { file: string; password: string };
+    res: number;
+  };
+  /** Add a backup's accounts to the unlocked vault. */
+  "backup/restore": {
+    req: { file: string; password: string };
+    res: BackupSummary;
   };
 
   // --- settings ---

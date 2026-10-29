@@ -432,6 +432,9 @@ user's behalf.
   - The user never has to know when their wallet was created. The import
     screen doesn't ask for it: an imported wallet always recovers its full
     history (see 1).
+  - **Restore from a backup file** (see 3.7), with the password it was
+    exported under: every account comes back with its name and secrets, and
+    accounts already in the Keychain are skipped. — _Built_
 - Name the account and set the extension password.
 
 ### 3.2 Manage accounts — Working
@@ -541,6 +544,9 @@ Challenges to check, one by one:
   Closing the browser always locks it. Before this setting existed the
   Keychain stayed unlocked until the browser closed.
 - **Theme**: light, dark, or following the system (default).
+- **Export backup**: after re-entering the password, downloads a file with
+  every account and its secrets, encrypted with that password. It stays on
+  the user's device, and restores only on the network it was made on. — _Built_
 
 ## 4. Network
 
