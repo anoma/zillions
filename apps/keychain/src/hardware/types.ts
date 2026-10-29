@@ -10,7 +10,7 @@
 import type { ComponentType } from "react";
 
 /** Which hardware wallet an account's keys live on. */
-export type DeviceKind = "ledger";
+export type DeviceKind = "ledger" | "keystone";
 
 /** One step of a device interaction, as displayed. */
 export type DeviceProgressStep = {
@@ -33,8 +33,12 @@ export type DeviceKeys = {
   seedFingerprint: string;
   /** ZIP-32 account index. */
   hdIndex: number;
-  transparentAddress: string;
-  shieldedAddress: string;
+  /**
+   * The default addresses, as a Ledger reports them. A Keystone exports
+   * nothing but keys: the keyring derives these from the viewing key.
+   */
+  transparentAddress?: string;
+  shieldedAddress?: string;
 };
 
 /** What the approval popup needs to drive signing on a device. */

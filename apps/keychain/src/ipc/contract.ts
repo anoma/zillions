@@ -55,7 +55,7 @@ export type AccountSecret =
   | { t: "ShieldedKeys"; spendingKey: string };
 
 /** Which hardware wallet an account's keys live on. */
-export type DeviceKind = "ledger";
+export type DeviceKind = "ledger" | "keystone";
 
 /** A pending PCZT for a device account, its kind and the account's ZIP-32 index. */
 export type DeviceSignTx = { device: DeviceKind; pczt: string; hdIndex: number };
