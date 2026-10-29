@@ -8,8 +8,8 @@ import { Start } from "./steps/Start";
 import { CreateConfirm } from "./steps/create/CreateConfirm";
 import { CreateSeed } from "./steps/create/CreateSeed";
 import { CreateWarning } from "./steps/create/CreateWarning";
+import { DeviceConnect } from "./steps/device/DeviceConnect";
 import { ImportSecret } from "./steps/import/ImportSecret";
-import { LedgerPassword } from "./steps/ledger/LedgerPassword";
 import { Complete } from "./steps/shared/Complete";
 import { NameAndPassword } from "./steps/shared/NameAndPassword";
 
@@ -40,10 +40,12 @@ export const StepRenderer = () => {
     case "import.complete":
       return <Complete />;
 
-    // ledger branch
-    case "ledger.password":
-      return <LedgerPassword />;
-    case "ledger.complete":
+    // device branch
+    case "device.connect":
+      return <DeviceConnect />;
+    case "device.name":
+      return <NameAndPassword nextStep="device.complete" />;
+    case "device.complete":
       return <Complete />;
 
     default: {

@@ -26,6 +26,8 @@ export const AccountType = {
   ShieldedKeys: "shielded-keys",
   // Ledger account
   Ledger: "ledger",
+  // Watch-only account backed by a viewing key (e.g. a hardware wallet's)
+  ViewingKey: "viewing-key",
   // Disposable
   Disposable: "disposable",
 } as const;
@@ -75,6 +77,8 @@ export type ZCashKeychainAccount = Account & {
   seedFingerprint?: string;
   /** Block height at which this account was created/imported. Used to skip scanning earlier blocks. */
   birthday?: number;
+  /** The hardware wallet the keys live on, if any (e.g. "ledger"). */
+  device?: string;
 };
 
 /**

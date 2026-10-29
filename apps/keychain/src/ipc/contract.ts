@@ -13,7 +13,7 @@
  *
  * Scope: Setup flow + popup + the dapp connection lifecycle. Wallet
  * persistence is the real encrypted vault (background/vault +
- * background/keyring); no Ledger.
+ * background/keyring); no secret material crosses here.
  *
  * SENDER GATING: `dapp/*` channels are the ONLY ones reachable from content
  * scripts (i.e. from web pages); their origin always comes from the message
@@ -42,7 +42,8 @@ export type AccountType =
   | "mnemonic"
   | "private-key"
   | "shielded-keys"
-  | "ledger";
+  | "ledger"
+  | "viewing-key";
 
 /** The flow that produced an account. */
 export type AccountFlow = "create" | "import";
@@ -53,19 +54,11 @@ export type AccountSecret =
   | { t: "PrivateKey"; privateKey: string }
   | { t: "ShieldedKeys"; spendingKey: string };
 
-/**
- * A Ledger's signatures over a PCZT, hex, in the order the signer kit returns
- * them: one per Orchard and per Ironwood spend the PCZT leaves unsigned, one
- * per transparent input (DER, then the sighash type byte).
- */
-export type LedgerSignatures = {
-  orchard: string[];
-  ironwood: string[];
-  transparent: string[];
-};
+/** Which hardware wallet an account's keys live on. */
+export type DeviceKind = "ledger" | "keystone";
 
-/** A pending PCZT for a Ledger account, and the account's ZIP-32 index. */
-export type LedgerSignTx = { pczt: string; hdIndex: number };
+/** A pending PCZT for a device account, its kind and the account's ZIP-32 index. */
+export type DeviceSignTx = { device: DeviceKind; pczt: string; hdIndex: number };
 
 /** A stored parent account (transparent or shielded), as returned to the UI. */
 export type AccountStore = {
@@ -74,6 +67,8 @@ export type AccountStore = {
   address: string;
   owner: string;
   type: AccountType;
+  /** The hardware wallet the keys live on, if any. */
+  device?: DeviceKind;
   path: Bip44Path;
   parentId?: string;
   source: "imported" | "generated";
@@ -86,6 +81,7 @@ export type DerivedAccount = {
   alias: string;
   address: string;
   type: AccountType;
+  device?: DeviceKind;
   parentId?: string;
 };
 
@@ -102,6 +98,8 @@ export type StoredAccount = {
   /** For a transparent parent: its address. For a shielded account: the UFVK. */
   owner: string;
   type: AccountType;
+  /** The hardware wallet the keys live on, if any. */
+  device?: DeviceKind;
   /** Set on derived (child) accounts; absent on parents. */
   parentId?: string;
   source: "imported" | "generated";
@@ -224,23 +222,32 @@ export type IpcContract = {
       viewingKey: string;
       /** Block height at which the parent account was created/imported. */
       birthday: number;
+      /** Set when the keys live on a hardware wallet, not in the vault. */
+      device?: DeviceKind;
     };
     res: DerivedAccount;
   };
   /**
-   * Store a Ledger account (no secret: keys stay on the device) with its
-   * shielded child, and make it active. Re-connecting an already imported
-   * Ledger just re-activates it.
+   * Store a hardware-wallet account (no secret: keys stay on the device) with
+   * its shielded child, and make it active. Re-connecting an already imported
+   * device just re-activates it.
    */
-  "keyring/saveLedgerAccount": {
+  "keyring/saveDeviceAccount": {
     req: {
+      device: DeviceKind;
       alias: string;
       bip44Path: Bip44Path;
       zip32Path: Zip32Path;
-      transparentAddress: string;
-      shieldedAddress: string;
+      /**
+       * The device's addresses. Optional for devices that don't hand them
+       * over (derived from the viewing key instead); today's all do.
+       */
+      transparentAddress?: string;
+      shieldedAddress?: string;
       /** Encoded UFVK (`uview1…`) read from the device. */
       viewingKey: string;
+      /** ZIP-32 seed fingerprint (hex) the PCZT's zip32_derivation carries. */
+      seedFingerprint: string;
       birthday: number;
     };
     res: {
@@ -373,19 +380,20 @@ export type IpcContract = {
     res: PcztSummary;
   };
   /**
-   * The pending PCZT under `msgId` when its signer is a Ledger account, which
-   * the popup has the device sign; null for any other account.
+   * The pending PCZT under `msgId` when a hardware wallet signs it — the
+   * popup has the device sign; null for any other account.
    */
-  "approvals/queryLedgerSignTx": {
+  "approvals/queryDeviceSignTx": {
     req: { msgId: string };
-    res: LedgerSignTx | null;
+    res: DeviceSignTx | null;
   };
   /**
    * Confirm the pending sign request owned by the calling popup's tab. A
-   * Ledger account's request carries the device's signatures.
+   * device account's request carries the device's signing output, opaque:
+   * its engine interprets (and verifies) it keyring-side.
    */
   "approvals/submitSignTx": {
-    req: { msgId: string; signer: string; ledgerSignatures?: LedgerSignatures };
+    req: { msgId: string; signer: string; deviceData?: string };
     res: void;
   };
   /** Reject the pending sign request owned by the calling popup's tab. */

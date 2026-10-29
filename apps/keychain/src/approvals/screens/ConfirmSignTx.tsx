@@ -1,28 +1,19 @@
 /**
  * Final sign confirmation: re-verifies the password when the 30-minute auth
  * window expired, then submits the approved sign request (the background
- * decrypts the seed and signs the PCZT) and closes. A Ledger account's PCZT
- * is signed on the device from here instead, as WebHID needs a page, and the
- * background puts the device's signatures in.
+ * decrypts the seed and signs the PCZT) and closes. A hardware-wallet
+ * account's PCZT is signed on the device from here instead — the device's
+ * own Sign view runs the session and hands over its opaque signing output,
+ * which its engine verifies and folds into the PCZT keyring-side.
  */
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Alert, Input, Stack } from "@zillions/components";
 
-import {
-  initZillionsSdk,
-  ledgerTransaction,
-} from "../../background/crypto/zillions";
-import type { LedgerSignTx } from "../../ipc/contract";
+import { wallets } from "../../hardware";
+import type { DeviceSignTx } from "../../ipc/contract";
 import { PageHeader } from "../../popup/ui/PageHeader";
-import {
-  ledgerErrorMessage,
-  signLedgerPczt,
-  withLedger,
-  type LedgerStep,
-} from "../../setup/model/ledger";
-import { LedgerProgress } from "../../setup/ui/LedgerProgress";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 import { Status } from "../types";
@@ -43,11 +34,8 @@ export const ConfirmSignTx = ({ details }: Props) => {
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<Status>();
   const [statusInfo, setStatusInfo] = useState("");
-  // Undefined until known; null when the account isn't a Ledger's.
-  const [ledger, setLedger] = useState<LedgerSignTx | null>();
-  /** Set while the device signs or after it failed. */
-  const [ledgerStep, setLedgerStep] = useState<LedgerStep>();
-  const abortLedger = useRef<AbortController>(undefined);
+  // Undefined until known; null when the keys aren't on a device.
+  const [device, setDevice] = useState<DeviceSignTx | null>();
 
   // The background consumes the request on the first submit, and StrictMode
   // runs the auto-submit effect twice: a ref survives both, state would not.
@@ -67,38 +55,27 @@ export const ConfirmSignTx = ({ details }: Props) => {
     }
   };
 
-  const signOnLedger = async (): Promise<void> => {
-    if (submitted.current || !ledger) return;
-    submitted.current = true;
-    setError(undefined);
-    setStatus(Status.Pending);
-    abortLedger.current = new AbortController();
-    const { signal } = abortLedger.current;
-    try {
-      const signatures = await withLedger(
-        setLedgerStep,
-        async (device) => {
-          await initZillionsSdk();
-          const transaction = ledgerTransaction(ledger.pczt, ledger.hdIndex);
-          return signLedgerPczt(device, transaction, setLedgerStep);
-        },
-        signal,
-      );
-      await client?.submitSignTx(msgId, signer, signatures);
-      setStatus(Status.Completed);
-    } catch (e) {
-      // The request stays pending until the background takes the signatures.
-      submitted.current = false;
-      if (signal.aborted) return;
-      setError(ledgerErrorMessage(e));
-      setStatus(Status.Failed);
-    }
-  };
-
-  const cancelLedger = async () => {
-    abortLedger.current?.abort();
+  const rejectSignTx = async () => {
     await client?.rejectSignTx(msgId);
     await closeCurrentTab();
+  };
+
+  /** The signing device's own screen: session, progress and retries included. */
+  const signOnDeviceView = (input: DeviceSignTx) => {
+    const Sign = wallets[input.device].views.Sign;
+    return (
+      <Sign
+        input={input}
+        onResult={async (deviceData) => {
+          // Opaque to the contract; the device's engine decodes it
+          // keyring-side. Throws on a failed submit, which re-arms the
+          // view's retry.
+          await client?.submitSignTx(msgId, signer, deviceData);
+          setStatus(Status.Completed);
+        }}
+        onCancel={() => void rejectSignTx()}
+      />
+    );
   };
 
   const handleApproveSignTx = useCallback(
@@ -121,14 +98,14 @@ export const ConfirmSignTx = ({ details }: Props) => {
         return;
       }
 
-      if (ledger) {
+      if (device) {
         setStatus(undefined);
         setRequiresAuth(false);
         return;
       }
       await signTx();
     },
-    [requiresAuth, password, ledger],
+    [requiresAuth, password, device],
   );
 
   useEffect(() => {
@@ -137,8 +114,8 @@ export const ConfirmSignTx = ({ details }: Props) => {
       .then((isAuthRequired) => setRequiresAuth(isAuthRequired))
       .catch((e) => console.error(e));
     client
-      ?.queryLedgerSignTx(msgId)
-      .then(setLedger)
+      ?.queryDeviceSignTx(msgId)
+      .then(setDevice)
       .catch((e: unknown) => {
         setError(`${e}`);
         setStatus(Status.Failed);
@@ -147,10 +124,9 @@ export const ConfirmSignTx = ({ details }: Props) => {
 
   useEffect(() => {
     // User is authenticated with a valid session, so submit signed Tx:
-    if (requiresAuth !== false || ledger === undefined) return;
-    if (ledger) void signOnLedger();
-    else void signTx();
-  }, [requiresAuth, ledger]);
+    if (requiresAuth !== false || device === undefined || device) return;
+    void signTx();
+  }, [requiresAuth, device]);
 
   useEffect(() => {
     if (status === Status.Completed) void closeCurrentTab();
@@ -179,17 +155,9 @@ export const ConfirmSignTx = ({ details }: Props) => {
             />
           </>
         )}
-        {!requiresAuth && ledger && (
-          <LedgerProgress
-            steps={["connect", "unlock", "open-app", "sign"]}
-            current={ledgerStep ?? "connect"}
-            error={status === Status.Failed ? error : undefined}
-            onCancel={() => void cancelLedger()}
-            onRetry={() => void signOnLedger()}
-          />
-        )}
+        {!requiresAuth && device && signOnDeviceView(device)}
         {!requiresAuth &&
-          !ledger &&
+          !device &&
           (status === Status.Failed ? (
             <Alert type="error">{error}</Alert>
           ) : (

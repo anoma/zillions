@@ -1,56 +1,43 @@
 /**
- * What a Ledger session has done and what the device waits on now, with a
+ * What a device session has done and what the device waits on now, with a
  * way out. Steps the device skips (already unlocked, app already open) show
- * as done once a later one is reached.
+ * as done once a later one is reached. Device-agnostic: the caller supplies
+ * the steps and their copy.
  */
 import { ActionButton, Alert, Stack } from "@zillions/components";
 import clsx from "clsx";
 import { CgSpinner } from "react-icons/cg";
 import { GoCheckCircleFill } from "react-icons/go";
 
-import type { LedgerStep } from "../model/ledger";
-
-const STEP_TEXT: Record<LedgerStep, { title: string; hint?: string }> = {
-  connect: {
-    title: "Connect your Ledger",
-    hint: "Plug it in and choose it in the browser prompt.",
-  },
-  unlock: { title: "Unlock it with your PIN" },
-  "open-app": { title: "Open the Zcash app" },
-  "confirm-key": {
-    title: "Approve the viewing key",
-    hint: "It lets Zillions find your funds. It can't spend them.",
-  },
-  sign: { title: "Review and approve the transaction" },
-};
+import type { DeviceProgressStep } from "./types";
 
 type Props = {
-  steps: LedgerStep[];
-  current: LedgerStep;
+  steps: DeviceProgressStep[];
+  /** The step the device waits on; undefined before the first report. */
+  current?: string;
   error?: string;
   onCancel: () => void;
   onRetry: () => void;
 };
 
-export const LedgerProgress = ({
+export const DeviceProgress = ({
   steps,
   current,
   error,
   onCancel,
   onRetry,
 }: Props) => {
-  const at = steps.indexOf(current);
+  const at = steps.findIndex((step) => step.key === current);
 
   return (
-    <Stack gap={4} data-testid="ledger-progress">
+    <Stack gap={4} data-testid="device-progress">
       <ol className="flex flex-col gap-3 border border-black rounded-lg p-5">
         {steps.map((step, i) => {
           const done = i < at;
           const active = i === at;
-          const { title, hint } = STEP_TEXT[step];
           return (
             <li
-              key={step}
+              key={step.key}
               aria-current={active ? "step" : undefined}
               className={clsx(
                 "grid grid-cols-[24px_1fr] gap-3 items-start transition-opacity",
@@ -67,10 +54,12 @@ export const LedgerProgress = ({
               </span>
               <span>
                 <span className={clsx("block", active && "font-semibold")}>
-                  {title}
+                  {step.title}
                 </span>
-                {active && hint && (
-                  <span className="block text-sm text-neutral-600">{hint}</span>
+                {active && step.hint && (
+                  <span className="block text-sm text-neutral-600">
+                    {step.hint}
+                  </span>
                 )}
               </span>
             </li>

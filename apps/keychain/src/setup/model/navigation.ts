@@ -18,13 +18,17 @@ const IMPORT_ORDER: Step[] = [
   "import.complete",
 ];
 
-const LEDGER_ORDER: Step[] = ["ledger.password", "ledger.complete"];
+const DEVICE_ORDER: Step[] = [
+  "device.connect",
+  "device.name",
+  "device.complete",
+];
 
 const ORDERS: Record<Flow, Step[]> = {
   none: [],
   create: CREATE_ORDER,
   import: IMPORT_ORDER,
-  ledger: LEDGER_ORDER,
+  device: DEVICE_ORDER,
 };
 
 const orderFor = (flow: Flow): Step[] => ORDERS[flow];

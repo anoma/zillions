@@ -26,12 +26,20 @@ import {
   webHidTransportFactory,
 } from "@ledgerhq/device-transport-kit-web-hid";
 
-import type {
-  Bip44Path,
-  LedgerSignatures,
-  Zip32Path,
-} from "../../ipc/contract";
-import { getNetwork } from "../../background/crypto/zillions";
+import type { Bip44Path, Zip32Path } from "../ipc/contract";
+import {
+  getNetwork,
+  type LedgerSignatures,
+} from "../background/crypto/zillions";
+import type { DeviceKeys } from "./types";
+
+/** One step of a device interaction, as displayed. */
+export type DeviceProgressStep = {
+  /** Stable identifier (the device module's step machine value). */
+  key: string;
+  title: string;
+  hint?: string;
+};
 
 export const LEDGER_BIP44_PATH: Bip44Path = { account: 0, change: 0, index: 0 };
 export const LEDGER_ZIP32_PATH: Zip32Path = { account: 0 };
@@ -47,45 +55,21 @@ export type LedgerStep =
   | "confirm-key"
   | "sign";
 
-/** Everything the keychain stores for a Ledger account; no secrets. */
-export type LedgerKeys = {
-  deviceName: string;
-  transparentAddress: string;
-  shieldedAddress: string;
-  /** Encoded UFVK (`uview1…`). */
-  viewingKey: string;
-};
-
-/** Whether this browser can reach a Ledger at all: WebHID, Chromium only. */
-export const canUseLedger = (): boolean => "hid" in navigator;
-
-const MESSAGE_OF: Record<string, string> = {
-  // Chrome reports an unplugged Ledger and one whose access was revoked alike.
-  NoAccessibleDeviceError:
-    "No Ledger found. Plug it in and unlock it. If it still isn't found, " +
-    "connect it again from Add Keys → Connect to hardware wallet.",
-};
-
-/**
- * Describe thrown Errors and DMK errors, which are plain `{ _tag }` objects
- * carrying no message of their own, only the error that caused them.
- */
-export const ledgerErrorMessage = (e: unknown): string => {
-  if (e instanceof Error) return e.message;
-  if (e && typeof e === "object") {
-    const { message, _tag, originalError } = e as {
-      message?: string;
-      _tag?: string;
-      originalError?: unknown;
-    };
-    if (message) return message;
-    if (_tag && MESSAGE_OF[_tag]) return MESSAGE_OF[_tag];
-    if (_tag && originalError instanceof Error) {
-      return `${_tag}: ${originalError.message}`;
-    }
-    if (_tag) return _tag;
-  }
-  return String(e);
+/** The steps' display copy, for the progress UI. */
+export const LEDGER_STEPS: Record<LedgerStep, DeviceProgressStep> = {
+  connect: {
+    key: "connect",
+    title: "Connect your Ledger",
+    hint: "Plug it in and choose it in the browser prompt.",
+  },
+  unlock: { key: "unlock", title: "Unlock it with your PIN" },
+  "open-app": { key: "open-app", title: "Open the Zcash app" },
+  "confirm-key": {
+    key: "confirm-key",
+    title: "Approve the viewing key",
+    hint: "It lets Zillions find your funds. It can't spend them.",
+  },
+  sign: { key: "sign", title: "Review and approve the transaction" },
 };
 
 export const isSupportedAppVersion = (version: string): boolean => {
@@ -226,7 +210,7 @@ export const withLedger = async <T>(
 export const connectLedger = (
   onStep: (step: LedgerStep) => void,
   signal?: AbortSignal,
-): Promise<LedgerKeys> =>
+): Promise<DeviceKeys> =>
   withLedger(
     onStep,
     async (signer, device) => {
@@ -250,10 +234,16 @@ export const connectLedger = (
       }
 
       return {
-        deviceName: device.deviceModel.name,
+        device: "ledger",
+        alias: device.deviceModel.name,
         transparentAddress,
         shieldedAddress,
         viewingKey: fvk.fullViewingKey,
+        // The device never reveals its seed's fingerprint. The app's PCZT
+        // needs 32 bytes and the device doesn't check them: zeros, the
+        // signer kit's default.
+        seedFingerprint: "00".repeat(32),
+        hdIndex: LEDGER_ZIP32_PATH.account,
       };
     },
     signal,

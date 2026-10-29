@@ -515,6 +515,39 @@ Challenges to check, one by one:
   open the Zcash app, approve) with a way to cancel or try again.
 - The recovery phrase and spending keys can't be revealed: they never leave
   the device.
+- How the device code is laid out (and how a second device slots in) is in
+  [hardware-wallets.md](design/hardware-wallets.md).
+
+### 3.7 Keystone hardware wallet — Built
+
+- **Connect a Keystone 3 Pro running the Cypherpunk firmware** from the
+  Keychain's first screen, like a Ledger. Its keys never leave the device:
+  the Keychain keeps only what lets the wallet see the account (its viewing
+  key and the addresses it names), which the user approves on the device.
+  The Zcash app ships only in the Cypherpunk firmware — a Keystone on the
+  multi-coin or BTC-only firmware can't connect, and the connect screen
+  says so.
+- **The wallet supports what Keystone's Zcash app supports.** Its viewing key
+  carries every pool — transparent, Orchard, Sapling and Ironwood — so a
+  Keystone account can also see and spend Sapling, which a Ledger's can't.
+- **The transaction travels by QR code — no cable, no WebHID.** The Keychain
+  shows a send as an animated code for the Keystone's camera; the device
+  reviews it, the user approves there, and the signed response comes back as
+  an animated code the Keychain scans. A browser camera is the only
+  hardware it needs, so a Keystone works in Firefox and Safari too, where a
+  Ledger needs a Chromium-based browser.
+- **The device proves its firmware.** Keystone's signed responses carry its
+  Cypherpunk firmware version; the Keychain refuses devices older than 3.0.8
+  (the first release that reports it and signs Ironwood transactions) with
+  an update prompt.
+- A send is approved in the Keychain as usual, then reviewed and approved on
+  the device; what the device shows is what gets signed. The device may sync
+  several accounts; the Keychain connects the first.
+- The recovery phrase and spending keys can't be revealed: they never leave
+  the device. The device signs with them; the Keychain's copy of the
+  transaction supplies only the proof material a signer may not hold.
+- How the device code is laid out is in
+  [hardware-wallets.md](design/hardware-wallets.md).
 
 ## 4. Network
 

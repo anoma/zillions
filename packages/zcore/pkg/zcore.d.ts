@@ -24,9 +24,22 @@ export function apply_ledger_signatures(pczt: Uint8Array, signatures: any): Uint
 export function claim_pczt(network: string, key: Uint8Array, note: string, position: bigint, trees: any, to: string, claimer_ufvk: string, tip: number): Uint8Array;
 
 /**
+ * The second PCZT's signatures and proofs merged into the first: the
+ * keychain's copy (every input but the device's still unsigned) plus the
+ * device's signed-and-redacted export makes the complete signed PCZT.
+ */
+export function combine_pczts(pczt0: Uint8Array, pczt1: Uint8Array): Uint8Array;
+
+/**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  */
 export function derive_account(network: string, seed: Uint8Array, hd_index: number): any;
+
+/**
+ * The account at unified full viewing key `ufvk` (a device's export):
+ * `{ ufvk, transparent, unified }`.
+ */
+export function derive_account_from_ufvk(network: string, ufvk: string): any;
 
 /**
  * Transparent addresses `from..from + count` on one BIP-44 chain of the
@@ -89,6 +102,14 @@ export function open_link_key(network: string, seed: Uint8Array, hd_index: numbe
  * address }], nullifiers, value_balance, expiry_height }`.
  */
 export function parse_transaction(network: string, height: number, data: Uint8Array): any;
+
+/**
+ * A Keystone's firmware version, from the `keystone:fw_version` stamp its
+ * signed PCZT responses carry in the global's proprietary map — the raw
+ * `[major, minor, build]` bytes as "13.0.8". The device displays major
+ * minus 10 ("3.0.8"); firmware that doesn't stamp has no readable version.
+ */
+export function pczt_keystone_fw_version(pczt: Uint8Array): string | undefined;
 
 /**
  * The PCZT `pczt` as `@ledgerhq/device-signer-kit-zcash`'s
@@ -244,7 +265,9 @@ export interface InitOutput {
     readonly address_kind: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly apply_ledger_signatures: (a: number, b: number, c: any) => [number, number, number, number];
     readonly claim_pczt: (a: number, b: number, c: number, d: number, e: number, f: number, g: bigint, h: any, i: number, j: number, k: number, l: number, m: number) => [number, number, number, number];
+    readonly combine_pczts: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly derive_account: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly derive_account_from_ufvk: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly derive_transparent: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number, number];
     readonly fresh_address: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly gap_limits: () => [number, number, number];
@@ -255,6 +278,7 @@ export interface InitOutput {
     readonly new_link_key: () => [number, number];
     readonly open_link_key: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pczt_keystone_fw_version: (a: number, b: number) => [number, number, number, number];
     readonly pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly plan_migration: (a: number, b: number, c: any) => [number, number, number];
@@ -278,8 +302,8 @@ export interface InitOutput {
     readonly warm_prover: () => void;
     readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
     readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
-    readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
     readonly rustsecp256k1_v0_10_0_context_create: (a: number) => number;
+    readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;
