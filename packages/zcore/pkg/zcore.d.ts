@@ -104,6 +104,14 @@ export function open_link_key(network: string, seed: Uint8Array, hd_index: numbe
 export function parse_transaction(network: string, height: number, data: Uint8Array): any;
 
 /**
+ * A Keystone's firmware version, from the `keystone:fw_version` stamp its
+ * signed PCZT responses carry in the global's proprietary map — the raw
+ * `[major, minor, build]` bytes as "13.0.8". The device displays major
+ * minus 10 ("3.0.8"); firmware that doesn't stamp has no readable version.
+ */
+export function pczt_keystone_fw_version(pczt: Uint8Array): string | undefined;
+
+/**
  * The PCZT `pczt` as `@ledgerhq/device-signer-kit-zcash`'s
  * `signPcztTransaction` takes it, for the account at ZIP 32 index `hd_index`:
  * byte fields as `Uint8Array`s, amounts as `bigint`s. Throws on a Sapling
@@ -270,6 +278,7 @@ export interface InitOutput {
     readonly new_link_key: () => [number, number];
     readonly open_link_key: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number, number];
     readonly parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly pczt_keystone_fw_version: (a: number, b: number) => [number, number, number, number];
     readonly pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly plan_migration: (a: number, b: number, c: any) => [number, number, number];

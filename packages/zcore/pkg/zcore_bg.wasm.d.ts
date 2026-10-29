@@ -17,6 +17,7 @@ export const needs_sapling_params: (a: number, b: number) => [number, number, nu
 export const new_link_key: () => [number, number];
 export const open_link_key: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number, number];
 export const parse_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const pczt_keystone_fw_version: (a: number, b: number) => [number, number, number, number];
 export const pczt_ledger_transaction: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
 export const pczt_summary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
 export const plan_migration: (a: number, b: number, c: any) => [number, number, number];

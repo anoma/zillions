@@ -573,6 +573,20 @@ pub fn combine_pczts(pczt0: &[u8], pczt1: &[u8]) -> Result<Vec<u8>, JsError> {
     serialize(combined)
 }
 
+/// A Keystone's firmware version, from the `keystone:fw_version` stamp its
+/// signed PCZT responses carry in the global's proprietary map — the raw
+/// `[major, minor, build]` bytes as "13.0.8". The device displays major
+/// minus 10 ("3.0.8"); firmware that doesn't stamp has no readable version.
+#[wasm_bindgen]
+pub fn pczt_keystone_fw_version(pczt: &[u8]) -> Result<Option<String>, JsError> {
+    let pczt = parse(pczt)?;
+    let stamp = pczt.global().proprietary().get("keystone:fw_version");
+    Ok(stamp.and_then(|bytes| match bytes.as_slice() {
+        [major, minor, build] => Some(format!("{major}.{minor}.{build}")),
+        _ => None,
+    }))
+}
+
 /// What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
 /// (`transparent`, `sapling`, `orchard`, `ironwood`), values in zatoshis as
 /// strings. Each output says whether it's `mine`, by the signing account's
@@ -686,5 +700,23 @@ mod tests {
         let combined =
             parse(&combine_pczts(&unsigned.serialize().unwrap(), &from_device).unwrap()).unwrap();
         prove(combined, None).unwrap();
+    }
+
+    #[test]
+    fn reads_a_devices_firmware_stamp() {
+        let stamped = Updater::new(ironwood_send())
+            .update_global_with(|mut global| {
+                global.set_proprietary("keystone:fw_version".to_string(), vec![13, 0, 8]);
+            })
+            .finish();
+        assert_eq!(
+            pczt_keystone_fw_version(&stamped.serialize().unwrap()).unwrap(),
+            Some("13.0.8".to_string())
+        );
+        // Firmware too old to stamp reads as no version at all.
+        assert_eq!(
+            pczt_keystone_fw_version(&ironwood_send().serialize().unwrap()).unwrap(),
+            None
+        );
     }
 }

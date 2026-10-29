@@ -11,6 +11,7 @@ import initZcore, {
   fresh_address,
   link_info,
   open_link_key,
+  pczt_keystone_fw_version,
   pczt_ledger_transaction,
   pczt_summary,
   seal_link_key,
@@ -199,6 +200,18 @@ export type LedgerSignatures = {
   orchard: string[];
   ironwood: string[];
   transparent: string[];
+};
+
+/**
+ * A Keystone's firmware version ("13.0.8" — the device displays major minus
+ * 10), from the stamp its signed PCZT responses carry. Undefined when the
+ * response has no readable stamp: firmware too old to report it.
+ */
+export const keystoneFwVersion = async (
+  pczt: string
+): Promise<string | undefined> => {
+  await initZillionsSdk();
+  return pczt_keystone_fw_version(base64ToBytes(pczt));
 };
 
 /**

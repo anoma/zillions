@@ -356,6 +356,29 @@ export function parse_transaction(network, height, data) {
 }
 
 /**
+ * A Keystone's firmware version, from the `keystone:fw_version` stamp its
+ * signed PCZT responses carry in the global's proprietary map — the raw
+ * `[major, minor, build]` bytes as "13.0.8". The device displays major
+ * minus 10 ("3.0.8"); firmware that doesn't stamp has no readable version.
+ * @param {Uint8Array} pczt
+ * @returns {string | undefined}
+ */
+export function pczt_keystone_fw_version(pczt) {
+    const ptr0 = passArray8ToWasm0(pczt, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.pczt_keystone_fw_version(ptr0, len0);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    let v2;
+    if (ret[0] !== 0) {
+        v2 = getStringFromWasm0(ret[0], ret[1]);
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    }
+    return v2;
+}
+
+/**
  * The PCZT `pczt` as `@ledgerhq/device-signer-kit-zcash`'s
  * `signPcztTransaction` takes it, for the account at ZIP 32 index `hd_index`:
  * byte fields as `Uint8Array`s, amounts as `bigint`s. Throws on a Sapling
