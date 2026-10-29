@@ -13,7 +13,7 @@
  *
  * Scope: Setup flow + popup + the dapp connection lifecycle. Wallet
  * persistence is the real encrypted vault (background/vault +
- * background/keyring); no Ledger.
+ * background/keyring); no secret material crosses here.
  *
  * SENDER GATING: `dapp/*` channels are the ONLY ones reachable from content
  * scripts (i.e. from web pages); their origin always comes from the message
