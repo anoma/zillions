@@ -21,7 +21,7 @@ import {
   validateMnemonic,
 } from "../crypto/mnemonic";
 import {
-  applyLedgerSignatures,
+  applyDeviceSignatures,
   computeSeedFingerprint,
   deriveAccount,
   initZillionsSdk,
@@ -148,7 +148,7 @@ export class Keyring {
       if (!ledgerSignatures) {
         throw new Error("A Ledger account signs on its device");
       }
-      return applyLedgerSignatures(pczt, ledgerSignatures);
+      return applyDeviceSignatures(pczt, ledgerSignatures);
     }
     const { seed, hdIndex } = await this.resolveSeed(record);
     return signPczt(pczt, seed, hdIndex);

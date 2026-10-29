@@ -4,7 +4,7 @@
  * lives in `ledger-session.ts` and the screens in `ledger-views.tsx`.
  */
 import type { LedgerSignatures } from "../ipc/contract";
-import { applyLedgerSignatures } from "../background/crypto/zillions";
+import { applyDeviceSignatures } from "../background/crypto/zillions";
 import type { DeviceEngine } from "./types";
 
 // Chrome reports an unplugged Ledger and one whose access was revoked alike.
@@ -72,5 +72,5 @@ export const ledgerEngine: DeviceEngine = {
    * one doesn't sign it, so device (or page) tampering can't slip through.
    */
   assembleSignedPczt: async (unsignedPczt, deviceData) =>
-    applyLedgerSignatures(unsignedPczt, decodeSignatures(deviceData)),
+    applyDeviceSignatures(unsignedPczt, decodeSignatures(deviceData)),
 };

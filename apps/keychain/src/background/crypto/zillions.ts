@@ -181,10 +181,10 @@ export const ledgerTransaction = (
   ) as PcztTransaction;
 
 /**
- * `pczt` (base64) with a Ledger's signatures in; throws if one doesn't sign
+ * `pczt` (base64) with a device's signatures in; throws if one doesn't sign
  * it. The binding signatures are the app's to add when it extracts.
  */
-export const applyLedgerSignatures = (
+export const applyDeviceSignatures = (
   pczt: string,
   signatures: LedgerSignatures
 ): string =>
