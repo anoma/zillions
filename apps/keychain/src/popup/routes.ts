@@ -18,6 +18,7 @@ export default {
     `/accounts/${accountId}/delete`,
   settings: (): string => "/settings",
   changePassword: (): string => "/settings/change-password",
+  exportBackup: (): string => "/settings/backup",
   connectedSites: (): string => "/settings/connected-sites",
   autoLock: (): string => "/settings/auto-lock",
   theme: (): string => "/settings/theme",

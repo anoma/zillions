@@ -5,7 +5,7 @@
 import type { AccountSecret } from "../../ipc/contract";
 
 /** What kind of secret the user is importing/creating. */
-export type SecretKind = "mnemonic" | "private-key" | "spending-key";
+export type SecretKind = "mnemonic" | "private-key" | "spending-key" | "backup";
 
 export type MnemonicLength = 12 | 24;
 
@@ -44,7 +44,7 @@ export const validateSpendingKey = (key: string): Validation => {
 
 /** Build the wire `AccountSecret` from UI state for a given secret kind. */
 export const toAccountSecret = (input: {
-  kind: SecretKind;
+  kind: Exclude<SecretKind, "backup">;
   mnemonic: string[];
   mnemonicLength: MnemonicLength;
   privateKey: string;

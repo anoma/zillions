@@ -133,6 +133,23 @@ export const handlers: HandlerMap = {
     };
   },
 
+  "backup/export": async ({ password }) => {
+    const { backup } = await getServices();
+    return backup.export(password);
+  },
+
+  "backup/inspect": async ({ file, password }) => {
+    const { backup } = await getServices();
+    return backup.inspect(file, password);
+  },
+
+  "backup/restore": async ({ file, password }) => {
+    const { backup, broadcaster } = await getServices();
+    const summary = await backup.restore(file, password);
+    if (summary.accounts > 0) void broadcaster.accountChanged();
+    return summary;
+  },
+
   "settings/getAutoLock": async () => {
     const { localStorage } = await getServices();
     return localStorage.getAutoLockMinutes();

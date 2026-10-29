@@ -10,6 +10,7 @@ import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 import type {
   AccountStore,
   ApprovalLogEntry,
+  BackupSummary,
   ActiveAccount,
   DerivedAccount,
   IpcKind,
@@ -108,6 +109,9 @@ const isPcztSummary = (v: unknown): v is PcztSummary =>
   Array.isArray(v.ironwoodInputs) &&
   isOutputArray(v.ironwoodOutputs);
 
+const isBackupSummary = (v: unknown): v is BackupSummary =>
+  isRecord(v) && typeof v.accounts === "number" && typeof v.skipped === "number";
+
 const isApprovalLogEntry = (v: unknown): v is ApprovalLogEntry =>
   isRecord(v) &&
   typeof v.id === "string" &&
@@ -148,6 +152,21 @@ export const validateResponse = <K extends IpcKind>(
     case "settings/setAutoLock":
       // void — accept undefined/null
       return undefined as IpcResponse<K>;
+
+    case "backup/export":
+      if (typeof value !== "string")
+        throw new ResponseShapeError(kind, "expected string (backup file)");
+      return value as IpcResponse<K>;
+
+    case "backup/inspect":
+      if (typeof value !== "number")
+        throw new ResponseShapeError(kind, "expected number");
+      return value as IpcResponse<K>;
+
+    case "backup/restore":
+      if (!isBackupSummary(value))
+        throw new ResponseShapeError(kind, "expected BackupSummary");
+      return value as IpcResponse<K>;
 
     case "settings/getAutoLock":
       if (typeof value !== "number")

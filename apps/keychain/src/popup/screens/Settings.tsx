@@ -56,6 +56,11 @@ export const Settings = () => {
           onClick={() => navigate(routes.changePassword())}
         />
         <Row
+          title="Export backup"
+          subtitle="An encrypted file of all your accounts"
+          onClick={() => navigate(routes.exportBackup())}
+        />
+        <Row
           title="Lock now"
           onClick={() => void lock()}
           trail={<GoLock className="size-4 text-muted" />}
