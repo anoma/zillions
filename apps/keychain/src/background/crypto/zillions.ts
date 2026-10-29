@@ -20,8 +20,6 @@ import type { PcztTransaction } from "@ledgerhq/device-signer-kit-zcash";
 import type { PcztSummary } from "@zillions/types";
 import browser from "webextension-polyfill";
 
-import type { LedgerSignatures } from "../../ipc/contract";
-
 let initialized: Promise<unknown> | undefined;
 
 /** Initialize the zcore wasm module. Idempotent; await before any call. */
@@ -179,6 +177,19 @@ export const ledgerTransaction = (
     base64ToBytes(pczt),
     hdIndex
   ) as PcztTransaction;
+
+/**
+ * A device's signatures over a PCZT, hex, in the order the Ledger signer kit
+ * returns them: one per Orchard and per Ironwood spend the PCZT leaves
+ * unsigned, one per transparent input (DER, then the sighash type byte).
+ * Only the device module and this façade know the shape — over the IPC
+ * boundary the signing output travels as an opaque `deviceData` string.
+ */
+export type LedgerSignatures = {
+  orchard: string[];
+  ironwood: string[];
+  transparent: string[];
+};
 
 /**
  * `pczt` (base64) with a device's signatures in; throws if one doesn't sign

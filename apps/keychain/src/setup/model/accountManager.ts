@@ -152,13 +152,15 @@ export const createLedgerAccount = async (
     }
 
     onProgress("Storing your Ledger account.");
-    const result = await client.saveLedgerAccount({
+    const result = await client.saveDeviceAccount({
+      device: "ledger",
       alias: keys.alias,
       bip44Path: LEDGER_BIP44_PATH,
       zip32Path: LEDGER_ZIP32_PATH,
       transparentAddress: keys.transparentAddress,
       shieldedAddress: keys.shieldedAddress,
       viewingKey: keys.viewingKey,
+      seedFingerprint: keys.seedFingerprint,
       // The device may already hold funds from any point in history.
       birthday: 0,
     });

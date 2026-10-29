@@ -26,12 +26,11 @@ import {
   webHidTransportFactory,
 } from "@ledgerhq/device-transport-kit-web-hid";
 
-import type {
-  Bip44Path,
-  LedgerSignatures,
-  Zip32Path,
-} from "../ipc/contract";
-import { getNetwork } from "../background/crypto/zillions";
+import type { Bip44Path, Zip32Path } from "../ipc/contract";
+import {
+  getNetwork,
+  type LedgerSignatures,
+} from "../background/crypto/zillions";
 import type { DeviceKeys } from "./types";
 
 /** One step of a device interaction, as displayed. */

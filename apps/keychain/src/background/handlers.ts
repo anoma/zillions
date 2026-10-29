@@ -13,6 +13,7 @@ import type {
   StoredAccount,
 } from "../ipc/contract";
 import type { KeyStoreType } from "../storage";
+import { deviceOf } from "./keyring/types";
 import { getServices } from "./services";
 import { ResetPasswordError } from "./vault";
 
@@ -23,6 +24,7 @@ const toStoredAccount = (a: KeyStoreType): StoredAccount => ({
   address: a.address,
   owner: a.owner,
   type: a.type as AccountType,
+  device: deviceOf(a),
   parentId: a.parentId,
   source: a.source as StoredAccount["source"],
   timestamp: a.timestamp,
@@ -147,9 +149,9 @@ export const handlers: HandlerMap = {
     return keyring.deriveShieldedAccount(input);
   },
 
-  "keyring/saveLedgerAccount": async (input) => {
+  "keyring/saveDeviceAccount": async (input) => {
     const { keyring, broadcaster } = await getServices();
-    const result = await keyring.storeLedgerAccount(input);
+    const result = await keyring.storeDeviceAccount(input);
     void broadcaster.accountChanged();
     return result;
   },
@@ -300,19 +302,14 @@ export const handlers: HandlerMap = {
     return approvals.queryPcztSummary(msgId);
   },
 
-  "approvals/queryLedgerSignTx": async ({ msgId }) => {
+  "approvals/queryDeviceSignTx": async ({ msgId }) => {
     const { approvals } = await getServices();
-    return approvals.queryLedgerSignTx(msgId);
+    return approvals.queryDeviceSignTx(msgId);
   },
 
-  "approvals/submitSignTx": async ({ msgId, signer, ledgerSignatures }, ctx) => {
+  "approvals/submitSignTx": async ({ msgId, signer, deviceData }, ctx) => {
     const { approvals } = await getServices();
-    await approvals.submitSignTx(
-      requireTabId(ctx),
-      msgId,
-      signer,
-      ledgerSignatures
-    );
+    await approvals.submitSignTx(requireTabId(ctx), msgId, signer, deviceData);
   },
 
   "approvals/rejectSignTx": async ({ msgId }, ctx) => {

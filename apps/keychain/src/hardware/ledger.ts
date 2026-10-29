@@ -3,8 +3,10 @@
  * No transports and no React, so the keyring can import it; the transport
  * lives in `ledger-session.ts` and the screens in `ledger-views.tsx`.
  */
-import type { LedgerSignatures } from "../ipc/contract";
-import { applyDeviceSignatures } from "../background/crypto/zillions";
+import {
+  applyDeviceSignatures,
+  type LedgerSignatures,
+} from "../background/crypto/zillions";
 import type { DeviceEngine } from "./types";
 
 // Chrome reports an unplugged Ledger and one whose access was revoked alike.

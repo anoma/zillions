@@ -19,7 +19,7 @@ import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
-import type { LedgerSignatures, LedgerSignTx } from "../../ipc/contract";
+import type { DeviceSignTx } from "../../ipc/contract";
 import { LocalStorage, type KeyStoreType } from "../../storage";
 import { buildPcztSummary, linkAddress } from "../crypto/zillions";
 import { Keyring } from "../keyring";
@@ -309,16 +309,19 @@ export class ApprovalsService {
   }
 
   /**
-   * The pending PCZT if a Ledger account signs it: the device is reachable
-   * only from the popup, which signs with it and submits the signatures.
+   * The pending PCZT if a hardware wallet signs it: the device is reachable
+   * only from the popup, which signs with it and submits the output. Null
+   * when the keys aren't on a device.
    */
-  async queryLedgerSignTx(msgId: string): Promise<LedgerSignTx | null> {
+  async queryDeviceSignTx(msgId: string): Promise<DeviceSignTx | null> {
     const pending = this.pendingTxs.get(msgId);
     if (!pending) {
       throw new Error(`Transaction data not found for ${msgId}`);
     }
-    const hdIndex = await this.keyring.ledgerHdIndex(pending.signer);
-    return hdIndex === undefined ? null : { pczt: pending.pczt, hdIndex };
+    const device = await this.keyring.signingDevice(pending.signer);
+    return device
+      ? { device: device.device, pczt: pending.pczt, hdIndex: device.hdIndex }
+      : null;
   }
 
   /** The approval popup confirmed: sign and settle the dapp's promise. */
@@ -326,7 +329,7 @@ export class ApprovalsService {
     popupTabId: number,
     msgId: string,
     signer: string,
-    ledgerSignatures?: LedgerSignatures
+    deviceData?: string
   ): Promise<void> {
     const pending = this.pendingTxs.get(msgId);
     const resolvers = this.getResolver(popupTabId);
@@ -347,7 +350,7 @@ export class ApprovalsService {
       const signed = await this.keyring.sign(
         pending.pczt,
         record.address,
-        ledgerSignatures
+        deviceData
       );
       resolvers.resolve(signed);
     } catch (e) {

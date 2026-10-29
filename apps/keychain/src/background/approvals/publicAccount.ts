@@ -7,6 +7,7 @@
  */
 import { AccountType, ZCashKeychainAccount } from "@zillions/types";
 
+import { deviceOf } from "../keyring/types";
 import type { KeyStoreType } from "../../storage";
 
 export const toPublicAccount = (
@@ -24,6 +25,7 @@ export const toPublicAccount = (
   account.hdIndex = record.path.account;
   account.seedFingerprint = record.seedFingerprint;
   account.birthday = record.birthday;
+  account.device = deviceOf(record);
 
   if (type === AccountType.ShieldedKeys) {
     account.viewingKey = owner;

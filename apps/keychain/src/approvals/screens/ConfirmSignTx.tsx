@@ -1,9 +1,10 @@
 /**
  * Final sign confirmation: re-verifies the password when the 30-minute auth
  * window expired, then submits the approved sign request (the background
- * decrypts the seed and signs the PCZT) and closes. A Ledger account's PCZT
- * is signed on the device from here instead, as WebHID needs a page, and the
- * background puts the device's signatures in.
+ * decrypts the seed and signs the PCZT) and closes. A hardware-wallet
+ * account's PCZT is signed on the device from here instead, as the device's
+ * transport needs a page, and its engine puts the signing output into the
+ * PCZT keyring-side.
  */
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -22,7 +23,8 @@ import {
   withLedger,
   type LedgerStep,
 } from "../../hardware/ledger-session";
-import type { LedgerSignTx } from "../../ipc/contract";import { PageHeader } from "../../popup/ui/PageHeader";
+import type { DeviceSignTx } from "../../ipc/contract";
+import { PageHeader } from "../../popup/ui/PageHeader";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 import { Status } from "../types";
@@ -45,8 +47,8 @@ export const ConfirmSignTx = ({ details }: Props) => {
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<Status>();
   const [statusInfo, setStatusInfo] = useState("");
-  // Undefined until known; null when the account isn't a Ledger's.
-  const [ledger, setLedger] = useState<LedgerSignTx | null>();
+  // Undefined until known; null when the keys aren't on a device.
+  const [device, setDevice] = useState<DeviceSignTx | null>();
   /** Set while the device signs or after it failed. */
   const [ledgerStep, setLedgerStep] = useState<LedgerStep>();
   const abortLedger = useRef<AbortController>(undefined);
@@ -69,8 +71,8 @@ export const ConfirmSignTx = ({ details }: Props) => {
     }
   };
 
-  const signOnLedger = async (): Promise<void> => {
-    if (submitted.current || !ledger) return;
+  const signOnDevice = async (): Promise<void> => {
+    if (submitted.current || !device) return;
     submitted.current = true;
     setError(undefined);
     setStatus(Status.Pending);
@@ -79,14 +81,15 @@ export const ConfirmSignTx = ({ details }: Props) => {
     try {
       const signatures = await withLedger(
         setLedgerStep,
-        async (device) => {
+        async (ledger) => {
           await initZillionsSdk();
-          const transaction = ledgerTransaction(ledger.pczt, ledger.hdIndex);
-          return signLedgerPczt(device, transaction, setLedgerStep);
+          const transaction = ledgerTransaction(device.pczt, device.hdIndex);
+          return signLedgerPczt(ledger, transaction, setLedgerStep);
         },
         signal,
       );
-      await client?.submitSignTx(msgId, signer, signatures);
+      // Opaque to the contract; the Ledger engine decodes keyring-side.
+      await client?.submitSignTx(msgId, signer, JSON.stringify(signatures));
       setStatus(Status.Completed);
     } catch (e) {
       // The request stays pending until the background takes the signatures.
@@ -123,14 +126,14 @@ export const ConfirmSignTx = ({ details }: Props) => {
         return;
       }
 
-      if (ledger) {
+      if (device) {
         setStatus(undefined);
         setRequiresAuth(false);
         return;
       }
       await signTx();
     },
-    [requiresAuth, password, ledger],
+    [requiresAuth, password, device],
   );
 
   useEffect(() => {
@@ -139,8 +142,8 @@ export const ConfirmSignTx = ({ details }: Props) => {
       .then((isAuthRequired) => setRequiresAuth(isAuthRequired))
       .catch((e) => console.error(e));
     client
-      ?.queryLedgerSignTx(msgId)
-      .then(setLedger)
+      ?.queryDeviceSignTx(msgId)
+      .then(setDevice)
       .catch((e: unknown) => {
         setError(`${e}`);
         setStatus(Status.Failed);
@@ -149,10 +152,10 @@ export const ConfirmSignTx = ({ details }: Props) => {
 
   useEffect(() => {
     // User is authenticated with a valid session, so submit signed Tx:
-    if (requiresAuth !== false || ledger === undefined) return;
-    if (ledger) void signOnLedger();
+    if (requiresAuth !== false || device === undefined) return;
+    if (device) void signOnDevice();
     else void signTx();
-  }, [requiresAuth, ledger]);
+  }, [requiresAuth, device]);
 
   useEffect(() => {
     if (status === Status.Completed) void closeCurrentTab();
@@ -181,17 +184,17 @@ export const ConfirmSignTx = ({ details }: Props) => {
             />
           </>
         )}
-        {!requiresAuth && ledger && (
+        {!requiresAuth && device && (
           <DeviceProgress
             steps={SIGN_STEPS.map((key) => LEDGER_STEPS[key])}
             current={ledgerStep ?? "connect"}
             error={status === Status.Failed ? error : undefined}
             onCancel={() => void cancelLedger()}
-            onRetry={() => void signOnLedger()}
+            onRetry={() => void signOnDevice()}
           />
         )}
         {!requiresAuth &&
-          !ledger &&
+          !device &&
           (status === Status.Failed ? (
             <Alert type="error">{error}</Alert>
           ) : (
