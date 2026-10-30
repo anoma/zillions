@@ -439,22 +439,37 @@ user's behalf.
   fresh shielded address each time, and the stable transparent one (see
   2.8). — _Built_
 - Rename, delete.
+- **Account identity**: each account shows a coloured initial, so the list
+  and approvals can be told apart at a glance. The colour is picked from the
+  account by default and can be changed; the list can be reordered by
+  dragging. — _Built_
 - Reveal, after re-entering the password: the **recovery phrase**, the
   **viewing key** (lets someone see, not spend), and the **spending keys**.
+  The recovery phrase hides itself again after a minute. — _Built_
 - Change the extension password; lock/unlock.
 
 ### 3.3 Connected sites — Working
 
 - A site must ask to connect; the user approves or rejects.
 - List connected sites; disconnect one or all.
+- The Keychain shows whether the site in the current tab is connected, and
+  as which account. — _Built_
 - Sites may ask to change the active account; the user approves.
 
 ### 3.4 Approve transactions — Built
 
 - A site asks the Keychain to sign a transaction.
 - The approval window shows: network, where funds come from, where they go,
-  amounts, and the fee, plus the full details on demand.
+  amounts, and the fee, plus every input and output.
 - The user approves or rejects; nothing is signed without approval.
+- The site asking, and the account it asks for, are shown apart from what is
+  asked, above the amount. Every input and output is listed without a click.
+  — _Built_
+- **Approval log**: the Keychain keeps its own record of what the user
+  approved, rejected or closed, per site (for a signed transaction: amount,
+  first recipient and account), newest first, and can clear it. It is the
+  Keychain's decisions only, not chain history (see 3.5), stays on the
+  device, and is encrypted like the other secrets. — _Built_
 - Each step of a migration (2.9) is approved on its own, when the user
   sends it, like any other transaction.
 - A payment link (2.10) is approved in one window titled as a payment link,
@@ -548,6 +563,14 @@ Challenges to check, one by one:
   transaction supplies only the proof material a signer may not hold.
 - How the device code is laid out is in
   [hardware-wallets.md](design/hardware-wallets.md).
+
+### 3.7 Settings — Built
+
+- **Auto-lock**: the Keychain locks after the computer has been idle for 5,
+  15 (default), 30 or 60 minutes, or never, and when the screen locks.
+  Closing the browser always locks it. Before this setting existed the
+  Keychain stayed unlocked until the browser closed.
+- **Theme**: light, dark, or following the system (default).
 
 ## 4. Network
 

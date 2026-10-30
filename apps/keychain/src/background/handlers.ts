@@ -13,6 +13,7 @@ import type {
   StoredAccount,
 } from "../ipc/contract";
 import type { KeyStoreType } from "../storage";
+import { applyAutoLock } from "./autoLock";
 import { deviceOf } from "./keyring/types";
 import { getServices } from "./services";
 import { ResetPasswordError } from "./vault";
@@ -117,9 +118,14 @@ export const handlers: HandlerMap = {
   },
 
   "vault/resetPassword": async ({ oldPassword, newPassword }) => {
-    const { vaultService } = await getServices();
+    const { vaultService, approvalLog } = await getServices();
+    // Read under the old key; re-sealed under the new one below.
+    const log = await approvalLog.entries().catch(() => []);
     const result = await vaultService.resetPassword(oldPassword, newPassword);
-    if (result.ok) return { ok: true };
+    if (result.ok) {
+      await approvalLog.write(log);
+      return { ok: true };
+    }
     return {
       ok: false,
       error:
@@ -127,6 +133,17 @@ export const handlers: HandlerMap = {
           ? "bad-password"
           : "keystore",
     };
+  },
+
+  "settings/getAutoLock": async () => {
+    const { localStorage } = await getServices();
+    return localStorage.getAutoLockMinutes();
+  },
+
+  "settings/setAutoLock": async ({ minutes }) => {
+    const { localStorage } = await getServices();
+    await localStorage.setAutoLockMinutes(minutes);
+    applyAutoLock(minutes);
   },
 
   "keyring/generateMnemonic": async ({ size }) => {
@@ -320,6 +337,16 @@ export const handlers: HandlerMap = {
   "approvals/submitOpenLinkKey": async ({ msgId }, ctx) => {
     const { approvals } = await getServices();
     await approvals.submitOpenLinkKey(requireTabId(ctx), msgId);
+  },
+
+  "approvals/log": async () => {
+    const { approvals } = await getServices();
+    return approvals.approvalLog();
+  },
+
+  "approvals/clearLog": async () => {
+    const { approvals } = await getServices();
+    await approvals.clearApprovalLog();
   },
 
   "approvals/submitUpdateDefaultAccount": async ({ address }, ctx) => {

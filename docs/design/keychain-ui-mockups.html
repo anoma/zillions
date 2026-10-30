@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Zillions Keychain — UI review & mockups</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Montserrat is the extension's font (@fontsource-variable/montserrat). Loaded from Google Fonts here only so this document renders standalone. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  /* ---------- document chrome (not part of the design) ---------- */
+  :root {
+    --doc-bg: #3a3835;
+    --doc-ink: #efede8;
+    --doc-muted: #b8b3a8;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--doc-bg); color: var(--doc-ink); }
+  body { margin: 0; font: 14px/1.5 "Montserrat", system-ui, sans-serif; padding: 40px 48px 120px; }
+  h1 { font-size: 26px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 18px; font-weight: 600; margin: 72px 0 6px; padding-top: 24px; border-top: 1px solid #55524d; }
+  h3 { font-size: 13px; font-weight: 600; margin: 28px 0 12px; color: var(--doc-muted); text-transform: uppercase; letter-spacing: .08em; }
+  p.lede { max-width: 820px; color: var(--doc-muted); margin: 0 0 24px; }
+  .notes { max-width: 820px; color: var(--doc-muted); font-size: 13px; }
+  .notes li { margin: 4px 0; }
+  .notes b { color: var(--doc-ink); font-weight: 600; }
+  .shelf { display: flex; flex-wrap: wrap; gap: 28px 24px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { font-size: 12px; color: var(--doc-muted); margin: 0 0 8px; }
+  figcaption b { color: var(--doc-ink); font-weight: 600; }
+  .swatches { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 0; }
+  .swatch { width: 112px; font-size: 11px; color: var(--doc-muted); }
+  .swatch i { display: block; height: 44px; border-radius: 8px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,.08); }
+  .pill-tag { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #55524d; color: var(--doc-ink); margin-left: 6px; vertical-align: 1px; }
+  .pill-tag.good { background: #2f5a3a; }
+  .pill-tag.warn { background: #6b4f1d; }
+  .ideas { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 24px; }
+  .idea { background: #46433f; border-radius: 14px; padding: 18px 18px 16px; }
+  .idea h4 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+  .idea p { margin: 0 0 12px; font-size: 12.5px; color: var(--doc-muted); }
+  .idea .mini { background: #ecebe7; color: #111; border-radius: 10px; padding: 12px 14px; font-size: 12px; }
+  .idea .meta { font-size: 11px; color: var(--doc-muted); margin-top: 10px; }
+
+  /* ---------- the device frame ---------- */
+  .phone {
+    width: 380px; height: 600px; background: #ecebe7; color: #111;
+    border-radius: 14px; overflow: hidden; position: relative;
+    box-shadow: 0 10px 40px rgba(0,0,0,.45), 0 0 0 1px rgba(0,0,0,.25);
+    font: 13px/1.4 "Montserrat", system-ui, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  .phone.approval { width: 396px; height: 640px; }
+  .phone.dark { background: #161514; color: #ecebe7; }
+
+  /* ======================================================================
+     CURRENT LOOK — reproduced from the live extension (0.10.0)
+     ====================================================================== */
+  .cur { padding: 0 20px; }
+  .cur .hdr { height: 68px; display: grid; grid-template-columns: 24px 1fr 24px; align-items: center; margin: 0 -20px; padding: 0 28px; }
+  .cur .hdr h1 { font-size: 20px; font-weight: 500; text-align: center; margin: 0; }
+  .cur .hdr svg { width: 22px; height: 22px; }
+  .cur .subnav { display: flex; justify-content: space-between; align-items: flex-end; margin: 18px 0 16px; }
+  .cur .subnav span { font-size: 12px; font-weight: 500; }
+  .cur .btn-xs { background: #d4b86a; border-radius: 15px; padding: 6px 16px; font-size: 14px; font-weight: 500; }
+  .cur .row { border: 1px solid #111; border-radius: 15px; padding: 20px; display: grid; grid-template-columns: 24px 1fr auto; gap: 32px; align-items: center; font-size: 16px; font-weight: 500; margin-bottom: 12px; }
+  .cur .box { width: 28px; height: 28px; border: 1px solid #111; border-radius: 5px; opacity: .5; }
+  .cur .box.on { opacity: 1; background: #ecebe7; display: grid; place-items: center; }
+  .cur .dots { font-size: 22px; line-height: 0; font-weight: 700; letter-spacing: -2px; writing-mode: vertical-lr; }
+  .cur .center-title { text-align: center; }
+  .cur .center-title .l { font-size: 14px; color: #6f6a5f; }
+  .cur .center-title .v { font-size: 32px; font-weight: 500; line-height: 1.1; }
+  .cur .center-title .d { font-size: 14px; color: #6f6a5f; margin-top: 4px; }
+  .cur .card { background: rgba(255,255,255,.5); border-radius: 15px; margin-top: 12px; }
+  .cur .card > div { padding: 12px 16px; border-bottom: 1px solid #d9d6cd; }
+  .cur .card > div:last-child { border-bottom: 0; }
+  .cur .card .k { font-size: 12px; color: #6f6a5f; }
+  .cur .card .v { font-size: 14px; }
+  .cur .msgs { display: flex; justify-content: space-between; font-size: 12px; margin: 16px 0 8px; }
+  .cur .io { border: 1px solid #a69f8f; border-radius: 15px; padding: 12px 16px; display: grid; grid-template-columns: 20px 1fr; gap: 12px; margin-bottom: 8px; }
+  .cur .io .t { font-size: 14px; font-weight: 500; }
+  .cur .io .c { font-size: 12px; color: #a39d8f; font-weight: 500; }
+  .cur .actions { position: absolute; left: 20px; right: 20px; bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cur .actions div { border-radius: 15px; padding: 12px; text-align: center; font-size: 16px; font-weight: 500; }
+  .cur .actions .o { border: 1px solid #111; }
+  .cur .actions .p { background: #d4b86a; }
+
+  /* ======================================================================
+     PROPOSED SYSTEM — shared tokens
+     ====================================================================== */
+  .nx {
+    --surface: #ecebe7; --card: #f6f5f2; --line: #e3e1db; --line-strong: #cdcac2;
+    --ink: #111; --ink-2: #4b4842; --muted: #7a766c; --gold: #ceb462; --gold-soft: #f1e9cf;
+    --red: #b4342c; --radius: 12px;
+    padding: 0 20px; display: flex; flex-direction: column; height: 100%;
+  }
+  .phone.dark .nx { --surface: #161514; --card: #1f1e1c; --line: #2a2826; --line-strong: #3b3835; --ink: #ecebe7; --ink-2: #c9c5bb; --muted: #8e8a80; --gold-soft: #3a3320; }
+  .nx .hdr { height: 56px; display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; }
+  .nx .hdr h1 { margin: 0; font-size: 14px; font-weight: 600; text-align: center; letter-spacing: -.01em; }
+  .nx .hdr .ic { width: 28px; height: 28px; display: grid; place-items: center; color: var(--ink-2); border-radius: 8px; }
+  .nx .hdr .ic svg { width: 17px; height: 17px; }
+  .nx .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 18px 0 6px; }
+  .nx .row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); min-height: 56px; }
+  .nx .row:last-child { border-bottom: 0; }
+  .nx .row .t { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .nx .row .s { font-size: 11.5px; color: var(--muted); margin-top: 2px; font-weight: 500; }
+  .nx .row .s .mono, .nx .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; }
+  .nx .row.ghost { color: var(--muted); font-weight: 600; font-size: 13px; min-height: 48px; }
+  .nx .av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #111; }
+  .nx .av.lg { width: 56px; height: 56px; font-size: 20px; }
+  .nx .av.a1 { background: #e5d49a; } .nx .av.a2 { background: #c8d2d6; } .nx .av.a3 { background: #d9c6cf; } .nx .av.a4 { background: #c3cdb9; }
+  .nx .chev { color: var(--line-strong); width: 16px; height: 16px; }
+  .nx .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); display: inline-block; box-shadow: 0 0 0 3px var(--gold-soft); }
+  .nx .tag { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--card); border: 1px solid var(--line-strong); color: var(--ink-2); }
+  .nx .tag.gold { background: var(--gold); border-color: var(--gold); color: #111; }
+  .nx .tag.soft { background: var(--gold-soft); border-color: transparent; color: #5a4a12; }
+  .nx .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 18px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .nx .btn.pri { background: var(--ink); color: var(--surface); }
+  .phone.dark .nx .btn.pri { background: #ecebe7; color: #161514; }
+  .nx .btn.sec { border: 1px solid var(--line-strong); color: var(--ink); background: transparent; }
+  .nx .btn.gold { background: var(--gold); color: #111; }
+  .nx .btn.sm { height: 30px; padding: 0 12px; font-size: 12px; }
+  .nx .btn.block { width: 100%; }
+  .nx .btn.dis { opacity: .35; }
+  .nx .actions { margin-top: auto; padding: 16px 0 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .nx .actions.single { grid-template-columns: 1fr; }
+  .nx .field { margin-top: 6px; }
+  .nx .field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+  .nx .input { height: 40px; border: 1px solid var(--line-strong); background: var(--card); border-radius: 10px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: var(--muted); justify-content: space-between; }
+  .nx .input.focus { border-color: var(--ink); box-shadow: 0 0 0 3px var(--gold-soft); color: var(--ink); }
+  .nx .input svg { width: 16px; height: 16px; color: var(--muted); }
+  .nx .input.err { border-color: var(--red); }
+  .nx .hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .nx .hint.err { color: var(--red); }
+  .nx .card { background: var(--card); border-radius: var(--radius); padding: 2px 14px; }
+  .nx .card .row { padding: 11px 0; min-height: 48px; }
+  .nx .kv { display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+  .nx .kv:last-child { border-bottom: 0; }
+  .nx .kv .k { color: var(--muted); font-weight: 500; flex: none; }
+  .nx .kv .v { text-align: right; font-weight: 500; word-break: break-all; }
+  .nx .kv .v b { font-weight: 600; }
+  .nx .amount { text-align: center; padding: 10px 0 4px; }
+  .nx .amount .big { font-size: 28px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+  .nx .amount .big small { font-size: 14px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+  .nx .amount .fee { font-size: 11.5px; color: var(--muted); margin-top: 6px; font-weight: 500; }
+  .nx .site { display: flex; align-items: center; gap: 10px; }
+  .nx .site .mono-ico { width: 32px; height: 32px; border-radius: 9px; background: var(--ink); color: var(--surface); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+  .nx .site .n { font-size: 13px; font-weight: 600; }
+  .nx .site .o { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+  .nx .alert { border-radius: 10px; padding: 10px 12px; font-size: 11.5px; line-height: 1.45; font-weight: 500; background: var(--gold-soft); color: #4a3d12; margin-top: 12px; }
+  .nx .alert.red { background: #f6e3e1; color: #7a2a24; }
+  .phone.dark .nx .alert.red { background: #3a1f1d; color: #f1b9b4; }
+  .nx .alert b { font-weight: 700; display: block; margin-bottom: 2px; }
+  .nx .disclosure { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 12px 0; border-top: 1px solid var(--line); margin-top: 8px; }
+  .nx .disclosure span:last-child { color: var(--muted); font-weight: 500; }
+  .nx .foot { margin-top: auto; padding: 12px 0 16px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; font-weight: 500; }
+  .nx .foot a { color: var(--muted); text-decoration: none; }
+  .nx .hero { padding: 18px 0 8px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+  .nx .hero .name { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .nx .chips { display: flex; gap: 8px; margin-top: 10px; }
+  .nx .emblem { width: 120px; margin: 54px auto 28px; display: block; }
+  .nx .center { text-align: center; }
+  .nx .qr { width: 156px; height: 156px; margin: 10px auto 0; background: #fff; border-radius: 10px; padding: 10px; display: grid; grid-template-columns: repeat(21, 1fr); gap: 0; }
+  .nx .qr i { background: #111; }
+  .nx .qr i.w { background: transparent; }
+  .nx .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin-top: 12px; }
+  .nx .seg span { text-align: center; font-size: 12px; font-weight: 600; padding: 6px; border-radius: 999px; color: var(--muted); }
+  .nx .seg span.on { background: var(--ink); color: var(--surface); }
+  .nx .list-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .nx .list-actions .btn { flex: 1; }
+  .nx .copy { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--ink-2); }
+  .nx .copy svg { width: 15px; height: 15px; }
+  .nx .status-line { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); font-weight: 500; padding: 10px 12px; background: var(--card); border-radius: 10px; margin-top: 12px; }
+  .nx .status-line .dot { box-shadow: none; }
+  .nx .status-line .dot.off { background: var(--line-strong); }
+  .nx .words { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; margin-top: 14px; padding: 14px; background: var(--card); border-radius: 12px; }
+  .nx .words span { font-size: 12px; font-weight: 500; }
+  .nx .words span i { font-style: normal; color: var(--muted); font-size: 10.5px; display: inline-block; width: 18px; }
+  .nx .danger { color: var(--red); }
+  .nx .countdown { font-variant-numeric: tabular-nums; }
+  .nx .thin { font-weight: 500; }
+  .nx .section-gap { height: 8px; }
+  .nx .progress { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .nx .progress i { display: block; height: 100%; width: 70%; background: var(--gold); }
+  .nx .kbd { font-family: ui-monospace, Menlo, monospace; font-size: 10.5px; padding: 1px 6px; border: 1px solid var(--line-strong); border-radius: 5px; color: var(--ink-2); background: var(--card); }
+</style>
+</head>
+<body>
+
+<h1>Zillions Keychain — look &amp; feel review</h1>
+<p class="lede">Popup (380×600) and approval window (396×640), extension 0.10.0. First the current screens, then one shared visual system applied in two layout directions, then feature ideas that need no network. Typography stays Montserrat; only sizes, weights and colour change.</p>
+
+<!-- ================================================================== -->
+<h2>1 · Today</h2>
+<p class="lede">What makes it look dated: 16px rows with 20px padding and a 1px black outline (a 2015 "wireframe" pattern), a square checkbox standing in for a radio, a 30px kebab per row, 20px centred titles, 64px-tall inputs, 32px approval amounts, and five stacked full-width buttons on the account page. Everything is a bordered box, so nothing has priority.</p>
+
+<div class="shelf">
+  <figure>
+    <figcaption><b>Popup · Select Account</b> (live render)</figcaption>
+    <div class="phone"><div class="cur">
+      <div class="hdr">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.5"><rect x="4" y="11" width="16" height="10" rx="1.5"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg>
+        <h1>Select Account</h1>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </div>
+      <div class="subnav"><span>Set default keys</span><span class="btn-xs">Add Keys</span></div>
+      <div class="row"><div class="box"></div><div>Ledger Nano X</div><div class="dots">•••</div></div>
+      <div class="row"><div class="box"></div><div>Savings</div><div class="dots">•••</div></div>
+      <div class="row"><div class="box on">✓</div><div>Main wallet</div><div class="dots">•••</div></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>Approvals · Confirm Transaction</b> (live render)</figcaption>
+    <div class="phone approval"><div class="cur">
+      <div class="hdr" style="grid-template-columns:1fr"><h1>Confirm Transaction</h1></div>
+      <div class="center-title"><div class="l">Sending</div><div class="v">1 ZEC</div><div class="d">+ 0.0001 ZEC fee</div></div>
+      <div class="card">
+        <div><div class="k">From <b>Main wallet</b></div><div class="v">u1l8xune…cetkxf</div></div>
+        <div><div class="k">To</div><div class="v" style="font-family:monospace;font-size:13px;word-break:break-all">u1qf3mk7z7q8z0r5zj9m2k3l4n5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2g3h4i5j6k7l8m9n0</div></div>
+      </div>
+      <div class="card">
+        <div><div class="k">Requested By</div><div class="v">https://app.zillions.money</div></div>
+        <div style="display:flex;justify-content:space-between"><span class="k">Fee</span><span class="v">0.0001 ZEC</span></div>
+      </div>
+      <div class="msgs"><span><b>3</b> Messages</span><span>View Data &lt;/&gt;</span></div>
+      <div class="io"><span style="color:#a69f8f">↑</span><div><div class="t">Ironwood input</div><div class="c">Shielded funds (2.5 ZEC)</div></div></div>
+      <div class="io"><span style="color:#a69f8f">↓</span><div><div class="t">Ironwood output</div><div class="c">u1qf3mk7...l8m9n0 (1 ZEC)</div></div></div>
+      <div class="actions"><div class="o">Reject</div><div class="p">Approve</div></div>
+    </div></div>
+  </figure>
+</div>
+
+<ul class="notes" style="margin-top:28px">
+  <li><b>Scale.</b> The popup is 380px wide but typeset like a 540px page: 16px rows, 20px titles, 18px menu items, 22px icons.</li>
+  <li><b>Borders do all the work.</b> Rows, inputs, address boxes, I/O cards and secondary buttons are all 1px-outlined rounded boxes. Hierarchy comes from nothing but position.</li>
+  <li><b>Controls read wrong.</b> The "set default" radio is drawn as a square checkbox; the kebab menu hides the most-used action (open account) behind "View Keys".</li>
+  <li><b>Duplicated navigation.</b> Header back arrow + a "Back" text button at the bottom; the settings drawer hides three items and the version behind a 65%-wide slide-in.</li>
+  <li><b>Approvals are the best part</b> (white summary cards) but the amount is oversized, the site is buried in the second card, and the flow cards below reintroduce the outlined-box look. Network isn't shown, which product §3.4 requires.</li>
+</ul>
+
+<!-- ================================================================== -->
+<h2>2 · Proposed system (shared by both directions)</h2>
+<p class="lede">Same palette family as the wallet app (warm surface, off-white cards, hairline dividers, gold as the single accent, black pill primary). Rows are flat and full-width with hairlines, no outlines, no rounded hover shapes. Type scale for a 380px column: title 14/600, row 13/600, secondary 11.5/500, eyebrow 10.5/600 caps, hero amount 28/600, buttons 13/600 at 38px.</p>
+<div class="swatches">
+  <div class="swatch"><i style="background:#ecebe7"></i>surface #ecebe7</div>
+  <div class="swatch"><i style="background:#f6f5f2"></i>card #f6f5f2</div>
+  <div class="swatch"><i style="background:#e3e1db"></i>line #e3e1db</div>
+  <div class="swatch"><i style="background:#cdcac2"></i>line-strong #cdcac2</div>
+  <div class="swatch"><i style="background:#111"></i>ink #111 (primary button)</div>
+  <div class="swatch"><i style="background:#7a766c"></i>muted #7a766c</div>
+  <div class="swatch"><i style="background:#ceb462"></i>gold #ceb462 (accent only)</div>
+  <div class="swatch"><i style="background:#f1e9cf"></i>gold-soft (focus, active ring)</div>
+</div>
+
+<h3>Login · Settings · Connected sites (same in both directions)</h3>
+<div class="shelf">
+  <figure>
+    <figcaption><b>Login</b> — smaller emblem, 40px input, black pill</figcaption>
+    <div class="phone"><div class="nx">
+      <img class="emblem" src="../../apps/keychain/public/assets/images/z-emblem.webp" alt="Zillions" />
+      <div class="center" style="font-size:15px;font-weight:600;margin-bottom:14px">Welcome back</div>
+      <div class="field"><div class="input focus"><span style="color:var(--muted)">Password</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M10.6 10.6A2 2 0 0 0 13.4 13.4M9.9 5.1A10.6 10.6 0 0 1 12 5c5 0 9 4 10 7a11 11 0 0 1-2.4 3.6M6.6 6.6A11.6 11.6 0 0 0 2 12c1 3 5 7 10 7a9.6 9.6 0 0 0 3.4-.6"/></svg></div></div>
+      <div style="height:16px"></div>
+      <div class="btn pri block">Unlock</div>
+      <div class="foot"><span>Zillions Keychain 0.10.0</span><a>Forgot password?</a></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>Settings</b> — replaces the slide-in drawer; a normal page</figcaption>
+    <div class="phone"><div class="nx">
+      <div class="hdr"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span><h1>Settings</h1><span></span></div>
+      <div class="eyebrow">Security</div>
+      <div class="row"><div></div><div><div class="t">Auto-lock</div><div class="s">After 15 minutes idle</div></div><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      <div class="row"><div></div><div><div class="t">Change password</div></div><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      <div class="row"><div></div><div><div class="t">Lock now</div><div class="s">Unlocked · locks in <span class="countdown">13:52</span></div></div><div></div></div>
+      <div class="eyebrow">Sites</div>
+      <div class="row"><div></div><div><div class="t">Connected sites</div><div class="s">2 sites</div></div><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      <div class="eyebrow">Appearance</div>
+      <div class="row"><div></div><div><div class="t">Theme</div><div class="s">System</div></div><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      <div class="foot"><span>Keychain 0.10.0 · a1b2c3d4</span><span><a>Help</a> &nbsp;·&nbsp; <a>X</a> &nbsp;·&nbsp; <a>Privacy</a></span></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>Connected sites</b> — monogram, which account the site sees, inline disconnect</figcaption>
+    <div class="phone"><div class="nx">
+      <div class="hdr"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span><h1>Connected sites</h1><span></span></div>
+      <div class="status-line"><span class="dot"></span>This tab is connected · app.zillions.money</div>
+      <div class="eyebrow">2 sites</div>
+      <div class="row"><div class="site"><div class="mono-ico">Z</div></div><div><div class="t">app.zillions.money</div><div class="s">Sees <b>Main wallet</b> · last used today</div></div><span class="btn sec sm">Disconnect</span></div>
+      <div class="row"><div class="site"><div class="mono-ico" style="background:#7a766c">L</div></div><div><div class="t">localhost:5173</div><div class="s">Sees <b>Main wallet</b> · 3 days ago</div></div><span class="btn sec sm">Disconnect</span></div>
+      <div class="foot"><span></span><a class="danger">Disconnect all</a></div>
+    </div></div>
+  </figure>
+</div>
+
+<!-- ================================================================== -->
+<h2>3 · Direction A — "List" <span class="pill-tag good">lowest risk</span></h2>
+<p class="lede">Keeps today's structure (list → detail) and re-skins it. Row tap opens the account; the active one shows a gold dot; "Use" switches the active account without a menu. The detail page turns five buttons into two grouped lists. Mostly a restyle of <code>KeyListItem</code>, <code>Input</code>, <code>ActionButton</code> sizes and the header.</p>
+
+<div class="shelf">
+  <figure>
+    <figcaption><b>A · Home (Accounts)</b></figcaption>
+    <div class="phone"><div class="nx">
+      <div class="hdr"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg></span><h1>Accounts</h1><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span></div>
+      <div class="status-line"><span class="dot"></span>Connected to app.zillions.money as <b style="margin-left:3px">Main wallet</b></div>
+      <div class="eyebrow">Accounts</div>
+      <div class="row"><div class="av a1">M</div><div><div class="t">Main wallet</div><div class="s">Shielded · <span class="mono">t1Vd…TjUN</span></div></div><span class="tag gold"><span class="dot" style="box-shadow:none;background:#111;width:6px;height:6px"></span>Active</span></div>
+      <div class="row"><div class="av a2">S</div><div><div class="t">Savings</div><div class="s">Shielded · <span class="mono">t1Kz…Ga4S</span></div></div><span class="btn sec sm">Use</span></div>
+      <div class="row"><div class="av a3">L</div><div><div class="t">Ledger Nano X <span class="tag" style="margin-left:4px;padding:1px 6px">Ledger</span></div><div class="s">Transparent · Orchard · Ironwood</div></div><span class="btn sec sm">Use</span></div>
+      <div class="row ghost"><div style="width:32px;text-align:center;font-size:18px;line-height:1">+</div><div>Add account</div><div></div></div>
+      <div class="foot"><span>Keychain 0.10.0</span><a>Open Zillions ↗</a></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>A · Account detail</b> — addresses as rows with copy; keys and management grouped</figcaption>
+    <div class="phone"><div class="nx">
+      <div class="hdr"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span><h1>Main wallet</h1><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span></div>
+      <div class="hero" style="padding:10px 0 2px;gap:6px"><div class="av lg a1" style="width:48px;height:48px;font-size:17px">M</div><div class="name">Main wallet</div><span class="tag soft">Active account</span></div>
+      <div class="eyebrow" style="margin-top:12px">Addresses</div>
+      <div class="row"><div></div><div><div class="t">Shielded <span class="tag soft" style="margin-left:4px;padding:1px 6px">new each time</span></div><div class="s mono">u1l8xunezsvhq8fgzfl7…vqcetkxf</div></div><span class="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></span></div>
+      <div class="row"><div></div><div><div class="t">Transparent</div><div class="s mono">t1VdxVQqDhsEo5g1ZHeZt1TvAhE4Cy5TjUN</div></div><span class="copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></span></div>
+      <div class="eyebrow">Keys</div>
+      <div class="row"><div></div><div><div class="t">Viewing key</div></div><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      <div class="row"><div></div><div><div class="t">Seed phrase</div><div class="s">Password required</div></div><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      <div class="row"><div></div><div><div class="t">Spending key</div><div class="s">Password required</div></div><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg></div>
+      <div class="foot" style="padding-bottom:14px"><a>Rename</a><a class="danger">Delete account</a></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>A · Approve transaction</b> — site first, amount, flat receipt, details collapsed</figcaption>
+    <div class="phone approval"><div class="nx">
+      <div class="hdr"><span></span><h1>Confirm transaction</h1><span class="tag" style="justify-self:end">Mainnet</span></div>
+      <div class="site" style="margin-top:4px"><div class="mono-ico">Z</div><div><div class="n">app.zillions.money</div><div class="o">asks <b>Main wallet</b> to sign</div></div></div>
+      <div class="amount"><div class="big">1.0000<small>ZEC</small></div><div class="fee">+ 0.0001 ZEC fee</div></div>
+      <div class="card" style="margin-top:6px">
+        <div class="kv"><span class="k">From</span><span class="v"><b>Main wallet</b> · shielded</span></div>
+        <div class="kv"><span class="k">To</span><span class="v"><span class="tag soft" style="margin-right:6px">Shielded</span><span class="mono">u1qf3mk7…k7l8m9n0</span></span></div>
+        <div class="kv"><span class="k">Fee</span><span class="v">0.0001 ZEC</span></div>
+        <div class="kv"><span class="k">Change</span><span class="v thin">1.4999 ZEC back to Main wallet</span></div>
+      </div>
+      <div class="disclosure"><span>Transaction details</span><span>3 flows · raw data ›</span></div>
+      <div class="actions"><span class="btn sec">Reject</span><span class="btn pri">Approve</span></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>A · Approve connection</b> — what the site gets, and which account</figcaption>
+    <div class="phone approval"><div class="nx">
+      <div class="hdr"><span></span><h1>Connect</h1><span></span></div>
+      <div class="hero" style="padding-top:36px"><div class="mono-ico" style="width:64px;height:64px;border-radius:18px;font-size:26px;background:var(--ink);color:var(--surface);display:grid;place-items:center;font-weight:700">Z</div><div class="name">app.zillions.money</div><div class="s" style="color:var(--muted);font-size:12px">wants to connect to your Keychain</div></div>
+      <div class="eyebrow">It will be able to</div>
+      <div class="row" style="min-height:44px;padding:9px 0"><div style="color:var(--muted)">✓</div><div class="thin">See the addresses of the account below</div><div></div></div>
+      <div class="row" style="min-height:44px;padding:9px 0"><div style="color:var(--muted)">✓</div><div class="thin">Ask you to approve transactions</div><div></div></div>
+      <div class="row" style="min-height:44px;padding:9px 0"><div style="color:var(--muted)">✕</div><div class="thin">Never move funds without your approval</div><div></div></div>
+      <div class="eyebrow">Account</div>
+      <div class="row"><div class="av a1">M</div><div><div class="t">Main wallet</div><div class="s">Active · <span class="mono">t1Vd…TjUN</span></div></div><span class="btn sec sm">Change</span></div>
+      <div class="actions"><span class="btn sec">Reject</span><span class="btn pri">Connect</span></div>
+    </div></div>
+  </figure>
+</div>
+
+<!-- ================================================================== -->
+<h2>4 · Direction B — "Active account first" <span class="pill-tag warn">more change</span></h2>
+<p class="lede">The popup's main job is "copy my address / check what's connected / switch account", so the active account becomes the home screen: name, two copy chips, a QR, then the other accounts as a compact switcher. Approvals go receipt-style, with the recipient's label when it is in the address book (idea 1 below). Changes routes and the account context, not just styles.</p>
+
+<div class="shelf">
+  <figure>
+    <figcaption><b>B · Home</b> — active account hero + switcher</figcaption>
+    <div class="phone"><div class="nx">
+      <div class="hdr"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg></span><h1></h1><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span></div>
+      <div class="hero" style="padding-top:6px"><div class="av lg a1">M</div><div class="name">Main wallet</div><div class="s" style="color:var(--muted);font-size:11.5px">Connected to app.zillions.money</div>
+        <div class="chips"><span class="btn pri sm">Copy shielded address</span><span class="btn sec sm">Copy transparent</span></div>
+        <div class="list-actions" style="margin-top:6px;gap:16px;font-size:11.5px;font-weight:600;color:var(--ink-2)"><span>Show QR</span><span>Keys &amp; details ›</span></div>
+      </div>
+      <div class="eyebrow" style="margin-top:22px">Switch account</div>
+      <div class="row" style="min-height:48px"><div class="av a2" style="width:26px;height:26px;font-size:11px">S</div><div><div class="t">Savings</div></div><span class="btn sec sm">Use</span></div>
+      <div class="row" style="min-height:48px"><div class="av a3" style="width:26px;height:26px;font-size:11px">L</div><div><div class="t">Ledger Nano X</div></div><span class="btn sec sm">Use</span></div>
+      <div class="row ghost" style="min-height:44px"><div style="width:26px;text-align:center;font-size:18px;line-height:1">+</div><div>Add account</div><div></div></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>B · Receive (QR)</b> — show an address in person, offline; "new address" is one tap</figcaption>
+    <div class="phone"><div class="nx">
+      <div class="hdr"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span><h1>Receive</h1><span></span></div>
+      <div class="seg"><span class="on">Shielded</span><span>Transparent</span></div>
+      <div class="qr" id="qr"></div>
+      <div class="center mono" style="margin-top:14px;color:var(--ink-2);font-size:11px;word-break:break-all;padding:0 10px">u1l8xunezsvhq8fgzfl7404m450nwnd76zshscn6nfys7vyz2ywyh4cc5daaq0c7q2su5lqfh…</div>
+      <div class="hint center" style="margin-top:8px">Fresh address. Earlier ones keep working.</div>
+      <div class="actions"><span class="btn sec">New address</span><span class="btn pri">Copy</span></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>B · Approve transaction</b> — receipt style, recipient label from the address book</figcaption>
+    <div class="phone approval"><div class="nx">
+      <div class="hdr"><span></span><h1>Confirm transaction</h1><span class="tag" style="justify-self:end">Mainnet</span></div>
+      <div class="amount" style="padding-top:22px"><div class="eyebrow" style="margin:0 0 8px">Sending</div><div class="big">1.0000<small>ZEC</small></div><div class="fee">from <b>Main wallet</b> · shielded</div></div>
+      <div class="section-gap"></div>
+      <div class="kv"><span class="k">To</span><span class="v"><b>Alice (work)</b><br/><span class="mono" style="color:var(--muted)">u1qf3mk7…k7l8m9n0</span></span></div>
+      <div class="kv"><span class="k">Privacy</span><span class="v"><span class="tag soft">Shielded → shielded</span></span></div>
+      <div class="kv"><span class="k">Message</span><span class="v thin">"Invoice #42, thanks!"</span></div>
+      <div class="kv"><span class="k">Fee</span><span class="v">0.0001 ZEC</span></div>
+      <div class="kv"><span class="k">Requested by</span><span class="v">app.zillions.money</span></div>
+      <div class="disclosure"><span>All inputs and outputs</span><span>3 ›</span></div>
+      <div class="hint" style="margin-top:auto;text-align:center"><span class="kbd">Esc</span> rejects &nbsp;·&nbsp; <span class="kbd">⌘</span><span class="kbd">↵</span> approves</div>
+      <div class="actions" style="margin-top:8px"><span class="btn sec">Reject</span><span class="btn pri">Approve</span></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>B · Approve — unusual case</b> — transparent recipient + high fee, inline and blocking</figcaption>
+    <div class="phone approval"><div class="nx">
+      <div class="hdr"><span></span><h1>Confirm transaction</h1><span class="tag" style="justify-self:end">Testnet</span></div>
+      <div class="amount" style="padding-top:14px"><div class="eyebrow" style="margin:0 0 8px">Sending</div><div class="big">0.2500<small>ZEC</small></div><div class="fee">from <b>Main wallet</b> · shielded</div></div>
+      <div class="kv"><span class="k">To</span><span class="v"><span class="tag" style="margin-right:6px">Transparent</span><span class="mono">t1R7u…pQ2x</span></span></div>
+      <div class="alert"><b>This payment is public</b>The recipient's address is transparent, so the amount and address are visible on-chain.</div>
+      <div class="alert red"><b>Unusually high fee: 0.0125 ZEC</b>Honest fees are far below 0.01 ZEC. The fee goes to miners and can't be recovered.<div style="margin-top:8px;display:flex;align-items:center;gap:8px"><span style="width:16px;height:16px;border:1.5px solid currentColor;border-radius:4px;display:inline-block"></span>I understand and want to pay this fee</div></div>
+      <div class="actions"><span class="btn sec">Reject</span><span class="btn pri dis">Approve</span></div>
+    </div></div>
+  </figure>
+</div>
+
+<!-- ================================================================== -->
+<h2>5 · Things to add (no network needed)</h2>
+<p class="lede">Everything here works from what the Keychain already holds locally: accounts, keys, connected sites, the PCZT being signed, and the browser's own clock and storage.</p>
+
+<div class="ideas">
+  <div class="idea">
+    <h4>1 · Address book</h4>
+    <p>Save a label for a recipient after approving a payment ("Label this address?"). Labels then show on every approval and in the app via the provider. Encrypted in the vault with the accounts.</p>
+    <div class="mini"><div style="display:flex;justify-content:space-between"><span style="color:#7a766c">To</span><span><b>Alice (work)</b> · u1qf3mk7…m9n0</span></div><div style="margin-top:8px;display:flex;gap:6px"><span class="pill-tag" style="background:#111;color:#fff;margin:0">Label this address</span><span class="pill-tag" style="background:#ddd;color:#111;margin:0">Not now</span></div></div>
+    <div class="meta">Trust win on approvals: a known label vs. a raw string. Effort M (new vault record + IPC + two screens).</div>
+  </div>
+  <div class="idea">
+    <h4>2 · Receive QR in the popup</h4>
+    <p>A QR of the fresh shielded address (or the transparent one), generated locally, with "New address". Covers "copy an address without the app open" (product §3.2) for in-person use.</p>
+    <div class="mini" style="display:flex;gap:12px;align-items:center"><div style="width:56px;height:56px;background:#111;border-radius:6px;opacity:.85"></div><div>Shielded · fresh each time<br/><span style="color:#7a766c">u1l8xune…cetkxf</span></div></div>
+    <div class="meta">Effort S (a small QR encoder, one screen).</div>
+  </div>
+  <div class="idea">
+    <h4>3 · Auto-lock timer &amp; session countdown</h4>
+    <p>Setting: lock after 5 / 15 / 60 min idle or on browser close. The home screen shows "locks in 13:52"; the 30-minute re-auth window for signing becomes visible instead of surprising.</p>
+    <div class="mini" style="display:flex;justify-content:space-between"><span>Auto-lock</span><span><b>15 min</b> ▾</span></div>
+    <div class="meta">Effort S (alarm in the background, one setting).</div>
+  </div>
+  <div class="idea">
+    <h4>4 · Current-tab connection status</h4>
+    <p>The popup knows the active tab's origin (it already has the tabs permission). Show "Connected to app.zillions.money as Main wallet" or "Not connected" with a one-tap disconnect, right at the top of Home.</p>
+    <div class="mini"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ceb462;margin-right:6px"></span>Connected to app.zillions.money as <b>Main wallet</b></div>
+    <div class="meta">Effort S. Also answers "why is the site not seeing my wallet?".</div>
+  </div>
+  <div class="idea">
+    <h4>5 · Verify an address</h4>
+    <p>Paste any Zcash address: is it valid, which network, transparent / Sapling / unified, which receivers it carries, and whether it belongs to one of your own accounts. Pure parsing, already in zcore.</p>
+    <div class="mini"><div style="color:#7a766c">u1qf3mk7…m9n0</div><div style="margin-top:6px"><span class="pill-tag" style="background:#f1e9cf;color:#5a4a12;margin:0">Unified · Mainnet</span> <span class="pill-tag" style="background:#ddd;color:#111;margin:0">Orchard + Sapling</span> <span class="pill-tag" style="background:#ddd;color:#111;margin:0">Not yours</span></div></div>
+    <div class="meta">Effort S. Useful before pasting into an exchange form.</div>
+  </div>
+  <div class="idea">
+    <h4>6 · Encrypted backup file</h4>
+    <p>Export the vault (accounts, labels, settings) as a password-encrypted file; import it on another browser. No seed phrases typed, no server. Pairs with a "Backed up ✓ / Not backed up" badge per account.</p>
+    <div class="mini" style="display:flex;justify-content:space-between"><span>Main wallet</span><span style="color:#b4342c">Seed phrase not backed up</span></div>
+    <div class="meta">Effort M (export/import + a backup-confirmed flag).</div>
+  </div>
+  <div class="idea">
+    <h4>7 · Dark theme</h4>
+    <p>The app already ships a dark palette (<code>:root.dark</code> in <code>apps/app/src/index.css</code>). Reuse the same tokens; follow the system by default.</p>
+    <div class="mini" style="background:#161514;color:#ecebe7"><div style="display:flex;justify-content:space-between"><span><b>Main wallet</b></span><span style="color:#ceb462">● Active</span></div><div style="color:#8e8a80;margin-top:4px">Shielded · t1Vd…TjUN</div></div>
+    <div class="meta">Effort S once the tokens are CSS variables (see the dark frame below).</div>
+  </div>
+  <div class="idea">
+    <h4>8 · Richer approvals, from the PCZT alone</h4>
+    <p>Network badge (required by §3.4, missing today), "shielded → shielded" vs "public" privacy line, memo preview, change shown as change, recipient type tag, and keyboard shortcuts (Esc / ⌘↵).</p>
+    <div class="mini"><span class="pill-tag" style="background:#f1e9cf;color:#5a4a12;margin:0">Mainnet</span> <span class="pill-tag" style="background:#f1e9cf;color:#5a4a12;margin:0 0 0 4px">Shielded → shielded</span><div style="margin-top:6px;color:#7a766c">Message: "Invoice #42, thanks!"</div></div>
+    <div class="meta">Effort S–M; all data is already in the summary except the memo (needs reading from the PCZT outputs).</div>
+  </div>
+  <div class="idea">
+    <h4>9 · Account identity: avatar, colour, order</h4>
+    <p>A deterministic avatar colour + initial per account (from its id), optional colour/emoji override, drag to reorder. Makes the switcher and approvals scannable without reading.</p>
+    <div class="mini" style="display:flex;gap:8px;align-items:center"><span style="width:26px;height:26px;border-radius:50%;background:#e5d49a;display:grid;place-items:center;font-weight:700">M</span><span style="width:26px;height:26px;border-radius:50%;background:#c8d2d6;display:grid;place-items:center;font-weight:700">S</span><span style="width:26px;height:26px;border-radius:50%;background:#d9c6cf;display:grid;place-items:center;font-weight:700">L</span><span style="color:#7a766c">+ Ledger badge, hardware accounts</span></div>
+    <div class="meta">Effort S (avatar), M (reorder).</div>
+  </div>
+  <div class="idea">
+    <h4>10 · Approval log <span class="pill-tag warn">product call</span></h4>
+    <p>A local list of what you approved or rejected, per site, with time: "Signed 1 ZEC to Alice for app.zillions.money, 2 h ago". Not chain history (§3.5 keeps balances/history in the app), only the Keychain's own decisions.</p>
+    <div class="mini"><div style="display:flex;justify-content:space-between"><span>Signed · 1.0000 ZEC → Alice</span><span style="color:#7a766c">2 h</span></div><div style="display:flex;justify-content:space-between;margin-top:4px"><span style="color:#b4342c">Rejected · connect</span><span style="color:#7a766c">evil.example</span></div></div>
+    <div class="meta">Effort M. Worth a line in docs/product.md before building.</div>
+  </div>
+</div>
+
+<h3>Dark theme, Direction A home</h3>
+<div class="shelf">
+  <figure>
+    <figcaption><b>Dark</b> — same tokens, app palette</figcaption>
+    <div class="phone dark"><div class="nx">
+      <div class="hdr"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg></span><h1>Accounts</h1><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span></div>
+      <div class="status-line"><span class="dot"></span>Connected to app.zillions.money as <b style="margin-left:3px">Main wallet</b></div>
+      <div class="eyebrow">Accounts</div>
+      <div class="row"><div class="av a1">M</div><div><div class="t">Main wallet</div><div class="s">Shielded · <span class="mono">t1Vd…TjUN</span></div></div><span class="tag gold"><span class="dot" style="box-shadow:none;background:#111;width:6px;height:6px"></span>Active</span></div>
+      <div class="row"><div class="av a2">S</div><div><div class="t">Savings</div><div class="s">Shielded · <span class="mono">t1Kz…Ga4S</span></div></div><span class="btn sec sm">Use</span></div>
+      <div class="row"><div class="av a3">L</div><div><div class="t">Ledger Nano X</div><div class="s">Transparent · Orchard · Ironwood</div></div><span class="btn sec sm">Use</span></div>
+      <div class="row ghost"><div style="width:32px;text-align:center;font-size:18px;line-height:1">+</div><div>Add account</div><div></div></div>
+      <div class="foot"><span>Keychain 0.10.0</span><a>Open Zillions ↗</a></div>
+    </div></div>
+  </figure>
+
+  <figure>
+    <figcaption><b>Seed phrase reveal</b> — after the password step; grid instead of a blurred textarea</figcaption>
+    <div class="phone"><div class="nx">
+      <div class="hdr"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg></span><h1>Seed phrase</h1><span></span></div>
+      <div class="alert red" style="margin-top:14px"><b>Never share these words</b>Anyone with them controls this account. Zillions will never ask for them.</div>
+      <div class="words">
+        <span><i>1</i>abandon</span><span><i>2</i>ability</span><span><i>3</i>able</span>
+        <span><i>4</i>about</span><span><i>5</i>above</span><span><i>6</i>absent</span>
+        <span><i>7</i>absorb</span><span><i>8</i>abstract</span><span><i>9</i>absurd</span>
+        <span><i>10</i>abuse</span><span><i>11</i>access</span><span><i>12</i>accident</span>
+      </div>
+      <div class="hint center" style="margin-top:12px">Hidden again in <span class="countdown">0:48</span></div>
+      <div class="actions single"><span class="btn sec">Copy to clipboard</span></div>
+    </div></div>
+  </figure>
+</div>
+
+<!-- ================================================================== -->
+<h2>6 · Recommendation</h2>
+<ul class="notes">
+  <li><b>Ship the system first</b> (section 2) under Direction A: it is a restyle of five components and the header, no route changes, and it fixes every complaint on the list. One PR.</li>
+  <li><b>Then take Home from Direction B</b> if you like the active-account hero: it needs the QR screen and a "current tab" lookup, which are ideas 2 and 4 anyway.</li>
+  <li><b>Approvals:</b> Direction A's receipt card now; network badge and the privacy line are cheap and close a product gap. Address-book labels (idea 1) are the biggest trust win and can follow.</li>
+  <li><b>Settings page replaces the drawer</b>, and auto-lock (idea 3) gives it a reason to exist.</li>
+</ul>
+
+<script>
+  // Decorative QR for the mockup only.
+  (function () {
+    const qr = document.getElementById("qr"); if (!qr) return;
+    const n = 21; let seed = 7;
+    const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+    const finder = (r, c) => {
+      const inR = (a, b, x) => x >= a && x < b;
+      const corner = (r0, c0) => inR(r0, r0 + 7, r) && inR(c0, c0 + 7, c);
+      if (!(corner(0, 0) || corner(0, n - 7) || corner(n - 7, 0))) return null;
+      const r0 = r < 7 ? 0 : n - 7, c0 = c < 7 ? 0 : n - 7;
+      const rr = r - r0, cc = c - c0;
+      const ring = rr === 0 || rr === 6 || cc === 0 || cc === 6;
+      const core = rr >= 2 && rr <= 4 && cc >= 2 && cc <= 4;
+      return ring || core;
+    };
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      const f = finder(r, c);
+      const on = f === null ? rnd() > 0.55 : f;
+      const i = document.createElement("i"); if (!on) i.className = "w"; qr.appendChild(i);
+    }
+  })();
+</script>
+</body>
+</html>

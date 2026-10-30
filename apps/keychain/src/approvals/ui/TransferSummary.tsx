@@ -1,109 +1,113 @@
-import { Stack } from "@zillions/components";
 import type { PcztSummary } from "@zillions/types";
-import { shortenAddress } from "@zillions/utils";
+import { shortenAddress, zatoshiToZec } from "@zillions/utils";
 
+import { Card, KeyValue } from "../../popup/ui/Row";
+import { Tag } from "../../popup/ui/Tag";
 import { formatZec } from "../utils/format";
 import {
   CLAIM_FEE,
   isHighFee,
   keptByPool,
+  outputPools,
   payments,
+  total,
   transferAmount,
 } from "../utils/pczt";
-import { SummaryCard } from "./SummaryCard";
-import { SummaryHeader } from "./SummaryHeader";
-import { SummaryRow } from "./SummaryRow";
 
-type TransferSummaryProps = {
-  summary: PcztSummary;
-  /** The signing account's wallet name, once it's been looked up. */
-  walletName?: string;
-  signer: string;
-  origin: string;
-};
+const isTransparent = (address: string): boolean => address.startsWith("t");
+
+const Recipient = ({ address }: { address?: string }) =>
+  address ? (
+    <span className="inline-flex items-center gap-1.5">
+      <Tag tone={isTransparent(address) ? "neutral" : "soft"}>
+        {isTransparent(address) ? "Transparent" : "Shielded"}
+      </Tag>
+      <span className="font-mono text-[11px]" title={address}>
+        {shortenAddress(address, 8, 8, "…")}
+      </span>
+    </span>
+  ) : (
+    "an unknown address"
+  );
 
 /**
  * What the transaction does, most important first: the amount leaving the
- * account, from which wallet to whom, the site asking, and the fee. Change is
- * whatever the account's viewing key proves is its own, so a payment can't
- * pass for change; with no payment at all, it's a move within the wallet.
+ * account, to whom, the fee and the change. Change is whatever the account's
+ * viewing key proves is its own, so a payment can't pass for change; with no
+ * payment at all, it's a move within the wallet.
  */
 export const TransferSummary = ({
   summary,
   walletName,
-  signer,
-  origin,
-}: TransferSummaryProps) => {
+}: {
+  summary: PcztSummary;
+  walletName?: string;
+}) => {
   const paid = payments(summary);
   const kept = keptByPool(summary);
   const moving = paid.length === 0;
   const link = summary.paymentLink === true;
   const amount = transferAmount(summary) - (link ? CLAIM_FEE : 0n);
+  const change = moving
+    ? 0n
+    : total(outputPools(summary).flatMap(({ outputs }) => outputs.filter((o) => o.mine)));
+  const fromTransparent =
+    summary.transparentInputs.length > 0 &&
+    summary.saplingInputs.length +
+      summary.orchardInputs.length +
+      summary.ironwoodInputs.length ===
+      0;
 
   return (
-    <Stack gap={3}>
-      <SummaryHeader
-        label={link ? "Payment link" : moving ? "Moving" : "Sending"}
-        detail={
-          <span className={isHighFee(summary) ? "font-bold text-red-500" : ""}>
-            + {formatZec(summary.fee)} fee
-          </span>
-        }
-      >
-        {formatZec(amount)}
-      </SummaryHeader>
-      <SummaryCard>
-        <SummaryRow
-          label={
-            <>
-              From <strong>{walletName ?? "your wallet"}</strong>
-            </>
+    <>
+      <section className="pt-5 pb-3 text-center">
+        <p className="m-0 mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+          {link ? "Payment link" : moving ? "Moving" : "Sending"}
+        </p>
+        <p className="m-0 text-[28px] font-semibold leading-[1.1] tracking-[-0.02em]">
+          {zatoshiToZec(amount)}
+          <small className="ml-1 text-sm font-semibold text-muted">ZEC</small>
+        </p>
+        <p
+          className={
+            isHighFee(summary)
+              ? "m-0 mt-1.5 text-[11.5px] font-bold text-danger"
+              : "m-0 mt-1.5 text-[11.5px] font-medium text-muted"
           }
         >
-          {signer ? shortenAddress(signer) : "Active account"}
-        </SummaryRow>
+          + {formatZec(summary.fee)} fee
+        </p>
+      </section>
+      <Card>
+        <KeyValue label="From">
+          <b className="font-semibold">{walletName ?? "Your wallet"}</b>
+          {" · "}
+          {fromTransparent ? "transparent" : "shielded"}
+        </KeyValue>
         {link ? (
-          <SummaryRow label="To">Whoever claims the link</SummaryRow>
+          <KeyValue label="To">Whoever claims the link</KeyValue>
         ) : moving ? (
-          <SummaryRow label="To">
-            {kept.length === 1
-              ? `Your wallet, in ${kept[0].pool}`
-              : "Your wallet"}
-          </SummaryRow>
+          <KeyValue label="To">
+            {kept.length === 1 ? `Your wallet, in ${kept[0].pool}` : "Your wallet"}
+          </KeyValue>
         ) : (
           paid.map((payment, i) => (
-            <SummaryRow
-              key={i}
-              label={
-                paid.length > 1 ? `To (${formatZec(payment.value ?? 0)})` : "To"
-              }
-            >
-              <span className="font-mono text-sm">
-                {payment.address ?? "an unknown address"}
-              </span>
-            </SummaryRow>
+            <KeyValue key={i} label={paid.length > 1 ? `To · ${formatZec(payment.value ?? 0)}` : "To"}>
+              <Recipient address={payment.address} />
+            </KeyValue>
           ))
         )}
-      </SummaryCard>
-      <SummaryCard>
-        <div className="flex items-center justify-between gap-4">
-          <SummaryRow label="Requested By">{origin}</SummaryRow>
-        </div>
-        <div className="flex items-center justify-between gap-4 px-4 py-3">
-          <span className="text-xs text-neutral-600">Fee</span>
-          <span className="text-base text-sm text-black">
-            {formatZec(summary.fee)}
-          </span>
-        </div>
-        {link && (
-          <div className="flex items-center justify-between gap-4 px-4 py-3">
-            <span className="text-xs text-neutral-600">Claim fee</span>
-            <span className="text-base text-sm text-black">
-              {formatZec(CLAIM_FEE)}
+        <KeyValue label="Fee">{formatZec(summary.fee)}</KeyValue>
+        {link && <KeyValue label="Claim fee">{formatZec(CLAIM_FEE)}</KeyValue>}
+        {change > 0n && (
+          <KeyValue label="Change">
+            <span className="font-medium">
+              {formatZec(change)} back to {walletName ?? "your wallet"}
             </span>
-          </div>
+          </KeyValue>
         )}
-      </SummaryCard>
-    </Stack>
+      </Card>
+    </>
   );
 };
+

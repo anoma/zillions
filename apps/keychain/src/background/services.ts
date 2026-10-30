@@ -15,7 +15,7 @@ import {
 import browser from "webextension-polyfill";
 
 import { LocalStorage, VaultStorage } from "../storage";
-import { ApprovalsService } from "./approvals";
+import { ApprovalLog, ApprovalsService } from "./approvals";
 import { Broadcaster } from "./broadcaster";
 import { initCrypto } from "./crypto/crypto";
 import { Keyring } from "./keyring";
@@ -26,6 +26,7 @@ const PREFIX_INDEXEDDB = "Zillions::IndexedDB";
 const PREFIX_UTILITY = "Zillions::Utility";
 const PREFIX_SESSION = "Zillions::SessionStorage";
 const PREFIX_LOCALSTORAGE = "Zillions::LocalStorage";
+const PREFIX_APPROVAL_LOG = "Zillions::ApprovalLog";
 
 export type Services = {
   vaultService: VaultService;
@@ -34,6 +35,8 @@ export type Services = {
   // active-account) that are storage concerns rather than key semantics.
   accounts: AccountRepository;
   approvals: ApprovalsService;
+  approvalLog: ApprovalLog;
+  localStorage: LocalStorage;
   /** Broadcasts wallet state changes to connected dapp tabs. */
   broadcaster: Broadcaster;
 };
@@ -64,15 +67,30 @@ export const getServices = (): Promise<Services> => {
           set: area.set.bind(area),
         })
       );
+      // IndexedDB: the encrypted log holds Uint8Arrays, which
+      // `storage.local` would not round-trip.
+      const approvalLog = new ApprovalLog(
+        new IndexedDBKVStore(PREFIX_APPROVAL_LOG),
+        vaultService
+      );
       const approvals = new ApprovalsService(
         localStorage,
         vaultService,
         accounts,
-        keyring
+        keyring,
+        approvalLog
       );
       const broadcaster = new Broadcaster(localStorage);
 
-      return { vaultService, keyring, accounts, approvals, broadcaster };
+      return {
+        vaultService,
+        keyring,
+        accounts,
+        approvals,
+        approvalLog,
+        localStorage,
+        broadcaster,
+      };
     })();
   }
   return services;

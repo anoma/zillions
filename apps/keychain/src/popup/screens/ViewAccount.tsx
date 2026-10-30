@@ -1,31 +1,64 @@
 /**
- * Account detail: the parent's transparent address, public key, and a fresh
- * shielded address each visit, plus actions to view the viewing key / seed
- * phrase / spending key and to rename or delete the account.
+ * Account detail: its addresses (a fresh shielded one each visit) to copy,
+ * its keys behind their own screens, and edit / delete.
  */
-import {
-  ActionButton,
-  GapPatterns,
-  Stack,
-  ViewKeys,
-} from "@zillions/components";
 import { useEffect, useState } from "react";
+import { GoPencil } from "react-icons/go";
 import { useNavigate, useParams } from "react-router-dom";
+
+import { shortenAddress } from "@zillions/utils";
 
 import { freshAddress } from "../../background/crypto/zillions";
 import { useAccounts } from "../context/AccountContext";
 import routes from "../routes";
-import { BackButton } from "../ui/BackButton";
-import { PageHeader } from "../ui/PageHeader";
+import { Avatar } from "../ui/Avatar";
+import { Button } from "../ui/Button";
+import { CopyButton } from "../ui/CopyButton";
+import { Row, Section } from "../ui/Row";
+import { IconButton, ScreenHeader } from "../ui/ScreenHeader";
+import { Tag } from "../ui/Tag";
+
+const AddressRow = ({
+  label,
+  address,
+  tag,
+}: {
+  label: string;
+  address?: string;
+  tag?: React.ReactNode;
+}) => (
+  <Row
+    title={
+      <span className="inline-flex items-center gap-1.5">
+        {label}
+        {tag}
+      </span>
+    }
+    subtitle={
+      <span className="font-mono text-[11px]">
+        {address ? shortenAddress(address, 18, 8, "…") : "Generating…"}
+      </span>
+    }
+    trail={
+      address && (
+        <CopyButton
+          value={address}
+          label={`Copy ${label.toLowerCase()} address`}
+        />
+      )
+    }
+  />
+);
 
 export const ViewAccount = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
-  const { getById, accounts } = useAccounts();
+  const { getById, accounts, activeAccountId, changeActiveAccount, status } =
+    useAccounts();
 
   const parent = getById(accountId);
   const shieldedChild = accounts.find(
-    (a) => a.parentId === parent?.id && a.type === "shielded-keys"
+    (a) => a.parentId === parent?.id && a.type === "shielded-keys",
   );
   // A spending-key import IS the shielded account; otherwise the shielded
   // receiver lives on the child account derived under this parent.
@@ -38,20 +71,22 @@ export const ViewAccount = () => {
     if (!ufvk) return;
     let live = true;
     void freshAddress(ufvk).then(
-      (address) => live && setFresh({ ufvk, address })
+      (address) => live && setFresh({ ufvk, address }),
     );
     return () => {
       live = false;
     };
   }, [ufvk]);
   // Never another account's address while this one's is made.
-  const shieldedAddress = ufvk && fresh?.ufvk === ufvk ? fresh.address : undefined;
+  const shieldedAddress =
+    ufvk && fresh?.ufvk === ufvk ? fresh.address : undefined;
 
-  if (!parent) {
+  useEffect(() => {
     // Account not found (e.g. deep link after deletion) — return to the list.
-    navigate(routes.accountList());
-    return <></>;
-  }
+    if (status !== "pending" && !parent)
+      navigate(routes.accountList(), { replace: true });
+  }, [parent, status]);
+  if (!parent) return null;
 
   const transparentAddress = isShieldedParent ? undefined : parent.address;
 
@@ -65,61 +100,91 @@ export const ViewAccount = () => {
         ? parent.id
         : shieldedChild?.id;
 
-  const isMnemonic = parent.type === "mnemonic";
+  const isActive = parent.id === activeAccountId;
 
   return (
-    <Stack gap={GapPatterns.TitleContent} full>
-      <PageHeader title={parent.alias} />
-      <Stack gap={2} full>
-        <ViewKeys
-          transparentAccountAddress={transparentAddress}
-          shieldedAccountAddress={shieldedAddress}
-        />
-        <Stack gap={2} full className="mt-5">
-          <ActionButton
-            outlineColor="black"
-            size="sm"
-            onClick={() => navigate(routes.viewingKey(parent.id))}
-          >
-            View Viewing Key
-          </ActionButton>
-          {isMnemonic && (
-            <ActionButton
-              outlineColor="black"
-              size="sm"
-              onClick={() => navigate(routes.viewMnemonic(parent.id))}
-            >
-              View Seed Phrase
-            </ActionButton>
-          )}
-          {shieldedAccountId && (
-            <ActionButton
-              outlineColor="black"
-              size="sm"
-              onClick={() =>
-                navigate(routes.viewSpendingKey(shieldedAccountId))
-              }
-            >
-              View Spending Key
-            </ActionButton>
-          )}
-          <ActionButton
-            backgroundColor="neutral-400"
-            size="sm"
+    <>
+      <ScreenHeader
+        back
+        title={parent.alias}
+        right={
+          <IconButton
+            label="Edit account"
             onClick={() => navigate(routes.renameAccount(parent.id))}
           >
-            Rename
-          </ActionButton>
-          <ActionButton
-            backgroundColor="neutral-400"
+            <GoPencil />
+          </IconButton>
+        }
+      />
+      <section className="flex flex-col items-center gap-1.5 pt-2.5 pb-0.5 text-center">
+        <Avatar accountId={parent.id} alias={parent.alias} size="lg" />
+        <p className="m-0 text-base font-semibold tracking-[-0.01em]">
+          {parent.alias}
+        </p>
+        {isActive ? (
+          <Tag tone="soft">Active account</Tag>
+        ) : (
+          <Button
+            variant="secondary"
             size="sm"
-            onClick={() => navigate(routes.deleteAccount(parent.id))}
+            onClick={() => void changeActiveAccount(parent.id, parent.type)}
           >
-            Delete
-          </ActionButton>
-        </Stack>
-      </Stack>
-      <BackButton onClick={() => navigate(routes.accountList())} />
-    </Stack>
+            Use this account
+          </Button>
+        )}
+      </section>
+
+      <Section title="Addresses" className="mt-1">
+        {ufvk && (
+          <AddressRow
+            label="Shielded"
+            address={shieldedAddress}
+            tag={<Tag tone="soft">new each time</Tag>}
+          />
+        )}
+        {transparentAddress && (
+          <AddressRow label="Transparent" address={transparentAddress} />
+        )}
+      </Section>
+
+      <Section title="Keys" className="mt-5">
+        <Row
+          title="Viewing key"
+          onClick={() => navigate(routes.viewingKey(parent.id))}
+        />
+        {parent.type === "mnemonic" && (
+          <Row
+            title="Seed phrase"
+            subtitle="Password required"
+            onClick={() => navigate(routes.viewMnemonic(parent.id))}
+          />
+        )}
+        {shieldedAccountId && (
+          <Row
+            title="Spending key"
+            subtitle="Password required"
+            onClick={() => navigate(routes.viewSpendingKey(shieldedAccountId))}
+          />
+        )}
+        {parent.type === "ledger" && (
+          <p className="m-0 mt-2 text-[11.5px] text-muted">
+            The seed phrase and spending keys stay on your Ledger.
+          </p>
+        )}
+      </Section>
+
+      <Section title="Actions" className="mt-5">
+        <Row
+          title="Edit account"
+          onClick={() => navigate(routes.renameAccount(parent.id))}
+        />
+        <Row
+          title={<span className="text-danger">Remove account</span>}
+          onClick={() => navigate(routes.deleteAccount(parent.id))}
+        />
+      </Section>
+
+      <div className="shrink-0 h-10" />
+    </>
   );
 };

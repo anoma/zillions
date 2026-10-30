@@ -1,78 +1,86 @@
 /**
- * Connected Sites settings screen: lists dapp origins approved to connect,
- * with per-site and disconnect-all revocation, over the typed IPC channels.
+ * Connected Sites: dapp origins approved to connect, each seeing the active
+ * account, with per-site and disconnect-all revocation.
  */
-import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { GoX } from "react-icons/go";
-
-import { ActionButton, Alert, Stack } from "@zillions/components";
 
 import { createBackgroundClient } from "../../ipc/client";
-import { PageHeader } from "../ui/PageHeader";
+import { useAccounts } from "../context/AccountContext";
+import { useCurrentSite } from "../currentSite";
+import { siteHost, SiteIcon } from "../ui/Avatar";
+import { Button } from "../ui/Button";
+import { Notice } from "../ui/Notice";
+import { Eyebrow, Footer, Row } from "../ui/Row";
+import { ScreenHeader } from "../ui/ScreenHeader";
+import { SiteStatus } from "../ui/SiteStatus";
 
 export const ConnectedSites = () => {
   const client = useMemo(() => createBackgroundClient(), []);
+  const { parentAccounts, activeAccountId } = useAccounts();
   const [connectedSites, setConnectedSites] = useState<string[]>();
+  const site = useCurrentSite(client, connectedSites);
+  const activeName = parentAccounts.find((a) => a.id === activeAccountId)?.alias;
 
   const fetchConnectedSites = useCallback(() => {
-    client
-      .connectedSites()
-      .then((origins) => setConnectedSites(origins))
-      .catch(console.error);
+    client.connectedSites().then(setConnectedSites).catch(console.error);
   }, [client]);
-
   useEffect(fetchConnectedSites, [fetchConnectedSites]);
 
-  const handleRevokeConnection = async (...sites: string[]): Promise<void> => {
-    for (const site of sites) {
-      await client.revokeConnection(site);
+  const revoke = async (...sites: string[]): Promise<void> => {
+    for (const s of sites) {
+      await client.revokeConnection(s);
     }
     fetchConnectedSites();
   };
 
-  const hasConnectedSites = connectedSites && connectedSites.length > 0;
-
   return (
-    <Stack gap={6}>
-      <PageHeader title="Connected Sites" />
-      {!hasConnectedSites && (
-        <Alert type="info">No connected sites found.</Alert>
+    <>
+      <ScreenHeader back title="Connected sites" />
+      <SiteStatus site={site} accountName={activeName} />
+      {connectedSites?.length === 0 && (
+        <Notice tone="neutral" className="mt-3.5">
+          No sites are connected. A site asks to connect the first time it
+          needs your wallet.
+        </Notice>
       )}
-
-      {hasConnectedSites && (
-        <Stack gap={4}>
-          <div>
-            <div className="w-36 float-right">
-              <ActionButton
-                size="xs"
-                onClick={() => void handleRevokeConnection(...connectedSites)}
-              >
-                Disconnect All
-              </ActionButton>
-            </div>
-          </div>
-          {connectedSites.map((site, i) => (
-            <li
-              key={`connected-site-${i}`}
-              className={clsx(
-                "border border-black rounded-md flex justify-between items-center text-black",
-                "items-center text-base py-4 px-6"
-              )}
-            >
-              <span className="text-ellipsis overflow-hidden" title={site}>
-                {site}
-              </span>
-              <span
-                className="text-black p-2 cursor-pointer hover:text-neutral-hover -mr-2"
-                onClick={() => void handleRevokeConnection(site)}
-              >
-                <GoX />
-              </span>
-            </li>
+      {connectedSites && connectedSites.length > 0 && (
+        <>
+          <Eyebrow>
+            {connectedSites.length === 1 ? "1 site" : `${connectedSites.length} sites`}
+          </Eyebrow>
+          {connectedSites.map((origin) => (
+            <Row
+              key={origin}
+              lead={<SiteIcon origin={origin} />}
+              title={<span title={origin}>{siteHost(origin)}</span>}
+              subtitle={
+                activeName ? (
+                  <>
+                    Sees <b className="font-semibold text-ink-2">{activeName}</b>
+                  </>
+                ) : (
+                  origin
+                )
+              }
+              trail={
+                <Button variant="secondary" size="sm" onClick={() => void revoke(origin)}>
+                  Disconnect
+                </Button>
+              }
+            />
           ))}
-        </Stack>
+          <Footer>
+            <span />
+            <button
+              type="button"
+              className="text-danger cursor-pointer"
+              onClick={() => void revoke(...connectedSites)}
+            >
+              Disconnect all
+            </button>
+          </Footer>
+        </>
       )}
-    </Stack>
+    </>
   );
 };

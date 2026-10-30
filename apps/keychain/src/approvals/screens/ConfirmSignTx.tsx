@@ -7,18 +7,18 @@
  * which its engine verifies and folds into the PCZT keyring-side.
  */
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
+import { CgSpinner } from "react-icons/cg";
 import { useNavigate } from "react-router-dom";
-
-import { Alert, Input, Stack } from "@zillions/components";
 
 import { wallets } from "../../hardware";
 import type { DeviceSignTx } from "../../ipc/contract";
-import { PageHeader } from "../../popup/ui/PageHeader";
+import { ActionBar, Button } from "../../popup/ui/Button";
+import { Notice } from "../../popup/ui/Notice";
+import { PasswordField } from "../../popup/ui/PasswordField";
+import { ScreenHeader } from "../../popup/ui/ScreenHeader";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 import { Status } from "../types";
-import { ApprovalActions } from "../ui/ApprovalActions";
-import { StatusBox } from "../ui/StatusBox";
 
 type Props = {
   details: ApprovalDetails;
@@ -33,7 +33,6 @@ export const ConfirmSignTx = ({ details }: Props) => {
   const [requiresAuth, setRequiresAuth] = useState<boolean>();
   const [error, setError] = useState<string>();
   const [status, setStatus] = useState<Status>();
-  const [statusInfo, setStatusInfo] = useState("");
   // Undefined until known; null when the keys aren't on a device.
   const [device, setDevice] = useState<DeviceSignTx | null>();
 
@@ -84,16 +83,16 @@ export const ConfirmSignTx = ({ details }: Props) => {
 
       try {
         if (requiresAuth) {
+          setError(undefined);
           setStatus(Status.Pending);
-          setStatusInfo(`Decrypting keys and signing transaction...`);
           const isAuthenticated = await client?.checkPassword(password);
 
           if (!isAuthenticated) {
-            throw new Error("Invalid password!");
+            throw new Error("Incorrect password");
           }
         }
       } catch (e) {
-        setError(`${e}`);
+        setError(e instanceof Error ? e.message : `${e}`);
         setStatus(Status.Failed);
         return;
       }
@@ -133,48 +132,56 @@ export const ConfirmSignTx = ({ details }: Props) => {
   }, [status]);
 
   return (
-    <Stack className="h-full text-black pt-4 pb-6" gap={4}>
-      <PageHeader title={requiresAuth ? "Verify" : "Signing transaction"} />
-      <Stack
-        full
-        as="form"
-        onSubmit={(e: React.FormEvent) => void handleApproveSignTx(e)}
-      >
-        {requiresAuth && (
-          <>
-            <StatusBox
-              status={status}
-              idleText="Verify your password to continue"
-              pendingText={statusInfo}
-              errorText={error}
-            />
-            <Input
-              variant="Password"
-              label={"Password"}
+    <form
+      className="flex flex-col flex-1"
+      onSubmit={(e: React.FormEvent) => void handleApproveSignTx(e)}
+    >
+      <ScreenHeader title={requiresAuth ? "Confirm it's you" : "Signing"} />
+      {requiresAuth && (
+        <>
+          <Notice tone="neutral" className="mt-3.5">
+            It&apos;s been a while since you entered your password. Enter it to
+            sign.
+          </Notice>
+          <div className="mt-4">
+            <PasswordField
+              autoFocus
+              label="Password"
+              value={password}
+              error={status === Status.Failed ? error : undefined}
               onChange={(e) => setPassword(e.target.value)}
             />
-          </>
-        )}
-        {!requiresAuth && device && signOnDeviceView(device)}
-        {!requiresAuth &&
-          !device &&
-          (status === Status.Failed ? (
-            <Alert type="error">{error}</Alert>
-          ) : (
-            <Alert type="warning">Submitting signature</Alert>
-          ))}
-        <div className="flex-1" />
-        {requiresAuth && (
-          <ApprovalActions
-            onReject={() => navigate(-1)}
-            rejectLabel="Back"
-            approveLabel="Authenticate"
-            approveDisabled={
-              !password || status === Status.Pending || submitted.current
-            }
-          />
-        )}
-      </Stack>
-    </Stack>
+          </div>
+        </>
+      )}
+      {!requiresAuth && device && (
+        <div className="mt-3.5">{signOnDeviceView(device)}</div>
+      )}
+      {!requiresAuth &&
+        !device &&
+        (status === Status.Failed ? (
+          <Notice tone="danger" title="Couldn't sign" className="mt-3.5">
+            {error}
+          </Notice>
+        ) : (
+          <div className="flex flex-col items-center gap-3 pt-24 text-[12.5px] font-medium text-muted">
+            <CgSpinner className="size-6 animate-spin text-gold" />
+            Signing transaction…
+          </div>
+        ))}
+      {requiresAuth && (
+        <ActionBar>
+          <Button variant="secondary" onClick={() => navigate(-1)}>
+            Back
+          </Button>
+          <Button
+            type="submit"
+            disabled={!password || status === Status.Pending || submitted.current}
+          >
+            Sign
+          </Button>
+        </ActionBar>
+      )}
+    </form>
   );
 };

@@ -11,6 +11,7 @@ import {
   message,
   type AccountStore,
   type AccountType,
+  type ApprovalLogEntry,
   type ActiveAccount,
   type DerivedAccount,
   type DeviceSignTx,
@@ -83,6 +84,17 @@ export class BackgroundClient {
   /** Whether the 30-minute auth window expired (password re-check needed). */
   requiresAuth(): Promise<boolean> {
     return this.send("vault/requiresAuth", {});
+  }
+
+  // ---- settings ----
+
+  /** Minutes of system idle time before the Keychain locks; 0 never. */
+  autoLockMinutes(): Promise<number> {
+    return this.send("settings/getAutoLock", {});
+  }
+
+  setAutoLockMinutes(minutes: number): Promise<void> {
+    return this.send("settings/setAutoLock", { minutes });
   }
 
   // ---- keyring ----
@@ -198,6 +210,15 @@ export class BackgroundClient {
   /** Confirm the pending "show a payment link again" request `msgId`. */
   submitOpenLinkKey(msgId: string): Promise<void> {
     return this.send("approvals/submitOpenLinkKey", { msgId });
+  }
+
+  /** Approval decisions, newest first. */
+  approvalLog(): Promise<ApprovalLogEntry[]> {
+    return this.send("approvals/log", {});
+  }
+
+  clearApprovalLog(): Promise<void> {
+    return this.send("approvals/clearLog", {});
   }
 
   /** Confirm the pending default-account change owned by this popup's tab. */

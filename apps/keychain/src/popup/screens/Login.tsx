@@ -1,10 +1,15 @@
 /**
  * Unlock screen. `onLogin` resolves to whether the password was correct.
+ * Shared with the approval window's login gate.
  */
 import React, { useState } from "react";
 
-import { ActionButton, Heading, Input, Stack } from "@zillions/components";
 import { ZEmblem } from "@zillions/components/assets/ZEmblem";
+
+import { Button } from "../ui/Button";
+import { PasswordField } from "../ui/PasswordField";
+import { Footer } from "../ui/Row";
+import { KEYCHAIN_VERSION } from "../version";
 
 enum Status {
   Idle,
@@ -34,40 +39,41 @@ export const Login = ({ onLogin }: LoginProps) => {
   };
 
   const errorMessage =
-    status === Status.Failed ? "An error has occurred"
-      : status === Status.InvalidPassword ? "Incorrect Password"
-        : "";
+    status === Status.Failed ? "Something went wrong. Try again."
+    : status === Status.InvalidPassword ? "Incorrect password"
+    : undefined;
 
   return (
-    <Stack
-      as="form"
-      className="py-6 w-full max-w-[500px] mx-auto"
-      gap={16}
-      onSubmit={handleSubmit}
-      full
-    >
-      <div className="flex flex-col justify-center flex-1 text-center pt-14">
-        <ZEmblem className="w-[80%] mx-auto" />
+    <form className="flex flex-col flex-1" onSubmit={(e) => void handleSubmit(e)}>
+      {/* 11:9 spacers: the gap under the Z is 10% shorter than centring gives. */}
+      <div className="flex flex-1 flex-col items-center">
+        <div className="grow-[11]" />
+        <ZEmblem className="w-[220px]" />
+        <div className="grow-[9]" />
       </div>
-      <Stack gap={2}>
-        <Heading className="text-lg text-center text-black">
-          Enter your password
-        </Heading>
-        <Input
-          autoFocus
-          placeholder="Password"
-          variant="Password"
-          value={password}
-          disabled={status === Status.Pending}
-          onChange={(e) => setPassword(e.target.value)}
-          error={errorMessage}
-        />
-      </Stack>
-      <ActionButton
+      <h1 className="m-0 mb-4 text-center text-[15px] font-semibold">
+        Welcome back
+      </h1>
+      <PasswordField
+        autoFocus
+        aria-label="Password"
+        placeholder="Password"
+        value={password}
+        disabled={status === Status.Pending}
+        onChange={(e) => setPassword(e.target.value)}
+        error={errorMessage}
+      />
+      <Button
+        type="submit"
+        block
+        className="mt-4"
         disabled={status === Status.Pending || password.length === 0}
       >
         Unlock
-      </ActionButton>
-    </Stack>
+      </Button>
+      <Footer className="!mt-8 !justify-center">
+        <span>Zillions Keychain {KEYCHAIN_VERSION}</span>
+      </Footer>
+    </form>
   );
 };

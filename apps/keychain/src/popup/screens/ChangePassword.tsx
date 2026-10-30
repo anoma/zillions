@@ -3,35 +3,23 @@
  * with zxcvbn, and re-encrypts every stored secret in the background.
  */
 import React, { useState } from "react";
-import zxcvbn from "zxcvbn";
-
-import {
-  ActionButton,
-  Alert,
-  GapPatterns,
-  Input,
-  Stack,
-} from "@zillions/components";
 import { useNavigate } from "react-router-dom";
+import zxcvbn from "zxcvbn";
 
 import { useVault } from "../context/VaultContext";
 import routes from "../routes";
-import { PageHeader } from "../ui/PageHeader";
-
-enum Status {
-  Unsubmitted,
-  Pending,
-  Complete,
-  Failed,
-}
+import { Button } from "../ui/Button";
+import { Notice } from "../ui/Notice";
+import { PasswordField } from "../ui/PasswordField";
+import { ScreenHeader } from "../ui/ScreenHeader";
 
 export const ChangePassword = () => {
   const navigate = useNavigate();
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [status, setStatus] = useState<Status>(Status.Unsubmitted);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [pending, setPending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>();
   const { changePassword } = useVault();
   const { feedback } = zxcvbn(newPassword);
 
@@ -40,7 +28,7 @@ export const ChangePassword = () => {
   const match = newPassword === confirmNewPassword;
 
   const shouldDisableSubmit =
-    status === Status.Pending ||
+    pending ||
     !oldPassword ||
     !newPassword ||
     !match ||
@@ -48,72 +36,65 @@ export const ChangePassword = () => {
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    setStatus(Status.Pending);
-    setErrorMessage("");
+    setPending(true);
+    setErrorMessage(undefined);
 
     try {
       const result = await changePassword(oldPassword, newPassword);
       if (result.ok) {
-        setStatus(Status.Complete);
-        navigate(routes.accountList());
+        navigate(routes.accountList(), { replace: true });
         return;
       }
-
-      setStatus(Status.Failed);
       setErrorMessage(
         result.error === "bad-password"
-          ? "Current password is incorrect!"
+          ? "Current password is incorrect"
           : "Unknown error"
       );
     } catch (err) {
-      setStatus(Status.Failed);
       setErrorMessage(`${err}`);
     }
+    setPending(false);
   };
 
   return (
-    <Stack
-      as="form"
-      gap={GapPatterns.TitleContent}
-      onSubmit={handleSubmit}
-      full
-    >
-      <PageHeader title="Change Password" />
-      <Stack className="justify-center" full gap={GapPatterns.FormFields}>
-        <Input
+    <form className="flex flex-col flex-1" onSubmit={(e) => void handleSubmit(e)}>
+      <ScreenHeader back title="Change password" />
+      <div className="flex flex-col gap-4 mt-3.5">
+        <PasswordField
+          autoFocus
           label="Current password"
-          variant="Password"
-          type="password"
           value={oldPassword}
           onChange={(e) => setOldPassword(e.target.value)}
         />
-        <Input
-          label="New Password"
-          variant="Password"
+        <PasswordField
+          label="New password"
+          autoComplete="new-password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           error={
             newPassword.length > 0
-              ? feedback.warning || feedback.suggestions.join(" ")
-              : ""
+              ? feedback.warning || feedback.suggestions.join(" ") || undefined
+              : undefined
           }
         />
-        <Input
+        <PasswordField
           label="Confirm new password"
-          variant="Password"
+          autoComplete="new-password"
           value={confirmNewPassword}
           onChange={(e) => setConfirmNewPassword(e.target.value)}
           error={
             confirmNewPassword && newPassword && !match
               ? "Passwords do not match"
-              : ""
+              : undefined
           }
         />
-        {errorMessage && <Alert type="error">{errorMessage}</Alert>}
-      </Stack>
-      <ActionButton size="lg" disabled={shouldDisableSubmit}>
-        Confirm
-      </ActionButton>
-    </Stack>
+        {errorMessage && <Notice tone="danger">{errorMessage}</Notice>}
+      </div>
+      <div className="mt-auto pt-4 pb-5">
+        <Button type="submit" block disabled={shouldDisableSubmit}>
+          Change password
+        </Button>
+      </div>
+    </form>
   );
 };

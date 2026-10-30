@@ -1,101 +1,89 @@
 /**
  * Reveal a mnemonic account's seed phrase. Gated by a password re-check; the
- * phrase is fetched from the background only after the password verifies.
+ * phrase is fetched from the background only after the password verifies,
+ * and hidden again after a minute.
  */
-import React, { useState } from "react";
-
-import {
-  ActionButton,
-  Alert,
-  GapPatterns,
-  Input,
-  SeedPhraseInstructions,
-  Stack,
-} from "@zillions/components";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useAccounts } from "../context/AccountContext";
-import { useVault } from "../context/VaultContext";
 import routes from "../routes";
-import { BackButton } from "../ui/BackButton";
-import { PageHeader } from "../ui/PageHeader";
+import { Button } from "../ui/Button";
+import { CopyButton } from "../ui/CopyButton";
+import { Notice } from "../ui/Notice";
+import { PasswordGate } from "../ui/PasswordGate";
+import { ScreenHeader } from "../ui/ScreenHeader";
+
+const SHOWN_FOR_S = 60;
+
+const formatCountdown = (seconds: number): string =>
+  `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 export const ViewMnemonic = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
-  const { checkPassword } = useVault();
-  const { getById, revealMnemonic } = useAccounts();
+  const { getById, revealMnemonic, status } = useAccounts();
+  const [mnemonic, setMnemonic] = useState<string>();
+  const [secondsLeft, setSecondsLeft] = useState(SHOWN_FOR_S);
+  const account = getById(accountId);
 
-  const [password, setPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [mnemonic, setMnemonic] = useState<string | undefined>();
+  useEffect(() => {
+    if (status !== "pending" && !account) navigate(routes.accountList(), { replace: true });
+  }, [account, status]);
 
-  if (!getById(accountId)) {
-    navigate(routes.accountList());
-    return <></>;
-  }
+  useEffect(() => {
+    if (mnemonic === undefined) return;
+    setSecondsLeft(SHOWN_FOR_S);
+    const timer = setInterval(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => clearInterval(timer);
+  }, [mnemonic]);
 
-  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
-    setPasswordError("");
-    try {
-      const valid = await checkPassword(password);
-      if (!valid) {
-        setPasswordError("Invalid password");
-        return;
-      }
-      setMnemonic((await revealMnemonic(accountId)) || "");
-    } catch (err) {
-      setPasswordError(`${err}`);
-    }
-  };
+  useEffect(() => {
+    if (secondsLeft <= 0) setMnemonic(undefined);
+  }, [secondsLeft]);
 
-  const revealed = mnemonic !== undefined;
+  if (!account) return null;
+  const words = mnemonic?.split(" ") ?? [];
 
   return (
-    <Stack full as="form" gap={4} onSubmit={handleSubmit}>
-      <PageHeader title="View Seed Phrase" />
-
-      {!revealed && (
+    <>
+      <ScreenHeader back title="Seed phrase" />
+      {mnemonic === undefined ? (
+        <PasswordGate
+          what="the seed phrase"
+          submitLabel="Show seed phrase"
+          onVerified={async () => setMnemonic((await revealMnemonic(accountId)) || "")}
+        />
+      ) : (
         <>
-          <Stack className="mt-12" full gap={GapPatterns.FormFields}>
-            <Alert type="info">
-              Please provide your password in order to view your seed phrase
-            </Alert>
-            <Input
-              autoFocus
-              variant="Password"
-              label="Password"
-              placeholder="Password"
-              error={passwordError}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Stack>
-          <ActionButton type="submit" size="md" disabled={!password}>
-            Proceed
-          </ActionButton>
-        </>
-      )}
-
-      {revealed && (
-        <>
-          <Stack className="flex-1 justify-center" full gap={1}>
-            <div className="text-sm">
-              <SeedPhraseInstructions />
-            </div>
-            <Input
-              variant="Textarea"
-              readOnly
+          <Notice tone="danger" title="Never share these words" className="mt-3.5">
+            Anyone with them controls this account. Zillions will never ask for
+            them.
+          </Notice>
+          <ol className="m-0 mt-3.5 grid grid-cols-3 gap-x-2.5 gap-y-1.5 rounded-xl bg-card p-3.5 list-none">
+            {words.map((word, i) => (
+              <li key={i} className="text-xs font-medium">
+                <span className="inline-block w-[18px] text-[10.5px] text-muted">{i + 1}</span>
+                {word}
+              </li>
+            ))}
+          </ol>
+          <p className="m-0 mt-3 text-center text-[11px] text-muted tabular-nums">
+            Hidden again in {formatCountdown(secondsLeft)}
+          </p>
+          <div className="mt-auto flex flex-col gap-2 pt-4 pb-5">
+            <CopyButton
               value={mnemonic}
-              sensitive
-              className="mt-6 [&_textarea]:rounded-lg [&_textarea]:py-8 [&_textarea]:px-6"
-              rows={mnemonic.split(" ").length === 24 ? 5 : 3}
-            />
-          </Stack>
-          <BackButton onClick={() => navigate(-1)} />
+              className="h-[38px] rounded-pill border border-line-strong text-[13px] font-semibold cursor-pointer hover:bg-black/5"
+            >
+              Copy to clipboard
+            </CopyButton>
+            <Button variant="secondary" block onClick={() => setMnemonic(undefined)}>
+              Hide now
+            </Button>
+          </div>
         </>
       )}
-    </Stack>
+    </>
   );
 };

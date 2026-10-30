@@ -6,21 +6,20 @@
 import { useContext } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { Alert, Stack } from "@zillions/components";
-
-import { PageHeader } from "../../popup/ui/PageHeader";
+import { ActionBar, Button } from "../../popup/ui/Button";
+import { Notice } from "../../popup/ui/Notice";
+import { ScreenHeader } from "../../popup/ui/ScreenHeader";
 import { ClientContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
-import { ApprovalActions } from "../ui/ApprovalActions";
-import { SummaryCard } from "../ui/SummaryCard";
-import { SummaryHeader } from "../ui/SummaryHeader";
-import { SummaryRow } from "../ui/SummaryRow";
+import { RequestCard } from "../ui/RequestCard";
+import { useWallets } from "../ui/useWallets";
 
 export const ApproveOpenLinkKey = () => {
   const client = useContext(ClientContext);
   const [params] = useSearchParams();
   const msgId = params.get("msgId") ?? "";
   const origin = params.get("origin") ?? "";
+  const { active } = useWallets();
 
   const handleResponse = async (approved: boolean): Promise<void> => {
     if (approved && msgId) {
@@ -30,22 +29,19 @@ export const ApproveOpenLinkKey = () => {
   };
 
   return (
-    <Stack className="h-full text-black pt-4 pb-6" gap={4}>
-      <PageHeader title="Show Payment Link" />
-      <main className="flex flex-col flex-1 gap-4">
-        <SummaryHeader label="Request">Show a payment link again</SummaryHeader>
-        <SummaryCard>
-          <SummaryRow label="Requested By">{origin}</SummaryRow>
-        </SummaryCard>
-        <Alert type="warning" title="The link is cash" className="text-xs">
-          Anyone who has it can claim the money. Approve only if you are showing
-          it to yourself on this site.
-        </Alert>
-      </main>
-      <ApprovalActions
-        onApprove={() => void handleResponse(true)}
-        onReject={() => void handleResponse(false)}
-      />
-    </Stack>
+    <>
+      <ScreenHeader title="Show payment link" />
+      <RequestCard origin={origin} accountLabel="Link from" account={active} />
+      <Notice tone="gold" title="The link is cash" className="mt-4">
+        Anyone who has it can claim the money. Approve only if you are showing
+        it to yourself on this site.
+      </Notice>
+      <ActionBar>
+        <Button variant="secondary" onClick={() => void handleResponse(false)}>
+          Reject
+        </Button>
+        <Button onClick={() => void handleResponse(true)}>Show link</Button>
+      </ActionBar>
+    </>
   );
 };

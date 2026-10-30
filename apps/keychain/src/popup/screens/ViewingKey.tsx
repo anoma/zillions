@@ -2,24 +2,25 @@
  * Display an account's viewing key (the stored UFVK). No secret reveal — the
  * viewing key is public material already held in the account record.
  */
-import { GapPatterns, Input, Stack } from "@zillions/components";
+import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useAccounts } from "../context/AccountContext";
 import routes from "../routes";
-import { BackButton } from "../ui/BackButton";
-import { PageHeader } from "../ui/PageHeader";
+import { CopyButton } from "../ui/CopyButton";
+import { Notice } from "../ui/Notice";
+import { ScreenHeader } from "../ui/ScreenHeader";
 
 export const ViewingKey = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
-  const { getById, accounts } = useAccounts();
-
+  const { getById, accounts, status } = useAccounts();
   const account = getById(accountId);
-  if (!account) {
-    navigate(routes.accountList());
-    return <></>;
-  }
+
+  useEffect(() => {
+    if (status !== "pending" && !account) navigate(routes.accountList(), { replace: true });
+  }, [account, status]);
+  if (!account) return null;
 
   // The UFVK (viewing key) lives on the SHIELDED account's `owner`: a
   // spending-key import is itself shielded; otherwise it's the shielded child
@@ -33,25 +34,23 @@ export const ViewingKey = () => {
   const viewingKey = shielded?.owner ?? "";
 
   return (
-    <Stack full gap={GapPatterns.TitleContent}>
-      <Stack full gap={GapPatterns.FormFields}>
-        <PageHeader title="Viewing Key" />
-        <p className="text-black">
-          Your viewing key grants the holder the ability to see all your
-          balances and transaction data. Please keep it secure to protect your
-          data.
-        </p>
-        <Input
-          label="Viewing Key"
-          variant="ReadOnlyCopyText"
-          readOnly
-          rows={10}
-          valueToDisplay={viewingKey}
+    <>
+      <ScreenHeader back title="Viewing key" />
+      <Notice tone="gold" title="Share with care" className="mt-3.5">
+        Anyone with this key can see this account&apos;s balances, transactions
+        and messages. It can&apos;t spend.
+      </Notice>
+      <p className="m-0 mt-3.5 rounded-xl bg-card p-3.5 font-mono text-[11px] leading-relaxed break-all select-all">
+        {viewingKey}
+      </p>
+      <div className="mt-auto pt-4 pb-5">
+        <CopyButton
           value={viewingKey}
-          className="pb-20 [&_textarea]:py-2"
-        />
-      </Stack>
-      <BackButton onClick={() => navigate(-1)} />
-    </Stack>
+          className="w-full h-[38px] rounded-pill bg-black text-white text-[13px] font-semibold cursor-pointer hover:bg-black/85"
+        >
+          Copy viewing key
+        </CopyButton>
+      </div>
+    </>
   );
 };

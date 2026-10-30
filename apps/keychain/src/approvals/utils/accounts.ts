@@ -1,17 +1,15 @@
 import type { StoredAccount } from "../../ipc/contract";
 
 /**
- * The wallet name to show for `signer`. A shielded account is named after the
- * wallet (its parent) it belongs to.
+ * The wallet (parent account) to show for `signer`: a shielded account
+ * belongs to its parent.
  */
-export const walletNameFor = (
+export const walletFor = (
   accounts: StoredAccount[],
   signer: string
-): string | undefined => {
+): StoredAccount | undefined => {
   const account = accounts.find((a) => a.address === signer);
-  const wallet =
-    account?.parentId ?
+  return account?.parentId ?
       accounts.find((a) => a.id === account.parentId)
     : account;
-  return wallet?.alias;
 };

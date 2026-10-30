@@ -4,6 +4,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { ApprovalsApp } from "../../src/approvals/ApprovalsApp";
+import { initTheme } from "../../src/popup/prefs";
+
+initTheme();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("Missing #root");

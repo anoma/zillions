@@ -15,15 +15,16 @@ import {
 } from "react";
 import { HashRouter, Route, Routes } from "react-router-dom";
 
-import { Alert, Container } from "@zillions/components";
 import type { PcztSummary } from "@zillions/types";
 
 import { BackgroundClient, createBackgroundClient } from "../ipc/client";
+import { Notice } from "../popup/ui/Notice";
+import { Screen } from "../popup/ui/Screen";
 import routes from "./routes";
 import { ApproveConnection } from "./screens/ApproveConnection";
 import { ApproveDisconnection } from "./screens/ApproveDisconnection";
-import { ApproveSignTx } from "./screens/ApproveSignTx";
 import { ApproveOpenLinkKey } from "./screens/ApproveOpenLinkKey";
+import { ApproveSignTx } from "./screens/ApproveSignTx";
 import { ApproveUpdateDefaultAccount } from "./screens/ApproveUpdateDefaultAccount";
 import { ConfirmSignTx } from "./screens/ConfirmSignTx";
 import { WithAuth } from "./WithAuth";
@@ -56,7 +57,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }> {
 
   render() {
     return this.state.error ?
-        <Alert type="error">{`${this.state.error}`}</Alert>
+        <Notice tone="danger" title="Something went wrong" className="mt-5">
+          {`${this.state.error}`}
+        </Notice>
       : this.props.children;
   }
 }
@@ -75,60 +78,62 @@ export const ApprovalsApp = () => {
 
   return (
     <HashRouter>
-      <Container size="popup">
+      <main className="flex flex-col h-screen overflow-hidden bg-surface text-black">
         <ClientContext.Provider value={client}>
           <ExtensionLockContext.Provider value={{ isUnlocked, setIsUnlocked }}>
-            <ErrorBoundary>
-              <Routes>
-                <Route
-                  path={routes.approveConnection()}
-                  element={
-                    <WithAuth>
-                      <ApproveConnection />
-                    </WithAuth>
-                  }
-                />
-                <Route
-                  path={routes.approveDisconnection()}
-                  element={
-                    <WithAuth>
-                      <ApproveDisconnection />
-                    </WithAuth>
-                  }
-                />
-                <Route
-                  path={routes.approveOpenLinkKey()}
-                  element={
-                    <WithAuth>
-                      <ApproveOpenLinkKey />
-                    </WithAuth>
-                  }
-                />
-                <Route
-                  path={routes.approveUpdateDefaultAccount()}
-                  element={
-                    <WithAuth>
-                      <ApproveUpdateDefaultAccount />
-                    </WithAuth>
-                  }
-                />
-                <Route
-                  path={routes.approveSignTx()}
-                  element={
-                    <WithAuth>
-                      <ApproveSignTx details={details} setDetails={setDetails} />
-                    </WithAuth>
-                  }
-                />
-                <Route
-                  path={routes.confirmSignTx()}
-                  element={details && <ConfirmSignTx details={details} />}
-                />
-              </Routes>
-            </ErrorBoundary>
+            <Screen>
+              <ErrorBoundary>
+                <Routes>
+                  <Route
+                    path={routes.approveConnection()}
+                    element={
+                      <WithAuth>
+                        <ApproveConnection />
+                      </WithAuth>
+                    }
+                  />
+                  <Route
+                    path={routes.approveDisconnection()}
+                    element={
+                      <WithAuth>
+                        <ApproveDisconnection />
+                      </WithAuth>
+                    }
+                  />
+                  <Route
+                    path={routes.approveOpenLinkKey()}
+                    element={
+                      <WithAuth>
+                        <ApproveOpenLinkKey />
+                      </WithAuth>
+                    }
+                  />
+                  <Route
+                    path={routes.approveUpdateDefaultAccount()}
+                    element={
+                      <WithAuth>
+                        <ApproveUpdateDefaultAccount />
+                      </WithAuth>
+                    }
+                  />
+                  <Route
+                    path={routes.approveSignTx()}
+                    element={
+                      <WithAuth>
+                        <ApproveSignTx details={details} setDetails={setDetails} />
+                      </WithAuth>
+                    }
+                  />
+                  <Route
+                    path={routes.confirmSignTx()}
+                    element={details && <ConfirmSignTx details={details} />}
+                  />
+                </Routes>
+              </ErrorBoundary>
+            </Screen>
           </ExtensionLockContext.Provider>
         </ClientContext.Provider>
-      </Container>
+      </main>
     </HashRouter>
   );
 };
