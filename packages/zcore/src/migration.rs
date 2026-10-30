@@ -10,7 +10,6 @@
 //! if one lands.
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use nonempty::NonEmpty;
 use rand_core::{OsRng, RngCore};
@@ -40,51 +39,10 @@ use crate::wallet::{Wallet, WalletData};
 // before its notes can anchor waits (the app asks zcore again).
 const MINING_MARGIN: u32 = 5;
 
-static TEST_AMOUNTS: AtomicBool = AtomicBool::new(false);
-
-/// Dev only: plans and recognises migration amounts of 0.001–0.002 ZEC, so a
-/// wallet with little Orchard can try preparations and several transfers.
-/// Such transfers don't blend in with anyone's; never for real use.
-#[wasm_bindgen]
-pub fn use_migration_test_amounts(on: bool) {
-    TEST_AMOUNTS.store(on, Ordering::Relaxed);
-}
-
-/// The test amounts: 0.001 and 0.002 ZEC.
-struct TestAmounts;
-
-impl PoolMigrationConstants for TestAmounts {
-    fn denomination_cap(&self) -> Zatoshis {
-        Zatoshis::const_from_u64(200_000)
-    }
-
-    fn max_residual_value(&self) -> Zatoshis {
-        Zatoshis::const_from_u64(100_000)
-    }
-}
-
-/// ZIP 318's constants, or the test amounts while they're on.
-// ponytail: a process-wide switch for a dev-only setting; pass it through the
-// calls if it ever has to differ between them.
+/// ZIP 318's constants, as specified.
 pub(crate) struct Grid;
 
-impl PoolMigrationConstants for Grid {
-    fn denomination_cap(&self) -> Zatoshis {
-        if TEST_AMOUNTS.load(Ordering::Relaxed) {
-            TestAmounts.denomination_cap()
-        } else {
-            DENOM_CAP
-        }
-    }
-
-    fn max_residual_value(&self) -> Zatoshis {
-        if TEST_AMOUNTS.load(Ordering::Relaxed) {
-            TestAmounts.max_residual_value()
-        } else {
-            MAX_RESIDUAL_VALUE
-        }
-    }
-}
+impl PoolMigrationConstants for Grid {}
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -114,11 +72,8 @@ pub(crate) struct MigrationPlan {
 
 /// ZIP 318's quantization: the largest standard amount that fits, again and
 /// again, which expands each decimal digit into 5s, 2s and 1s of its place.
-fn quantize(mut value: u64, grid: &impl PoolMigrationConstants) -> Vec<u64> {
-    let (floor, cap) = (
-        grid.max_residual_value().into_u64(),
-        grid.denomination_cap().into_u64(),
-    );
+fn quantize(mut value: u64) -> Vec<u64> {
+    let (floor, cap) = (MAX_RESIDUAL_VALUE.into_u64(), DENOM_CAP.into_u64());
     let mut parts = vec![];
     while value >= floor {
         let part = largest_one_two_five(value.min(cap), floor);
@@ -188,11 +143,7 @@ fn transfer_fee(network: &Network, target: BlockHeight) -> Result<u64, String> {
         .map_err(|e| format!("{e:?}"))
 }
 
-pub(crate) fn plan(
-    wallet: &Wallet,
-    rng: &mut impl RngCore,
-    grid: &impl PoolMigrationConstants,
-) -> Result<MigrationPlan, String> {
+pub(crate) fn plan(wallet: &Wallet, rng: &mut impl RngCore) -> Result<MigrationPlan, String> {
     let notes = wallet.spendable_orchard();
     let orchard: u64 = notes.iter().sum();
     let target = BlockHeight::from(u32::from(wallet.tip) + 1);
@@ -203,7 +154,7 @@ pub(crate) fn plan(
     // split until the parts, their fees and the preparations' fit.
     let mut value = orchard;
     let (parts, preps) = loop {
-        let parts = quantize(value, grid);
+        let parts = quantize(value);
         if parts.is_empty() {
             break (parts, 0);
         }
@@ -351,7 +302,7 @@ pub fn plan_migration(network: &str, wallet: JsValue) -> Result<JsValue, JsError
     let data: WalletData =
         serde_wasm_bindgen::from_value(wallet).map_err(|e| JsError::new(&e.to_string()))?;
     let wallet = Wallet::new(network, &data).map_err(|e| JsError::new(&e))?;
-    let plan = plan(&wallet, &mut OsRng, &Grid).map_err(|e| JsError::new(&e))?;
+    let plan = plan(&wallet, &mut OsRng).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&plan).map_err(|e| JsError::new(&e.to_string()))
 }
 
@@ -457,23 +408,23 @@ mod tests {
 
     #[test]
     fn quantizes_each_digit_into_fives_twos_and_ones() {
-        assert_eq!(quantize(9 * CENT, &Grid), [5 * CENT, 2 * CENT, 2 * CENT]);
+        assert_eq!(quantize(9 * CENT), [5 * CENT, 2 * CENT, 2 * CENT]);
         assert_eq!(
-            quantize(4 * COIN + 3 * CENT, &Grid),
+            quantize(4 * COIN + 3 * CENT),
             [2 * COIN, 2 * COIN, 2 * CENT, CENT]
         );
         // Above the cap, whole caps; below a cent, nothing.
         assert_eq!(
-            quantize(25_000 * COIN + CENT + 99, &Grid),
+            quantize(25_000 * COIN + CENT + 99),
             [10_000 * COIN, 10_000 * COIN, 5_000 * COIN, CENT]
         );
-        assert!(quantize(CENT - 1, &Grid).is_empty());
+        assert!(quantize(CENT - 1).is_empty());
     }
 
     #[test]
     fn plans_a_small_balance_as_one_cent_after_a_preparation() {
         // Even one transfer spends a note made for it.
-        let plan = plan(&wallet(&[1_130_714]), &mut OsRng, &Grid).unwrap();
+        let plan = plan(&wallet(&[1_130_714]), &mut OsRng).unwrap();
         assert_eq!(plan.transfers.len(), 1);
         assert_eq!(plan.transfers[0].value, CENT);
         assert_eq!(plan.preparations, [TIP + 1]);
@@ -494,21 +445,10 @@ mod tests {
     }
 
     #[test]
-    fn test_amounts_split_a_cent_into_several_transfers() {
-        let plan = plan(&wallet(&[1_130_714]), &mut OsRng, &TestAmounts).unwrap();
-        assert!(plan.transfers.len() > 1);
-        assert!(plan
-            .transfers
-            .iter()
-            .all(|t| t.value == 100_000 || t.value == 200_000));
-        assert_eq!(plan.preparations.len(), 1);
-    }
-
-    #[test]
     fn fees_come_out_of_the_balance_and_every_amount_is_standard() {
         let values = [7 * COIN, 5_432_109_876, 3 * CENT, 123_456];
         let orchard: u64 = values.iter().sum();
-        let plan = plan(&wallet(&values), &mut OsRng, &Grid).unwrap();
+        let plan = plan(&wallet(&values), &mut OsRng).unwrap();
         let moved: u64 = plan.transfers.iter().map(|t| t.value).sum();
         assert_eq!(
             moved
@@ -600,6 +540,19 @@ mod tests {
             zcash_protocol::zip318::expiry_height(target)
         );
         assert!(tx.ironwood_bundle().is_none() && tx.sapling_bundle().is_none());
+
+        // A made note, worth its part and the fee, crosses with no change.
+        let (made, _, _) = crate::build::tests::bucketed_wallet(5 * CENT + fee);
+        let transfer = crate::send::tests::plan_to_self(&made, 5 * CENT);
+        let step = transfer.steps().first();
+        let target = BlockHeight::from(transfer.min_target_height());
+        assert!(crate::build::bucket(step, &Network::MainNetwork, target).is_some());
+        assert_eq!(u64::from(step.balance().fee_required()), fee);
+        assert!(step
+            .balance()
+            .proposed_change()
+            .iter()
+            .all(|c| c.value().is_zero()));
     }
 
     #[test]
@@ -626,7 +579,7 @@ mod tests {
 
     #[test]
     fn too_little_plans_nothing() {
-        let plan = plan(&wallet(&[CENT / 2]), &mut OsRng, &Grid).unwrap();
+        let plan = plan(&wallet(&[CENT / 2]), &mut OsRng).unwrap();
         assert!(plan.transfers.is_empty() && plan.preparations.is_empty());
         assert_eq!(plan.left, CENT / 2);
     }

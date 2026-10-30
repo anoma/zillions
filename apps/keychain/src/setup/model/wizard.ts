@@ -4,20 +4,21 @@
  * All transient wizard state lives in one typed object, mutated only via typed
  * events through the reducer. The rendered step is derived from `state.step`.
  *
- * Scope: create, import and Ledger flows.
+ * Scope: create, import and hardware-wallet flows.
  */
 import type {
   AccountStore,
   BackupSummary,
   Bip44Path,
   DerivedAccount,
+  DeviceKind,
   Zip32Path,
 } from "../../ipc/contract";
-import type { LedgerKeys } from "./ledger";
+import type { DeviceKeys } from "../../hardware";
 import type { MnemonicLength, SecretKind } from "./secrets";
 
 /** Which onboarding branch the user is in. */
-export type Flow = "none" | "create" | "import" | "ledger";
+export type Flow = "none" | "create" | "import" | "device";
 
 /** The discrete steps. `start` is the landing choice. */
 export type Step =
@@ -33,9 +34,10 @@ export type Step =
   | "import.secret"
   | "import.name"
   | "import.complete"
-  // ledger branch (entered from start once the device is read)
-  | "ledger.password"
-  | "ledger.complete";
+  // device branch (connect, then name + password if needed)
+  | "device.connect"
+  | "device.name"
+  | "device.complete";
 
 /** Async persistence status for the final "complete" step. */
 export type CompletionStatus = "idle" | "pending" | "done" | "failed";
@@ -72,8 +74,9 @@ export type WizardState = {
   shieldedAccount?: DerivedAccount;
   backupSummary?: BackupSummary;
 
-  // --- ledger ---
-  ledgerKeys?: LedgerKeys;
+  // --- hardware wallet ---
+  deviceKind?: DeviceKind;
+  deviceKeys?: DeviceKeys;
 };
 
 export const initialWizardState = (passwordRequired: boolean): WizardState => ({
@@ -100,8 +103,9 @@ export const initialWizardState = (passwordRequired: boolean): WizardState => ({
 export type WizardEvent =
   | { type: "passwordRequirementResolved"; required: boolean }
   | { type: "chooseFlow"; flow: Extract<Flow, "create" | "import"> }
+  | { type: "chooseDevice"; device: DeviceKind }
+  | { type: "deviceConnected"; device: DeviceKind; keys: DeviceKeys }
   | { type: "goToStep"; step: Step }
-  | { type: "ledgerConnected"; keys: LedgerKeys }
   | { type: "setMnemonic"; mnemonic: string[] }
   | { type: "setMnemonicLength"; length: MnemonicLength }
   | { type: "setSecretKind"; kind: SecretKind }
@@ -139,15 +143,25 @@ export const wizardReducer = (
         step: event.flow === "create" ? "create.warning" : "import.secret",
       };
 
+    case "chooseDevice":
+      return {
+        ...state,
+        flow: "device",
+        deviceKind: event.device,
+        step: "device.connect",
+      };
+
     case "goToStep":
       return { ...state, step: event.step };
 
-    case "ledgerConnected":
+    case "deviceConnected":
       return {
         ...state,
-        flow: "ledger",
-        ledgerKeys: event.keys,
-        step: state.passwordRequired ? "ledger.password" : "ledger.complete",
+        deviceKind: event.device,
+        deviceKeys: event.keys,
+        // The device reports its name: the default account alias.
+        alias: event.keys.alias,
+        step: state.passwordRequired ? "device.name" : "device.complete",
       };
 
     case "setMnemonic":

@@ -15,11 +15,10 @@ import {
   type ActiveAccount,
   type BackupSummary,
   type DerivedAccount,
+  type DeviceSignTx,
   type IpcKind,
   type IpcRequest,
   type IpcResponse,
-  type LedgerSignatures,
-  type LedgerSignTx,
   type LockState,
   type MnemonicValidation,
   type ResetPasswordResult,
@@ -137,10 +136,10 @@ export class BackgroundClient {
     return this.send("keyring/deriveShieldedAccount", input);
   }
 
-  saveLedgerAccount(
-    input: IpcRequest<"keyring/saveLedgerAccount">
-  ): Promise<IpcResponse<"keyring/saveLedgerAccount">> {
-    return this.send("keyring/saveLedgerAccount", input);
+  saveDeviceAccount(
+    input: IpcRequest<"keyring/saveDeviceAccount">
+  ): Promise<IpcResponse<"keyring/saveDeviceAccount">> {
+    return this.send("keyring/saveDeviceAccount", input);
   }
 
   /** All stored account records (parents and their shielded children). */
@@ -206,21 +205,17 @@ export class BackgroundClient {
     return this.send("approvals/queryPcztSummary", { msgId });
   }
 
-  /** The pending PCZT under `msgId` if a Ledger account signs it, else null. */
-  queryLedgerSignTx(msgId: string): Promise<LedgerSignTx | null> {
-    return this.send("approvals/queryLedgerSignTx", { msgId });
+  /** The pending PCZT under `msgId` when a hardware wallet signs it, else null. */
+  queryDeviceSignTx(msgId: string): Promise<DeviceSignTx | null> {
+    return this.send("approvals/queryDeviceSignTx", { msgId });
   }
 
   /** Confirm the pending sign request owned by this popup's tab. */
-  submitSignTx(
-    msgId: string,
-    signer: string,
-    ledgerSignatures?: LedgerSignatures
-  ): Promise<void> {
+  submitSignTx(msgId: string, signer: string, deviceData?: string): Promise<void> {
     return this.send("approvals/submitSignTx", {
       msgId,
       signer,
-      ledgerSignatures,
+      deviceData,
     });
   }
 

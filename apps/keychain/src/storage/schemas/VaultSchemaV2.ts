@@ -39,6 +39,7 @@ enum AccountType {
   PrivateKey = "private-key",
   ShieldedKeys = "shielded-keys",
   Ledger = "ledger",
+  ViewingKey = "viewing-key",
   Disposable = "disposable",
 }
 
@@ -63,6 +64,7 @@ export const KeyStore = t.exact(
         [AccountType.PrivateKey]: null,
         [AccountType.ShieldedKeys]: null,
         [AccountType.Ledger]: null,
+        [AccountType.ViewingKey]: null,
         [AccountType.Disposable]: null,
       }),
       source: t.keyof({
@@ -82,6 +84,8 @@ export const KeyStore = t.exact(
       parentId: t.string,
       pseudoExtendedKey: t.string,
       diversifierIndex: t.number,
+      /** The hardware wallet the keys live on, if any. */
+      device: t.string,
     }),
   ])
 );

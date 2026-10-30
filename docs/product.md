@@ -287,7 +287,7 @@ Moves shielded funds to one of the account's own transparent addresses.
   wallets.
 - Links: Help, Privacy policy, X (Twitter).
 
-### 2.9 Move to Ironwood — Built (immediately), Planned (with privacy)
+### 2.9 Move to Ironwood — Built
 
 Orchard is closed to new funds since NU6.3; its funds can only leave. The
 wallet moves them to Ironwood following [ZIP 318], the standard other
@@ -314,8 +314,8 @@ due. How it's built is in [migration.md](design/migration.md).
   2. **How**: _With added privacy_ (recommended): the funds move as several
      standard amounts, spread over hours, so they look like everyone
      else's; or _Immediately_: one transfer, faster, its full amount public
-     at once. Each shows the number of steps, the time it takes and the
-     fees.
+     at once. Each shows the number of transfers, the time they take and
+     the fees.
   3. **Network privacy**: a recommendation to turn on a trusted VPN such as
      NymVPN (free for the migration), with a warning that the IP address can
      link the transfers; the user may continue without. A web page can't
@@ -345,9 +345,6 @@ due. How it's built is in [migration.md](design/migration.md).
 - In history (2.6), transfers show as Migrated, Orchard → Ironwood; the
   preparation steps that split the funds into standard amounts show as
   such, not as payments.
-- _Immediately_ is built: its review shows the amount and fee of one
-  transfer of every Orchard note to the account's own Ironwood, and confirming
-  sends it.
 - _To confirm_: recommending Tor Browser too, once the Keychain installs and
   is tested there (signed add-on, WebAssembly at its security levels).
 - _Later_: locking the leftover under 0.01 ZEC so nothing spends it by
@@ -536,6 +533,39 @@ Challenges to check, one by one:
   open the Zcash app, approve) with a way to cancel or try again.
 - The recovery phrase and spending keys can't be revealed: they never leave
   the device.
+- How the device code is laid out (and how a second device slots in) is in
+  [hardware-wallets.md](design/hardware-wallets.md).
+
+### 3.7 Keystone hardware wallet — Built
+
+- **Connect a Keystone 3 Pro running the Cypherpunk firmware** from the
+  Keychain's first screen, like a Ledger. Its keys never leave the device:
+  the Keychain keeps only what lets the wallet see the account (its viewing
+  key and the addresses it names), which the user approves on the device.
+  The Zcash app ships only in the Cypherpunk firmware — a Keystone on the
+  multi-coin or BTC-only firmware can't connect, and the connect screen
+  says so.
+- **The wallet supports what Keystone's Zcash app supports.** Its viewing key
+  carries every pool — transparent, Orchard, Sapling and Ironwood — so a
+  Keystone account can also see and spend Sapling, which a Ledger's can't.
+- **The transaction travels by QR code — no cable, no WebHID.** The Keychain
+  shows a send as an animated code for the Keystone's camera; the device
+  reviews it, the user approves there, and the signed response comes back as
+  an animated code the Keychain scans. A browser camera is the only
+  hardware it needs, so a Keystone works in Firefox and Safari too, where a
+  Ledger needs a Chromium-based browser.
+- **The device proves its firmware.** Keystone's signed responses carry its
+  Cypherpunk firmware version; the Keychain refuses devices older than 3.0.8
+  (the first release that reports it and signs Ironwood transactions) with
+  an update prompt.
+- A send is approved in the Keychain as usual, then reviewed and approved on
+  the device; what the device shows is what gets signed. The device may sync
+  several accounts; the Keychain connects the first.
+- The recovery phrase and spending keys can't be revealed: they never leave
+  the device. The device signs with them; the Keychain's copy of the
+  transaction supplies only the proof material a signer may not hold.
+- How the device code is laid out is in
+  [hardware-wallets.md](design/hardware-wallets.md).
 
 ### 3.7 Settings — Built
 

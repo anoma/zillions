@@ -14,6 +14,5 @@ import type { InjectedZillions } from "./InjectedZillions";
 
 declare global {
   // NOTE: var is required to extend globalThis
-  // eslint-disable-next-line no-var
   var zc: InjectedZillions;
 }
