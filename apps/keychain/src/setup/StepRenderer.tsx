@@ -8,6 +8,7 @@ import { Start } from "./steps/Start";
 import { CreateConfirm } from "./steps/create/CreateConfirm";
 import { CreateSeed } from "./steps/create/CreateSeed";
 import { CreateWarning } from "./steps/create/CreateWarning";
+import { DeviceChoose } from "./steps/device/DeviceChoose";
 import { DeviceConnect } from "./steps/device/DeviceConnect";
 import { ImportSecret } from "./steps/import/ImportSecret";
 import { Complete } from "./steps/shared/Complete";
@@ -41,6 +42,8 @@ export const StepRenderer = () => {
       return <Complete />;
 
     // device branch
+    case "device.choose":
+      return <DeviceChoose />;
     case "device.connect":
       return <DeviceConnect />;
     case "device.name":

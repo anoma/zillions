@@ -20,7 +20,8 @@ export const StepHeader = () => {
   const showBack = !isLastStep(state.flow, state.step);
 
   return (
-    <>
+    // Keyed by flow so the header fades in when leaving the landing screen.
+    <div key={state.flow} className="animate-screen-fade">
       <div className="relative flex items-center min-h-[22px]">
         {showBack && (
           <span
@@ -45,7 +46,7 @@ export const StepHeader = () => {
         />
       </div>
       {meta.title && (
-        <hgroup className="mt-3 mb-4">
+        <hgroup key={state.step} className="mt-3 mb-4 animate-screen-fade">
           <Heading
             level="h2"
             className="max-w-[70%] text-xl text-black mx-auto text-center leading-[1.25]"
@@ -54,6 +55,6 @@ export const StepHeader = () => {
           </Heading>
         </hgroup>
       )}
-    </>
+    </div>
   );
 };

@@ -26,7 +26,8 @@ export const STEP_META: Record<Step, StepMeta> = {
   "import.name": { title: "Set Up Your Imported Keys", index: 2, total: 3 },
   "import.complete": { title: "Keys Imported", index: 3, total: 3 },
 
-  "device.connect": { title: "Connect Your Device", index: 1, total: 3 },
-  "device.name": { title: "Set Up Your Device", index: 2, total: 3 },
-  "device.complete": { title: "Device Connected", index: 3, total: 3 },
+  "device.choose": { title: "Hardware Wallet", index: 1, total: 4 },
+  "device.connect": { title: "Connect Your Device", index: 2, total: 4 },
+  "device.name": { title: "Set Up Your Device", index: 3, total: 4 },
+  "device.complete": { title: "Device Connected", index: 4, total: 4 },
 };

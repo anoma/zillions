@@ -30,8 +30,8 @@ export const DeviceProgress = ({
   const at = steps.findIndex((step) => step.key === current);
 
   return (
-    <Stack gap={4} data-testid="device-progress">
-      <ol className="flex flex-col gap-3 border border-black rounded-lg p-5">
+    <Stack gap={4} className="flex-1" data-testid="device-progress">
+      <ol className="flex flex-col gap-3 bg-black/[0.05] rounded-xl p-5">
         {steps.map((step, i) => {
           const done = i < at;
           const active = i === at;
@@ -57,7 +57,7 @@ export const DeviceProgress = ({
                   {step.title}
                 </span>
                 {active && step.hint && (
-                  <span className="block text-sm text-neutral-600">
+                  <span className="block text-[13px] font-medium text-muted">
                     {step.hint}
                   </span>
                 )}
@@ -71,7 +71,7 @@ export const DeviceProgress = ({
           {error}
         </Alert>
       )}
-      <Stack direction="horizontal" gap={2}>
+      <Stack direction="horizontal" gap={2} className="mt-auto">
         {error && (
           <ActionButton
             size="lg"
@@ -84,7 +84,8 @@ export const DeviceProgress = ({
         )}
         <ActionButton
           size="lg"
-          outlineColor="black"
+          outlineColor="neutral-300"
+          textColor="black"
           backgroundHoverColor="black"
           textHoverColor="primary"
           onClick={onCancel}

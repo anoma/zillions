@@ -9,7 +9,7 @@ const radioGroup = tv({
     fieldset: "flex relative w-full h-full",
     container: "flex text-black min-w-28 text-center",
     label:
-      "cursor-pointer text-xs font-bold px-0 py-1.5 relative w-full select-none active:top-px",
+      "cursor-pointer text-xs font-semibold px-0 py-1.5 relative w-full select-none active:top-px",
     input: "unset",
     text: "relative transition-color duration-100 ease-out z-10 select-none",
     indicator: clsx(

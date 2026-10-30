@@ -28,7 +28,7 @@ export const CreateWarning = () => {
   return (
     <>
       <Stack className="mb-8" gap={5}>
-        <aside className="flex items-center border-t border-b border-neutral-500 justify-center py-10 w-full">
+        <aside className="flex items-center border-t border-b border-line justify-center py-10 w-full">
           <div className="flex justify-center mx-auto text-primary text-[125px] leading-[1]">
             <GoAlertFill />
           </div>
@@ -37,7 +37,7 @@ export const CreateWarning = () => {
           <SeedPhraseInstructions />
         </div>
       </Stack>
-      <footer>
+      <footer className="mt-auto">
         <ActionButton
           data-testid={countdown === 0 ? "setup-show-phrase-button" : undefined}
           size="lg"

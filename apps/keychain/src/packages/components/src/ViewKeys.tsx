@@ -38,7 +38,7 @@ export const ViewKeys = ({
       as="section"
       gap={GapPatterns.TitleContent}
     >
-      <Stack gap={GapPatterns.FormFields}>
+      <Stack gap={GapPatterns.FormFields} className="flex-1 justify-center">
         {shieldedAccountAddress && (
           <div>
             <Input

@@ -34,15 +34,17 @@ const ListItem = ({
   return (
     <li
       className={clsx(
-        "relative border border-neutral-500 rounded-sm text-neutral-500 text-sm font-light",
-        "px-1 py-3 h-12"
+        "relative border border-transparent rounded-textField bg-black/[0.05] text-muted text-sm font-medium",
+        "px-1 py-3 h-12 transition-[background-color,border-color] duration-150 ease-out",
+        onChange && "hover:bg-black/[0.07] focus-within:bg-transparent focus-within:border-black",
+        hasError && "!border-danger"
       )}
     >
       {onChange ?
         <span
           className={clsx(
             "flex items-center absolute left-0 top-0 w-full h-full",
-            "[&_input]:bg-transparent [&_input]:border-0",
+            "[&_input]:!bg-transparent [&_input]:!border-0",
             "[&_input]:pt-4 [&_input]:pb-3 [&_input]:pl-7"
           )}
         >
@@ -60,9 +62,9 @@ const ListItem = ({
             error={hasError}
           />
         </span>
-        : <span className="absolute font-light left-2.5 top-[1em] select-none">
+        : <span className="absolute left-2.5 top-[1em] select-none">
           <i className="not-italic">{idx + 1} </i>
-          <span className="text-black font-bold ml-1">{word}</span>
+          <span className="text-black font-semibold ml-1">{word}</span>
         </span>
       }
     </li>
