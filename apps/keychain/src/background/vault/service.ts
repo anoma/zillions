@@ -103,8 +103,10 @@ export class VaultService {
     }
 
     try {
-      await this.sessionStore.set("authTimestamp", Date.now());
       this.crypto.decrypt(store.password, await this.hashPassword(password));
+      // Only a verified password extends the re-authentication window
+      // (`requiresAuth`); a wrong one must not.
+      await this.sessionStore.set("authTimestamp", Date.now());
       return true;
     } catch (error) {
       console.warn(error);

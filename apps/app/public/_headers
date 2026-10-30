@@ -1,3 +1,0 @@
-# Vite names every build asset by its content hash, so a URL never changes meaning.
-/assets/*
-  Cache-Control: public, max-age=31536000, immutable

@@ -84,6 +84,10 @@ that is set in `wxt.config.ts`.
 `window.zc` (connect, accounts, sign PCZT, sign arbitrary message, verify,
 update default account) and logs the wallet events the extension broadcasts.
 
+It needs a development build (`pnpm dev`): those run the Keychain on
+`localhost` too, while production builds only run on `https://app.zillions.money`
+(`src/origins.ts`; `scripts/check-keychain-manifest.mjs` checks the output).
+
 ```bash
 cd examples/test-dapp
 npm install

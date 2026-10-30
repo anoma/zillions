@@ -12,6 +12,7 @@
 import browser, { type Runtime } from "webextension-polyfill";
 
 import type { IpcKind, IpcMessage, IpcResult } from "../ipc/contract";
+import { isAllowedOrigin } from "../origins";
 import { handlers, TRUSTED_SENDER, type IpcSenderContext } from "./handlers";
 
 /** Dispatch a single envelope. Exported for in-process use (mock/tests). */
@@ -52,13 +53,15 @@ const classifySender = (
     return { trusted: true, tabId: sender.tab?.id };
   }
 
-  // Content-script sender: lives in a real tab on a web origin.
+  // Content-script sender: lives in a real tab on a web origin. The manifest
+  // already limits where the content script runs; checking again here keeps
+  // the background's own gate should that list ever widen.
   if (sender.tab?.id !== undefined && /^https?:\/\//.test(url)) {
-    return {
-      trusted: false,
-      origin: new URL(url).origin,
-      tabId: sender.tab.id,
-    };
+    const origin = new URL(url).origin;
+    if (!isAllowedOrigin(origin, import.meta.env.MODE === "development")) {
+      return undefined;
+    }
+    return { trusted: false, origin, tabId: sender.tab.id };
   }
 
   return undefined;

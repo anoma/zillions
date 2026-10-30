@@ -17,6 +17,9 @@ on:
   schedule:
     - cron: "0 6 * * *"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     if: github.event_name != 'schedule'
@@ -25,11 +28,12 @@ jobs:
       run:
         working-directory: packages/zcore
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: stable
           components: rustfmt
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: packages/zcore
       - run: ./patch-crates.sh
@@ -45,8 +49,17 @@ jobs:
       checks: write
       issues: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      # The patched crates (see patches/README.md) have no registry source in
+      # Cargo.lock, and cargo-audit skips packages without one. Give this
+      # checkout's copy one, so advisories against their versions still show.
+      - run: |
+          for crate in bls12_381 pasta_curves; do
+            perl -0pi -e 's|(\nname = "'"$crate"'"\nversion = "[^"]+"\n)|$1source = "registry+https://github.com/rust-lang/crates.io-index"\n|' Cargo.lock
+            grep -A2 "^name = \"$crate\"$" Cargo.lock | grep -q '^source = ' || { echo "no source added for $crate"; exit 1; }
+          done
+        working-directory: packages/zcore
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: packages/zcore

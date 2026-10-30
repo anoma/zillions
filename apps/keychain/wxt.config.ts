@@ -6,6 +6,8 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 import svgr from "vite-plugin-svgr";
 import { defineConfig } from "wxt";
 
+import { matchPatterns } from "./src/origins";
+
 const r = (p: string): string => resolve(__dirname, p);
 
 const pkg = JSON.parse(readFileSync(r("package.json"), "utf-8")) as {
@@ -16,9 +18,13 @@ const pkg = JSON.parse(readFileSync(r("package.json"), "utf-8")) as {
  * Replicates the legacy extension's `define`: every `Z_INTERFACE_*` from `.env`
  * (process.env wins), plus TARGET/NODE_ENV/version, so `@zillions/*` packages
  * that read `process.env.Z_INTERFACE_*` keep resolving.
+ *
+ * NODE_ENV comes from WXT's mode, not the shell: an exported
+ * `NODE_ENV=development` must not relax the password rules in a release build.
  */
 const buildProcessEnv = (
   target: string,
+  mode: string,
 ): Record<string, string | undefined> => {
   const fileEnv: Record<string, string | undefined> = {};
   loadDotenv({ path: r(".env"), processEnv: fileEnv });
@@ -27,7 +33,7 @@ const buildProcessEnv = (
     ...fileEnv,
     ...process.env,
     TARGET: target,
-    NODE_ENV: process.env.NODE_ENV || "production",
+    NODE_ENV: mode,
     npm_package_version: pkg.version,
   };
 
@@ -132,7 +138,7 @@ export default defineConfig({
     },
   },
 
-  manifest: ({ browser }) => ({
+  manifest: ({ browser, mode }) => ({
     name: "Zillions Keychain",
     description:
       "The Zillions Keychain manages a user's wallet for the Zcash ecosystem.",
@@ -157,12 +163,13 @@ export default defineConfig({
     },
     // `injected.js` is the MAIN-world provider script the content script
     // injects into pages (sets `window.zc`). Keep this list minimal: every
-    // entry is fetchable by any site and lets it detect the wallet. The wasm
-    // binaries only load in extension contexts, which don't need an entry.
+    // entry is fetchable by the matched sites and lets them detect the
+    // wallet. The wasm binaries only load in extension contexts, which don't
+    // need an entry. Same sites as the content script (src/origins.ts).
     web_accessible_resources: [
       {
         resources: ["injected.js"],
-        matches: ["<all_urls>"],
+        matches: matchPatterns(mode === "development"),
       },
     ],
     icons: {
@@ -189,9 +196,9 @@ export default defineConfig({
       : {}),
   }),
 
-  vite: ({ browser }) => ({
+  vite: ({ browser, mode }) => ({
     define: {
-      "process.env": JSON.stringify(buildProcessEnv(browser)),
+      "process.env": JSON.stringify(buildProcessEnv(browser, mode)),
       // The Keystone UR libraries branch on the Node version; in the browser
       // there is none.
       "process.version": JSON.stringify(""),

@@ -2,11 +2,13 @@ import browser from "webextension-polyfill";
 
 import { createBackgroundClient } from "../src/ipc/client";
 import { isDappEventMessage } from "../src/background/broadcaster";
+import { matchPatterns } from "../src/origins";
 import { startProxy } from "../src/provider/proxy";
 
 // `defineContentScript` / `injectScript` are auto-imported by WXT (`#imports`).
 export default defineContentScript({
-  matches: ["<all_urls>"],
+  // The Zillions app only; development builds add the local dev servers.
+  matches: matchPatterns(import.meta.env.MODE === "development"),
   runAt: "document_start",
   allFrames: false,
   world: "ISOLATED",
