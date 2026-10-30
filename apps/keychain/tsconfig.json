@@ -13,11 +13,15 @@
     "moduleResolution": "bundler",
     "noEmit": true,
     "noFallthroughCasesInSwitch": true,
+    // WXT 0.21's base config turns these on; the codebase predates them.
+    "noImplicitOverride": false,
+    "noUncheckedIndexedAccess": false,
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
     "target": "es2025",
+    "verbatimModuleSyntax": false,
     "paths": {
       "@vitejs/plugin-react": ["./.types-shims/vitejs-plugin-react.d.ts"],
       "@zillions/components": ["./src/packages/components/src"],

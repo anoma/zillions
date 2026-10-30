@@ -114,7 +114,7 @@ export default defineConfig({
     ],
   },
 
-  runner: {
+  webExt: {
     // This forces the dev browser to reuse the same profile directory
     // keeping cookies, localStorage, and IndexedDB safe between sessions.
     chromiumArgs: ["--user-data-dir=./.wxt/dev-profile"],
