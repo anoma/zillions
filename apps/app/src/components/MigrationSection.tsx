@@ -2,12 +2,7 @@ import { twMerge } from "tailwind-merge";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useMigration } from "../hooks/useMigration";
 import { DatabaseArrowIcon } from "../icons/DatabaseArrowIcon";
-import {
-  clockAt,
-  fromNow,
-  MIGRATION_ENABLED,
-  MIGRATION_MINIMUM,
-} from "../lib/utils";
+import { clockAt, fromNow, MIGRATION_MINIMUM } from "../lib/utils";
 import {
   isDue,
   sendAt,
@@ -17,12 +12,12 @@ import {
 import { ActionButton } from "./ui/ActionButton";
 import { ZecValue } from "./ZecValue";
 
-/** Home's migration prompt and progress; nothing while the flag is off or Orchard holds too little. */
+/** Home's migration prompt and progress; nothing while Orchard holds too little to move. */
 export function MigrationSection() {
   const balance = useGetBalance();
   const status = useMigration().data;
   const orchard = balance.data?.orchardBalance ?? 0n;
-  if (!MIGRATION_ENABLED || (!status && orchard < MIGRATION_MINIMUM)) {
+  if (!status && orchard < MIGRATION_MINIMUM) {
     return null;
   }
 

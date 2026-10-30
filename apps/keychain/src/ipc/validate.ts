@@ -12,9 +12,9 @@ import type {
   ApprovalLogEntry,
   ActiveAccount,
   DerivedAccount,
+  DeviceSignTx,
   IpcKind,
   IpcResponse,
-  LedgerSignTx,
   LockState,
   MnemonicValidation,
   ResetPasswordResult,
@@ -92,9 +92,12 @@ const isOutputArray = (v: unknown): boolean =>
   Array.isArray(v) &&
   v.every((o) => isRecord(o) && typeof o.mine === "boolean");
 
-const isLedgerSignTxOrNull = (v: unknown): v is LedgerSignTx | null =>
+const isDeviceSignTxOrNull = (v: unknown): v is DeviceSignTx | null =>
   v === null ||
-  (isRecord(v) && typeof v.pczt === "string" && typeof v.hdIndex === "number");
+  (isRecord(v) &&
+    typeof v.device === "string" &&
+    typeof v.pczt === "string" &&
+    typeof v.hdIndex === "number");
 
 const isPcztSummary = (v: unknown): v is PcztSummary =>
   isRecord(v) &&
@@ -189,9 +192,9 @@ export const validateResponse = <K extends IpcKind>(
         throw new ResponseShapeError(kind, "expected PcztSummary");
       return value as IpcResponse<K>;
 
-    case "approvals/queryLedgerSignTx":
-      if (!isLedgerSignTxOrNull(value))
-        throw new ResponseShapeError(kind, "expected LedgerSignTx | null");
+    case "approvals/queryDeviceSignTx":
+      if (!isDeviceSignTxOrNull(value))
+        throw new ResponseShapeError(kind, "expected DeviceSignTx | null");
       return value as IpcResponse<K>;
 
     case "dapp/accounts":
@@ -266,7 +269,7 @@ export const validateResponse = <K extends IpcKind>(
         throw new ResponseShapeError(kind, "expected DerivedAccount");
       return value as IpcResponse<K>;
 
-    case "keyring/saveLedgerAccount":
+    case "keyring/saveDeviceAccount":
       if (
         !isRecord(value) ||
         !isAccountStore(value.parentAccount) ||
@@ -274,7 +277,7 @@ export const validateResponse = <K extends IpcKind>(
           !isDerivedAccount(value.shieldedAccount)) ||
         typeof value.alreadyImported !== "boolean"
       )
-        throw new ResponseShapeError(kind, "expected saved Ledger account");
+        throw new ResponseShapeError(kind, "expected saved device account");
       return value as IpcResponse<K>;
 
     default: {

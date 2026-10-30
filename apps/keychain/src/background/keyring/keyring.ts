@@ -8,10 +8,11 @@ import type {
   AccountType,
   Bip44Path,
   DerivedAccount,
-  LedgerSignatures,
+  DeviceKind,
   MnemonicValidation,
   Zip32Path,
 } from "../../ipc/contract";
+import { engines } from "../../hardware/engines";
 import { KeyStoreType } from "../../storage";
 import { generateId } from "../../utils/id";
 import {
@@ -21,7 +22,6 @@ import {
   validateMnemonic,
 } from "../crypto/mnemonic";
 import {
-  applyLedgerSignatures,
   computeSeedFingerprint,
   deriveAccount,
   initZillionsSdk,
@@ -32,7 +32,11 @@ import {
   type SpendingKeys,
 } from "../crypto/zillions";
 import { AccountRepository, VaultService } from "../vault";
-import { AccountSource, SensitiveAccountStoreData } from "./types";
+import {
+  AccountSource,
+  deviceOf,
+  SensitiveAccountStoreData,
+} from "./types";
 
 // UUID v5 namespace: ids are derived deterministically from account inputs.
 const UUID_NAMESPACE = "9bfceade-37fe-11ed-acc0-a3da3461b38c";
@@ -48,6 +52,7 @@ const toAccountStore = (a: KeyStoreType): AccountStore => ({
   address: a.address,
   owner: a.owner,
   type: a.type as AccountType,
+  device: deviceOf(a),
   path: a.path as Bip44Path,
   parentId: a.parentId,
   source: a.source as AccountStore["source"],
@@ -132,23 +137,27 @@ export class Keyring {
    * account. A derived shielded child carries no secret of its own — the
    * mnemonic lives on its parent — so the secret is revealed from the parent
    * record while the hd index comes from the resolved account's path. A
-   * Ledger account's device signed in the approval tab; its
-   * `ledgerSignatures` go into the PCZT here.
+   * hardware-wallet account signed on its device in the approval tab; its
+   * opaque `deviceData` is verified and folded into the PCZT here by the
+   * device's engine.
    */
   public async sign(
     pczt: string,
     signer?: string,
-    ledgerSignatures?: LedgerSignatures
+    deviceData?: string
   ): Promise<string> {
     await this.vaultService.assertIsUnlocked();
     await initZillionsSdk();
 
     const record = await this.signingAccount(signer);
-    if (await this.ledgerAccount(record)) {
-      if (!ledgerSignatures) {
-        throw new Error("A Ledger account signs on its device");
+    const device = await this.deviceAccount(record);
+    if (device) {
+      if (!deviceData) {
+        throw new Error(
+          `A ${engines[device.device].name} account signs on its device`
+        );
       }
-      return applyLedgerSignatures(pczt, ledgerSignatures);
+      return engines[device.device].assembleSignedPczt(pczt, deviceData);
     }
     const { seed, hdIndex } = await this.resolveSeed(record);
     return signPczt(pczt, seed, hdIndex);
@@ -183,43 +192,51 @@ export class Keyring {
 
   /**
    * The viewing key (UFVK) of the account `sign` would sign with, derived
-   * from its seed, or for a Ledger account the one the device exported:
-   * what the approval summary checks outputs against.
+   * from its seed, or for a hardware-wallet account the one the device
+   * exported: what the approval summary checks outputs against.
    */
   public async viewingKey(signer?: string): Promise<string> {
     await this.vaultService.assertIsUnlocked();
 
     const record = await this.signingAccount(signer);
-    const ledger = await this.ledgerAccount(record);
-    if (ledger) return ledger.ufvk;
+    const device = await this.deviceAccount(record);
+    if (device) return device.ufvk;
     const { seed, hdIndex } = await this.resolveSeed(record);
     return (await deriveAccount(seed, hdIndex)).ufvk;
   }
 
-  /** The `signer` address's ZIP-32 index if a Ledger holds its keys. */
-  public async ledgerHdIndex(signer?: string): Promise<number | undefined> {
+  /**
+   * The `signer` address's device identity if its keys live on one: the kind
+   * and the ZIP-32 index the device signed under.
+   */
+  public async signingDevice(
+    signer?: string
+  ): Promise<{ device: DeviceKind; hdIndex: number } | undefined> {
     const record = await this.signingAccount(signer);
-    return (await this.ledgerAccount(record))?.hdIndex;
+    const device = await this.deviceAccount(record);
+    return device && { device: device.device, hdIndex: device.hdIndex };
   }
 
   /**
-   * A Ledger account's stored UFVK and ZIP-32 index, both on its shielded
-   * child, whichever of the pair `record` is; undefined for other accounts.
+   * A device account's kind, stored UFVK and ZIP-32 index, all on its
+   * shielded child, whichever of the pair `record` is; undefined for
+   * mnemonic-rooted accounts.
    */
-  private async ledgerAccount(
+  private async deviceAccount(
     record: KeyStoreType
-  ): Promise<{ ufvk: string; hdIndex: number } | undefined> {
+  ): Promise<{ device: DeviceKind; ufvk: string; hdIndex: number } | undefined> {
     const parent = record.parentId
       ? await this.accounts.findById(record.parentId)
       : record;
-    if ((parent?.type as string) !== "ledger") return undefined;
+    const device = parent && deviceOf(parent);
+    if (!device) return undefined;
     const child = record.parentId
       ? record
       : (await this.accounts.findAll()).find((r) => r.parentId === record.id);
     if (!child) {
       throw new Error(`Shielded account of ${record.address} not found`);
     }
-    return { ufvk: child.owner, hdIndex: child.path.account };
+    return { device, ufvk: child.owner, hdIndex: child.path.account };
   }
 
   /** The `signer` address's account, else the active one. */
@@ -281,8 +298,8 @@ export class Keyring {
     if (!secretHolder) {
       throw new Error(`Parent account not found: ${record.parentId}`);
     }
-    if ((secretHolder.type as string) === "ledger") {
-      throw new Error("A Ledger account's keys never leave the device");
+    if (deviceOf(secretHolder)) {
+      throw new Error("A hardware wallet's keys never leave the device");
     }
     if ((secretHolder.type as string) !== "mnemonic") {
       throw new Error(
@@ -420,17 +437,20 @@ export class Keyring {
   }
 
   /**
-   * Store a Ledger account and make it active. The keys never leave the
-   * device, so like a derived child the record's `sensitive` is an encrypted
-   * empty payload. A Ledger that's already imported is re-activated instead.
+   * Store a hardware-wallet account and make it active. The keys never leave
+   * the device, so like a derived child the record's `sensitive` is an
+   * encrypted empty payload. A device that's already imported is
+   * re-activated instead.
    */
-  public async storeLedgerAccount(input: {
+  public async storeDeviceAccount(input: {
+    device: DeviceKind;
     alias: string;
     bip44Path: Bip44Path;
     zip32Path: Zip32Path;
-    transparentAddress: string;
-    shieldedAddress: string;
+    transparentAddress?: string;
+    shieldedAddress?: string;
     viewingKey: string;
+    seedFingerprint: string;
     birthday: number;
   }): Promise<{
     parentAccount: AccountStore;
@@ -439,9 +459,16 @@ export class Keyring {
   }> {
     await this.vaultService.assertIsUnlocked();
 
-    const existing = await this.accounts.findByAddress(
-      input.transparentAddress
-    );
+    // Every device account names a shielded side; its keys may have no
+    // transparent receiver, and the unified address identifies the
+    // account then.
+    const shieldedAddress = input.shieldedAddress;
+    if (!shieldedAddress) {
+      throw new Error("Device did not provide its addresses");
+    }
+    const address = input.transparentAddress ?? shieldedAddress;
+
+    const existing = await this.accounts.findByAddress(address);
     if (existing) {
       const parent = existing.parentId
         ? await this.accounts.findById(existing.parentId)
@@ -463,25 +490,29 @@ export class Keyring {
           alias: child.alias,
           address: child.address,
           type: child.type as AccountType,
+          device: deviceOf(child),
           parentId: child.parentId,
         },
         alreadyImported: true,
       };
     }
 
+    // A Ledger parent keeps the legacy `"ledger"` type; a device that only
+    // exports a viewing key parents a `"viewing-key"` account.
+    const parentType: AccountType =
+      input.device === "ledger" ? "ledger" : "viewing-key";
     const id = uuidv4();
     const accountStore: KeyStoreType = {
       id,
       alias: input.alias,
-      address: input.transparentAddress,
-      owner: input.transparentAddress,
+      address,
+      owner: address,
       path: input.bip44Path,
-      type: "ledger" as KeyStoreType["type"],
+      type: parentType as KeyStoreType["type"],
+      device: input.device,
       source: "imported",
       timestamp: 0,
-      // The device never reveals its seed's. The app's PCZT needs 32 bytes and
-      // the device doesn't check them: zeros, the signer kit's default.
-      seedFingerprint: "00".repeat(32),
+      seedFingerprint: input.seedFingerprint,
       birthday: input.birthday,
     };
     const sensitive = await this.vaultService.encryptSensitiveData({
@@ -495,11 +526,12 @@ export class Keyring {
       alias: input.alias,
       path: input.zip32Path,
       source: "imported",
-      shieldedAddress: input.shieldedAddress,
+      shieldedAddress,
       viewingKey: input.viewingKey,
       birthday: input.birthday,
+      device: input.device,
     });
-    await this.accounts.setActiveAccount(id, "ledger");
+    await this.accounts.setActiveAccount(id, parentType);
 
     return {
       parentAccount: toAccountStore(accountStore),
@@ -525,6 +557,7 @@ export class Keyring {
     shieldedAddress: string;
     viewingKey: string;
     birthday: number;
+    device?: DeviceKind;
   }): Promise<DerivedAccount> {
     await this.vaultService.assertIsUnlocked();
 
@@ -557,6 +590,7 @@ export class Keyring {
       path: input.path,
       parentId: parent.id,
       type: "shielded-keys" as KeyStoreType["type"],
+      device: input.device,
       source: input.source,
       timestamp,
       seedFingerprint: parent.seedFingerprint,
@@ -577,6 +611,7 @@ export class Keyring {
       alias: account.alias,
       address: account.address,
       type: "shielded-keys",
+      device: input.device,
       parentId: account.parentId,
     };
   }

@@ -192,6 +192,9 @@ export default defineConfig({
   vite: ({ browser }) => ({
     define: {
       "process.env": JSON.stringify(buildProcessEnv(browser)),
+      // The Keystone UR libraries branch on the Node version; in the browser
+      // there is none.
+      "process.version": JSON.stringify(""),
     },
     plugins: [
       tailwindcss(),

@@ -12,11 +12,15 @@ import { useWizard } from "../../SetupContext";
 import { createAccount } from "../../model/accountManager";
 import { toAccountSecret } from "../../model/secrets";
 import type { Step } from "../../model/wizard";
+import { saveDevice } from "../device/saveDevice";
 import { PasswordFields } from "../../ui/PasswordFields";
 
 type Props = {
   /** Where to go once persistence starts (the completion step of the branch). */
-  nextStep: Extract<Step, "create.complete" | "import.complete">;
+  nextStep: Extract<
+    Step,
+    "create.complete" | "import.complete" | "device.complete"
+  >;
 };
 
 export const NameAndPassword = ({ nextStep }: Props) => {
@@ -35,6 +39,19 @@ export const NameAndPassword = ({ nextStep }: Props) => {
 
     dispatch({ type: "setAlias", alias });
     dispatch({ type: "setPassword", password });
+
+    // A device account skips the seed derivation: its keys come from the
+    // device, the orchestration is saveDevice's.
+    if (state.flow === "device") {
+      await saveDevice(client, dispatch, {
+        device: state.deviceKind!,
+        keys: state.deviceKeys!,
+        passwordRequired: state.passwordRequired,
+        password,
+      });
+      return;
+    }
+
     dispatch({ type: "goToStep", step: nextStep });
     dispatch({ type: "completionStarted", info: "Starting…" });
 

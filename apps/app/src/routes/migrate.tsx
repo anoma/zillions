@@ -1,5 +1,5 @@
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { PageLoader } from "../components/PageLoader";
@@ -16,7 +16,6 @@ import { SpinnerIcon } from "../icons/SpinnerIcon";
 import {
   clockAt,
   fromNow,
-  MIGRATION_ENABLED,
   MIGRATION_MINIMUM,
   zatoshiToZec,
 } from "../lib/utils";
@@ -26,13 +25,11 @@ import {
   stepName,
   transfersDone,
 } from "../lib/wallet/migration";
+import type { MigrationPlan } from "../lib/wallet/send";
 import type { Note } from "../lib/wallet/types";
 import type { Wallet } from "../lib/wallet/wallet";
 
 export const Route = createFileRoute("/migrate")({
-  beforeLoad: () => {
-    if (!MIGRATION_ENABLED) throw redirect({ to: "/" });
-  },
   component: MigrateRoute,
 });
 
@@ -57,7 +54,7 @@ function MigrateRoute() {
   const planned = useSendPlan(
     {
       from: "orchard",
-      to: mode === "immediate" && step === "review" ? self : "",
+      to: step === "choose" || mode === "immediate" ? self : "",
       amount: 0n,
     },
     true,
@@ -72,7 +69,7 @@ function MigrateRoute() {
         balance.data?.orchardBalance.toString(),
       ],
       queryFn: () => wallet.planMigration(),
-      enabled: mode === "private" && step === "review",
+      enabled: step === "choose" || (mode === "private" && step === "review"),
       // Each run draws a new order and timing: keep the one on screen.
       staleTime: Infinity,
     }),
@@ -129,13 +126,20 @@ function MigrateRoute() {
             selected={mode === "private"}
             onSelect={() => setMode("private")}
             title="Migrate with privacy (recommended)"
-            detail="Split into standard amounts · Spread over hours · Most private"
+            detail={privateDetail(plan.data)}
           />
           <Option
             selected={mode === "immediate"}
             onSelect={() => setMode("immediate")}
             title="Migrate immediately"
-            detail="One transfer · Sent now · Less private"
+            detail={[
+              "1 transfer",
+              "Sent now",
+              ...(planned.plan.data
+                ? [`${zatoshiLabel(planned.plan.data.fee)} fee`]
+                : []),
+              "Less private",
+            ].join(" · ")}
           />
         </div>
         <Note>
@@ -201,12 +205,7 @@ function MigrateRoute() {
 
   if (mode === "private") {
     const p = plan.data;
-    const fees =
-      p &&
-      BigInt(
-        p.transfers.length * p.transferFee +
-          p.preparations.length * p.preparationFee,
-      );
+    const fees = p && BigInt(planFees(p));
     const last = p?.transfers.at(-1)?.height;
     return (
       <Page title="Confirm transfer plan" onBack={back}>
@@ -409,24 +408,32 @@ function MigrationSteps({ status }: { status: Status }) {
     await refresh();
   };
 
+  const due = step && tip + 1 >= step.height;
+  // The card and the next step's row both go by zcore's answer, not the estimate.
+  const sendable = Boolean(ready.data && due);
+  // Never before the next block, however far behind the estimate is.
+  const comeBack = step ? Math.max(sendAt(step), tip + 1) : tip + 1;
+  // Past the estimate, yet zcore finds no bucket anchor for it.
+  const late = Boolean(step && !ready.data && tip + 1 >= sendAt(step));
+  const name = step ? stepName(step) : "";
   const state = (txid: string | undefined, at: number, isNext: boolean) =>
     txid
       ? pending.has(txid)
         ? "Being mined"
         : "Done"
       : isNext
-        ? tip + 1 >= sendAt(step!)
+        ? sendable
           ? "Ready to send"
-          : `Send at ~${clockAt(tip, sendAt(step!))}`
+          : late
+            ? "Not ready yet"
+            : `Send at ~${clockAt(tip, comeBack)}`
         : step?.kind === "transfer" && at <= step.height
           ? "Not needed"
-          : stepTime(tip, at);
+          : tip + 1 >= at
+            ? `After ${name}`
+            : stepTime(tip, at);
   const done = transfersDone(m, pending);
-  const due = step && tip + 1 >= step.height;
-  const name = step ? stepName(step) : "";
   const Name = name.charAt(0).toUpperCase() + name.slice(1);
-  // Never before the next block, however far behind the estimate is.
-  const comeBack = step ? Math.max(sendAt(step), tip + 1) : tip + 1;
   const soon = fromNow(tip, comeBack);
 
   if (send.data) {
@@ -465,7 +472,7 @@ function MigrationSteps({ status }: { status: Status }) {
       {step &&
         (ready.isPending ? (
           <NextCard title={<Waiting />} />
-        ) : ready.data && due ? (
+        ) : sendable ? (
           <NextCard
             title={`${Name} is ready`}
             action={
@@ -475,6 +482,11 @@ function MigrationSteps({ status }: { status: Status }) {
             }
           >
             Send it now, or any time later.
+          </NextCard>
+        ) : late ? (
+          <NextCard title={`${Name} isn't ready yet`}>
+            Its funds can't be spent at a network checkpoint yet. Check again
+            later; Zillions won't send it for you.
           </NextCard>
         ) : (
           <NextCard
@@ -544,6 +556,22 @@ function MigrationSteps({ status }: { status: Status }) {
 }
 
 const zatoshiLabel = (zat: number) => `${zatoshiToZec(BigInt(zat))} ZEC`;
+
+const planFees = (p: MigrationPlan) =>
+  p.transfers.length * p.transferFee + p.preparations.length * p.preparationFee;
+
+/** The private option's summary: its transfers, how long they take and the fees, once planned. */
+function privateDetail(p: MigrationPlan | undefined) {
+  if (!p)
+    return "Split into standard amounts · Spread over hours · Most private";
+  if (!p.transfers.length) return "Too little to move with privacy";
+  return [
+    `${p.transfers.length} ${p.transfers.length === 1 ? "transfer" : "transfers"}`,
+    `Over ${fromNow(p.tip, p.transfers.at(-1)!.height)}`,
+    `${zatoshiLabel(planFees(p))} fees`,
+    "Most private",
+  ].join(" · ");
+}
 
 /** When a step is planned, as both the review and the steps list show it. */
 const stepTime = (tip: number, height: number) =>

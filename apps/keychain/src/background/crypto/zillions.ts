@@ -5,10 +5,13 @@
  */
 import initZcore, {
   apply_ledger_signatures,
+  combine_pczts,
   derive_account,
+  derive_account_from_ufvk,
   fresh_address,
   link_info,
   open_link_key,
+  pczt_keystone_fw_version,
   pczt_ledger_transaction,
   pczt_summary,
   seal_link_key,
@@ -19,8 +22,6 @@ import initZcore, {
 import type { PcztTransaction } from "@ledgerhq/device-signer-kit-zcash";
 import type { PcztSummary } from "@zillions/types";
 import browser from "webextension-polyfill";
-
-import type { LedgerSignatures } from "../../ipc/contract";
 
 let initialized: Promise<unknown> | undefined;
 
@@ -58,6 +59,14 @@ export const deriveAccount = async (
 ): Promise<DerivedKeys> => {
   await initZillionsSdk();
   return derive_account(getNetwork(), seed, hdIndex);
+};
+
+/** The account a device's UFVK export names: same keys, no seed. */
+export const deriveAccountFromUfvk = async (
+  ufvk: string
+): Promise<DerivedKeys> => {
+  await initZillionsSdk();
+  return derive_account_from_ufvk(getNetwork(), ufvk);
 };
 
 /**
@@ -181,11 +190,51 @@ export const ledgerTransaction = (
   ) as PcztTransaction;
 
 /**
- * `pczt` (base64) with a Ledger's signatures in; throws if one doesn't sign
+ * A device's signatures over a PCZT, hex, in the order the Ledger signer kit
+ * returns them: one per Orchard and per Ironwood spend the PCZT leaves
+ * unsigned, one per transparent input (DER, then the sighash type byte).
+ * Only the device module and this façade know the shape — over the IPC
+ * boundary the signing output travels as an opaque `deviceData` string.
+ */
+export type LedgerSignatures = {
+  orchard: string[];
+  ironwood: string[];
+  transparent: string[];
+};
+
+/**
+ * A Keystone's firmware version ("13.0.8" — the device displays major minus
+ * 10), from the stamp its signed PCZT responses carry. Undefined when the
+ * response has no readable stamp: firmware too old to report it.
+ */
+export const keystoneFwVersion = async (
+  pczt: string
+): Promise<string | undefined> => {
+  await initZillionsSdk();
+  return pczt_keystone_fw_version(base64ToBytes(pczt));
+};
+
+/**
+ * `pczt` (base64) with a device's signatures in; throws if one doesn't sign
  * it. The binding signatures are the app's to add when it extracts.
  */
-export const applyLedgerSignatures = (
+export const applyDeviceSignatures = (
   pczt: string,
   signatures: LedgerSignatures
 ): string =>
   bytesToBase64(apply_ledger_signatures(base64ToBytes(pczt), signatures));
+
+/**
+ * `pczt1` (base64, what a Keystone scanned back: signatures, but not the
+ * proof keys) merged into `pczt0` (the keyring's full copy). Throws if they
+ * aren't the same transaction.
+ */
+export const combinePczts = async (
+  pczt0: string,
+  pczt1: string
+): Promise<string> => {
+  await initZillionsSdk();
+  return bytesToBase64(
+    combine_pczts(base64ToBytes(pczt0), base64ToBytes(pczt1))
+  );
+};
