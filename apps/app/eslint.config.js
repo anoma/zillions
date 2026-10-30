@@ -1,7 +1,7 @@
 import js from "@eslint/js";
 import pluginQuery from "@tanstack/eslint-plugin-query";
 import reactHooks from "eslint-plugin-react-hooks";
-import reactRefresh from "eslint-plugin-react-refresh";
+import { reactRefresh } from "eslint-plugin-react-refresh";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -14,7 +14,10 @@ export default defineConfig([
       js.configs.recommended,
       tseslint.configs.recommended,
       reactHooks.configs.flat.recommended,
-      reactRefresh.configs.vite,
+      // TanStack Router's Vite plugin hot-reloads the Route export.
+      reactRefresh.configs.vite({
+        extraHOCs: ["createFileRoute", "createRootRoute"],
+      }),
       pluginQuery.configs["flat/recommended-strict"],
     ],
     rules: {
