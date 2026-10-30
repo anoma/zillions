@@ -22,7 +22,8 @@ import type { DeviceKeys, DeviceSignTx, DeviceViews } from "./types";
 
 const cancelProps = (onClose: () => void) => ({
   size: "lg" as const,
-  outlineColor: "black" as const,
+  outlineColor: "neutral-300" as const,
+  textColor: "black" as const,
   backgroundHoverColor: "black" as const,
   textHoverColor: "primary" as const,
   onClick: onClose,
@@ -65,17 +66,17 @@ export const KeystoneConnect = ({
   };
 
   return (
-    <Stack gap={4} data-testid="device-progress">
+    <Stack gap={4} className="flex-1" data-testid="device-progress">
       <Stack gap={2}>
-        <p className="font-semibold">
+        <p className="text-sm font-semibold">
           Scan the account QR on the Keystone with the camera below
         </p>
-        <p className="text-sm text-neutral-600">
+        <p className="text-[13px] font-medium text-muted">
           On the Keystone (Cypherpunk firmware), choose the account to
           connect and open its sync QR. Addresses are derived from the
           viewing key after scanning.
         </p>
-        <p className="text-sm text-neutral-600">
+        <p className="text-[13px] font-medium text-muted">
           Don&apos;t see a Zcash account on the device? The Zcash app ships
           in Keystone&apos;s Cypherpunk firmware.
         </p>
@@ -93,7 +94,7 @@ export const KeystoneConnect = ({
           {error}
         </Alert>
       )}
-      <Stack direction="horizontal" gap={2}>
+      <Stack direction="horizontal" gap={2} className="mt-auto">
         {error && (
           <ActionButton
             size="lg"
@@ -142,12 +143,12 @@ export const KeystoneSign = ({
   };
 
   return (
-    <Stack gap={4} data-testid="device-progress">
+    <Stack gap={4} className="flex-1" data-testid="device-progress">
       <Stack gap={2}>
-        <p className="font-semibold">
+        <p className="text-sm font-semibold">
           Scan this code with the Keystone and approve the transaction
         </p>
-        <p className="text-sm text-neutral-600">
+        <p className="text-[13px] font-medium text-muted">
           Then point the animated QR the Keystone shows at the camera below.
         </p>
       </Stack>
@@ -171,7 +172,7 @@ export const KeystoneSign = ({
           {error}
         </Alert>
       )}
-      <Stack direction="horizontal" gap={2}>
+      <Stack direction="horizontal" gap={2} className="mt-auto">
         {error && (
           <ActionButton
             size="lg"

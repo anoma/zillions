@@ -10,25 +10,25 @@ import { GoEye, GoEyeClosed } from "react-icons/go";
 const inputClassList = tv({
   slots: {
     field: clsx(
-      "border border-neutral-600 rounded-sm text-black text-base font-medium leading-[1.25]",
-      "py-5 px-4 w-full transition-all duration-150 ease-out focus:outline-0 active:outline-0 focus:outline-0",
-      "placeholder:text-neutral-400 placeholder:transition-opacity placeholder:duration-150 placeholder:ease-out",
-      "hover:placeholder:opacity-70 focus:placeholder:opacity-0 select:bg-primary-50",
+      "border border-transparent rounded-textField bg-black/[0.05] text-black text-[15px] font-medium leading-[1.25]",
+      "py-3.5 px-4 w-full outline-0 transition-[background-color,border-color] duration-150 ease-out",
+      "hover:bg-black/[0.07] focus:bg-transparent focus:border-black",
+      "placeholder:text-muted placeholder:font-normal",
     ),
-    label: "text-black text-sm font-medium [&_p]:pb-1",
+    label: "text-black text-[13px] font-medium [&_p]:pb-1",
     labelText: "pl-1.5",
-    error: "text-red-500 hidden text-xs font-normal pl-1.5",
+    error: "text-danger hidden text-xs font-medium pl-1.5 pt-1",
     inputWrapper: "flex relative",
     icon: clsx(
-      "flex items-center cursor-pointer h-full absolute right-4 top-0 text-2xl",
-      "text-black [&_path]:stroke-black [&_rect]:stroke-black"
+      "flex items-center cursor-pointer h-full absolute right-4 top-0 text-lg",
+      "text-muted transition-colors hover:text-black"
     ),
-    hint: "text-neutral-400 hidden text-xs font-light pl-1.5",
+    hint: "text-muted hidden text-xs font-medium pl-1.5 pt-1",
   },
   variants: {
     hasError: {
       true: {
-        field: "focus:!border-red-500",
+        field: "!border-danger",
         inputWrapper: "mb-1",
         error: "block",
       },
@@ -54,9 +54,7 @@ const inputClassList = tv({
     theme: {
       primary: { field: "border-black" },
       secondary: { field: "border-cyan" },
-      neutral: {
-        field: "focus:border-neutral-500 active:border-neutral-500",
-      },
+      neutral: {},
     },
   },
   compoundVariants: [],

@@ -28,7 +28,7 @@ export const DeviceConnect = () => {
           });
         }
       }}
-      onClose={() => dispatch({ type: "goToStep", step: "start" })}
+      onClose={() => dispatch({ type: "goToStep", step: "device.choose" })}
     />
   );
 };

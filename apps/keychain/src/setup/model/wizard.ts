@@ -33,7 +33,8 @@ export type Step =
   | "import.secret"
   | "import.name"
   | "import.complete"
-  // device branch (connect, then name + password if needed)
+  // device branch (choose, connect, then name + password if needed)
+  | "device.choose"
   | "device.connect"
   | "device.name"
   | "device.complete";
@@ -95,7 +96,7 @@ export const initialWizardState = (passwordRequired: boolean): WizardState => ({
 /** Typed events. Steps dispatch these; no direct setter access. */
 export type WizardEvent =
   | { type: "passwordRequirementResolved"; required: boolean }
-  | { type: "chooseFlow"; flow: Extract<Flow, "create" | "import"> }
+  | { type: "chooseFlow"; flow: Exclude<Flow, "none"> }
   | { type: "chooseDevice"; device: DeviceKind }
   | { type: "deviceConnected"; device: DeviceKind; keys: DeviceKeys }
   | { type: "goToStep"; step: Step }
@@ -119,6 +120,12 @@ export type WizardEvent =
   | { type: "completionFailed"; info: string }
   | { type: "reset" };
 
+const FIRST_STEP: Record<Exclude<Flow, "none">, Step> = {
+  create: "create.warning",
+  import: "import.secret",
+  device: "device.choose",
+};
+
 export const wizardReducer = (
   state: WizardState,
   event: WizardEvent
@@ -127,11 +134,13 @@ export const wizardReducer = (
     case "passwordRequirementResolved":
       return { ...state, passwordRequired: event.required };
 
+    // Each branch starts clean: whatever a previous branch held (a typed key,
+    // a picked secret kind) must not leak into the one chosen now.
     case "chooseFlow":
       return {
-        ...state,
+        ...initialWizardState(state.passwordRequired),
         flow: event.flow,
-        step: event.flow === "create" ? "create.warning" : "import.secret",
+        step: FIRST_STEP[event.flow],
       };
 
     case "chooseDevice":

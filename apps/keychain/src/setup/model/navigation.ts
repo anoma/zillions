@@ -19,6 +19,7 @@ const IMPORT_ORDER: Step[] = [
 ];
 
 const DEVICE_ORDER: Step[] = [
+  "device.choose",
   "device.connect",
   "device.name",
   "device.complete",

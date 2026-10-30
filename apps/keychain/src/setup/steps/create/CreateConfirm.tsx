@@ -65,21 +65,21 @@ export const CreateConfirm = () => {
     <>
       <p
         className={clsx(
-          "text-black text-base -mt-2 mb-8",
+          "text-ink-2 text-sm -mt-2 mb-6",
           "mx-auto max-w-[90%] text-center font-medium"
         )}
       >
         Fill out the words according to their numbers
       </p>
       <Stack
-        className="flex-1 justify-between h-[415px]"
+        className="flex-1 justify-between"
         gap={8}
         as="form"
         onSubmit={onSubmit}
       >
         <Stack
           gap={GapPatterns.FormFields}
-          className="[&_label]:!text-sm justify-center flex-1"
+          className="justify-center flex-1"
         >
           <Input
             label={`Word #${idx1 + 1}`}

@@ -34,7 +34,7 @@ export const CreateSeed = () => {
 
   return (
     <>
-      <Stack gap={5}>
+      <Stack gap={5} full>
         <RadioGroup
           id="mnemonicLength"
           groupLabel="Number of seeds"
@@ -50,7 +50,7 @@ export const CreateSeed = () => {
             })
           }
         />
-        <Stack gap={3}>
+        <Stack gap={3} full>
           <SeedPhraseList
             columns={mnemonicLength === 24 ? 4 : 3}
             words={mnemonic}
@@ -64,12 +64,13 @@ export const CreateSeed = () => {
           >
             Copy to Clipboard
           </FeedbackButton>
-          <div className="border-t border-neutral-300 pt-4 pb-6 text-sm">
+          <div className="border-t border-line pt-4 pb-6 text-sm">
             <SeedPhraseInstructions />
           </div>
           <ActionButton
             size="lg"
             data-testid="setup-go-to-verification-button"
+            className="mt-auto"
             backgroundHoverColor="black"
             textHoverColor="primary"
             disabled={mnemonic.length === 0}

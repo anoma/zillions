@@ -4,6 +4,7 @@
  * `invalidWordIndex` for highlighting.
  */
 import { ActionButton, Alert, Input, RadioGroup, Stack } from "@zillions/components";
+import clsx from "clsx";
 import { useCallback, useState } from "react";
 
 import { useWizard } from "../../SetupContext";
@@ -38,7 +39,8 @@ export const ImportSecret = () => {
   const { state, dispatch, client } = useWizard();
   const { secretKind, mnemonicLength, privateKey, spendingKey } = state;
 
-  const [option, setOption] = useState<Option>("12");
+  const option: Option =
+    secretKind === "mnemonic" ? (String(mnemonicLength) as Option) : secretKind;
   const [words, setWords] = useState<string[]>(Array.from({ length: LONG }, () => ""));
   const [invalidWordIndex, setInvalidWordIndex] = useState<number>();
   const [mnemonicError, setMnemonicError] = useState<string>();
@@ -77,7 +79,6 @@ export const ImportSecret = () => {
       if (pasted.length <= 1) return; // single word: default behavior
       e.preventDefault();
       if (pasted.length > SHORT) {
-        setOption("24");
         dispatch({ type: "setMnemonicLength", length: 24 });
         dispatch({ type: "setSecretKind", kind: "mnemonic" });
       }
@@ -93,9 +94,7 @@ export const ImportSecret = () => {
   );
 
   const onChangeOption = (value: string): void => {
-    const opt = value as Option;
-    setOption(opt);
-    const { kind, length } = optionToKind(opt);
+    const { kind, length } = optionToKind(value as Option);
     dispatch({ type: "setSecretKind", kind });
     if (kind === "mnemonic") dispatch({ type: "setMnemonicLength", length });
     setMnemonicError(undefined);
@@ -129,11 +128,24 @@ export const ImportSecret = () => {
   };
 
   return (
-    <>
+    <Stack as="form" gap={4} onSubmit={onSubmit} className="flex-1 mt-2">
+      <RadioGroup
+        id="secretKind"
+        groupLabel="Number of seeds"
+        value={option}
+        options={[
+          { text: "12 words", value: "12" },
+          { text: "24 words", value: "24" },
+          { text: "Private Key", value: "private-key" },
+          { text: "Spending Key", value: "spending-key" },
+        ]}
+        onChange={onChangeOption}
+      />
+
       <Stack
         as="ul"
         gap={1}
-        className="text-sm list-disc mb-5 px-6 text-black font-medium"
+        className="min-h-[60px] text-[13px] list-disc px-6 text-ink-2 font-medium"
       >
         {isMnemonic && (
           <>
@@ -145,72 +157,66 @@ export const ImportSecret = () => {
           </>
         )}
       </Stack>
-      <Stack as="form" gap={3} onSubmit={onSubmit} className="flex-1">
-        <Stack direction="vertical" gap={2.5}>
-          {mnemonicError && <Alert type="error">{mnemonicError}</Alert>}
 
-          <RadioGroup
-            id="secretKind"
-            groupLabel="Number of seeds"
-            value={option}
-            options={[
-              { text: "12 words", value: "12" },
-              { text: "24 words", value: "24" },
-              { text: "Private Key", value: "private-key" },
-              { text: "Spending Key", value: "spending-key" },
-            ]}
-            onChange={onChangeOption}
+      {/* The word grid stays under its instructions; a lone key field is
+          centred in the space down to Next. */}
+      <div
+        className={clsx(
+          "flex flex-col flex-1 gap-2.5",
+          isMnemonic ? "justify-start" : "justify-center"
+        )}
+      >
+        {mnemonicError && <Alert type="error">{mnemonicError}</Alert>}
+
+        {isMnemonic && (
+          <SeedPhraseList
+            sensitive={false}
+            columns={mnemonicLength === 24 ? 4 : 3}
+            invalidWordIndex={invalidWordIndex}
+            words={words.slice(0, mnemonicLength)}
+            onChange={onWordChange}
+            onPaste={onPaste}
           />
+        )}
 
-          {isMnemonic && (
-            <SeedPhraseList
-              sensitive={false}
-              columns={mnemonicLength === 24 ? 4 : 3}
-              invalidWordIndex={invalidWordIndex}
-              words={words.slice(0, mnemonicLength)}
-              onChange={onWordChange}
-              onPaste={onPaste}
-            />
-          )}
+        {secretKind === "private-key" && (
+          <Input
+            label="Private key"
+            variant="PasswordOnBlur"
+            value={privateKey}
+            placeholder="Enter your private key"
+            onChange={(e) =>
+              dispatch({ type: "setPrivateKey", value: e.target.value })
+            }
+            error={privateKeyError}
+          />
+        )}
 
-          {secretKind === "private-key" && (
-            <Input
-              label="Private key"
-              variant="PasswordOnBlur"
-              value={privateKey}
-              placeholder="Enter your private key"
-              onChange={(e) =>
-                dispatch({ type: "setPrivateKey", value: e.target.value })
-              }
-              error={privateKeyError}
-            />
-          )}
+        {secretKind === "spending-key" && (
+          <Input
+            label="Spending key"
+            variant="PasswordOnBlur"
+            value={spendingKey}
+            placeholder="Enter your spending key"
+            onChange={(e) =>
+              dispatch({ type: "setSpendingKey", value: e.target.value })
+            }
+            error={spendingKeyError}
+          />
+        )}
+      </div>
 
-          {secretKind === "spending-key" && (
-            <Input
-              label="Spending key"
-              variant="PasswordOnBlur"
-              value={spendingKey}
-              placeholder="Enter your spending key"
-              onChange={(e) =>
-                dispatch({ type: "setSpendingKey", value: e.target.value })
-              }
-              error={spendingKeyError}
-            />
-          )}
-        </Stack>
-
-        <ActionButton
-          size="lg"
-          type="submit"
-          data-testid="setup-import-keys-import-button"
-          disabled={submitDisabled}
-          backgroundHoverColor="black"
-          textHoverColor="primary"
-        >
-          Next
-        </ActionButton>
-      </Stack>
-    </>
+      <ActionButton
+        size="lg"
+        type="submit"
+        data-testid="setup-import-keys-import-button"
+        className="mt-auto"
+        disabled={submitDisabled}
+        backgroundHoverColor="black"
+        textHoverColor="primary"
+      >
+        Next
+      </ActionButton>
+    </Stack>
   );
 };

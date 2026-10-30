@@ -32,7 +32,7 @@ export const Complete = () => {
 
       {completion === "done" && (
         <>
-          <p className="text-black text-center text-base w-full -mt-3 mb-8">
+          <p className="text-ink-2 text-center text-sm font-medium w-full -mt-2 mb-6">
             Here are the accounts generated from your keys
           </p>
           <ViewKeys
@@ -43,6 +43,8 @@ export const Complete = () => {
               <ActionButton
                 size="lg"
                 data-testid="setup-close-page-btn"
+                backgroundHoverColor="black"
+                textHoverColor="primary"
                 onClick={closeCurrentTab}
               >
                 Finish Setup
