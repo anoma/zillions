@@ -25,6 +25,8 @@ export function postcard(bytes: Uint8Array) {
     varint: () => {
       let n = 0;
       for (let shift = 0; ; shift += 7) {
+        // Past the end `bytes[i]` is undefined, which no comparison ends.
+        if (i >= bytes.length) throw new Error("Truncated postcard varint");
         const byte = bytes[i++];
         n += (byte & 0x7f) * 2 ** shift;
         if (byte < 0x80) return n;

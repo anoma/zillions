@@ -1,0 +1,31 @@
+name: audit
+
+# What the lockfile pulls in, against the advisory database. Advisories land
+# without our code changing, so this also runs daily.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - run: node scripts/check-pins.mjs
+      # Reads the lockfile; nothing is installed. Only what ships to users
+      # fails the build; dev tooling is reviewed from the full report below.
+      - run: pnpm audit --prod --audit-level=high
+      - run: pnpm audit
+        continue-on-error: true

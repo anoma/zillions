@@ -1,0 +1,34 @@
+# Every version is pinned (scripts/check-pins.mjs), so upgrades only arrive
+# as these pull requests. The cooldown skips releases younger than a week:
+# compromised packages are usually pulled within days of publishing.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Rewrite the pin rather than widen it to a range.
+    versioning-strategy: increase
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: cargo
+    directory: /packages/zcore
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

@@ -450,6 +450,8 @@ user's behalf.
 
 ### 3.3 Connected sites — Working
 
+- The Keychain only runs on the Zillions app (`app.zillions.money`); no other
+  site can see it or talk to it. Development builds also run on `localhost`.
 - A site must ask to connect; the user approves or rejects.
 - List connected sites; disconnect one or all.
 - The Keychain shows whether the site in the current tab is connected, and
