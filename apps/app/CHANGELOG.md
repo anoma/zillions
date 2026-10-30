@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.17.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.16.1...zillions-app-v1.17.0) (2026-10-30)
+
+
+### Features
+
+* turn on Move to Ironwood ([#161](https://github.com/heliaxdev/zillions-interface/issues/161)) ([3110e76](https://github.com/heliaxdev/zillions-interface/commit/3110e768af3bbd1e3f4f696da378aad53c97c6c5))
+
+
+### Bug Fixes
+
+* security review hardening ([#179](https://github.com/heliaxdev/zillions-interface/issues/179)) ([f52153f](https://github.com/heliaxdev/zillions-interface/commit/f52153f5069c36efa7e9c96a3af4433180ce1c5e))
+* unify eslint version ([#173](https://github.com/heliaxdev/zillions-interface/issues/173)) ([56c7dfb](https://github.com/heliaxdev/zillions-interface/commit/56c7dfb80457bb6ccda94e8ac69ad3d839d868ae))
+
 ## [1.16.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.16.0...zillions-app-v1.16.1) (2026-10-26)
 
 

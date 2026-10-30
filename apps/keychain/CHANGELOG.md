@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.11.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.10.0...zillions-keychain-v0.11.0) (2026-10-30)
+
+
+### Features
+
+* many ui tweaks ([#172](https://github.com/heliaxdev/zillions-interface/issues/172)) ([0217729](https://github.com/heliaxdev/zillions-interface/commit/0217729872fb733f2fd964a92906133e48c95a32))
+* review create keys ([#195](https://github.com/heliaxdev/zillions-interface/issues/195)) ([851c4c9](https://github.com/heliaxdev/zillions-interface/commit/851c4c9065e3d232e7c95ab70dcaa594ca5ab115))
+
+
+### Bug Fixes
+
+* security review hardening ([#179](https://github.com/heliaxdev/zillions-interface/issues/179)) ([f52153f](https://github.com/heliaxdev/zillions-interface/commit/f52153f5069c36efa7e9c96a3af4433180ce1c5e))
+* unify eslint version ([#173](https://github.com/heliaxdev/zillions-interface/issues/173)) ([56c7dfb](https://github.com/heliaxdev/zillions-interface/commit/56c7dfb80457bb6ccda94e8ac69ad3d839d868ae))
+
 ## [0.10.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.9.0...zillions-keychain-v0.10.0) (2026-10-26)
 
 
