@@ -13,8 +13,10 @@ import type {
 import { gpuSecrets } from "./gpu";
 import DecryptWorker from "./worker.ts?worker";
 
-// Maximum time that a decryption can take in milliseconds
-const DECRYPTION_TIMEOUT_MS = 30000;
+export const config = {
+  // Maximum time that a decryption can take in milliseconds
+  DECRYPTION_TIMEOUT_MS: 30000,
+};
 
 /**
  * Wraps a worker as a request/response channel: one chunk in flight at a time.
@@ -80,6 +82,14 @@ export const CORES = navigator.hardwareConcurrency ?? 4;
 /** `VITE_GPU_DISABLED=true` keeps trial decryption on the CPU, to compare. */
 const GPU = import.meta.env.VITE_GPU_DISABLED !== "true";
 
+// Error that occurs when a timeout is exceeded
+class TimeoutError extends Error {
+  constructor(ms: number) {
+    super(`Operation timed out after ${ms}ms`);
+    this.name = "TimeoutError";
+  }
+}
+
 // Constructs a promise that is guaranteed to resolve within ms milliseconds regardless
 // of whether the given promise has resolved or not.
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -88,7 +98,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     // Wait ms milliseconds
     setTimeout(() => {
       // Then reject the promise
-      reject(new Error(`Operation timed out after ${ms}ms`));
+      reject(new TimeoutError(ms));
     }, ms);
   });
   // Make promise that evaluates to either the timeout or the given promise;
@@ -149,20 +159,26 @@ export async function crawlChunks(options: {
               // Add timeout to the decryption to  prevent hanging
               const delimitedDecryptionPromise = withTimeout(
                 decryptionPromise,
-                DECRYPTION_TIMEOUT_MS,
+                config.DECRYPTION_TIMEOUT_MS,
               );
               // Release the decrypted chunks in order
               release(chunk, await delimitedDecryptionPromise).forEach(onChunk);
               // Given our success, break out of the retry loop
               break;
             } catch (error) {
-              console.log("Decryption timed out:", error);
-              // The decryption timed out or an error ocurred during it, so terminate the worker
-              channels[i]?.terminate();
-              // Uninitialize the worker to ensure that a neew one is created in the next iteration
-              channels[i] = undefined;
-              // We were not sucessful, so try again
-              continue;
+              if (error instanceof TimeoutError) {
+                // Try again only if the previous decryption attempt timed out
+                console.log("Decryption timed out:", error);
+                // The decryption timed out or an error ocurred during it, so terminate the worker
+                channels[i]?.terminate();
+                // Uninitialize the worker to ensure that a neew one is created in the next iteration
+                channels[i] = undefined;
+                // We were not sucessful, so try again
+                continue;
+              } else {
+                // Otherwise propagate all other errors upwards
+                throw error;
+              }
             }
           }
         }
