@@ -13,7 +13,7 @@ export function address_kind(network: string, address: string): string | undefin
  * transparent }`, each a list of hex signatures in the order the kit returns
  * them. Throws if one doesn't sign this PCZT.
  */
-export function apply_ledger_signatures(pczt: Uint8Array, signatures: any): Uint8Array;
+export function apply_ledger_signatures(pczt: Uint8Array | number[], signatures: any): Uint8Array;
 
 /**
  * A link's claim, signed and ready to prove: its one note (as sync encodes
@@ -21,19 +21,19 @@ export function apply_ledger_signatures(pczt: Uint8Array, signatures: any): Uint
  * Ironwood tree data, as for a send; `claimer_ufvk` keeps the creator from
  * seeing where it went. `tip` is the chain's height now.
  */
-export function claim_pczt(network: string, key: Uint8Array, note: string, position: bigint, trees: any, to: string, claimer_ufvk: string, tip: number): Uint8Array;
+export function claim_pczt(network: string, key: Uint8Array | number[], note: string, position: bigint, trees: any, to: string, claimer_ufvk: string, tip: number): Uint8Array;
 
 /**
  * The second PCZT's signatures and proofs merged into the first: the
  * keychain's copy (every input but the device's still unsigned) plus the
  * device's signed-and-redacted export makes the complete signed PCZT.
  */
-export function combine_pczts(pczt0: Uint8Array, pczt1: Uint8Array): Uint8Array;
+export function combine_pczts(pczt0: Uint8Array | number[], pczt1: Uint8Array | number[]): Uint8Array;
 
 /**
  * The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
  */
-export function derive_account(network: string, seed: Uint8Array, hd_index: number): any;
+export function derive_account(network: string, seed: Uint8Array | number[], hd_index: number): any;
 
 /**
  * The account at unified full viewing key `ufvk` (a device's export):
@@ -68,12 +68,12 @@ export function gap_limits(): any;
  * coordinates, 64 bytes, from the first note `try_decrypt` would try. Empty
  * when the UFVK has no key for the pool.
  */
-export function gpu_inputs(network: string, ufvk: string, pool: string, body: Uint8Array, from: number, tried: Uint8Array): Uint8Array;
+export function gpu_inputs(network: string, ufvk: string, pool: string, body: Uint8Array | number[], from: number, tried: Uint8Array | number[]): Uint8Array;
 
 /**
  * The link's address and nullifier key: `{ address, nk }`.
  */
-export function link_info(network: string, key: Uint8Array): any;
+export function link_info(network: string, key: Uint8Array | number[]): any;
 
 /**
  * The most `send` (its `amount` ignored) can pay after fees, in zatoshis.
@@ -83,7 +83,7 @@ export function max_send(network: string, wallet: any, send: any): bigint;
 /**
  * Whether proving `pczt` needs the Sapling parameters (~51 MB to fetch).
  */
-export function needs_sapling_params(pczt: Uint8Array): boolean;
+export function needs_sapling_params(pczt: Uint8Array | number[]): boolean;
 
 /**
  * 32 random bytes that make an Orchard spending key: a new link.
@@ -93,7 +93,7 @@ export function new_link_key(): Uint8Array;
 /**
  * The link key back from its seal and nullifier key, both from the memo.
  */
-export function open_link_key(network: string, seed: Uint8Array, hd_index: number, sealed: Uint8Array, nk: Uint8Array): Uint8Array;
+export function open_link_key(network: string, seed: Uint8Array | number[], hd_index: number, sealed: Uint8Array | number[], nk: Uint8Array | number[]): Uint8Array;
 
 /**
  * The transparent side of a raw transaction mined at `height`, which fixes
@@ -101,7 +101,7 @@ export function open_link_key(network: string, seed: Uint8Array, hd_index: numbe
  * one: `{ txid, inputs: [{ txid, index, address }], outputs: [{ index, value,
  * address }], nullifiers, value_balance, expiry_height }`.
  */
-export function parse_transaction(network: string, height: number, data: Uint8Array): any;
+export function parse_transaction(network: string, height: number, data: Uint8Array | number[]): any;
 
 /**
  * A Keystone's firmware version, from the `keystone:fw_version` stamp its
@@ -109,7 +109,7 @@ export function parse_transaction(network: string, height: number, data: Uint8Ar
  * `[major, minor, build]` bytes as "13.0.8". The device displays major
  * minus 10 ("3.0.8"); firmware that doesn't stamp has no readable version.
  */
-export function pczt_keystone_fw_version(pczt: Uint8Array): string | undefined;
+export function pczt_keystone_fw_version(pczt: Uint8Array | number[]): string | undefined;
 
 /**
  * The PCZT `pczt` as `@ledgerhq/device-signer-kit-zcash`'s
@@ -117,7 +117,7 @@ export function pczt_keystone_fw_version(pczt: Uint8Array): string | undefined;
  * byte fields as `Uint8Array`s, amounts as `bigint`s. Throws on a Sapling
  * spend or output, which a Ledger can't sign.
  */
-export function pczt_ledger_transaction(network: string, pczt: Uint8Array, hd_index: number): any;
+export function pczt_ledger_transaction(network: string, pczt: Uint8Array | number[], hd_index: number): any;
 
 /**
  * What a PCZT moves: `{ network, fee }` and inputs and outputs per pool
@@ -125,7 +125,7 @@ export function pczt_ledger_transaction(network: string, pczt: Uint8Array, hd_in
  * strings. Each output says whether it's `mine`, by the signing account's
  * `ufvk`; throws if an output's note or label doesn't match what's signed.
  */
-export function pczt_summary(network: string, pczt: Uint8Array, ufvk: string): any;
+export function pczt_summary(network: string, pczt: Uint8Array | number[], ufvk: string): any;
 
 /**
  * The plan for moving every spendable Orchard note to Ironwood with
@@ -138,7 +138,7 @@ export function plan_migration(network: string, wallet: any): any;
  * a note: `{ plan, made }`, its plan as `plan_send` reports one and how many
  * parts it makes. Errors starting "not ready" mean waiting for older notes.
  */
-export function plan_preparation(network: string, wallet: any, parts: BigUint64Array): any;
+export function plan_preparation(network: string, wallet: any, parts: BigUint64Array | bigint[]): any;
 
 /**
  * Plans a send: `wallet` is `{ tip, notes, utxos }` (unspent only), `send`
@@ -158,7 +158,7 @@ export function plan_shield(network: string, wallet: any): any;
  * seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`; `trees` as
  * `send_pczt` takes them.
  */
-export function preparation_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, wallet: any, parts: BigUint64Array, trees: any): Uint8Array;
+export function preparation_pczt(network: string, ufvk: string, seed_fingerprint: string, hd_index: number, wallet: any, parts: BigUint64Array | bigint[], trees: any): Uint8Array;
 
 /**
  * Proves a signed PCZT and extracts its transaction: `{ txid, raw, expiry_height }`. The
@@ -168,23 +168,23 @@ export function preparation_pczt(network: string, ufvk: string, seed_fingerprint
  * `proving-key`, `orchard-proof`, `ironwood-proof`, then `verifying`; each
  * is skipped when the transaction doesn't need it.
  */
-export function prove_pczt(pczt: Uint8Array, sapling_spend?: Uint8Array | null, sapling_output?: Uint8Array | null, on_stage?: Function | null): any;
+export function prove_pczt(pczt: Uint8Array | number[], sapling_spend?: Uint8Array | number[] | null, sapling_output?: Uint8Array | number[] | null, on_stage?: Function | null): any;
 
 /**
  * The address a transparent output's `script` pays; `undefined` unless it's
  * P2PKH or P2SH.
  */
-export function script_address(network: string, script: Uint8Array): string | undefined;
+export function script_address(network: string, script: Uint8Array | number[]): string | undefined;
 
 /**
  * The link key sealed to the account at `hd_index`, for the funding memo.
  */
-export function seal_link_key(network: string, seed: Uint8Array, hd_index: number, key: Uint8Array): Uint8Array;
+export function seal_link_key(network: string, seed: Uint8Array | number[], hd_index: number, key: Uint8Array | number[]): Uint8Array;
 
 /**
  * The seed's ZIP-32 fingerprint, hex. Names the seed without revealing it.
  */
-export function seed_fingerprint(seed: Uint8Array): string;
+export function seed_fingerprint(seed: Uint8Array | number[]): string;
 
 /**
  * The unsigned PCZT for `send`, planned as [`plan_send`] plans it, for the
@@ -205,7 +205,7 @@ export function shield_pczt(network: string, ufvk: string, seed_fingerprint: str
 /**
  * The PCZT with every input the seed's account `hd_index` holds signed.
  */
-export function sign_pczt(network: string, pczt: Uint8Array, seed: Uint8Array, hd_index: number): Uint8Array;
+export function sign_pczt(network: string, pczt: Uint8Array | number[], seed: Uint8Array | number[], hd_index: number): Uint8Array;
 
 /**
  * What `from` (`"shielded"` or `"transparent"`) can spend before fees, in
@@ -217,7 +217,7 @@ export function spendable(network: string, wallet: any, from: string): any;
 /**
  * The account's spending secret in both encodings: `{ orchard, sapling }`.
  */
-export function spending_keys(network: string, seed: Uint8Array, hd_index: number): any;
+export function spending_keys(network: string, seed: Uint8Array | number[], hd_index: number): any;
 
 /**
  * Trial-decrypt one pool's `/ciphertexts` chunk, the raw response body,
@@ -228,7 +228,7 @@ export function spending_keys(network: string, seed: Uint8Array, hd_index: numbe
  * Returns `{ count, min_height, from, digest, hits: [{ pool, scope, value, nf_mine, index }] }`:
  * `from` is where it started, `digest` fingerprints all `count` notes.
  */
-export function try_decrypt(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array, from: number, tried: Uint8Array): any;
+export function try_decrypt(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array | number[], from: number, tried: Uint8Array | number[]): any;
 
 /**
  * Trial-decrypt one pool's chunk in full against `ufvk`: the raw
@@ -237,14 +237,14 @@ export function try_decrypt(network: string, ufvk: string, pool: string, chunk: 
  * `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
  *    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
  */
-export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array, memos: Uint8Array, outgoing: Uint8Array, hits: Uint32Array): any;
+export function try_decrypt_full(network: string, ufvk: string, pool: string, chunk: number, ciphertexts: Uint8Array | number[], memos: Uint8Array | number[], outgoing: Uint8Array | number[], hits: Uint32Array | number[]): any;
 
 /**
  * [`try_decrypt`] with its key agreement already done: `secrets` is the GPU
  * shader's output for [`gpu_inputs`] of the same arguments. Fails when a
  * spot check finds the GPU wrong; [`try_decrypt`] then answers instead.
  */
-export function try_decrypt_gpu(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array, from: number, tried: Uint8Array, secrets: Uint32Array): any;
+export function try_decrypt_gpu(network: string, ufvk: string, pool: string, chunk: number, body: Uint8Array | number[], from: number, tried: Uint8Array | number[], secrets: Uint32Array | number[]): any;
 
 /**
  * The shielded pools `ufvk` has a key for, newest first: Ironwood uses the
@@ -300,17 +300,17 @@ export interface InitOutput {
     readonly try_decrypt_gpu: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number) => [number, number, number];
     readonly ufvk_pools: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly warm_prover: () => void;
-    readonly rustsecp256k1_v0_10_0_default_error_callback_fn: (a: number, b: number) => void;
-    readonly rustsecp256k1_v0_10_0_default_illegal_callback_fn: (a: number, b: number) => void;
-    readonly rustsecp256k1_v0_10_0_context_create: (a: number) => number;
-    readonly rustsecp256k1_v0_10_0_context_destroy: (a: number) => void;
+    readonly rustsecp256k1_v0_14_default_error_callback_fn: (a: number, b: number) => void;
+    readonly rustsecp256k1_v0_14_default_illegal_callback_fn: (a: number, b: number) => void;
+    readonly rustsecp256k1_v0_14_context_destroy: (a: number) => void;
+    readonly rustsecp256k1_v0_14_context_create: (a: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_exn_store: (a: number) => void;
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __externref_table_dealloc: (a: number) => void;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __externref_drop_slice: (a: number, b: number) => void;
     readonly __wbindgen_start: () => void;
 }

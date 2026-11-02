@@ -47,7 +47,9 @@ pub(crate) fn sign(
     let ours = |derivation: Option<AccountId>| derivation == Some(account);
 
     let sapling_external = usk.sapling().clone();
-    let sapling_internal = sapling_external.derive_internal();
+    let sapling_internal = sapling_external
+        .derive_internal()
+        .ok_or("this Sapling key has no internal key")?;
     let sapling_keys = [
         (Scope::External, &sapling_external),
         (Scope::Internal, &sapling_internal),
@@ -135,7 +137,7 @@ pub(crate) fn sign(
         .update_sapling_with(|mut updater| {
             for (i, key) in &sapling_spends {
                 updater.update_spend_with(*i, |mut spend| {
-                    spend.set_proof_generation_key(key.expsk.proof_generation_key())
+                    spend.set_proof_generation_key(key.expsk().proof_generation_key())
                 })?;
             }
             Ok(())
@@ -153,15 +155,19 @@ pub(crate) fn sign(
     }
     for (i, key) in &sapling_spends {
         signer
-            .sign_sapling(*i, &key.expsk.ask)
+            .sign_sapling(&mut crate::rng(), *i, key.expsk().ask())
             .map_err(to_pczt_error)?;
     }
     let ask = orchard::keys::SpendAuthorizingKey::from(usk.orchard());
     for i in orchard_spends {
-        signer.sign_orchard(i, &ask).map_err(to_pczt_error)?;
+        signer
+            .sign_orchard(&mut crate::rng(), i, &ask)
+            .map_err(to_pczt_error)?;
     }
     for i in ironwood_spends {
-        signer.sign_ironwood(i, &ask).map_err(to_pczt_error)?;
+        signer
+            .sign_ironwood(&mut crate::rng(), i, &ask)
+            .map_err(to_pczt_error)?;
     }
     Ok(signer.finish())
 }
@@ -212,16 +218,16 @@ pub(crate) fn payee(
 ) -> Result<String, String> {
     let Some(claimed) = user_address else {
         return Ok(match to {
-            Receiver::Orchard(r) => UnifiedAddress::from_receivers(Some(r), None, None)
+            Receiver::Orchard(r) => UnifiedAddress::from_receivers(Some(r), None, None, None, None)
                 .ok_or("an Orchard receiver makes no address")?
                 .encode(network),
-            Receiver::Sapling(r) => Address::Sapling(r).encode(network),
+            Receiver::Sapling(r) => Address::Sapling(Box::new(r)).encode(network),
         });
     };
     let holds = match (Address::decode(network, claimed), to) {
         (Some(Address::Unified(ua)), Receiver::Orchard(r)) => ua.orchard() == Some(&r),
         (Some(Address::Unified(ua)), Receiver::Sapling(r)) => ua.sapling() == Some(&r),
-        (Some(Address::Sapling(pa)), Receiver::Sapling(r)) => pa == r,
+        (Some(Address::Sapling(pa)), Receiver::Sapling(r)) => *pa == r,
         _ => false,
     };
     if holds {
@@ -337,7 +343,7 @@ fn transparent_outputs(
         })
         .map_err(to_pczt_error)?;
     let ours = |paths: &[([u8; 33], Vec<bip32::ChildNumber>)]| -> Option<String> {
-        let account = ufvk.transparent()?;
+        let account = ufvk.p2pkh()?;
         paths.iter().find_map(|(pubkey, path)| {
             let [.., scope, index] = path[..] else {
                 return None;
@@ -502,7 +508,7 @@ fn prove_with(
         stage("sapling-proofs");
         let params = sapling.ok_or("Sapling proofs need the Sapling parameters")?;
         prover = prover
-            .create_sapling_proofs(&params.spend, &params.output)
+            .create_sapling_proofs(&mut crate::rng(), &params.spend, &params.output)
             .map_err(to_pczt_error)?;
     }
     let halo2 = prover.requires_orchard_proof() || prover.requires_ironwood_proof();
@@ -513,11 +519,15 @@ fn prove_with(
         let pk = PROVING_KEY.get_or_init(|| ProvingKey::build(CIRCUIT));
         if prover.requires_orchard_proof() {
             stage("orchard-proof");
-            prover = prover.create_orchard_proof(pk).map_err(to_pczt_error)?;
+            prover = prover
+                .create_orchard_proof(&mut crate::rng(), pk)
+                .map_err(to_pczt_error)?;
         }
         if prover.requires_ironwood_proof() {
             stage("ironwood-proof");
-            prover = prover.create_ironwood_proof(pk).map_err(to_pczt_error)?;
+            prover = prover
+                .create_ironwood_proof(&mut crate::rng(), pk)
+                .map_err(to_pczt_error)?;
         }
     }
     stage("verifying");
@@ -534,7 +544,9 @@ fn prove_with(
     if let Some((spend_vk, output_vk)) = &sapling_vks {
         extractor = extractor.with_sapling(spend_vk, output_vk);
     }
-    let tx = extractor.extract().map_err(to_pczt_error)?;
+    let tx = extractor
+        .extract(&mut crate::rng())
+        .map_err(to_pczt_error)?;
     let mut raw = Vec::new();
     tx.write(&mut raw).map_err(|e| e.to_string())?;
     Ok((tx.txid().to_string(), raw))
@@ -594,7 +606,8 @@ pub fn pczt_keystone_fw_version(pczt: &[u8]) -> Result<Option<String>, JsError> 
 #[wasm_bindgen]
 pub fn pczt_summary(network: &str, pczt: &[u8], ufvk: &str) -> Result<JsValue, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
-    let ufvk = UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| JsError::new(&e))?;
+    let ufvk =
+        UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| JsError::new(&e.to_string()))?;
     let summary = summarize(&network, &parse(pczt)?, &ufvk).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&summary).map_err(|e| JsError::new(&e.to_string()))
 }

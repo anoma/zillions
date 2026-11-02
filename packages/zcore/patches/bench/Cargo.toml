@@ -8,9 +8,9 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-bls12_381 = { version = "=0.8.0", default-features = false }
-ff = "0.13"
-pasta_curves = { version = "=0.5.2", default-features = false }
+bls12_381 = { version = "=0.9.0", default-features = false }
+ff = "0.14"
+pasta_curves = { version = "=0.6.1", default-features = false }
 
 # Same as zcore's.
 [profile.release]

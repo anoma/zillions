@@ -1,5 +1,6 @@
 /** A migration in progress (product.md 2.9, docs/design/migration.md): the plan saved at review and what each step sent. */
 
+import { NU7 } from "./chain/blockTime";
 import type { MigrationPlan } from "./send";
 
 type Sent = { height: number; txid?: string };
@@ -23,21 +24,28 @@ export const startMigration = (plan: MigrationPlan): Migration => ({
   transfers: plan.transfers.map(({ value, height }) => ({ value, height })),
 });
 
-/** Blocks between ZIP 318 bucket boundaries. */
-const BUCKET = 144;
+/** Blocks between ZIP 318 bucket boundaries; NU7 triples them, to keep them as far apart in time. */
+const bucket = (height: number) => (height < NU7 ? 144 : 432);
 /** Upstream's trusted confirmations: an anchor sits this far below the target. */
 const TRUSTED = 3;
 
+/** The first bucket boundary at or above `height`, as upstream's `AnchorGrid`. */
+const boundary = (height: number): number => {
+  const above = Math.ceil(height / bucket(height)) * bucket(height);
+  return height < NU7 && above >= NU7 ? boundary(NU7) : above;
+};
+
 /** The tip from which a note mined at `height` can be spent at a bucket anchor, as zcore's `anchorable` counts. */
 export const readyAt = (height: number) =>
-  Math.ceil(height / BUCKET) * BUCKET + BUCKET + TRUSTED - 1;
+  boundary(boundary(height) + 1) + TRUSTED - 1;
 
 export type OrchardNote = { value: number; height: number };
 
 /** `height` is when the plan has the step due; `readyAt`, the tip from which its notes can anchor. */
 export type Step = { index: number; height: number; readyAt: number } &
   /** Makes notes for `parts`, the transfers that have none yet. */
-  (| { kind: "preparation"; parts: number[] }
+  (
+    | { kind: "preparation"; parts: number[] }
     /** Spends the note worth `value` and the transfer fee. */
     | { kind: "transfer"; value: number }
   );

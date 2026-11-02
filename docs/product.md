@@ -139,7 +139,8 @@ holds only what the device supports (3.6).
   or the recipient changes; it is never dropped silently. — _Built_
 - **Fee preview** before confirming, updating as the form changes.
 - Checks before sending: amount set, recipient a valid address on this
-  network, enough balance, message within 512 bytes.
+  network, enough balance, message within 512 bytes, and from NU7 no more
+  notes than one block can hold (ZIP 218).
 - **Privacy notice** under the button: "This transfer is shielded",
   "partly shielded" or "transparent", depending on source and recipient.
 - Approval happens in the Keychain, which shows what is being signed.
@@ -211,9 +212,9 @@ Moves shielded funds to one of the account's own transparent addresses.
     the account's own transactions, 10 for a payment received from someone
     else. A pending transaction's icon carries a clock; hovering or tapping
     it shows how far along it is as a percent and the minutes left, planned
-    upfront from 75-second blocks (4 min for its own: the next block, the
-    15-second tip check, 2 more blocks; 9 more blocks for a payment
-    received). Each event (mined, a new block) spreads what's left of the
+    upfront from the block time at the tip: 25 seconds from NU7, 75 before
+    (for its own, the next block, a tip check of a fifth of a block, 2 more
+    blocks: 80 seconds; for a payment received, 9 more blocks). Each event (mined, a new block) spreads what's left of the
     percent over the new time left, so it only moves forward. Past the
     estimate the percent is gone for good: before it's mined it says it's
     taking longer and how many blocks are left before it expires; once

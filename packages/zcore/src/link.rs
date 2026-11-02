@@ -3,10 +3,10 @@
 //! sealed copy for the funding memo, which only the sender's seed opens.
 
 use blake2b_simd::Params;
-use rand_core::{OsRng, RngCore};
+use rand_core::Rng;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
-use zcash_address::unified::{Encoding, Fvk, Ufvk};
+use zcash_address::unified::{Encoding, Fvk, Revision, Ufvk, Uitem};
 use zcash_keys::address::UnifiedAddress;
 use zcash_keys::keys::UnifiedSpendingKey;
 use zcash_protocol::consensus::{Network, Parameters};
@@ -25,7 +25,7 @@ pub(crate) fn spending_key(key: &[u8]) -> Result<orchard::keys::SpendingKey, Str
 fn new_key() -> [u8; KEY_BYTES] {
     loop {
         let mut key = [0u8; KEY_BYTES];
-        OsRng.fill_bytes(&mut key);
+        crate::rng().fill_bytes(&mut key);
         if spending_key(&key).is_ok() {
             return key;
         }
@@ -56,11 +56,14 @@ fn nk(fvk: &orchard::keys::FullViewingKey) -> [u8; 32] {
 fn info(network: &Network, key: &[u8]) -> Result<LinkInfo, String> {
     let fvk = orchard::keys::FullViewingKey::from(&spending_key(key)?);
     let receiver = fvk.address_at(0u32, Scope::External);
-    let ua = UnifiedAddress::from_receivers(Some(receiver), None, None)
+    let ua = UnifiedAddress::from_receivers(Some(receiver), None, None, None, None)
         .ok_or("no unified address for the link")?;
-    let ufvk = Ufvk::try_from_items(vec![Fvk::Orchard(fvk.to_bytes())])
-        .map_err(|e| e.to_string())?
-        .encode(&network.network_type());
+    let ufvk = Ufvk::try_from_items(
+        Revision::R0,
+        vec![Uitem::Data(Fvk::Orchard(fvk.to_bytes()))],
+    )
+    .map_err(|e| e.to_string())?
+    .encode(&network.network_type());
     Ok(LinkInfo {
         address: ua.encode(network),
         nk: hex::encode(nk(&fvk)),

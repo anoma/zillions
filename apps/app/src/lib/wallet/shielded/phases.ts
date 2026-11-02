@@ -3,6 +3,7 @@
  * spam era sits and how far each phase has come.
  */
 
+import { secondsBetween } from "../chain/blockTime";
 import { NETWORK } from "../config";
 import type { Pool, PoolScan, Segment, ShieldedScan } from "../types";
 
@@ -17,13 +18,7 @@ export const POOLS = [
  * the spam era is read, and the user hasn't started (or paused) it.
  */
 export type SyncPhase =
-  | "catch-up"
-  | "setup"
-  | "history"
-  | "paused"
-  | "spam"
-  | "spam-off"
-  | "done";
+  "catch-up" | "setup" | "history" | "paused" | "spam" | "spam-off" | "done";
 
 export type SyncProgress = {
   phase: SyncPhase;
@@ -87,11 +82,9 @@ function span(segment: Segment, floor: number, ceil: number) {
 /** Sapling decrypts ~2× slower, so it counts double. */
 const weight = (pool: Pool) => (pool === "sapling" ? 2 : 1);
 
-/** The estimated time of `height`, from the tip's at `now`: 75 s blocks, 150 s before Blossom. */
+/** The estimated time of `height`, from the tip's at `now`. */
 function heightTime(height: number, tip: number, now: number) {
-  const blossom = NETWORK === "main" ? 653_600 : 584_000;
-  const slow = Math.max(0, blossom - height);
-  return now - ((tip - height) * 75 + slow * 75) * 1000;
+  return now - secondsBetween(height, tip) * 1000;
 }
 
 /** How far `phase` has come over `scan`; `tip` and `now` date history's progress. */

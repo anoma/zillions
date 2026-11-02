@@ -41,12 +41,14 @@ use sapling::note_encryption::{CompactOutputDescription, SaplingDomain, Zip212En
 use zcash_keys::address::{Address, UnifiedAddress};
 use zcash_keys::keys::{OutgoingViewingKey, UnifiedFullViewingKey};
 use zcash_note_encryption::{
-    batch, try_output_recovery_with_ovk, BatchDomain, Domain, EphemeralKeyBytes, ShieldedOutput,
-    COMPACT_NOTE_SIZE, ENC_CIPHERTEXT_SIZE, OUT_CIPHERTEXT_SIZE,
+    batch, note_bytes::NoteBytesData, try_output_recovery_with_ovk, BatchDomain, EphemeralKeyBytes,
+    ShieldedOutput, OUT_CIPHERTEXT_SIZE,
 };
 use zcash_primitives::transaction::components::sapling::zip212_enforcement;
 use zcash_protocol::consensus::{BlockHeight, Network};
 use zcash_protocol::memo::{Memo, MemoBytes};
+
+use sapling::note_encryption::{COMPACT_NOTE_SIZE, ENC_CIPHERTEXT_SIZE};
 
 /// Notes per `/ciphertexts` chunk: record `i` of chunk `c` sits at tree
 /// position `c × CHUNK_SIZE + i`.
@@ -86,34 +88,42 @@ struct FullNote {
 struct FullOutput<C> {
     eph_key: EphemeralKeyBytes,
     cm: C,
-    enc: [u8; ENC_CIPHERTEXT_SIZE],
+    enc: NoteBytesData<ENC_CIPHERTEXT_SIZE>,
 }
 
-impl ShieldedOutput<SaplingDomain, ENC_CIPHERTEXT_SIZE> for FullOutput<SaplingCmu> {
-    fn ephemeral_key(&self) -> EphemeralKeyBytes {
-        self.eph_key.clone()
-    }
-    fn cmstar_bytes(&self) -> [u8; 32] {
-        self.cm.to_bytes()
-    }
-    fn enc_ciphertext(&self) -> &[u8; ENC_CIPHERTEXT_SIZE] {
-        &self.enc
+impl<C> FullOutput<C> {
+    fn compact(&self) -> NoteBytesData<COMPACT_NOTE_SIZE> {
+        NoteBytesData(self.enc.0[..COMPACT_NOTE_SIZE].try_into().unwrap())
     }
 }
 
-impl<V: DomainVersion> ShieldedOutput<NoteEncryptionDomain<V>, ENC_CIPHERTEXT_SIZE>
-    for FullOutput<OrchardCmx>
-where
-    NoteEncryptionDomain<V>: Domain<ExtractedCommitmentBytes = [u8; 32]>,
-{
+impl ShieldedOutput<SaplingDomain> for FullOutput<SaplingCmu> {
     fn ephemeral_key(&self) -> EphemeralKeyBytes {
         self.eph_key.clone()
     }
-    fn cmstar_bytes(&self) -> [u8; 32] {
-        self.cm.to_bytes()
+    fn cmstar(&self) -> &SaplingCmu {
+        &self.cm
     }
-    fn enc_ciphertext(&self) -> &[u8; ENC_CIPHERTEXT_SIZE] {
-        &self.enc
+    fn enc_ciphertext(&self) -> Option<&NoteBytesData<ENC_CIPHERTEXT_SIZE>> {
+        Some(&self.enc)
+    }
+    fn enc_ciphertext_compact(&self) -> NoteBytesData<COMPACT_NOTE_SIZE> {
+        self.compact()
+    }
+}
+
+impl<V: DomainVersion> ShieldedOutput<NoteEncryptionDomain<V>> for FullOutput<OrchardCmx> {
+    fn ephemeral_key(&self) -> EphemeralKeyBytes {
+        self.eph_key.clone()
+    }
+    fn cmstar(&self) -> &OrchardCmx {
+        &self.cm
+    }
+    fn enc_ciphertext(&self) -> Option<&NoteBytesData<ENC_CIPHERTEXT_SIZE>> {
+        Some(&self.enc)
+    }
+    fn enc_ciphertext_compact(&self) -> NoteBytesData<COMPACT_NOTE_SIZE> {
+        self.compact()
     }
 }
 
@@ -209,13 +219,18 @@ pub(crate) fn parse_network(network: &str) -> Result<Network, String> {
 /// receiver wrapped in a unified address. Falls back to raw bytes if the
 /// unified encoding refuses them, so a note is never lost to a display detail.
 fn encode_sapling(network: &Network, addr: &sapling::PaymentAddress) -> String {
-    Address::Sapling(*addr).encode(network)
+    Address::Sapling(Box::new(*addr)).encode(network)
 }
 
 fn encode_orchard(network: &Network, addr: &orchard::Address) -> String {
-    UnifiedAddress::from_receivers(Some(*addr), None, None)
-        .map(|ua| Address::Unified(ua).encode(network))
+    UnifiedAddress::from_receivers(Some(*addr), None, None, None, None)
+        .map(|ua| Address::Unified(Box::new(ua)).encode(network))
         .unwrap_or_else(|| hex::encode(addr.to_raw_address_bytes()))
+}
+
+/// The system's randomness: the browser's crypto in wasm.
+pub(crate) fn rng() -> rand_core::UnwrapErr<getrandom::SysRng> {
+    rand_core::UnwrapErr(getrandom::SysRng)
 }
 
 pub(crate) fn hex_n<const N: usize>(s: &str) -> Result<[u8; N], String> {
@@ -257,10 +272,9 @@ fn orchard_ivks(fvk: &orchard::keys::FullViewingKey) -> Vec<OrchardIvk> {
 
 /// [`sapling_ivks`] as the GPU multiplies by them: each scope's scalar, little-endian.
 fn sapling_scalars(dfvk: &sapling::zip32::DiversifiableFullViewingKey) -> Vec<[u8; 32]> {
-    use ff::PrimeField;
     SCOPES
         .iter()
-        .map(|(_, scope)| dfvk.to_ivk(*scope).0.to_repr())
+        .map(|(_, scope)| dfvk.to_ivk(*scope).to_repr())
         .collect()
 }
 
@@ -402,7 +416,7 @@ fn decrypt_sapling(
     secrets: Option<&[u32]>,
 ) -> Result<Compact, String> {
     let network: Network = parse_network(network)?;
-    let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+    let ufvk = UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| e.to_string())?;
     let (from, digest) = resume(chunk_records(body)?.1, SAPLING_RECORD_LEN, from, tried);
     let body = chunk_body(body, SAPLING_RECORD_LEN)?;
     let (count, min_height) = (body.records.len(), body.min_height);
@@ -418,7 +432,7 @@ fn decrypt_sapling(
     };
 
     let enforcement = chunk_enforcement(&network, body.min_height, body.max_height);
-    let nk = &dfvk.fvk().vk.nk;
+    let nk = dfvk.fvk().vk.nk();
     let ivks = sapling_ivks(dfvk);
     let outputs = body
         .records
@@ -488,10 +502,10 @@ fn decrypt_orchard<V: DomainVersion>(
 ) -> Result<Compact, String>
 where
     NoteEncryptionDomain<V>: BatchDomain<IncomingViewingKey = OrchardIvk, Note = orchard::Note>,
-    CompactAction: ShieldedOutput<NoteEncryptionDomain<V>, COMPACT_NOTE_SIZE>,
+    CompactAction: ShieldedOutput<NoteEncryptionDomain<V>>,
 {
     let network: Network = parse_network(network)?;
-    let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+    let ufvk = UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| e.to_string())?;
     let (from, digest) = resume(chunk_records(body)?.1, ORCHARD_RECORD_LEN, from, tried);
     let body = chunk_body(body, ORCHARD_RECORD_LEN)?;
     let (count, min_height) = (body.records.len(), body.min_height);
@@ -618,7 +632,11 @@ where
         );
         Ok((
             NoteEncryptionDomain::<V>::for_compact_action(&action),
-            FullOutput { eph_key, cm, enc },
+            FullOutput {
+                eph_key,
+                cm,
+                enc: NoteBytesData(enc),
+            },
         ))
     };
     let outputs = notes.iter().map(&output).collect::<Result<Vec<_>, _>>()?;
@@ -694,7 +712,7 @@ fn decrypt_full(
     wanted: &[usize],
 ) -> Result<FullChunk, String> {
     let network: Network = parse_network(network)?;
-    let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+    let ufvk = UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| e.to_string())?;
     // A send spending only transparent coins encrypts its outputs to the
     // transparent account's OVK (upstream's `select_ovk`); upstream recovers
     // those from its own records, which a fresh sync doesn't have.
@@ -733,7 +751,7 @@ fn decrypt_full(
 
     // Sapling: one domain per output (ZIP-212 enforcement is height-dependent).
     if let ("sapling", Some(dfvk)) = (pool, ufvk.sapling()) {
-        let nk = &dfvk.fvk().vk.nk;
+        let nk = dfvk.fvk().vk.nk();
         let ivks = sapling_ivks(dfvk);
         let indices = output_indices(notes);
         let output = |n: &FullNote| -> Result<_, String> {
@@ -745,7 +763,7 @@ fn decrypt_full(
                 FullOutput {
                     eph_key: EphemeralKeyBytes(n.eph_key),
                     cm,
-                    enc: n.enc_ciphertext,
+                    enc: NoteBytesData(n.enc_ciphertext),
                 },
             ))
         };
@@ -880,7 +898,7 @@ pub fn gpu_inputs(
 ) -> Result<Vec<u8>, JsError> {
     let inputs = || -> Result<Vec<u8>, String> {
         let network = parse_network(network)?;
-        let ufvk = UnifiedFullViewingKey::decode(&network, ufvk)?;
+        let ufvk = UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| e.to_string())?;
         let (scalars, record_len) = match pool {
             "sapling" => (ufvk.sapling().map(sapling_scalars), SAPLING_RECORD_LEN),
             "orchard" | "ironwood" => (ufvk.orchard().map(orchard_scalars), ORCHARD_RECORD_LEN),
@@ -980,7 +998,8 @@ mod tests {
         .expect("usk");
         let ufvk = usk
             .to_unified_full_viewing_key()
-            .encode(&Network::MainNetwork);
+            .encode(&Network::MainNetwork)
+            .unwrap();
 
         let sapling = ciphertexts(
             3_342_508,
@@ -1150,12 +1169,12 @@ mod tests {
         let enc = encryption.encrypt_note_plaintext();
 
         let mut record = IronwoodDomain::epk_bytes(encryption.epk()).0.to_vec();
-        record.extend(&enc[..COMPACT_NOTE_SIZE]);
+        record.extend(&enc.0[..COMPACT_NOTE_SIZE]);
         record.extend(ExtractedNoteCommitment::from(note.commitment()).to_bytes());
         record.extend(rho_bytes);
         let body = ciphertexts(3_430_000, &[&hex::encode(&record)]);
 
-        let ufvk = ufvk.encode(&Network::MainNetwork);
+        let ufvk = ufvk.encode(&Network::MainNetwork).unwrap();
         let compact =
             decrypt_orchard::<IronwoodVersion>("main", &ufvk, "ironwood", &body, (0, &[]), None)
                 .expect("runs");
@@ -1205,7 +1224,7 @@ mod tests {
         // The whole ciphertext through the full path: same answer, plus where it sits.
         let full = FullNote {
             cm: ExtractedNoteCommitment::from(note.commitment()).to_bytes(),
-            enc_ciphertext: enc,
+            enc_ciphertext: enc.0,
             eph_key: IronwoodDomain::epk_bytes(encryption.epk()).0,
             height: 3_430_000,
             position: 7,
@@ -1332,7 +1351,7 @@ mod tests {
                 )
             };
             let mut record = epk.to_vec();
-            record.extend(&enc[..COMPACT_NOTE_SIZE]);
+            record.extend(&enc.0[..COMPACT_NOTE_SIZE]);
             record.extend(ExtractedNoteCommitment::from(note.commitment()).to_bytes());
             record.extend(rho_bytes);
             hex::encode(record)
@@ -1354,9 +1373,9 @@ mod tests {
             sapling::value::NoteValue::from_raw(5),
             sapling::Rseed::AfterZip212([5u8; 32]),
         );
-        let e = sapling_note_encryption(None, note.clone(), [0u8; 512], &mut rand_core::OsRng);
+        let e = sapling_note_encryption(None, note.clone(), [0u8; 512], &mut crate::rng());
         let mut ours = SaplingDomain::epk_bytes(e.epk()).0.to_vec();
-        ours.extend(&e.encrypt_note_plaintext()[..COMPACT_NOTE_SIZE]);
+        ours.extend(&e.encrypt_note_plaintext().0[..COMPACT_NOTE_SIZE]);
         ours.extend(note.cmu().to_bytes());
         let sapling_stranger = "cb476002450613bae9a8fa4240a80f459ca338ab4ac9d0ccd69507d0a4bef98567294ab5a43ac6750a760eb171df88bf67d5847fe3bd1d7ac9f4d2bd3e1e69da31868f810a478d3d5b39366f43e11a8b88ddf3841e184cee50a61ef8bad79f28a360ae0383b4c2a563723744abb8994145e5d109";
         let sapling = ciphertexts(
@@ -1368,7 +1387,7 @@ mod tests {
             ],
         );
 
-        let ufvk = ufvk.encode(&Network::MainNetwork);
+        let ufvk = ufvk.encode(&Network::MainNetwork).unwrap();
         let hits = |c: Compact| {
             c.hits
                 .iter()
@@ -1481,7 +1500,8 @@ mod tests {
         .expect("usk");
         let ufvk = usk
             .to_unified_full_viewing_key()
-            .encode(&Network::MainNetwork);
+            .encode(&Network::MainNetwork)
+            .unwrap();
 
         let sapling = [fixture(SAPLING_FULL)];
         let orchard = [fixture(ORCHARD_FULL)];
@@ -1516,7 +1536,7 @@ mod tests {
                 &nonempty::NonEmpty::new(zcash_protocol::PoolType::Transparent),
             )
             .expect("transparent ovk");
-        let encoded = ufvk.encode(&Network::MainNetwork);
+        let encoded = ufvk.encode(&Network::MainNetwork).unwrap();
         (ufvk, transparent, encoded)
     }
 
@@ -1524,7 +1544,6 @@ mod tests {
     // send spending only transparent coins), it's recovered either way.
     #[test]
     fn recovers_our_own_sapling_output() {
-        use rand_core::OsRng;
         use sapling::note_encryption::sapling_note_encryption;
         use sapling::value::{NoteValue, ValueCommitTrapdoor, ValueCommitment};
         use sapling::{Note, Rseed};
@@ -1549,18 +1568,18 @@ mod tests {
             memo[..4].copy_from_slice(b"paid");
 
             let cmu = note.cmu();
-            let encryptor = sapling_note_encryption(Some(ovk), note, memo, &mut OsRng);
-            let cv = ValueCommitment::derive(value, ValueCommitTrapdoor::random(OsRng));
+            let encryptor = sapling_note_encryption(Some(ovk), note, memo, &mut crate::rng());
+            let cv = ValueCommitment::derive(value, ValueCommitTrapdoor::random(crate::rng()));
 
             let full = vec![FullNote {
                 cm: cmu.to_bytes(),
-                enc_ciphertext: encryptor.encrypt_note_plaintext(),
+                enc_ciphertext: encryptor.encrypt_note_plaintext().0,
                 eph_key: SaplingDomain::epk_bytes(encryptor.epk()).0,
                 height: 3_378_506,
                 position: 73_920_512,
                 tx_index: 3,
                 rho: [0; 32],
-                out_ciphertext: encryptor.encrypt_outgoing_plaintext(&cv, &cmu, &mut OsRng),
+                out_ciphertext: encryptor.encrypt_outgoing_plaintext(&cv, &cmu, &mut crate::rng()),
                 cv: cv.to_bytes(),
             }];
             let chunk = decrypt_full("main", &encoded, "sapling", &full, &[]).expect("runs");
@@ -1572,7 +1591,7 @@ mod tests {
             // Encoded as a wallet shows it, not as raw diversified bytes.
             assert_eq!(
                 chunk.sent[0].recipient,
-                Address::Sapling(theirs).encode(&Network::MainNetwork)
+                Address::Sapling(Box::new(theirs)).encode(&Network::MainNetwork)
             );
             assert!(chunk.sent[0].recipient.starts_with("zs1"));
             assert_eq!(chunk.sent[0].memo.as_deref(), Some("paid"));
@@ -1586,7 +1605,6 @@ mod tests {
         use orchard::note_encryption::{IronwoodDomain, IronwoodNoteEncryption};
         use orchard::value::{NoteValue, ValueCommitTrapdoor, ValueCommitment};
         use orchard::NoteVersion;
-        use rand_core::OsRng;
         use zcash_note_encryption::Domain;
 
         let (ufvk, transparent, encoded) = sender();
@@ -1620,13 +1638,13 @@ mod tests {
 
             let full = vec![FullNote {
                 cm: cmx.to_bytes(),
-                enc_ciphertext: encryption.encrypt_note_plaintext(),
+                enc_ciphertext: encryption.encrypt_note_plaintext().0,
                 eph_key: IronwoodDomain::epk_bytes(encryption.epk()).0,
                 height: 3_430_000,
                 position: 1_234,
                 tx_index: 2,
                 rho: rho_bytes,
-                out_ciphertext: encryption.encrypt_outgoing_plaintext(&cv, &cmx, &mut OsRng),
+                out_ciphertext: encryption.encrypt_outgoing_plaintext(&cv, &cmx, &mut crate::rng()),
                 cv: cv.to_bytes(),
             }];
             let chunk = decrypt_full("main", &encoded, "ironwood", &full, &[]).expect("runs");

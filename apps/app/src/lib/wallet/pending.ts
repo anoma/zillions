@@ -1,10 +1,11 @@
+import { blockSeconds } from "./chain/blockTime";
 import type { Activity, PendingTx } from "./types";
 
 /**
  * Blocks past a pending transaction's expiry before it's dropped: the indexer
  * trails the chain, and one mined at its last height must show up first.
  */
-export const EXPIRY_MARGIN = 10;
+export const EXPIRY_MARGIN = 30;
 
 /** Nullifiers and `txid:index` outpoints pending transactions spend. */
 export const held = (pending: PendingTx[]) => ({
@@ -75,15 +76,11 @@ export const confirmedAt = (history: Activity[], tip: number | undefined) =>
           : { ...tx, confirmations };
       });
 
-/** Zcash's target block time. */
-// NU7 (ZIP 218) cuts it to 25 s: switch it by height then, like phases.ts does for Blossom.
-export const BLOCK_SECONDS = 75;
-
 /** Between syncs the tip is checked this often, and a new block syncs at once. */
-export const TIP_CHECK_MS = (BLOCK_SECONDS / 5) * 1000;
+export const tipCheckMs = () => (blockSeconds() / 5) * 1000;
 
 /** About how long a broadcast takes to show mined: the next block, then the tip check that finds it. */
-const PROCESSING_MS = BLOCK_SECONDS * 1000 + TIP_CHECK_MS;
+const processingMs = () => blockSeconds() * 1000 + tipCheckMs();
 
 /**
  * A pending transaction's progress, planned at its last event (first seen,
@@ -104,9 +101,9 @@ type Tracked = Pick<Activity, "tx_type"> &
 /** What's left of `tx`'s wait: the processing until it's mined, then a block per missing confirmation. */
 const leftMs = ({ tx_type, confirmations = 0 }: Tracked) =>
   (requiredConfirmations(tx_type) - Math.max(1, confirmations)) *
-    BLOCK_SECONDS *
+    blockSeconds() *
     1000 +
-  (confirmations ? 0 : PROCESSING_MS);
+  (confirmations ? 0 : processingMs());
 
 const barAt = (p: Progress, now: number) =>
   p.until > p.at
@@ -133,7 +130,7 @@ export function plan(tx: Tracked, now: number, prev?: Progress): Progress {
     tx.timestamp === undefined
       ? now
       : tx.timestamp * 1000 -
-        (confirmations && tx.tx_type !== "Received" ? PROCESSING_MS : 0);
+        (confirmations && tx.tx_type !== "Received" ? processingMs() : 0);
   return {
     confirmations,
     at: start,

@@ -1,9 +1,5 @@
-import {
-  BLOCK_SECONDS,
-  plan,
-  type Progress,
-  progressAt,
-} from "../lib/wallet/pending";
+import { blockSeconds } from "../lib/wallet/chain/blockTime";
+import { plan, type Progress, progressAt } from "../lib/wallet/pending";
 import type { Activity } from "../lib/wallet/types";
 import { useNow } from "./useNow";
 
@@ -14,7 +10,7 @@ export type PendingTx = Pick<Activity, "txid" | "tx_type"> &
 const plans = new Map<string, Progress>();
 
 const blockMinutes = (blocks: number) =>
-  Math.max(1, Math.ceil((blocks * BLOCK_SECONDS) / 60));
+  Math.max(1, Math.ceil((blocks * blockSeconds()) / 60));
 
 /** How far along `tx` is, none once late, and the time left, or why it's late before it's mined. */
 export function usePendingProgress(tx: PendingTx) {

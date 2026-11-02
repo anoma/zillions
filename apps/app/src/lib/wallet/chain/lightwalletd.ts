@@ -6,6 +6,7 @@
 
 import { LIGHTWALLETD_URL } from "../config";
 import type { Pool } from "../types";
+import { sawTip } from "./blockTime";
 import { fetchWithRetry } from "./http";
 
 const SERVICE = "cash.z.wallet.sdk.rpc.CompactTxStreamer";
@@ -112,7 +113,7 @@ async function call(method: string, request: Uint8Array) {
   const messages: Uint8Array[] = [];
   let status = res.headers.get("grpc-status");
   let reason = res.headers.get("grpc-message");
-  for (let i = 0; i < body.length; ) {
+  for (let i = 0; i < body.length;) {
     const flag = body[i];
     const length = new DataView(
       body.buffer,
@@ -184,7 +185,9 @@ export function treeSize(tree: string) {
 
 export async function fetchLatestHeight() {
   const [block] = await call("GetLatestBlock", new Uint8Array());
-  return num(fields(block), 1);
+  const height = num(fields(block), 1);
+  sawTip(height);
+  return height;
 }
 
 /** An unspent transparent output. `txid` is in explorer byte order. */

@@ -36,6 +36,12 @@ test("a note can anchor from a bucket past the boundary above it", () => {
   expect(readyAt(1_009)).toBe(1_298);
 });
 
+test("boundaries are 432 blocks apart from NU7, as zcore's `anchorable` counts", () => {
+  expect(readyAt(3_543_205)).toBe(3_543_698);
+  expect(readyAt(3_543_300)).toBe(3_544_130);
+  expect(readyAt(3_543_505)).toBe(3_544_130);
+});
+
 test("prepares notes for every transfer that has none", () => {
   expect(nextStep(plan(), at(50, 7 * CENT), new Set())).toEqual({
     kind: "preparation",
