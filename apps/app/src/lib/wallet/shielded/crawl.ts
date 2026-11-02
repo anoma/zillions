@@ -93,17 +93,18 @@ class TimeoutError extends Error {
 // Constructs a promise that is guaranteed to resolve within ms milliseconds regardless
 // of whether the given promise has resolved or not.
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timerId: ReturnType<typeof setTimeout>;
   // Make promise that rejects in ms milliseconds
   const timeout = new Promise<never>((_, reject) => {
     // Wait ms milliseconds
-    setTimeout(() => {
+    timerId = setTimeout(() => {
       // Then reject the promise
       reject(new TimeoutError(ms));
     }, ms);
   });
   // Make promise that evaluates to either the timeout or the given promise;
   // whichever evaluates sooner.
-  return Promise.race([promise, timeout]);
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timerId));
 }
 
 export async function crawlChunks(options: {
