@@ -7,6 +7,7 @@
 import outputUrl from "@zillions/sapling-params/sapling-output.params?url";
 import spendUrl from "@zillions/sapling-params/sapling-spend.params?url";
 import initZcore, { needs_sapling_params } from "@zillions/zcore";
+import { minedBy } from "./blockTime";
 import { sendTransaction } from "./lightwalletd";
 import type { ProveRequest, ProveResponse } from "./prove";
 import ProveWorker from "./prove.ts?worker";
@@ -205,5 +206,5 @@ export async function submitTransaction(
     throw new Error("Dry run: the transaction was proven but not broadcast");
   }
   await sendTransaction(raw);
-  return { txid, raw, expiryHeight: expiry_height };
+  return { txid, raw, expiryHeight: minedBy(expiry_height) };
 }

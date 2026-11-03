@@ -24,8 +24,8 @@ import { NETWORK } from "./config";
 /** Unused addresses in a row that end a chain, from zcore once it's loaded. */
 const gapLimits = () => gap_limits() as Record<Scope, number>;
 
-/** Blocks below the tip a reorg can still replace; zcashd refuses deeper ones. */
-export const REORG_DEPTH = 100;
+/** Blocks below the tip a reorg can still replace: ZIP 218's rollback floor from NU7. */
+export const REORG_DEPTH = 600;
 
 const SCOPES = ["external", "internal"] as const;
 

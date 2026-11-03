@@ -28,7 +28,7 @@ import {
   pendingActivity,
   prunePending,
   requiredConfirmations,
-  TIP_CHECK_MS,
+  tipCheckMs,
 } from "./pending";
 import {
   maxSend,
@@ -249,7 +249,7 @@ export class Wallet {
       // Counted from the end, so a slow sync never queues another.
       this.#checks = 0;
       if (!this.#abort.signal.aborted) {
-        this.#resync = setTimeout(this.#resyncTick, TIP_CHECK_MS);
+        this.#resync = setTimeout(this.#resyncTick, tipCheckMs());
       }
     }
   });
@@ -262,14 +262,14 @@ export class Wallet {
     const waiting = this.#waiting();
     const due =
       (!this.#history || waiting) &&
-      ((!this.#history && this.#checks * TIP_CHECK_MS >= RESYNC_MS) ||
+      ((!this.#history && this.#checks * tipCheckMs() >= RESYNC_MS) ||
         (await fetchLatestHeight().catch(() => 0)) > (this.#tip ?? Infinity));
     // A sync started meanwhile schedules the next tick itself.
     if (this.#resync !== timer || this.#abort.signal.aborted) return;
     if (due && !this.#history) return this.resync();
     if (due && waiting)
       return void this.sync().catch((e) => console.error("[sync] failed", e));
-    this.#resync = setTimeout(this.#resyncTick, TIP_CHECK_MS);
+    this.#resync = setTimeout(this.#resyncTick, tipCheckMs());
   };
 
   /** Whether something is pending: unmined, or mined fewer blocks ago than a payment received needs. */

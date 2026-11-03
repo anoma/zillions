@@ -36,11 +36,14 @@ const CHECKPOINTS = {
   main: [3_511_000, 1_791_490_925],
   test: [4_481_000, 1_791_528_275],
 } as const;
-// Mainnet averages ~75.36s per block (testnet is faster); assuming a slower
-// rate keeps the estimate below the real height as the checkpoint ages.
-const ASSUMED_BLOCK_SECONDS = 76;
+/** ZIP 218 cuts the block time target from 75 to 25 seconds at this height. */
+const NU7 = { main: 3_543_405, test: 4_465_026 } as const;
+// A second slower than each target (mainnet averages ~75.36s before NU7), so
+// the estimate stays below the real height as the checkpoint ages.
+const SECONDS_BEFORE_NU7 = 76;
+const SECONDS_FROM_NU7 = 26;
 // Absorbs a device clock running up to a week fast.
-const CLOCK_MARGIN_BLOCKS = (7 * 24 * 60 * 60) / 75;
+const CLOCK_MARGIN_SECONDS = 7 * 24 * 60 * 60;
 
 /**
  * A new account's birthday, estimated offline from the device clock so the
@@ -48,9 +51,15 @@ const CLOCK_MARGIN_BLOCKS = (7 * 24 * 60 * 60) / 75;
  * the real height, or the wallet would skip blocks that can hold its funds.
  */
 const estimateBirthday = (): number => {
-  const [height, time] = CHECKPOINTS[getNetwork()];
-  const elapsed = Math.max(0, Date.now() / 1000 - time);
-  return Math.floor(height + elapsed / ASSUMED_BLOCK_SECONDS - CLOCK_MARGIN_BLOCKS);
+  const network = getNetwork();
+  const [height, time] = CHECKPOINTS[network];
+  const elapsed = Math.max(0, Date.now() / 1000 - time - CLOCK_MARGIN_SECONDS);
+  const beforeNu7 = Math.max(
+    0,
+    Math.min(elapsed / SECONDS_BEFORE_NU7, NU7[network] - height),
+  );
+  const fromNu7 = (elapsed - beforeNu7 * SECONDS_BEFORE_NU7) / SECONDS_FROM_NU7;
+  return Math.floor(height + beforeNu7 + fromNu7);
 };
 
 export type CreateAccountResult =

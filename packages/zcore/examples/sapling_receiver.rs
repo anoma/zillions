@@ -15,5 +15,8 @@ fn main() {
         panic!("not a mainnet unified address");
     };
     let sapling = ua.sapling().expect("this address has no Sapling receiver");
-    println!("{}", Address::Sapling(*sapling).encode(&MainNetwork));
+    println!(
+        "{}",
+        Address::Sapling(Box::new(*sapling)).encode(&MainNetwork)
+    );
 }

@@ -4,7 +4,8 @@
 //! addresses from the viewing key, for both, and what kind an address is.
 //! Offline key math.
 
-use rand_core::{OsRng, RngCore};
+use rand_core::Rng;
+use secrecy::ExposeSecret;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use zcash_keys::address::Address;
@@ -12,7 +13,7 @@ use zcash_keys::encoding::{encode_extended_spending_key, AddressCodec};
 use zcash_keys::keys::{
     Era, ReceiverRequirement, UnifiedAddressRequest, UnifiedFullViewingKey, UnifiedSpendingKey,
 };
-use zcash_protocol::consensus::{Network, NetworkConstants};
+use zcash_protocol::consensus::{Network, Parameters};
 use zcash_protocol::{PoolType, ShieldedPool};
 use zip32::{fingerprint::SeedFingerprint, AccountId, DiversifierIndex};
 
@@ -47,7 +48,7 @@ fn account_from_ufvk(network: &Network, ufvk: &UnifiedFullViewingKey) -> Result<
         .default_address(UnifiedAddressRequest::SHIELDED)
         .map_err(|e| e.to_string())?;
     Ok(Account {
-        ufvk: ufvk.encode(network),
+        ufvk: ufvk.encode(network).map_err(|e| e.to_string())?,
         transparent: all.transparent().map(|addr| addr.encode(network)),
         unified: shielded.encode(network),
     })
@@ -101,10 +102,10 @@ const ORCHARD: UnifiedAddressRequest = UnifiedAddressRequest::unsafe_custom(
 );
 
 pub(crate) fn fresh(network: &Network, ufvk: &str) -> Result<String, String> {
-    let ufvk = UnifiedFullViewingKey::decode(network, ufvk)?;
+    let ufvk = UnifiedFullViewingKey::decode(network, ufvk).map_err(|e| e.to_string())?;
     // Random, not a counter: the keychain and the app hand out addresses with no shared state.
     let mut j = [0u8; 11];
-    OsRng.fill_bytes(&mut j);
+    crate::rng().fill_bytes(&mut j);
     let request = if ufvk.sapling().is_some() {
         ORCHARD_SAPLING
     } else {
@@ -126,7 +127,7 @@ pub fn fresh_address(network: &str, ufvk: &str) -> Result<String, JsError> {
 }
 
 fn pools(network: &Network, ufvk: &str) -> Result<Vec<String>, String> {
-    let ufvk = UnifiedFullViewingKey::decode(network, ufvk)?;
+    let ufvk = UnifiedFullViewingKey::decode(network, ufvk).map_err(|e| e.to_string())?;
     let orchard = ufvk.orchard().is_some();
     Ok([
         ("ironwood", orchard),
@@ -178,9 +179,9 @@ pub fn spending_keys(network: &str, seed: &[u8], hd_index: u32) -> Result<JsValu
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
     let usk = spending_key(&network, seed, hd_index).map_err(|e| JsError::new(&e))?;
     let keys = SpendingKeys {
-        orchard: hex::encode(usk.to_bytes(Era::Orchard)),
+        orchard: hex::encode(usk.to_bytes(Era::Orchard).expose_secret()),
         sapling: encode_extended_spending_key(
-            network.hrp_sapling_extended_spending_key(),
+            zcash_keys::constants::hrp_sapling_extended_spending_key(network.network_type()),
             usk.sapling(),
         ),
     };
@@ -206,7 +207,7 @@ mod tests {
 
     #[test]
     fn pools_are_the_ones_the_viewing_key_has_a_key_for() {
-        use zcash_address::unified::{Container, Encoding, Fvk, Ufvk};
+        use zcash_address::unified::{Container, Encoding, Fvk, Revision, Ufvk, Uitem};
 
         let network = Network::MainNetwork;
         let full = account(&network, &[7u8; 32], 0).unwrap().ufvk;
@@ -216,13 +217,16 @@ mod tests {
         );
 
         // A Ledger's: Orchard and transparent only.
-        let (net, ufvk) = Ufvk::decode(&full).unwrap();
+        let (net, _, ufvk) = Ufvk::decode(&full).unwrap();
         let items = ufvk
             .items()
             .into_iter()
             .filter(|item| !matches!(item, Fvk::Sapling(_)))
+            .map(Uitem::Data)
             .collect();
-        let ledger = Ufvk::try_from_items(items).unwrap().encode(&net);
+        let ledger = Ufvk::try_from_items(Revision::R0, items)
+            .unwrap()
+            .encode(&net);
         assert_eq!(pools(&network, &ledger).unwrap(), ["ironwood", "orchard"]);
     }
 
@@ -292,19 +296,23 @@ mod tests {
 
     #[test]
     fn fresh_addresses_without_sapling() {
-        use zcash_address::unified::{Encoding, Fvk, Ufvk};
+        use zcash_address::unified::{Encoding, Fvk, Revision, Ufvk, Uitem};
         use zcash_keys::address::Address;
-        use zcash_protocol::consensus::Parameters;
 
         let network = Network::MainNetwork;
         let full = spending_key(&network, &[7u8; 32], 0)
             .unwrap()
             .to_unified_full_viewing_key();
         // What a Ledger exports: Orchard and transparent, no Sapling.
-        let ledger = Ufvk::try_from_items(vec![
-            Fvk::Orchard(full.orchard().unwrap().to_bytes()),
-            Fvk::P2pkh(full.transparent().unwrap().serialize().try_into().unwrap()),
-        ])
+        let ledger = Ufvk::try_from_items(
+            Revision::R0,
+            vec![
+                Uitem::Data(Fvk::Orchard(full.orchard().unwrap().to_bytes())),
+                Uitem::Data(Fvk::P2pkh(
+                    full.p2pkh().unwrap().serialize().try_into().unwrap(),
+                )),
+            ],
+        )
         .unwrap()
         .encode(&network.network_type());
 

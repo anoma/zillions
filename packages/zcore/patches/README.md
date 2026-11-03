@@ -1,6 +1,6 @@
 # Patched curve crates
 
-`../patch-crates.sh` unpacks `pasta_curves` 0.5.2 and `bls12_381` 0.8.0 from
+`../patch-crates.sh` unpacks `pasta_curves` 0.6.1 and `bls12_381` 0.9.0 from
 crates.io into `../patched/`, checks them against `SHA256SUMS` (the same
 checksums Cargo.lock had for them), and applies the patch named after each.
 `[patch.crates-io]` in `../Cargo.toml` points there.

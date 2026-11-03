@@ -22,8 +22,8 @@ pub(crate) fn derive(
     from: u32,
     count: u32,
 ) -> Result<Vec<String>, String> {
-    let ufvk = UnifiedFullViewingKey::decode(network, ufvk)?;
-    let Some(account) = ufvk.transparent() else {
+    let ufvk = UnifiedFullViewingKey::decode(network, ufvk).map_err(|e| e.to_string())?;
+    let Some(account) = ufvk.p2pkh() else {
         return Ok(Vec::new());
     };
     let ivk: Box<dyn Fn(NonHardenedChildIndex) -> Result<_, _>> = match scope {
@@ -287,7 +287,7 @@ mod tests {
         let network = Network::MainNetwork;
         let usk = UnifiedSpendingKey::from_seed(&network, &[7u8; 32], zip32::AccountId::ZERO)
             .expect("usk");
-        let ufvk = usk.to_unified_full_viewing_key().encode(&network);
+        let ufvk = usk.to_unified_full_viewing_key().encode(&network).unwrap();
 
         let external = derive(&network, &ufvk, "external", 0, 3).expect("external");
         let internal = derive(&network, &ufvk, "internal", 0, 3).expect("internal");

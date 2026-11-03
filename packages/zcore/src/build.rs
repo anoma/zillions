@@ -17,7 +17,6 @@ use nonempty::NonEmpty;
 use orchard::tree::MerkleHashOrchard;
 use pczt::roles::{creator::Creator, io_finalizer::IoFinalizer, updater::Updater};
 use pczt::Pczt;
-use rand_core::OsRng;
 use serde::Deserialize;
 use transparent::pczt::Bip32Derivation;
 use zcash_client_backend::fees::StandardFeeRule;
@@ -31,6 +30,7 @@ use zcash_protocol::consensus::{
     BlockHeight, Network, NetworkConstants, NetworkUpgrade, Parameters,
 };
 use zcash_protocol::memo::MemoBytes;
+use zcash_protocol::zip318::PoolMigrationConstants;
 use zcash_protocol::{PoolType, ShieldedPool};
 use zip32::Scope;
 
@@ -124,9 +124,9 @@ pub(crate) fn bucket<N>(
 ) -> Option<BlockHeight> {
     let anchor = step.anchor_height()?;
     let crossing = zcash_client_backend::fees::canonical_crossing_fee(network, target_height)
-        .is_ok_and(|fee| step.is_canonical_crossing(&crate::migration::Grid, fee));
-    let preparation = is_preparation(step)
-        && zcash_protocol::zip318::AnchorBucketInterval::ZIP_318.is_boundary(anchor);
+        .is_ok_and(|fee| step.is_canonical_crossing(&crate::migration::zip318(network), fee));
+    let grid = crate::migration::zip318(network).anchor_grid();
+    let preparation = is_preparation(step) && grid.is_boundary(anchor);
     (crossing || preparation).then_some(anchor)
 }
 
@@ -313,7 +313,8 @@ pub(crate) fn pczt<N>(
     // A canonical ZIP 318 crossing takes the rolling expiry every migration
     // in its period shares (upstream refuses to override it).
     if bucketed {
-        builder = builder.with_expiry_height(zcash_protocol::zip318::expiry_height(target_height));
+        builder = builder
+            .with_expiry_height(crate::migration::zip318(&network).canonical_expiry(target_height));
     }
 
     // Spends.
@@ -371,7 +372,7 @@ pub(crate) fn pczt<N>(
         }
     }
 
-    let account = ufvk.transparent();
+    let account = ufvk.p2pkh();
     let mut transparent_inputs = Vec::new();
     for input in step.transparent_inputs() {
         let (_, scope, index) = wallet
@@ -448,7 +449,7 @@ pub(crate) fn pczt<N>(
             }
             (Address::Sapling(to), _) => {
                 builder
-                    .add_sapling_output::<Infallible>(ovk.map(Into::into), to, amount, memo)
+                    .add_sapling_output::<Infallible>(ovk.map(Into::into), *to, amount, memo)
                     .map_err(|e| format!("{e:?}"))?;
                 sapling_outputs.push(encoded);
             }
@@ -527,7 +528,7 @@ pub(crate) fn pczt<N>(
     }
 
     let built = builder
-        .build_for_pczt(OsRng, &StandardFeeRule::Zip317)
+        .build_for_pczt(crate::rng(), &StandardFeeRule::Zip317)
         .map_err(|e| format!("{e:?}"))?;
     let user_addresses =
         |outputs: &[String], index: &dyn Fn(usize) -> Option<usize>| -> HashMap<usize, String> {
@@ -550,7 +551,7 @@ pub(crate) fn pczt<N>(
     let pczt = Creator::build_from_parts(built.pczt_parts)
         .ok_or("transaction version has no PCZT form")?;
     let pczt = IoFinalizer::new(pczt)
-        .finalize_io()
+        .finalize_io(&mut crate::rng())
         .map_err(|e| format!("{e:?}"))?;
 
     // Where each spend's key sits, so the keychain can find it, and where
@@ -698,7 +699,8 @@ pub(crate) fn claim(
         Some(Address::Unified(ua)) => *ua.orchard().ok_or("no Orchard receiver")?,
         _ => return Err("claims go to a unified address".into()),
     };
-    let ovk = UnifiedFullViewingKey::decode(network, claimer_ufvk)?
+    let ovk = UnifiedFullViewingKey::decode(network, claimer_ufvk)
+        .map_err(|e| e.to_string())?
         .orchard()
         .ok_or("the claimer's viewing key has no Orchard part")?
         .to_ovk(Scope::External);
@@ -726,12 +728,12 @@ pub(crate) fn claim(
         )
         .map_err(|e| format!("{e:?}"))?;
     let built = builder
-        .build_for_pczt(OsRng, &StandardFeeRule::Zip317)
+        .build_for_pczt(crate::rng(), &StandardFeeRule::Zip317)
         .map_err(|e| format!("{e:?}"))?;
     let pczt = Creator::build_from_parts(built.pczt_parts)
         .ok_or("transaction version has no PCZT form")?;
     let pczt = IoFinalizer::new(pczt)
-        .finalize_io()
+        .finalize_io(&mut crate::rng())
         .map_err(|e| format!("{e:?}"))?;
 
     // The builder signs its own dummy spends; the real one is left to the link.
@@ -751,7 +753,7 @@ pub(crate) fn claim(
     let mut signer = pczt::roles::signer::Signer::new(pczt).map_err(|e| format!("{e:?}"))?;
     for i in real {
         signer
-            .sign_ironwood(i, &ask)
+            .sign_ironwood(&mut crate::rng(), i, &ask)
             .map_err(|e| format!("{e:?}"))?;
     }
     Ok(signer.finish())
@@ -964,7 +966,7 @@ pub(crate) mod tests {
         let network = Network::MainNetwork;
         let usk = UnifiedSpendingKey::from_seed(&network, &SEED, zip32::AccountId::ZERO).unwrap();
         let key = if internal {
-            usk.sapling().derive_internal()
+            usk.sapling().derive_internal().unwrap()
         } else {
             usk.sapling().clone()
         };
@@ -1070,6 +1072,64 @@ pub(crate) mod tests {
             u64::from(tx.transparent_bundle().unwrap().vout[0].value()),
             50_000
         );
+    }
+
+    /// The branch and default expiry follow the target height across NU7.
+    #[test]
+    fn builds_for_the_upgrade_at_its_target_height_end_to_end() {
+        use zcash_primitives::transaction::{Transaction, TxVersion};
+        use zcash_protocol::consensus::{BranchId, NetworkUpgrade, Parameters};
+
+        let network = Network::MainNetwork;
+        let activation = u32::from(network.activation_height(NetworkUpgrade::Nu7).unwrap());
+        for (tip, branch, delta) in [
+            (activation - 2, BranchId::Nu6_3, 40),
+            (activation - 1, BranchId::Nu7, 120),
+        ] {
+            let (mut wallet, trees, _) = wallet_and_trees("ironwood", 200_000);
+            wallet.tip = BlockHeight::from(tip);
+            let ufvk = UnifiedFullViewingKey::decode(&network, &wallet_ufvk()).unwrap();
+            let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+                .unwrap()
+                .to_bytes();
+            let to = crate::transparent_tx::derive(&network, &wallet_ufvk(), "external", 5, 1)
+                .unwrap()
+                .remove(0);
+            let proposal = crate::send::tests::plan(&wallet, &to, 50_000);
+            let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
+            let signed = crate::roles::sign(&network, unsigned, &SEED, 0).unwrap();
+            let (_, raw) = crate::roles::prove(signed, None).unwrap();
+            let tx = Transaction::read(&raw[..], branch).unwrap();
+            assert_eq!(tx.consensus_branch_id(), branch);
+            assert_eq!(tx.version(), TxVersion::V6);
+            assert_eq!(u32::from(tx.expiry_height()), tip + 1 + delta);
+        }
+    }
+
+    /// From NU7 boundaries are 432 blocks apart and the rolling expiry's modulus
+    /// is 103,680, the same times apart as before.
+    #[test]
+    fn crosses_on_the_nu7_grid() {
+        use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
+
+        let network = Network::MainNetwork;
+        let activation = u32::from(network.activation_height(NetworkUpgrade::Nu7).unwrap());
+        let (mut wallet, trees, _) = bucketed_wallet(1_200_000);
+        wallet.tip = BlockHeight::from(activation + 5_000);
+        let ufvk = UnifiedFullViewingKey::decode(&network, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+
+        let proposal = crate::send::tests::plan_to_self(&wallet, 1_000_000);
+        let step = proposal.steps().first();
+        let target = BlockHeight::from(proposal.min_target_height());
+        let boundary = bucket(step, &network, target).expect("a crossing");
+        assert_eq!(u32::from(boundary) % 432, 0);
+        assert!(u32::from(boundary) > activation);
+
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, None).unwrap();
+        assert_eq!(unsigned.global().expiry_height() % 103_680, 0);
     }
 
     #[test]
@@ -1324,7 +1384,7 @@ pub(crate) mod tests {
         .unwrap();
         assert_eq!(
             tx.expiry_height(),
-            zcash_protocol::zip318::expiry_height(target)
+            crate::migration::zip318(&Network::MainNetwork).canonical_expiry(target)
         );
         assert_eq!(
             -i64::from(*tx.ironwood_bundle().unwrap().value_balance()),

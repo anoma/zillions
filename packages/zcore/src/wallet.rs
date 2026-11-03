@@ -1,7 +1,7 @@
 //! The wallet as upstream's planner sees it: our unspent notes and UTXOs behind
 //! `zcash_client_backend`'s `InputSource`, so upstream decides what to spend.
 //!
-//! Selection mirrors `zcash_client_sqlite` 0.22's (`wallet/common.rs`,
+//! Selection mirrors `zcash_client_sqlite` 0.23's (`wallet/common.rs`,
 //! `wallet/transparent.rs`): dust is never selected, notes go oldest first,
 //! UTXOs largest first, and eligibility is upstream's own confirmations rule.
 //! Re-check it against sqlite on every librustzcash bump.
@@ -14,7 +14,8 @@ use transparent::keys::TransparentKeyScope;
 use zcash_client_backend::data_api::wallet::input_selection::LockFilter;
 use zcash_client_backend::data_api::wallet::{ConfirmationsPolicy, TargetHeight};
 use zcash_client_backend::data_api::{
-    AccountMeta, InputSource, NoteFilter, ReceivedNotes, TargetValue,
+    AccountMeta, ChangeReceivers, InputSource, NoteFilter, ReceivedNotes, TargetValue,
+    TransparentChangeKind,
 };
 use zcash_client_backend::fees::StandardFeeRule;
 use zcash_client_backend::wallet::{Note, ReceivedNote, WalletTransparentOutput};
@@ -296,6 +297,16 @@ impl InputSource for Wallet {
     type Error = String;
     type AccountId = u32;
     type NoteRef = u32;
+
+    /// Every kind: planning has no viewing key to read them from, and
+    /// [`crate::build::pczt`] refuses change to a pool the account has no key for.
+    fn get_change_receivers(&self, _account: u32) -> Result<ChangeReceivers, String> {
+        Ok(ChangeReceivers::new(
+            true,
+            true,
+            Some(TransparentChangeKind::P2pkh),
+        ))
+    }
 
     fn get_spendable_note(
         &self,

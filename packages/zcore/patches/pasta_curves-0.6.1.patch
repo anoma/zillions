@@ -1,6 +1,6 @@
 --- a/src/arithmetic/fields.rs
 +++ b/src/arithmetic/fields.rs
-@@ -253,6 +253,14 @@
+@@ -374,8 +374,16 @@
  /// Compute a + (b * c) + carry, returning the result and the new carry over.
  #[inline(always)]
  pub(crate) const fn mac(a: u64, b: u64, c: u64, carry: u64) -> (u64, u64) {
@@ -17,3 +17,5 @@
 +    let (lo, c2) = lo.overflowing_add(carry);
 +    (lo, hi + c1 as u64 + c2 as u64)
  }
+ 
+ #[cfg(all(test, feature = "alloc"))]
