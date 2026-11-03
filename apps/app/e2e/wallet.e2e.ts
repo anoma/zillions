@@ -54,7 +54,7 @@ test("send checks the amount and the recipient", async ({ page }) => {
   await expect(page.getByRole("alert")).toHaveText("Insufficient balance");
 
   await page.getByRole("radio", { name: "Transparent" }).click();
-  await expect(page.getByText("Available: 0.01 ZEC")).toBeVisible();
+  await expect(page.getByText("Balance: 0.01 ZEC")).toBeVisible();
   await amount.fill("0.001");
   await submit.click();
   await expect(page.getByRole("alert")).toHaveText("Set a recipient");

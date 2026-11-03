@@ -27,7 +27,7 @@ import {
   confirmedAt,
   pendingActivity,
   prunePending,
-  requiredConfirmations,
+  REQUIRED_CONFIRMATIONS,
   tipCheckMs,
 } from "./pending";
 import {
@@ -272,14 +272,14 @@ export class Wallet {
     this.#resync = setTimeout(this.#resyncTick, tipCheckMs());
   };
 
-  /** Whether something is pending: unmined, or mined fewer blocks ago than a payment received needs. */
+  /** Whether something is pending: unmined, or mined with too few confirmations. */
   #waiting = () => {
     const tip = this.#tip;
     return (
       this.#state.pending.length > 0 ||
       (tip !== undefined &&
         [...this.#state.blocks.keys()].some(
-          (height) => tip - height + 1 < requiredConfirmations("Received"),
+          (height) => tip - height + 1 < REQUIRED_CONFIRMATIONS,
         ))
     );
   };

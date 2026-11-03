@@ -28,13 +28,10 @@ test("the block time follows the tip", async () => {
   expect(blockSeconds()).toBe(25);
 });
 
-test("from NU7 a send plans 80 seconds and a payment received 9 blocks of 25", async () => {
+test("from NU7 a send plans 30 seconds: a block of 25 and a 5 s tip check", async () => {
   const { NU7, plan, sawTip } = await load();
   sawTip(NU7);
-  expect(plan({ tx_type: "Sent", timestamp: 1 }, 1_000).until).toBe(81_000);
-  expect(
-    plan({ tx_type: "Received", timestamp: 1, confirmations: 1 }, 1_000).until,
-  ).toBe(226_000);
+  expect(plan({ tx_type: "Sent", timestamp: 1 }, 1_000).until).toBe(31_000);
 });
 
 test("a transaction built before NU7 can't be mined past it", async () => {

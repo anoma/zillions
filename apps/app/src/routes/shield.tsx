@@ -14,6 +14,7 @@ import {
 } from "../components/TransferForm";
 import { TransferSuccess } from "../components/TransferSuccess";
 import { useAccount } from "../hooks/useAccount";
+import { useConfirming } from "../hooks/useConfirming";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useSubmitStage } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
@@ -33,7 +34,11 @@ function ShieldRoute() {
   const account = useAccount();
   const wallet = useWallet();
   const balance = useGetBalance();
-  const available = balance.data?.transparent.available ?? 0n;
+  const {
+    balance: total = 0n,
+    available = 0n,
+    waiting = 0n,
+  } = balance.data?.transparent ?? {};
   const { seedFingerprint, hdIndex } = account.shielded;
 
   // The proposal is the PCZT that gets signed: its fee is the one paid.
@@ -51,6 +56,11 @@ function ShieldRoute() {
       retry: false,
     }),
   );
+
+  const tooLittle = total > 0n && total < SHIELDING_THRESHOLD;
+  const tooLittleMessage = `Shielding needs at least ${zatoshiToZec(SHIELDING_THRESHOLD)} ZEC`;
+  const confirming = waiting > 0n && !tooLittle;
+  const hold = useConfirming(confirming, tooLittle);
 
   const [validationMessage, setValidationMessage] = useState("");
   const { stages, track } = useSubmitStage();
@@ -87,18 +97,19 @@ function ShieldRoute() {
     return <TransferSuccess tx={{ ...shield.data, status: "Pending" }} />;
   }
 
-  const tooLittle = available > 0n && available < SHIELDING_THRESHOLD;
-  const tooLittleMessage = `Shielding needs at least ${zatoshiToZec(SHIELDING_THRESHOLD)} ZEC`;
-
   const onSubmit = () => {
-    const problem =
-      available === 0n
+    const blocked =
+      total === 0n
         ? "No transparent funds to shield"
         : tooLittle
           ? tooLittleMessage
-          : !proposal.data && !proposal.error
-            ? "Preparing the transaction, try again in a moment"
-            : "";
+          : "";
+    setValidationMessage(blocked);
+    if (blocked || hold.held()) return;
+    const problem =
+      !proposal.data && !proposal.error
+        ? "Preparing the transaction, try again in a moment"
+        : "";
     setValidationMessage(problem);
     if (!problem && proposal.data) shield.mutate();
   };
@@ -121,7 +132,7 @@ function ShieldRoute() {
       </FormCard>
 
       <FormCard heading="Amount">
-        <AmountDisplay zat={available} />
+        <AmountDisplay zat={total} />
         <div
           role={tooLittle ? "alert" : undefined}
           className={twMerge(
@@ -137,24 +148,27 @@ function ShieldRoute() {
         </div>
       </FormCard>
 
-      <Breakdown label="You'll have shielded" total={proposal.data?.value}>
+      <Breakdown
+        label="You'll have shielded"
+        // The proposal holds only what's confirmed.
+        total={confirming ? undefined : proposal.data?.value}
+      >
         <FeeRow
           label="Transparent funds"
-          fee={available > 0n ? available : undefined}
+          fee={total > 0n ? total : undefined}
           pending={false}
         />
         <FeeRow fee={proposal.data?.fee} pending={proposal.isLoading} />
       </Breakdown>
 
       <SubmitBlock
-        label={
-          proposal.data ? `Shield ${zatoshiToZec(available)} ZEC` : "Shield"
-        }
+        label={total > 0n ? `Shield ${zatoshiToZec(total)} ZEC` : "Shield"}
         pending={shield.isPending}
         pendingLabel="Shielding..."
         color="black"
         stages={stages}
         error={formError}
+        confirming={{ ...hold, waiting, verb: "shield" }}
       />
     </FormPage>
   );

@@ -26,8 +26,8 @@ export const startMigration = (plan: MigrationPlan): Migration => ({
 
 /** Blocks between ZIP 318 bucket boundaries; NU7 triples them, to keep them as far apart in time. */
 const bucket = (height: number) => (height < NU7 ? 144 : 432);
-/** Upstream's trusted confirmations: an anchor sits this far below the target. */
-const TRUSTED = 3;
+/** zcore's trusted confirmations: an anchor sits this far below the target. */
+const TRUSTED = 1;
 
 /** The first bucket boundary at or above `height`, as upstream's `AnchorGrid`. */
 const boundary = (height: number): number => {

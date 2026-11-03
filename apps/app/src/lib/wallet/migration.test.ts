@@ -30,16 +30,16 @@ const at = (height: number, ...values: number[]) =>
 
 test("a note can anchor from a bucket past the boundary above it", () => {
   // Mined at 1,000: boundary 1,008, anchorable once the newest boundary under
-  // three confirmations is 1,152, i.e. from tip 1,154.
-  expect(readyAt(1_000)).toBe(1_154);
-  expect(readyAt(1_008)).toBe(1_154);
-  expect(readyAt(1_009)).toBe(1_298);
+  // one confirmation is 1,152, i.e. from tip 1,152.
+  expect(readyAt(1_000)).toBe(1_152);
+  expect(readyAt(1_008)).toBe(1_152);
+  expect(readyAt(1_009)).toBe(1_296);
 });
 
 test("boundaries are 432 blocks apart from NU7, as zcore's `anchorable` counts", () => {
-  expect(readyAt(3_543_205)).toBe(3_543_698);
-  expect(readyAt(3_543_300)).toBe(3_544_130);
-  expect(readyAt(3_543_505)).toBe(3_544_130);
+  expect(readyAt(3_543_205)).toBe(3_543_696);
+  expect(readyAt(3_543_300)).toBe(3_544_128);
+  expect(readyAt(3_543_505)).toBe(3_544_128);
 });
 
 test("prepares notes for every transfer that has none", () => {

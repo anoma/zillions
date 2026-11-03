@@ -555,7 +555,7 @@ impl Wallet {
             ShieldedPool::Orchard,
             TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable),
             TargetHeight::from(self.tip + 1),
-            ConfirmationsPolicy::default(),
+            ConfirmationsPolicy::MIN,
             &[],
         )
         .iter()
@@ -566,7 +566,7 @@ impl Wallet {
     /// What `from` (`"shielded"` or `"transparent"`) can spend now, and once
     /// every note is confirmed: dust never counts.
     pub(crate) fn spendable(&self, from: &str) -> (u64, u64) {
-        // Past upstream's longest wait, 10 confirmations.
+        // Well past any confirmation wait.
         const SETTLED: u32 = 100;
         (
             self.spendable_at(from, TargetHeight::from(self.tip + 1)),
@@ -576,7 +576,7 @@ impl Wallet {
 
     /// By the same confirmation and dust rules selection applies.
     fn spendable_at(&self, from: &str, target: TargetHeight) -> u64 {
-        let policy = ConfirmationsPolicy::default();
+        let policy = ConfirmationsPolicy::MIN;
         if from == "transparent" {
             return self
                 .spendable_utxos(target, policy)
@@ -735,7 +735,8 @@ mod tests {
         let change = orchard_family_note("ironwood", Scope::Internal, 50_000, TIP - 5, 2);
         let wallet = wallet(vec![received, change], vec![]);
         assert_eq!(picked(&wallet, at_least(10_000)), [(2, 50_000)]);
-        assert_eq!(wallet.spendable("shielded"), (50_000, 100_000));
+        // We spend at one confirmation for both.
+        assert_eq!(wallet.spendable("shielded"), (100_000, 100_000));
     }
 
     #[test]
@@ -751,7 +752,7 @@ mod tests {
             vec![
                 note(5_000, TIP - 100, 1),
                 note(70_000, TIP - 100, 2),
-                note(90_000, TIP - 2, 3),
+                note(90_000, TIP + 1, 3),
             ],
             vec![
                 UtxoData::for_tests(&ours, 30_000, 0, TIP - 50),
