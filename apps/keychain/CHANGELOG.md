@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.11.0...zillions-keychain-v0.11.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* missing process polyfill and rollback read/write all permissions ([#203](https://github.com/heliaxdev/zillions-interface/issues/203)) ([cb2855f](https://github.com/heliaxdev/zillions-interface/commit/cb2855fccedaf5e37c4665bef1cbd83d5d9f33b6))
+
 ## [0.11.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.10.0...zillions-keychain-v0.11.0) (2026-10-30)
 
 
