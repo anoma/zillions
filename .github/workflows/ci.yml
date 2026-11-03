@@ -51,6 +51,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      # The app imports keychain sources, whose tsconfig extends the
+      # `.wxt/tsconfig.json` this writes.
+      - run: pnpm --filter zillions-keychain exec wxt prepare
       - id: playwright
         run: echo "version=$(pnpm --filter zillions-app exec playwright --version)" >> "$GITHUB_OUTPUT"
       - id: browsers
