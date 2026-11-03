@@ -215,7 +215,7 @@ export default defineConfig({
         include: "**/*.svg",
       }),
       nodePolyfills({
-        globals: { Buffer: true, global: true, process: false },
+        globals: { Buffer: true, global: true, process: true },
         protocolImports: true,
         exclude: ["vm"],
       }),
