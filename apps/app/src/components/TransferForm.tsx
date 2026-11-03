@@ -6,6 +6,11 @@ import {
   useState,
 } from "react";
 import { twMerge } from "tailwind-merge";
+import {
+  readyIn,
+  type useConfirming,
+  useReadyIn,
+} from "../hooks/useConfirming";
 import type { StageEntry, SubmitStage } from "../hooks/useSubmitStage";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { AmountInput } from "./AmountInput";
@@ -68,14 +73,14 @@ function ArrowRightIcon(props: ComponentProps<"svg">) {
   );
 }
 
-export function AvailableWithMax({
-  available,
+export function BalanceWithMax({
+  balance,
   waiting,
   pool,
   isMax,
   onToggleMax,
 }: {
-  available: bigint;
+  balance: bigint;
   waiting: bigint;
   pool: "shielded" | "transparent";
   isMax: boolean;
@@ -84,7 +89,7 @@ export function AvailableWithMax({
   return (
     <div className="flex items-center justify-center gap-2 text-xs font-medium">
       <span>
-        Available: <ZecValue zat={available} />
+        Balance: <ZecValue zat={balance} />
       </span>
       {/* Opens leftwards: this row sits at the card's right edge. */}
       <HeldFunds
@@ -343,6 +348,7 @@ export function SubmitBlock({
   color = "gold-button",
   stages,
   error,
+  confirming,
   children,
 }: {
   label: string;
@@ -351,8 +357,10 @@ export function SubmitBlock({
   color?: Extract<Color, "gold-button" | "black">;
   stages: StageEntry[];
   error?: string;
+  confirming?: Confirming;
   children?: ReactNode;
 }) {
+  const notice = !pending && confirming?.notice;
   return (
     <div>
       <ActionButton
@@ -361,12 +369,53 @@ export function SubmitBlock({
         backgroundColor={color}
         textColor={color === "black" ? "white" : undefined}
         disabled={pending}
+        aria-describedby={notice ? CONFIRMING_ID : undefined}
       >
         {pending ? pendingLabel : label}
       </ActionButton>
       {children}
+      <div id={CONFIRMING_ID} role="status">
+        {notice && confirming && (
+          <ConfirmingNotice {...confirming} notice={notice} />
+        )}
+      </div>
       {pending && <SubmitProgress stages={stages} />}
       {error && <FormError>{error}</FormError>}
+    </div>
+  );
+}
+
+const CONFIRMING_ID = "submit-confirming";
+
+type Confirming = ReturnType<typeof useConfirming> & {
+  waiting: bigint;
+  verb: string;
+};
+
+/** Why the submit waits on confirming funds, counting down, then that it can go. */
+function ConfirmingNotice({
+  notice,
+  waiting,
+  verb,
+}: Confirming & { notice: "waiting" | "ready" }) {
+  const ms = useReadyIn();
+  return (
+    <div className="mt-4 px-4 py-3 rounded-lg bg-gold/15 text-sm text-center motion-safe:animate-fade-in">
+      {notice === "ready" ? (
+        `Your funds have confirmed. You can ${verb} now.`
+      ) : (
+        <>
+          <ZecValue zat={waiting} /> of your balance is still confirming.{" "}
+          {/* Read out once a minute, not every second. */}
+          <span
+            aria-hidden="true"
+            className={ms === undefined ? undefined : "whitespace-nowrap"}
+          >
+            {readyIn(ms)}
+          </span>
+          <span className="sr-only">{readyIn(ms, true)}</span>
+        </>
+      )}
     </div>
   );
 }

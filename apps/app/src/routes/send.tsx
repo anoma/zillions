@@ -11,7 +11,7 @@ import { RecipientField } from "../components/send/RecipientField";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
 import {
   AmountField,
-  AvailableWithMax,
+  BalanceWithMax,
   Breakdown,
   FormCard,
   type Problem,
@@ -20,6 +20,7 @@ import {
 import { TransferSuccess } from "../components/TransferSuccess";
 import { useAddressKind, useFreshAddress } from "../hooks/useAddresses";
 import { useAmountField } from "../hooks/useAmountField";
+import { useConfirming } from "../hooks/useConfirming";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useCreateLink, useNewLink } from "../hooks/usePaymentLink";
 import {
@@ -86,12 +87,23 @@ function SendRoute() {
     extra,
   );
   const { maxAmount, ceiling } = planned;
-  const amount = isMax ? withoutExtra(maxAmount.data ?? 0n, extra) : typed;
+  const { available = 0n, waiting = 0n } = balance.data?.[from] ?? {};
+  // Max is the whole balance: what's spendable now, plus what's confirming.
+  const most =
+    maxAmount.data ?? (maxAmount.isError && waiting ? 0n : undefined);
+  const amount = isMax ? withoutExtra((most ?? 0n) + waiting, extra) : typed;
   const send = useSend();
   const createLink = useCreateLink(send);
 
-  const available = balance.data?.[from].available ?? 0n;
-  const overBalance = Boolean(balance.data) && isOverBalance(amount, available);
+  const overBalance =
+    Boolean(balance.data) && isOverBalance(amount, available + waiting);
+  const confirming =
+    waiting > 0n &&
+    amount > 0n &&
+    !overBalance &&
+    (isMax || amount > available || Boolean(ceiling));
+
+  const hold = useConfirming(confirming, overBalance);
 
   const onSubmit = () => {
     const found = submitProblem({
@@ -106,13 +118,14 @@ function SendRoute() {
       linkReady: Boolean(link),
     });
     // Memo and fee ceiling problems already show by their fields.
-    if (found || memoError || ceiling) {
+    if (found || memoError || (ceiling && !confirming)) {
       setProblem(found);
       if (found?.field === "amount") amountRef.current?.focus();
       if (found?.field === "to") toRef.current?.focus();
       return;
     }
     setProblem(undefined);
+    if (hold.held()) return;
     if (isPaymentLink) {
       createLink.mutate({ link: link!, from, amount, description: memoText });
       return;
@@ -139,12 +152,15 @@ function SendRoute() {
     return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
   }
 
-  const clear = () => setProblem(undefined);
-  const amountError = amountErrorOf(problem, overBalance, planned);
+  const clear = () => {
+    setProblem(undefined);
+    hold.reset();
+  };
+  const amountError = amountErrorOf(problem, overBalance, confirming, planned);
   const toError = problem?.field === "to" ? problem.message : undefined;
   const formError = formErrorOf(
     problem,
-    overBalance,
+    overBalance || confirming,
     planned,
     createLink.error ?? send.error,
   );
@@ -174,9 +190,9 @@ function SendRoute() {
         htmlFor="send-amount"
         aside={
           <div id="send-available">
-            <AvailableWithMax
-              available={available}
-              waiting={balance.data?.[from].waiting ?? 0n}
+            <BalanceWithMax
+              balance={balance.data?.[from].balance ?? 0n}
+              waiting={waiting}
               pool={from}
               isMax={isMax}
               onToggleMax={() => {
@@ -190,9 +206,7 @@ function SendRoute() {
         <AmountField
           id="send-amount"
           ref={amountRef}
-          value={amountField.shown(
-            maxAmount.data === undefined ? undefined : amount,
-          )}
+          value={amountField.shown(most === undefined ? undefined : amount)}
           describedBy="send-available"
           error={amountError}
           onChange={(value) => {
@@ -265,6 +279,11 @@ function SendRoute() {
         color={transparent ? "black" : "gold-button"}
         stages={send.stages}
         error={formError}
+        confirming={{
+          ...hold,
+          waiting,
+          verb: isPaymentLink ? "create the link" : "send",
+        }}
       >
         <PrivacyNotice
           transparentFrom={transparentFrom}
@@ -321,24 +340,25 @@ function submitProblem({
 function amountErrorOf(
   problem: SendProblem | undefined,
   overBalance: boolean,
+  confirming: boolean,
   planned: Planned,
 ) {
   if (problem?.field === "amount") return problem.message;
   if (overBalance) return "Insufficient balance";
-  if (planned.ceiling) return planProblem(planned);
+  if (planned.ceiling && !confirming) return planProblem(planned);
   return undefined;
 }
 
-/** A plan error the amount field doesn't already show. */
+/** A plan error the amount field doesn't already show, or that only waits on confirming funds. */
 function formErrorOf(
   problem: SendProblem | undefined,
-  overBalance: boolean,
+  quiet: boolean,
   planned: Planned,
   sendError: Error | null,
 ) {
   if (sendError) return sendError.message;
   if (problem?.field === "form") return problem.message;
-  if (planned.ceiling || overBalance) return undefined;
+  if (planned.ceiling || quiet) return undefined;
   return planProblem(planned);
 }
 
