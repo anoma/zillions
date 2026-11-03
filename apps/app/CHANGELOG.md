@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.18.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.17.0...zillions-app-v1.18.0) (2026-11-03)
+
+
+### Features
+
+* NU7 support ([#206](https://github.com/heliaxdev/zillions-interface/issues/206)) ([8ced481](https://github.com/heliaxdev/zillions-interface/commit/8ced4812bd71173acb5198fe87c43822e3d14efd))
+* one confirmation, full balance ([#209](https://github.com/heliaxdev/zillions-interface/issues/209)) ([a8531af](https://github.com/heliaxdev/zillions-interface/commit/a8531af76dbb63ee89b0dd1fdce8146508eec162))
+
 ## [1.17.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.16.1...zillions-app-v1.17.0) (2026-10-30)
 
 
