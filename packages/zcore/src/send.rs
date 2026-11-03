@@ -163,7 +163,7 @@ fn propose(
     let params = wallet.network;
     let request = request(send, amount)?;
     let spend_policy = spend_policy(&send.from)?;
-    let policy = ConfirmationsPolicy::default();
+    let policy = ConfirmationsPolicy::MIN;
     let target_height = TargetHeight::from(wallet.tip + 1);
     let anchor_height = policy.anchor_height(target_height);
     let zip318 = crate::migration::zip318(&params);
@@ -301,7 +301,7 @@ fn propose_shield(
     wallet: &Wallet,
 ) -> Result<Proposal<StandardFeeRule, std::convert::Infallible>, String> {
     let params = wallet.network;
-    let policy = ConfirmationsPolicy::default();
+    let policy = ConfirmationsPolicy::MIN;
     let target_height = TargetHeight::from(wallet.tip + 1);
     let mut from: Vec<_> = wallet
         .utxos
@@ -743,12 +743,12 @@ pub(crate) mod tests {
 
     #[test]
     fn refuses_what_it_cannot_fund_and_unconfirmed_notes() {
-        let wallet_ = wallet(vec![ironwood_note(200_000, TIP, 1)]);
+        let wallet_ = wallet(vec![ironwood_note(200_000, TIP + 1, 1)]);
         let to =
             crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1)
                 .unwrap()
                 .remove(0);
-        // Mined at the tip: not confirmed enough to spend.
+        // Mined past the tip read: no confirmation yet.
         assert!(propose(
             &wallet_,
             &send(&to, 50_000),

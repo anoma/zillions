@@ -121,7 +121,7 @@ fn preparations(notes: usize, parts: usize) -> usize {
 fn anchorable(network: &Network, mined: u32) -> u32 {
     let grid = zip318(network).anchor_grid();
     let boundary = grid.boundary_at_or_above(BlockHeight::from(mined));
-    u32::from(grid.boundary_after(boundary)) + u32::from(ConfirmationsPolicy::default().trusted())
+    u32::from(grid.boundary_after(boundary)) + u32::from(ConfirmationsPolicy::MIN.trusted())
 }
 
 /// A preparation's fee: ZIP 317 for its 16 actions.
@@ -244,7 +244,7 @@ pub(crate) fn preparation(
     let activation = network
         .activation_height(NetworkUpgrade::Nu6_3)
         .ok_or("NU6.3 isn't scheduled on this network")?;
-    let policy = ConfirmationsPolicy::default()
+    let policy = ConfirmationsPolicy::MIN
         .bucketed(zip318(&network).anchor_grid(), target, activation)
         .ok_or("no bucket boundary to anchor to yet")?;
     let fee = preparation_fee(&network, height)?;
@@ -424,10 +424,10 @@ mod tests {
         let network = Network::MainNetwork;
         let activation = u32::from(network.activation_height(NetworkUpgrade::Nu7).unwrap());
         // The last boundary below activation, then the next one on NU7's grid.
-        assert_eq!(anchorable(&network, activation - 200), 3_543_699);
+        assert_eq!(anchorable(&network, activation - 200), 3_543_697);
         // Mined past that boundary: 3,543,696 is next, then one 432 on.
-        assert_eq!(anchorable(&network, 3_543_300), 3_544_131);
-        assert_eq!(anchorable(&network, activation + 100), 3_544_131);
+        assert_eq!(anchorable(&network, 3_543_300), 3_544_129);
+        assert_eq!(anchorable(&network, activation + 100), 3_544_129);
     }
 
     #[test]

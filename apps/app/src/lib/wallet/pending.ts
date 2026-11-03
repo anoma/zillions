@@ -56,13 +56,8 @@ export const pendingActivity = (
         }),
     }));
 
-/**
- * Confirmations a mined transaction needs to show as completed:
- * zcash_client_backend's `ConfirmationsPolicy` defaults, trusted for our
- * own transactions and untrusted for a payment from someone else.
- */
-export const requiredConfirmations = (tx_type: Activity["tx_type"]) =>
-  tx_type === "Received" ? 10 : 3;
+/** Confirmations a mined transaction needs to show as completed, as zcore's `ConfirmationsPolicy::MIN` spends it. */
+export const REQUIRED_CONFIRMATIONS = 1;
 
 /** Mined `history` with its confirmations at `tip`, Pending until it has enough; an unknown tip leaves it as is. */
 export const confirmedAt = (history: Activity[], tip: number | undefined) =>
@@ -71,7 +66,7 @@ export const confirmedAt = (history: Activity[], tip: number | undefined) =>
     : history.map((tx): Activity => {
         // The indexer can be past the tip this session last read.
         const confirmations = Math.max(1, tip - tx.block_height + 1);
-        return confirmations < requiredConfirmations(tx.tx_type)
+        return confirmations < REQUIRED_CONFIRMATIONS
           ? { ...tx, confirmations, status: "Pending" }
           : { ...tx, confirmations };
       });
@@ -99,8 +94,8 @@ type Tracked = Pick<Activity, "tx_type"> &
   Partial<Pick<Activity, "confirmations" | "timestamp">>;
 
 /** What's left of `tx`'s wait: the processing until it's mined, then a block per missing confirmation. */
-const leftMs = ({ tx_type, confirmations = 0 }: Tracked) =>
-  (requiredConfirmations(tx_type) - Math.max(1, confirmations)) *
+const leftMs = ({ confirmations = 0 }: Tracked) =>
+  (REQUIRED_CONFIRMATIONS - Math.max(1, confirmations)) *
     blockSeconds() *
     1000 +
   (confirmations ? 0 : processingMs());
