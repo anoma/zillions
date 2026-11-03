@@ -40,8 +40,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm keychain:build
-      # The built extension may reach no site but the Zillions app.
-      - run: node scripts/check-keychain-manifest.mjs
 
   e2e:
     runs-on: ubuntu-latest

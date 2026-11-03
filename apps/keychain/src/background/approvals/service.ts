@@ -379,6 +379,8 @@ export class ApprovalsService {
     this.pendingTxs.delete(msgId);
 
     try {
+      // The site may have been disconnected while the popup was open.
+      await this.assertConnected(resolvers.meta.origin);
       // The active account may have changed while the popup was open, and a
       // site may only sign with the one active now.
       const record = await this.activeSigner(signer || pending.signer);
