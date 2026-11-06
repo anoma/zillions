@@ -130,18 +130,31 @@ same account anywhere).
   credential (`id`, `rpId`, plus its COSE public key when created here —
   an imported credential's record holds the id and RP alone) in the
   record's `credential` field.
-- **The seed re-derives at every ceremony.** The passkey evaluates its
-  PRF for the fixed salt `zillions/zcash-seed/v1`, and the PRF output
-  becomes the entropy of a BIP-39 24-word phrase: the wasm stays the
-  seed authority — `MnemonicService.toSeed` is the only seed path, which
-  the JS encoder's phrase re-enters via a `validate` cross-check. The
-  same salt and the same path reproduce the seed on every machine; the
-  passkey is the backup, and the phrase is never displayed — not at
-  connect, not later.
+- **The seed re-derives at every ceremony, and nothing lingers.** The
+  passkey evaluates its PRF for the fixed salt `zillions/zcash-seed/v1`,
+  and the PRF output is the entropy of a BIP-39 24-word phrase that
+  never exists as text: `passkey-seed.ts` packs the entropy straight to
+  the phrase's ASCII bytes (the encoding is deterministic bit-packing,
+  not crypto) and WebCrypto's PBKDF2-HMAC-SHA-512 with the fixed
+  `"mnemonic"` salt does the rest. The same salt and the same path
+  reproduce the seed on every machine; the passkey is the backup. Every
+  derivation runs inside `withPrfSeed`, which zero-fills the PRF output
+  and the seed on every exit, throws included — the page-side
+  ceremonies zero the PRF buffer once encoded, and the wasm's seed
+  copies die zero-filled with each call (`Zeroizing` at zcore's
+  boundary). Two residuals, both inside the extension: the PRF output
+  rides to the engine as base64 inside the `deviceData` string
+  (unzeroizable, GC-bound), and WebCrypto's `importKey` holds a
+  non-extractable copy of the phrase bytes until GC. The wasm
+  `MnemonicService` path stays the seed authority for the phrase
+  wallets; the passkey runtime no longer touches it. The seed pin tests
+  (`passkey-seed.test.ts`) tie the new path to the official BIP-39
+  vectors, the `@scure` string path, and a fixed seed.
 - **The consensus constants live alone (`passkey-constants.ts`).** The
   RP ID `keychain.zillions.money` and the PRF salt are a zero-import
-  module the build (`wxt.config.ts`), the ceremonies (`passkey-core.ts`)
-  and the CI manifest guard all import. Nothing is ever served from the
+  module the build (`wxt.config.ts`) and the ceremonies
+  (`passkey-core.ts`) both import, so the manifest cannot drift from
+  what the ceremonies claim. Nothing is ever served from the
   RP host — no DNS record, no catch-all — so no web page can claim it:
   an RP ID must be a registrable-domain suffix of the caller's origin,
   and a child of `zillions.money` is never a suffix of it. The salt is

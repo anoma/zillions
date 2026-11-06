@@ -586,7 +586,9 @@ Challenges to check, one by one:
   install, so the passkey is the backup.
 - **The account keeps no secret in the Keychain.** The seed itself is
   never stored anywhere — not on disk, not in the Keychain's encrypted
-  vault — so what's in the vault can't spend by itself. The Keychain
+  vault — and nothing secret is held in memory between uses either: the
+  seed and the PRF output it comes from are wiped from memory the moment
+  they're used. What's in the vault can't spend by itself. The Keychain
   keeps only what lets it see the account (its viewing key and
   addresses) and the passkey credential's public part.
 - **Each passkey is its own account** — its own seed, its own addresses.
@@ -602,11 +604,12 @@ Challenges to check, one by one:
   where the transaction is reviewed, and the signing is bound to
   exactly the transaction that screen described.
 - **The account has no recovery phrase to write down.** A 24-word
-  phrase is derived from the passkey and would restore identically in
-  any Zcash wallet, but the Keychain never shows it — the passkey is
-  the backup, and the phrase re-derives at every spend. Afterwards the
-  recovery phrase and the spending keys can't be revealed, like a
-  Ledger's.
+  phrase would restore identically in any Zcash wallet, but the
+  Keychain never builds it as text, let alone shows it: the seed is
+  derived from the passkey's PRF output directly, re-derived at every
+  spend, and wiped from memory when the signature exists. The passkey
+  is the backup, and the recovery phrase and the spending keys can't be
+  revealed, like a Ledger's.
 - Needs Chromium 122+ or Firefox 150+: earlier browsers can't hand a
   `keychain.zillions.money` passkey to an extension.
 - How the device code is laid out is in
