@@ -162,9 +162,6 @@ importers:
       '@ledgerhq/device-transport-kit-web-hid':
         specifier: 1.2.4
         version: 1.2.4(@ledgerhq/device-management-kit@1.11.0(rxjs@7.8.2))(rxjs@7.8.2)
-      '@scure/bip39':
-        specifier: 2.4.0
-        version: 2.4.0
       '@simplewebauthn/browser':
         specifier: 14.0.0
         version: 14.0.0
@@ -220,6 +217,9 @@ importers:
       '@eslint/compat':
         specifier: 2.1.1
         version: 2.1.1(eslint@10.13.0(jiti@2.7.0))
+      '@scure/bip39':
+        specifier: 2.4.0
+        version: 2.4.0
       '@tailwindcss/vite':
         specifier: 4.3.3
         version: 4.3.3(vite@8.3.5(@types/node@26.6.6)(esbuild@0.27.7)(jiti@2.7.0)(yaml@2.9.1))

@@ -12,9 +12,10 @@
  * discovery get() listing the synced passkeys the browser already holds
  * for the RP, recovering the account one of them was created for. Either
  * way the output both proves the passkey can derive keys and is the
- * entropy itself: the wasm seed → the account's public keys. The 24-word
- * encoding of the seed is derived but never rendered — the passkey itself
- * is the backup. Signing asks the user to verify the spend's digest; its
+ * entropy itself: the wasm seed → the account's public keys. The seed's
+ * whole life is its derivation scope, zero-filled on exit, and no phrase
+ * is ever built as text — the passkey itself is the backup. Signing asks
+ * the user to verify the spend's digest; its
  * assertion and the PRF output leave as the opaque `deviceData` string —
  * only the engine (`passkey-prf.ts`) interprets it.
  */
@@ -35,7 +36,7 @@ import {
   b64,
   browserPrfSupport,
   isPrfMissing,
-  seedFromEntropy,
+  withPrfSeed,
 } from "./passkey-core";
 import {
   createCredential,
@@ -88,24 +89,25 @@ export const PasskeyConnect = ({
   }, []);
 
   // PRF output → seed → the account's public keys, stored under the
-  // credential that produced it. The phrase that encodes the seed stays
-  // local — it is never shown and never crosses the IPC boundary; the
-  // passkey itself is the backup.
+  // credential that produced it. The seed's whole life is this call —
+  // `withPrfSeed` zero-fills it and the PRF output on every exit — and
+  // no phrase is ever built as text: the passkey itself is the backup.
   const connectKeys = async (
     credential: DeviceCredential,
     prfOutput: Uint8Array<ArrayBuffer>
   ) => {
-    const { seed } = await seedFromEntropy(prfOutput);
-    const account = await deriveAccount(seed, 0);
-    await onKeys({
-      device: "passkey-prf",
-      alias: "Passkey",
-      viewingKey: account.ufvk,
-      seedFingerprint: computeSeedFingerprint(seed),
-      hdIndex: 0,
-      transparentAddress: account.transparent,
-      shieldedAddress: account.unified,
-      credential,
+    await withPrfSeed(prfOutput, async (seed) => {
+      const account = await deriveAccount(seed, 0);
+      await onKeys({
+        device: "passkey-prf",
+        alias: "Passkey",
+        viewingKey: account.ufvk,
+        seedFingerprint: computeSeedFingerprint(seed),
+        hdIndex: 0,
+        transparentAddress: account.transparent,
+        shieldedAddress: account.unified,
+        credential,
+      });
     });
   };
 

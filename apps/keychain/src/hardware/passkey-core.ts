@@ -7,15 +7,13 @@
  * everything here is the fixed frame around them: the RP, the salt, the
  * challenge binding, the origin checks, and the seed math.
  */
-import { entropyToMnemonic } from "@scure/bip39";
-import { wordlist } from "@scure/bip39/wordlists/english.js";
 import {
   type AuthenticationResponseJSON,
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
 import browser from "webextension-polyfill";
 
-import { mnemonicToSeed, validateMnemonic } from "../background/crypto/mnemonic";
+import { deriveSeed } from "./passkey-seed";
 
 // The consensus constants live in a zero-import leaf module so the build
 // derives the manifest's host permission from the very same values.
@@ -76,22 +74,41 @@ export const extensionOrigins = async (): Promise<string[]> => {
 };
 
 /**
- * The account seed 32 entropy bytes stand for: through BIP-39 — so the
- * backup phrase restores identically in any wallet — then the wasm seed
- * (`toSeed` stays the single seed authority; it re-validates the JS
- * encoder's phrase as a cross-check). The entropy is the credential's
- * PRF output.
+ * Best-effort zero-fill: writes through any view into a buffer the
+ * browser owns (the ceremony's PRF output, which the response object
+ * still references) and ignores a buffer that refuses (frozen). The last
+ * write every secret byte we hold gets.
  */
-export const seedFromEntropy = async (
-  entropy: Uint8Array
-): Promise<{ phrase: string; seed: Uint8Array }> => {
-  const phrase = entropyToMnemonic(entropy, wordlist);
-  if (!(await validateMnemonic(phrase))) {
-    // Unreachable for well-formed entropy; refuse a phrase the wasm
-    // wouldn't stand behind regardless.
-    throw new Error("The derived backup phrase failed validation");
+export const zeroBytes = (bytes: Uint8Array): void => {
+  try {
+    bytes.fill(0);
+  } catch {
+    // The browser owns this buffer now; zeroing is best effort.
   }
-  return { phrase, seed: await mnemonicToSeed(phrase) };
+};
+
+/**
+ * Run `fn` with the seed the PRF output stands for, then leave nothing:
+ * the seed and the entropy are zero-filled on every exit, throws
+ * included. The entropy is usually a view into the browser's ceremony
+ * buffer, so zeroing it scrubs the copy the response object still holds;
+ * `fn` must not retain the seed past the call. Everything the account's
+ * keys derive from lives and dies inside this call.
+ */
+export const withPrfSeed = async <T>(
+  entropy: Uint8Array<ArrayBuffer>,
+  fn: (seed: Uint8Array) => Promise<T>
+): Promise<T> => {
+  try {
+    const seed = await deriveSeed(entropy);
+    try {
+      return await fn(seed);
+    } finally {
+      zeroBytes(seed);
+    }
+  } finally {
+    zeroBytes(entropy);
+  }
 };
 
 /** Whether this browser can run the ceremonies at all: WebAuthn in the

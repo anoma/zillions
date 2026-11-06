@@ -13,7 +13,7 @@
  * one opaque `deviceData` string (the JSON assertion plus PRF output) that
  * only this engine interprets: verify the assertion when the record holds
  * the credential's public key (accounts created here), re-derive the seed,
- * sign, discard. An imported credential carries no public key — WebAuthn
+ * sign, zero-fill. An imported credential carries no public key — WebAuthn
  * never re-reveals one — so its spends are gated by the extension's own
  * review screen and the OS verification dialog instead of a verified
  * assertion.
@@ -28,8 +28,8 @@ import {
   passkeyErrorMessage,
   passkeySupported,
   pcztChallenge,
-  seedFromEntropy,
   verifyAssertion,
+  withPrfSeed,
 } from "./passkey-core";
 
 /** Fold a Sign view's `deviceData` (assertion + PRF output) into the
@@ -49,6 +49,7 @@ const assemble = async (
   if (typeof context?.hdIndex !== "number") {
     throw new Error("The passkey's account index is missing");
   }
+  const hdIndex = context.hdIndex;
   const { assertion, prf } = JSON.parse(deviceData) as {
     assertion: AuthenticationResponseJSON;
     prf: string;
@@ -73,8 +74,9 @@ const assemble = async (
   // design doc records the asymmetry); a foreign PRF output still signs
   // nothing, as signatures under the wrong seed authorize none of this
   // account's spends.
-  const { seed } = await seedFromEntropy(b64url.decode(prf));
-  return signPczt(unsignedPczt, seed, context.hdIndex);
+  return withPrfSeed(b64url.decode(prf), async (seed) =>
+    signPczt(unsignedPczt, seed, hdIndex)
+  );
 };
 
 export const passkeyPrfEngine: DeviceEngine = {
@@ -88,8 +90,9 @@ export const passkeyPrfEngine: DeviceEngine = {
    * stored credential's, the challenge is SHA-256 of `unsignedPczt`, and
    * UV is required — no other transaction can be approved by this
    * assertion, and no website can mint one. The PRF output then re-derives
-   * the seed (same salt at every ceremony), which signs and is discarded
-   * immediately.
+   * the seed (same salt at every ceremony) inside `withPrfSeed`: the seed
+   * and the decoded output are zero-filled the moment the signature
+   * exists, on every exit.
    */
   assembleSignedPczt: (unsignedPczt, deviceData, context) =>
     assemble(unsignedPczt, deviceData, context),
