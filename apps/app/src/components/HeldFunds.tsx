@@ -4,7 +4,7 @@ import { readyIn, useReadyIn } from "../hooks/useConfirming";
 import { zatoshiToZec } from "../lib/utils";
 import { Tooltip } from "./Tooltip";
 
-/** An info icon on the `zat` of `pool` still confirming; nothing when there is none. */
+/** An info icon on the `zat` of `pool` still processing; nothing when there is none. */
 export function HeldFunds({
   zat,
   pool,
@@ -21,7 +21,7 @@ export function HeldFunds({
     <Tooltip
       position="bottom"
       className={twMerge("z-10 w-56 p-3 font-normal text-left", className)}
-      content={`${zatoshiToZec(zat)} ZEC of your ${pool} balance is still confirming. ${readyIn(ms)}`}
+      content={`${zatoshiToZec(zat)} ZEC of your ${pool} balance is still processing. ${readyIn(ms)}`}
     >
       <GoInfo
         aria-hidden="true"

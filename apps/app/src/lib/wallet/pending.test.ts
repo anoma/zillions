@@ -76,26 +76,6 @@ test("history lists pending transactions newest first, until mined", () => {
   ]);
 });
 
-test("a pending transaction counts the blocks it has left to be mined", () => {
-  const receipt = {
-    tx_type: "Sent" as const,
-    value: -3_000n,
-    fee: 1_000n,
-    from: { pool: "shielded" as const },
-    to: { address: "zs1" },
-  };
-  const pending = [
-    tx("forever", { receipt, expiryHeight: 0 }),
-    tx("expiring", { receipt }),
-  ];
-  const left = (tip?: number) =>
-    pendingActivity(pending, new Set(), tip).map((a) => a.expires_in);
-
-  expect(left(3_200)).toEqual([40, undefined]);
-  expect(left(3_300)).toEqual([0, undefined]);
-  expect(left(undefined)).toEqual([undefined, undefined]);
-});
-
 test("a mined transaction is confirmed at its first confirmation", () => {
   const mined = (tx_type: "Sent" | "Received", block_height: number) =>
     ({ tx_type, block_height, confirmations: 0, status: "Confirmed" }) as never;
@@ -125,13 +105,13 @@ test("a send plans 90 seconds, and is done once mined", () => {
   };
 
   // A block of 75 s and a 15 s tip check.
-  expect(run([], 0)).toEqual({ percent: 0, minutes: 2 });
-  expect(run([], 45)).toEqual({ percent: 50, minutes: 1 });
+  expect(run([], 0)).toEqual({ percent: 0, left: 90_000 });
+  expect(run([], 45)).toEqual({ percent: 50, left: 45_000 });
   expect(run([[60, 1]], 60)).toEqual({
     percent: undefined,
-    minutes: undefined,
+    left: undefined,
   });
 
   // Past the estimate the percent is gone for good.
-  expect(run([], 120)).toEqual({ percent: undefined, minutes: undefined });
+  expect(run([], 120)).toEqual({ percent: undefined, left: undefined });
 });

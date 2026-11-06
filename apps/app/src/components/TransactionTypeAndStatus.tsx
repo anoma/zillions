@@ -21,7 +21,7 @@ export function PendingIcon({
   tx: PendingTx;
   children: ReactNode;
 }) {
-  const { percent, detail } = usePendingProgress(tx);
+  const { detail } = usePendingProgress(tx);
   return (
     // A tap opens the tooltip instead of the row's link.
     <span
@@ -33,14 +33,7 @@ export function PendingIcon({
     >
       <Tooltip
         className="z-10 w-60 p-3 left-0 translate-x-0 text-left font-normal"
-        content={
-          <span className="flex flex-col gap-1">
-            <span className="font-medium">
-              Processing{percent !== undefined && ` · ${percent}%`}
-            </span>
-            {detail && <span className="text-gray-600">{detail}</span>}
-          </span>
-        }
+        content={<span className="font-medium">Processing · {detail}</span>}
       >
         <span className="relative inline-flex">
           {children}
@@ -91,9 +84,7 @@ export function TransactionTypeAndStatus({
         icon
       )}
       {tx.tx_type}
-      {tx.status &&
-        tx.status !== "Confirmed" &&
-        ` (${tx.status === "Pending" ? "Processing" : tx.status})`}
+      {tx.status === "Expired" && " (Expired)"}
     </div>
   );
 }

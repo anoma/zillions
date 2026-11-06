@@ -167,12 +167,8 @@ export function useSend() {
         change[pool === "transparent" ? "transparent" : "shielded"] +=
           send.amount;
       }
-      const receipt = {
-        ...shown,
-        fee: BigInt(plan.fee),
-        timestamp: Math.floor(Date.now() / 1000),
-      };
-      const { txid, expiryHeight } = await wallet.submit(
+      const receipt = { ...shown, fee: BigInt(plan.fee) };
+      const { txid, expiryHeight, timestamp } = await wallet.submit(
         base64ToBytes(signed),
         change,
         receipt,
@@ -182,7 +178,7 @@ export function useSend() {
         await wallet.internalAddressUsed(changeTo, expiryHeight);
         await queryClient.invalidateQueries(internalAddress(wallet));
       }
-      return { ...receipt, txid, expiryHeight };
+      return { ...receipt, timestamp, txid, expiryHeight };
     },
     onSettled: (_, error) => track(undefined, error),
   });
