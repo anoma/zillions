@@ -573,7 +573,46 @@ Challenges to check, one by one:
 - How the device code is laid out is in
   [hardware-wallets.md](design/hardware-wallets.md).
 
-### 3.7 Settings — Built
+### 3.8 Passkey — Built
+
+- **Connect a passkey from the Keychain's first screen**, like a Ledger.
+  The connect screen offers both directions: create a new passkey, or
+  use an existing one. Creating makes the browser's password manager
+  mint a credential whose on-device key derivation (the WebAuthn PRF)
+  supplies the account's keys, evaluated for a fixed salt every time it
+  verifies the user. Importing lists the passkeys the browser already
+  holds for the Keychain and recovers the account one of them was
+  created for — the same passkey re-derives the same account on any
+  install, so the passkey is the backup.
+- **The account keeps no secret in the Keychain.** The seed itself is
+  never stored anywhere — not on disk, not in the Keychain's encrypted
+  vault — so what's in the vault can't spend by itself. The Keychain
+  keeps only what lets it see the account (its viewing key and
+  addresses) and the passkey credential's public part.
+- **Each passkey is its own account** — its own seed, its own addresses.
+  Creating a new passkey makes a new account, never a copy of an
+  existing one; connecting several passkeys is like connecting several
+  Ledgers. Importing a passkey whose account is already in the Keychain
+  is refused.
+- **The browser's passkey dialog is the device's screen.** The Keychain
+  asks for the passkey it registered as `keychain.zillions.money`, only
+  from its own pages, so only this extension can use it — no website
+  can. What the user verifies there is themselves (a fingerprint, a
+  PIN), not the transaction: the Keychain's send-approval screen is
+  where the transaction is reviewed, and the signing is bound to
+  exactly the transaction that screen described.
+- **The account has no recovery phrase to write down.** A 24-word
+  phrase is derived from the passkey and would restore identically in
+  any Zcash wallet, but the Keychain never shows it — the passkey is
+  the backup, and the phrase re-derives at every spend. Afterwards the
+  recovery phrase and the spending keys can't be revealed, like a
+  Ledger's.
+- Needs Chromium 122+ or Firefox 150+: earlier browsers can't hand a
+  `keychain.zillions.money` passkey to an extension.
+- How the device code is laid out is in
+  [hardware-wallets.md](design/hardware-wallets.md).
+
+### 3.9 Settings — Built
 
 - **Auto-lock**: the Keychain locks after the computer has been idle for 5,
   15 (default), 30 or 60 minutes, or never, and when the screen locks.
