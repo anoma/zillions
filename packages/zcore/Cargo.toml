@@ -4,9 +4,9 @@ version = "0.1.0"
 authors = ["Heliax"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/anoma/zillions-interface"
-description = "Zillions wallet core: keys, shielded trial decryption and transparent derivation, on NU6.3"
+description = "Zillions wallet core: keys, shielded trial decryption and transparent derivation, on NU7"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.89"
 
 # Standalone: none of the old SDK workspace's pins apply here.
 [workspace]
@@ -26,47 +26,49 @@ wasm-bindgen = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 hex = "0.4"
+# Reads the spending key bytes zcash_keys hands over wrapped.
+secrecy = "0.8"
 # Fingerprints the notes of a chunk already tried, so a re-read skips them.
 blake2b_simd = "1"
 # Decodes the new server's binary chunk header; records are sliced by hand.
 postcard = { version = "1", default-features = false }
 
 # Only the note-encryption + key surface: no proving circuits.
-zcash_keys = { version = "0.16", default-features = false, features = ["orchard", "sapling", "transparent-inputs", "unstable"] }
-transparent = { package = "zcash_transparent", version = "0.10", default-features = false, features = ["transparent-inputs"] }
+zcash_keys = { version = "0.17", default-features = false, features = ["orchard", "sapling", "transparent-inputs", "unstable"] }
+transparent = { package = "zcash_transparent", version = "0.11", default-features = false, features = ["transparent-inputs"] }
 # Script bytes → address, as `zcash_transparent` reads them.
-zcash_script = { version = "0.4", default-features = false }
+zcash_script = { version = "0.6", default-features = false }
 # Hash160 of the public key a P2PKH input reveals: its sender's address.
 sha2 = "0.10"
 ripemd = "0.1"
-zcash_protocol = "0.10"
-zcash_primitives = { version = "0.30", default-features = false, features = ["transparent-inputs"] }
+zcash_protocol = "0.11"
+zcash_primitives = { version = "0.31", default-features = false, features = ["transparent-inputs"] }
 # Shielding's PCZT roles: the app creates and proves, the keychain signs, a
 # hardware wallet's output combines back in.
-pczt = { version = "0.9", default-features = false, features = ["orchard", "transparent", "zcp-builder", "io-finalizer", "signer", "prover", "spend-finalizer", "tx-extractor"] }
+pczt = { version = "0.10", default-features = false, features = ["orchard", "transparent", "zcp-builder", "io-finalizer", "signer", "prover", "spend-finalizer", "tx-extractor"] }
 # Signatures a Ledger returns arrive DER-encoded.
-secp256k1 = { version = "0.29", default-features = false }
-bip32 = { version = "=0.6.0-pre.1", default-features = false }
-rand_core = { version = "0.6", features = ["getrandom"] }
+secp256k1 = { version = "0.33", default-features = false }
+bip32 = { version = "0.6", default-features = false }
+rand_core = "0.10"
 # wasm32 has no OS randomness: the browser's crypto supplies it.
-getrandom = { version = "0.2", features = ["js"] }
-zcash_note_encryption = "0.4"
-sapling = { package = "sapling-crypto", version = "0.7", default-features = false, features = ["std"] }
-orchard = { version = "0.15", default-features = false, features = ["std", "circuit"] }
+getrandom = { version = "0.4", features = ["sys_rng", "wasm_js"] }
+zcash_note_encryption = "0.5"
+sapling = { package = "sapling-crypto", version = "0.9", default-features = false, features = ["std"] }
+orchard = { version = "0.16", default-features = false, features = ["std", "circuit"] }
 # Pre-ZIP-212 Sapling notes carry their rcm as a scalar.
-jubjub = "0.10"
-ff = "0.13"
+jubjub = "0.11"
+ff = "0.14"
 # GPU trial decryption: the secrets back from the shader, and the cipher they key.
-pasta_curves = "0.5"
-group = "0.13"
+pasta_curves = "0.6"
+group = "0.14"
 chacha20 = "0.9"
-zip32 = { version = "0.2", default-features = false }
+zip32 = { version = "0.3", default-features = false }
 
 # Upstream wallet policy for sends: note selection, change, fees, ZIP 318.
 # No sync, gRPC or tokio.
-zcash_client_backend = { version = "0.24", default-features = false, features = ["orchard", "transparent-inputs"] }
-zcash_address = "0.13"
-incrementalmerkletree = "0.8"
+zcash_client_backend = { version = "0.25", default-features = false, features = ["orchard", "transparent-inputs"] }
+zcash_address = "0.14"
+incrementalmerkletree = "0.9"
 nonempty = { version = "0.11", default-features = false }
 # ziziphus bodies cross from JS as byte arrays.
 serde_bytes = "0.11"
@@ -74,9 +76,9 @@ serde_bytes = "0.11"
 js-sys = "0.3"
 
 [dev-dependencies]
-incrementalmerkletree = { version = "0.8", features = ["legacy-api"] }
+incrementalmerkletree = { version = "0.9", features = ["legacy-api"] }
 # Only the tests build spending keys and encrypt notes.
-zcash_keys = { version = "0.16", features = ["orchard", "sapling", "transparent-inputs"] }
+zcash_keys = { version = "0.17", features = ["orchard", "sapling", "transparent-inputs"] }
 serde_json = "1"
 # Only the tests encode nullifier chunks, as the indexer does.
 postcard = { version = "1", features = ["alloc"] }
@@ -84,5 +86,5 @@ postcard = { version = "1", features = ["alloc"] }
 # crates.io releases with one change each, unpacked by ./patch-crates.sh;
 # see patches/README.md.
 [patch.crates-io]
-pasta_curves = { path = "patched/pasta_curves-0.5.2" }
-bls12_381 = { path = "patched/bls12_381-0.8.0" }
+pasta_curves = { path = "patched/pasta_curves-0.6.1" }
+bls12_381 = { path = "patched/bls12_381-0.9.0" }

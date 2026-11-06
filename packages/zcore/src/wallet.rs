@@ -1,7 +1,7 @@
 //! The wallet as upstream's planner sees it: our unspent notes and UTXOs behind
 //! `zcash_client_backend`'s `InputSource`, so upstream decides what to spend.
 //!
-//! Selection mirrors `zcash_client_sqlite` 0.22's (`wallet/common.rs`,
+//! Selection mirrors `zcash_client_sqlite` 0.23's (`wallet/common.rs`,
 //! `wallet/transparent.rs`): dust is never selected, notes go oldest first,
 //! UTXOs largest first, and eligibility is upstream's own confirmations rule.
 //! Re-check it against sqlite on every librustzcash bump.
@@ -14,7 +14,8 @@ use transparent::keys::TransparentKeyScope;
 use zcash_client_backend::data_api::wallet::input_selection::LockFilter;
 use zcash_client_backend::data_api::wallet::{ConfirmationsPolicy, TargetHeight};
 use zcash_client_backend::data_api::{
-    AccountMeta, InputSource, NoteFilter, ReceivedNotes, TargetValue,
+    AccountMeta, ChangeReceivers, InputSource, NoteFilter, ReceivedNotes, TargetValue,
+    TransparentChangeKind,
 };
 use zcash_client_backend::fees::StandardFeeRule;
 use zcash_client_backend::wallet::{Note, ReceivedNote, WalletTransparentOutput};
@@ -297,6 +298,16 @@ impl InputSource for Wallet {
     type AccountId = u32;
     type NoteRef = u32;
 
+    /// Every kind: planning has no viewing key to read them from, and
+    /// [`crate::build::pczt`] refuses change to a pool the account has no key for.
+    fn get_change_receivers(&self, _account: u32) -> Result<ChangeReceivers, String> {
+        Ok(ChangeReceivers::new(
+            true,
+            true,
+            Some(TransparentChangeKind::P2pkh),
+        ))
+    }
+
     fn get_spendable_note(
         &self,
         txid: &TxId,
@@ -544,7 +555,7 @@ impl Wallet {
             ShieldedPool::Orchard,
             TargetValue::AllFunds(zcash_client_backend::data_api::MaxSpendMode::MaxSpendable),
             TargetHeight::from(self.tip + 1),
-            ConfirmationsPolicy::default(),
+            ConfirmationsPolicy::MIN,
             &[],
         )
         .iter()
@@ -555,7 +566,7 @@ impl Wallet {
     /// What `from` (`"shielded"` or `"transparent"`) can spend now, and once
     /// every note is confirmed: dust never counts.
     pub(crate) fn spendable(&self, from: &str) -> (u64, u64) {
-        // Past upstream's longest wait, 10 confirmations.
+        // Well past any confirmation wait.
         const SETTLED: u32 = 100;
         (
             self.spendable_at(from, TargetHeight::from(self.tip + 1)),
@@ -565,7 +576,7 @@ impl Wallet {
 
     /// By the same confirmation and dust rules selection applies.
     fn spendable_at(&self, from: &str, target: TargetHeight) -> u64 {
-        let policy = ConfirmationsPolicy::default();
+        let policy = ConfirmationsPolicy::MIN;
         if from == "transparent" {
             return self
                 .spendable_utxos(target, policy)
@@ -724,7 +735,8 @@ mod tests {
         let change = orchard_family_note("ironwood", Scope::Internal, 50_000, TIP - 5, 2);
         let wallet = wallet(vec![received, change], vec![]);
         assert_eq!(picked(&wallet, at_least(10_000)), [(2, 50_000)]);
-        assert_eq!(wallet.spendable("shielded"), (50_000, 100_000));
+        // We spend at one confirmation for both.
+        assert_eq!(wallet.spendable("shielded"), (100_000, 100_000));
     }
 
     #[test]
@@ -740,7 +752,7 @@ mod tests {
             vec![
                 note(5_000, TIP - 100, 1),
                 note(70_000, TIP - 100, 2),
-                note(90_000, TIP - 2, 3),
+                note(90_000, TIP + 1, 3),
             ],
             vec![
                 UtxoData::for_tests(&ours, 30_000, 0, TIP - 50),

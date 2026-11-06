@@ -95,8 +95,8 @@ holds only what the device supports (3.6).
   change (or an unshield's amount) counts in its pool until it's mined or
   expires. Amounts received but not yet mined aren't shown yet: the wallet
   only reads mined blocks.
-- Balances are everything the account holds. Only a send's **available**
-  amount (2.3–2.5) leaves out what can't be spent yet. — _Built_
+- Balances are everything the account holds, and every screen shows the same
+  one, the transfer forms (2.3–2.5) included. — _Built_
 - Shortcut buttons: **Send**, **Receive**, **Shield** (shown when there is a
   transparent balance), **Unshield** (shown when there is a shielded balance).
 - Recent transactions (see 2.6).
@@ -119,16 +119,25 @@ holds only what the device supports (3.6).
 
 - **From**: choose the shielded or the transparent balance. Within that
   balance the wallet picks the funds itself (see 1); there is no pool choice.
-- Shows the **available** amount for the chosen source: what a send can spend
-  now. Pending change and shielded funds still confirming are left out: 3
-  confirmations for the account's own transactions, 10 for payments received
-  (`zcash_client_backend`'s defaults; transparent coins count once mined). So
-  is dust that costs more to spend than it's worth. When something is
-  waiting, a small info icon by it says how much, and that it's spendable once
-  confirmed. — _Built_
+- Shows the **balance** of the chosen source, as the home screen does. Part
+  of it may not be spendable yet: pending change and funds still confirming,
+  one confirmation for any transaction (`zcash_client_backend`'s
+  `ConfirmationsPolicy::MIN`; transparent coins count once mined). When
+  something is confirming, a small info icon by the balance says how much,
+  and counts down to when it's spendable. — _Built_
+- **Waiting on confirming funds**: a send that needs funds still confirming
+  isn't an error. Pressing Send shows a notice (not an error) with how much
+  is confirming and a live countdown to when it's ready, from the same plan
+  as the pending transaction's clock; once that runs late it says so instead.
+  When the funds confirm, the notice says the send can go, and the user
+  presses Send again. Nothing is signed ahead: the transaction can only be
+  built once the funds are on chain, and the Keychain never opens unasked.
+  The submit button is never disabled. Shield and Unshield work the same. —
+  _Built_
 - **Amount** entry in ZEC.
-- **Tap-to-fill** (Max): the maximum sendable amount, the available balance
-  less the fee, kept up to date as the recipient changes.
+- **Tap-to-fill** (Max): the maximum sendable amount, the balance less the
+  fee, kept up to date as the recipient changes. While funds are confirming,
+  their fee is estimated; the exact amount shows once they confirm.
 - **To**: paste any Zcash address (transparent, Sapling or unified). The field
   shows at a glance whether the recipient is transparent or shielded. Without
   an address, the user can send a payment link instead (2.10). — _Planned_
@@ -139,7 +148,8 @@ holds only what the device supports (3.6).
   or the recipient changes; it is never dropped silently. — _Built_
 - **Fee preview** before confirming, updating as the form changes.
 - Checks before sending: amount set, recipient a valid address on this
-  network, enough balance, message within 512 bytes.
+  network, enough balance, message within 512 bytes, and from NU7 no more
+  notes than one block can hold (ZIP 218).
 - **Privacy notice** under the button: "This transfer is shielded",
   "partly shielded" or "transparent", depending on source and recipient.
 - Approval happens in the Keychain, which shows what is being signed.
@@ -151,7 +161,7 @@ holds only what the device supports (3.6).
 
 Moves transparent funds into the shielded balance.
 
-- Shows the transparent amount available and the **fee** that will be paid.
+- Shows the transparent balance and the **fee** that will be paid.
 - Needs at least **0.001 ZEC**: below that the fee eats too much of it, and
   the screen says so.
 - Shields **all** transparent funds; there is no partial shielding. A coin is
@@ -166,8 +176,8 @@ Moves transparent funds into the shielded balance.
 
 Moves shielded funds to one of the account's own transparent addresses.
 
-- Shows the available shielded amount; the user enters an amount, with
-  tap-to-fill for the maximum.
+- Shows the shielded balance; the user enters an amount, with tap-to-fill for
+  the maximum.
 - Each unshield goes to a **fresh transparent address** of the account, one
   never shown anywhere, and never the one the account shields from or
   receives on, so observers can't pair the funds going in with the funds
@@ -207,13 +217,12 @@ Moves shielded funds to one of the account's own transparent addresses.
   - **Status**: "Processing" from the moment a send, shield or unshield is
     broadcast (a payment received: once it's mined) until it has its
     confirmations, then "Completed" (a payment link: Unclaimed, Claimed or
-    Cancelled). The confirmations are zcash_client_backend's default: 3 for
-    the account's own transactions, 10 for a payment received from someone
-    else. A pending transaction's icon carries a clock; hovering or tapping
+    Cancelled). The confirmations are zcash_client_backend's
+    `ConfirmationsPolicy::MIN`: one for any transaction. A pending transaction's icon carries a clock; hovering or tapping
     it shows how far along it is as a percent and the minutes left, planned
-    upfront from 75-second blocks (4 min for its own: the next block, the
-    15-second tip check, 2 more blocks; 9 more blocks for a payment
-    received). Each event (mined, a new block) spreads what's left of the
+    upfront from the block time at the tip: 25 seconds from NU7, 75 before
+    (for its own, the next block, a tip check of a fifth of a block, 2 more
+    blocks: 80 seconds; for a payment received, 9 more blocks). Each event (mined, a new block) spreads what's left of the
     percent over the new time left, so it only moves forward. Past the
     estimate the percent is gone for good: before it's mined it says it's
     taking longer and how many blocks are left before it expires; once
@@ -450,8 +459,6 @@ user's behalf.
 
 ### 3.3 Connected sites — Working
 
-- The Keychain only runs on the Zillions app (`app.zillions.money`); no other
-  site can see it or talk to it. Development builds also run on `localhost`.
 - A site must ask to connect; the user approves or rejects.
 - List connected sites; disconnect one or all.
 - The Keychain shows whether the site in the current tab is connected, and

@@ -78,7 +78,7 @@ passed through unchanged.
 
 ## Build
 
-You'll need Rust 1.88+ with the `wasm32-unknown-unknown` target,
+You'll need Rust 1.89+ with the `wasm32-unknown-unknown` target,
 [wasm-pack](https://rustwasm.github.io/wasm-pack/), and a clang that targets
 wasm32. On macOS, Apple's clang can't target wasm32; `brew install llvm` and the
 script picks it up.

@@ -2,7 +2,18 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 import { FeeRow } from "./PlannedFee";
-import { AmountField, AvailableWithMax, SubmitProgress } from "./TransferForm";
+import {
+  AmountField,
+  BalanceWithMax,
+  SubmitBlock,
+  SubmitProgress,
+} from "./TransferForm";
+
+vi.mock("../hooks/useConfirming", async (actual) => ({
+  ...(await actual<typeof import("../hooks/useConfirming")>()),
+  useReadyIn: () => 84_000,
+}));
+const { countdown } = await import("../hooks/useConfirming");
 
 afterEach(cleanup);
 
@@ -26,22 +37,55 @@ test("an amount error is the field's description", () => {
   expect(onChange).toHaveBeenCalledWith("1.5");
 });
 
-test("Max shows the available amount and toggles", () => {
+test("Max shows the balance and toggles", () => {
   const onToggleMax = vi.fn();
   render(
-    <AvailableWithMax
-      available={150_000_000n}
+    <BalanceWithMax
+      balance={150_000_000n}
       waiting={0n}
       pool="shielded"
       isMax={true}
       onToggleMax={onToggleMax}
     />,
   );
-  expect(screen.getByText(/Available:/).textContent).toBe("Available: 1.5 ZEC");
+  expect(screen.getByText(/Balance:/).textContent).toBe("Balance: 1.5 ZEC");
   const max = screen.getByRole("button", { name: "Max" });
   expect(max.getAttribute("aria-pressed")).toBe("true");
   fireEvent.click(max);
   expect(onToggleMax).toHaveBeenCalledOnce();
+});
+
+test("a submit waiting on confirming funds says why, counting down, then that it can go", () => {
+  const hold = { held: () => true, reset: () => {} };
+  const block = (notice: "waiting" | "ready") => (
+    <SubmitBlock
+      label="Send 1 ZEC"
+      pending={false}
+      pendingLabel="Sending..."
+      stages={[]}
+      confirming={{ ...hold, notice, waiting: 50_000_000n, verb: "send" }}
+    />
+  );
+  const { rerender } = render(block("waiting"));
+  const button = screen.getByRole("button", { name: "Send 1 ZEC" });
+  // Never disabled: the notice is its description, announced as a status.
+  expect(button.hasAttribute("disabled")).toBe(false);
+  const notice = screen.getByRole("status");
+  expect(button.getAttribute("aria-describedby")).toBe(notice.id);
+  expect(notice.textContent).toBe(
+    "0.5 ZEC of your balance is still confirming. It'll be ready in about 1 min 24 s.It'll be ready in about 2 min.",
+  );
+
+  rerender(block("ready"));
+  expect(notice.textContent).toBe(
+    "Your funds have confirmed. You can send now.",
+  );
+});
+
+test("a countdown reads in seconds, then minutes and seconds", () => {
+  expect(countdown(41_200)).toBe("42 s");
+  expect(countdown(65_000)).toBe("1 min 05 s");
+  expect(countdown(0)).toBe("1 s");
 });
 
 test("progress lists only the optional steps that ran, up to the current one", () => {

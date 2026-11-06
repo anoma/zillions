@@ -4,7 +4,7 @@
 //! when it's due (docs/design/migration.md); a transfer is an ordinary send
 //! of its amount from its note, which `send.rs` plans as a crossing.
 //!
-//! Upstream (zcash_protocol 0.10 `zip318`, zcash_client_backend 0.24) has the
+//! Upstream (zcash_protocol 0.11 `zip318`, zcash_client_backend 0.25) has the
 //! constants, the fee and the denomination series but no planner; this
 //! follows the ZIP's text on top of them. TODO: switch to upstream's planner
 //! if one lands.
@@ -12,9 +12,12 @@
 use std::collections::BTreeMap;
 
 use nonempty::NonEmpty;
-use rand_core::{OsRng, RngCore};
+use rand_core::Rng;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
+use zcash_client_backend::data_api::anchor_retention::{
+    AnchorRetentionInterval, PoolMigrationParams,
+};
 use zcash_client_backend::data_api::wallet::{ConfirmationsPolicy, TargetHeight};
 use zcash_client_backend::fees::{
     canonical_crossing_fee, ChangeValue, StandardFeeRule, TransactionBalance,
@@ -27,9 +30,8 @@ use zcash_primitives::transaction::fees::FeeRule as _;
 use zcash_protocol::consensus::{BlockHeight, Network, NetworkUpgrade, Parameters};
 use zcash_protocol::value::Zatoshis;
 use zcash_protocol::zip318::{
-    largest_one_two_five, AnchorBucketInterval, PoolMigrationConstants, DENOM_CAP,
-    MAX_RESIDUAL_VALUE, PREP_DELAY_CAP, PREP_DELAY_MEAN, PREP_TX_ACTIONS, TRANSFER_DELAY_CAP,
-    TRANSFER_DELAY_MEAN,
+    largest_one_two_five, BlockSpacing, PoolMigrationConstants, DENOM_CAP, MAX_RESIDUAL_VALUE,
+    PREP_DELAY_CAP, PREP_DELAY_MEAN, PREP_TX_ACTIONS, TRANSFER_DELAY_CAP, TRANSFER_DELAY_MEAN,
 };
 
 use crate::wallet::{Wallet, WalletData};
@@ -39,10 +41,13 @@ use crate::wallet::{Wallet, WalletData};
 // before its notes can anchor waits (the app asks zcore again).
 const MINING_MARGIN: u32 = 5;
 
-/// ZIP 318's constants, as specified.
-pub(crate) struct Grid;
-
-impl PoolMigrationConstants for Grid {}
+/// ZIP 318's constants, as specified, on `network`'s block spacing.
+pub(crate) fn zip318(network: &Network) -> PoolMigrationParams {
+    PoolMigrationParams::new(
+        BlockSpacing::for_network(network),
+        AnchorRetentionInterval::ZIP_318,
+    )
+}
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -83,9 +88,9 @@ fn quantize(mut value: u64) -> Vec<u64> {
     parts
 }
 
-/// A delay in blocks from an exponential distribution with mean `mean`,
-/// redrawn above `cap`, as ZIP 318 draws every gap in the schedule.
-fn delay(rng: &mut impl RngCore, mean: u32, cap: u32) -> u32 {
+/// A delay in reference blocks from an exponential distribution with mean
+/// `mean`, redrawn above `cap`, as ZIP 318 draws every gap in the schedule.
+fn delay(rng: &mut impl Rng, mean: u32, cap: u32) -> u32 {
     loop {
         let u = (rng.next_u64() >> 11) as f64 / (1u64 << 53) as f64;
         let draw = (-f64::from(mean) * (1.0 - u).ln()).round();
@@ -113,11 +118,10 @@ fn preparations(notes: usize, parts: usize) -> usize {
 /// The first height at which a transaction can anchor to a bucket boundary at
 /// or above `mined`: upstream anchors one whole bucket below the newest
 /// boundary under its confirmations.
-fn anchorable(mined: u32) -> u32 {
-    let bucket = AnchorBucketInterval::ZIP_318;
-    u32::from(bucket.boundary_at_or_above(BlockHeight::from(mined)))
-        + bucket.block_count().get()
-        + u32::from(ConfirmationsPolicy::default().trusted())
+fn anchorable(network: &Network, mined: u32) -> u32 {
+    let grid = zip318(network).anchor_grid();
+    let boundary = grid.boundary_at_or_above(BlockHeight::from(mined));
+    u32::from(grid.boundary_after(boundary)) + u32::from(ConfirmationsPolicy::MIN.trusted())
 }
 
 /// A preparation's fee: ZIP 317 for its 16 actions.
@@ -143,7 +147,7 @@ fn transfer_fee(network: &Network, target: BlockHeight) -> Result<u64, String> {
         .map_err(|e| format!("{e:?}"))
 }
 
-pub(crate) fn plan(wallet: &Wallet, rng: &mut impl RngCore) -> Result<MigrationPlan, String> {
+pub(crate) fn plan(wallet: &Wallet, rng: &mut impl Rng) -> Result<MigrationPlan, String> {
     let notes = wallet.spendable_orchard();
     let orchard: u64 = notes.iter().sum();
     let target = BlockHeight::from(u32::from(wallet.tip) + 1);
@@ -183,14 +187,20 @@ pub(crate) fn plan(wallet: &Wallet, rng: &mut impl RngCore) -> Result<MigrationP
         .network
         .activation_height(NetworkUpgrade::Nu6_3)
         .map_or(0, u32::from);
-    let after = |mined: u32| anchorable((mined + MINING_MARGIN).max(activation + 1));
+    let network = wallet.network;
+    let after = |mined: u32| anchorable(&network, (mined + MINING_MARGIN).max(activation + 1));
+    let spacing = BlockSpacing::for_network(&network);
+    // ZIP 318's delays are in reference blocks: three of NU7's make one.
+    let later = |height: u32, delay: u32| u32::from(spacing.advance(height.into(), delay));
     let mut preparations: Vec<u32> = vec![];
     for _ in 0..preps {
         let height = match preparations.last() {
             None => u32::from(target),
-            Some(&last) => {
-                (last + delay(rng, PREP_DELAY_MEAN.get(), PREP_DELAY_CAP.get())).max(after(last))
-            }
+            Some(&last) => later(
+                last,
+                delay(rng, PREP_DELAY_MEAN.get(), PREP_DELAY_CAP.get()),
+            )
+            .max(after(last)),
         };
         preparations.push(height);
     }
@@ -200,7 +210,10 @@ pub(crate) fn plan(wallet: &Wallet, rng: &mut impl RngCore) -> Result<MigrationP
         .enumerate()
         .map(|(i, value)| {
             if i > 0 {
-                height += delay(rng, TRANSFER_DELAY_MEAN.get(), TRANSFER_DELAY_CAP.get());
+                height = later(
+                    height,
+                    delay(rng, TRANSFER_DELAY_MEAN.get(), TRANSFER_DELAY_CAP.get()),
+                );
             }
             Transfer { value, height }
         })
@@ -231,8 +244,8 @@ pub(crate) fn preparation(
     let activation = network
         .activation_height(NetworkUpgrade::Nu6_3)
         .ok_or("NU6.3 isn't scheduled on this network")?;
-    let policy = ConfirmationsPolicy::default()
-        .bucketed(AnchorBucketInterval::ZIP_318, target, activation)
+    let policy = ConfirmationsPolicy::MIN
+        .bucketed(zip318(&network).anchor_grid(), target, activation)
         .ok_or("no bucket boundary to anchor to yet")?;
     let fee = preparation_fee(&network, height)?;
     let transfer_fee = transfer_fee(&network, height)?;
@@ -302,7 +315,7 @@ pub fn plan_migration(network: &str, wallet: JsValue) -> Result<JsValue, JsError
     let data: WalletData =
         serde_wasm_bindgen::from_value(wallet).map_err(|e| JsError::new(&e.to_string()))?;
     let wallet = Wallet::new(network, &data).map_err(|e| JsError::new(&e))?;
-    let plan = plan(&wallet, &mut OsRng).map_err(|e| JsError::new(&e))?;
+    let plan = plan(&wallet, &mut crate::rng()).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&plan).map_err(|e| JsError::new(&e.to_string()))
 }
 
@@ -358,7 +371,7 @@ pub fn preparation_pczt(
     let trees: crate::build::Trees =
         serde_wasm_bindgen::from_value(trees).map_err(|e| JsError::new(&e.to_string()))?;
     let ufvk = zcash_keys::keys::UnifiedFullViewingKey::decode(&wallet.network, ufvk)
-        .map_err(|e| JsError::new(&e))?;
+        .map_err(|e| JsError::new(&e.to_string()))?;
     let fingerprint = crate::hex_n::<32>(seed_fingerprint).map_err(|e| JsError::new(&e))?;
     let (proposal, _) = preparation(&wallet, &parts).map_err(|e| JsError::new(&e))?;
     crate::build::pczt(
@@ -407,6 +420,17 @@ mod tests {
     }
 
     #[test]
+    fn notes_anchor_on_the_nu7_grid_from_activation() {
+        let network = Network::MainNetwork;
+        let activation = u32::from(network.activation_height(NetworkUpgrade::Nu7).unwrap());
+        // The last boundary below activation, then the next one on NU7's grid.
+        assert_eq!(anchorable(&network, activation - 200), 3_543_697);
+        // Mined past that boundary: 3,543,696 is next, then one 432 on.
+        assert_eq!(anchorable(&network, 3_543_300), 3_544_129);
+        assert_eq!(anchorable(&network, activation + 100), 3_544_129);
+    }
+
+    #[test]
     fn quantizes_each_digit_into_fives_twos_and_ones() {
         assert_eq!(quantize(9 * CENT), [5 * CENT, 2 * CENT, 2 * CENT]);
         assert_eq!(
@@ -424,7 +448,7 @@ mod tests {
     #[test]
     fn plans_a_small_balance_as_one_cent_after_a_preparation() {
         // Even one transfer spends a note made for it.
-        let plan = plan(&wallet(&[1_130_714]), &mut OsRng).unwrap();
+        let plan = plan(&wallet(&[1_130_714]), &mut crate::rng()).unwrap();
         assert_eq!(plan.transfers.len(), 1);
         assert_eq!(plan.transfers[0].value, CENT);
         assert_eq!(plan.preparations, [TIP + 1]);
@@ -448,7 +472,7 @@ mod tests {
     fn fees_come_out_of_the_balance_and_every_amount_is_standard() {
         let values = [7 * COIN, 5_432_109_876, 3 * CENT, 123_456];
         let orchard: u64 = values.iter().sum();
-        let plan = plan(&wallet(&values), &mut OsRng).unwrap();
+        let plan = plan(&wallet(&values), &mut crate::rng()).unwrap();
         let moved: u64 = plan.transfers.iter().map(|t| t.value).sum();
         assert_eq!(
             moved
@@ -467,7 +491,7 @@ mod tests {
         assert!(plan.transfers[0].height >= last_prep + MINING_MARGIN + 144);
         assert_eq!(
             plan.transfers[0].height,
-            anchorable(last_prep + MINING_MARGIN)
+            anchorable(&Network::MainNetwork, last_prep + MINING_MARGIN)
         );
         assert!(plan
             .transfers
@@ -537,7 +561,7 @@ mod tests {
         assert_eq!(i64::from(*bundle.value_balance()), prep_fee as i64);
         assert_eq!(
             tx.expiry_height(),
-            zcash_protocol::zip318::expiry_height(target)
+            zip318(&Network::MainNetwork).canonical_expiry(target)
         );
         assert!(tx.ironwood_bundle().is_none() && tx.sapling_bundle().is_none());
 
@@ -579,7 +603,7 @@ mod tests {
 
     #[test]
     fn too_little_plans_nothing() {
-        let plan = plan(&wallet(&[CENT / 2]), &mut OsRng).unwrap();
+        let plan = plan(&wallet(&[CENT / 2]), &mut crate::rng()).unwrap();
         assert!(plan.transfers.is_empty() && plan.preparations.is_empty());
         assert_eq!(plan.left, CENT / 2);
     }

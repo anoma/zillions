@@ -1,3 +1,4 @@
+import { secondsBetween } from "./wallet/chain/blockTime";
 import type { Activity } from "./wallet/types";
 
 const ZATOSHI_PER_ZEC = 100_000_000n;
@@ -9,18 +10,18 @@ const DECIMALS = 8;
  */
 export const MIGRATION_MINIMUM = ZATOSHI_PER_ZEC / 100n;
 
-/** About how long until block `height`, from `tip`, at 75 seconds a block. */
+/** About how long until block `height`, from `tip`. */
 export function fromNow(tip: number, height: number) {
-  const minutes = ((height - tip) * 75) / 60;
+  const minutes = secondsBetween(tip, height) / 60;
   if (minutes < 5) return "now";
   if (minutes < 90) return `~${Math.round(minutes)} min`;
   const hours = Math.round(minutes / 60);
   return hours < 48 ? `~${hours} hours` : `~${Math.round(hours / 24)} days`;
 }
 
-/** The local clock time of block `height`, from `tip`, at 75 seconds a block; with the weekday when it isn't today. */
+/** The local clock time of block `height`, from `tip`; with the weekday when it isn't today. */
 export function clockAt(tip: number, height: number) {
-  const when = new Date(Date.now() + (height - tip) * 75_000);
+  const when = new Date(Date.now() + secondsBetween(tip, height) * 1000);
   const time = when.toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",

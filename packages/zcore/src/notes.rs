@@ -112,8 +112,9 @@ mod tests {
 
     #[test]
     fn sapling_notes_round_trip_both_seed_kinds() {
-        let (_, recipient) =
-            sapling::zip32::ExtendedSpendingKey::master(&[7u8; 32]).default_address();
+        let (_, recipient) = sapling::zip32::ExtendedSpendingKey::master(&[7u8; 32])
+            .unwrap()
+            .default_address();
         let value = sapling::value::NoteValue::from_raw(42);
         for rseed in [
             Rseed::AfterZip212([9u8; 32]),

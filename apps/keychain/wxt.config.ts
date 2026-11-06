@@ -6,8 +6,6 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 import svgr from "vite-plugin-svgr";
 import { defineConfig } from "wxt";
 
-import { matchPatterns } from "./src/origins";
-
 const r = (p: string): string => resolve(__dirname, p);
 
 const pkg = JSON.parse(readFileSync(r("package.json"), "utf-8")) as {
@@ -163,13 +161,12 @@ export default defineConfig({
     },
     // `injected.js` is the MAIN-world provider script the content script
     // injects into pages (sets `window.zc`). Keep this list minimal: every
-    // entry is fetchable by the matched sites and lets them detect the
-    // wallet. The wasm binaries only load in extension contexts, which don't
-    // need an entry. Same sites as the content script (src/origins.ts).
+    // entry is fetchable by any site and lets it detect the wallet. The wasm
+    // binaries only load in extension contexts, which don't need an entry.
     web_accessible_resources: [
       {
         resources: ["injected.js"],
-        matches: matchPatterns(mode === "development"),
+        matches: ["<all_urls>"],
       },
     ],
     icons: {
@@ -215,7 +212,7 @@ export default defineConfig({
         include: "**/*.svg",
       }),
       nodePolyfills({
-        globals: { Buffer: true, global: true, process: false },
+        globals: { Buffer: true, global: true, process: true },
         protocolImports: true,
         exclude: ["vm"],
       }),

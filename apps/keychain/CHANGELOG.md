@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.11.1...zillions-keychain-v0.12.0) (2026-11-03)
+
+
+### Features
+
+* NU7 support ([#206](https://github.com/heliaxdev/zillions-interface/issues/206)) ([8ced481](https://github.com/heliaxdev/zillions-interface/commit/8ced4812bd71173acb5198fe87c43822e3d14efd))
+
+## [0.11.1](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.11.0...zillions-keychain-v0.11.1) (2026-11-03)
+
+
+### Bug Fixes
+
+* missing process polyfill and rollback read/write all permissions ([#203](https://github.com/heliaxdev/zillions-interface/issues/203)) ([cb2855f](https://github.com/heliaxdev/zillions-interface/commit/cb2855fccedaf5e37c4665bef1cbd83d5d9f33b6))
+
 ## [0.11.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.10.0...zillions-keychain-v0.11.0) (2026-10-30)
 
 

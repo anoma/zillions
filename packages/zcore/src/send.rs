@@ -6,9 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::num::NonZeroU32;
 use wasm_bindgen::prelude::*;
 use zcash_address::ZcashAddress;
-use zcash_client_backend::data_api::anchor_retention::{
-    AnchorRetentionInterval, PoolMigrationParams,
-};
 use zcash_client_backend::data_api::wallet::input_selection::{
     GreedyInputSelector, InputSelector, InputSelectorError, NoteSelection, ShieldingSelector,
     SpendPolicy, TransparentSpendPolicy,
@@ -19,12 +16,12 @@ use zcash_client_backend::fees::{DustOutputPolicy, StandardFeeRule, TransparentC
 use zcash_client_backend::proposal::Proposal;
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
 use zcash_primitives::transaction::fees::zip317::MARGINAL_FEE;
-use zcash_protocol::consensus::{BlockHeight, NetworkUpgrade, Parameters};
+use zcash_protocol::consensus::{BlockHeight, Network, NetworkUpgrade, Parameters};
 use zcash_protocol::memo::{Memo, MemoBytes};
 use zcash_protocol::value::Zatoshis;
 
-use rand_core::{OsRng, RngCore};
-use zcash_protocol::zip318::{AnchorBucketInterval, PoolMigrationConstants, ANCHOR_AGE_CAP};
+use rand_core::Rng;
+use zcash_protocol::zip318::{AnchorGrid, PoolMigrationConstants, ANCHOR_AGE_CAP};
 use zcash_protocol::{PoolType, ShieldedPool};
 
 use crate::parse_network;
@@ -114,7 +111,7 @@ fn at_boundary(
 
 /// An anchor age, in bucket boundaries: ZIP 318's geometric draw with
 /// parameter 1/2, at least 1, redrawn above `cap`.
-fn draw_age(rng: &mut impl RngCore, cap: u32) -> u32 {
+fn draw_age(rng: &mut impl Rng, cap: u32) -> u32 {
     loop {
         let age = 1 + rng.next_u32().trailing_ones();
         if age <= cap {
@@ -127,18 +124,17 @@ fn draw_age(rng: &mut impl RngCore, cap: u32) -> u32 {
 /// boundary at or below `activation`, or one `crossing_at` finds no note mined
 /// by, truncates the draw below it and redraws.
 fn draw_crossing(
-    rng: &mut impl RngCore,
+    rng: &mut impl Rng,
+    grid: AnchorGrid,
     newest: BlockHeight,
     activation: BlockHeight,
     mut crossing_at: impl FnMut(BlockHeight) -> Result<Option<WalletProposal>, String>,
 ) -> Result<Option<WalletProposal>, String> {
-    let bucket = AnchorBucketInterval::ZIP_318.block_count().get();
     let mut cap = ANCHOR_AGE_CAP;
     while cap > 0 {
         let age = draw_age(rng, cap);
-        let boundary = u32::from(newest)
-            .checked_sub(age * bucket)
-            .map(BlockHeight::from)
+        let boundary = (0..age)
+            .try_fold(newest, |b, _| grid.boundary_before(b))
             .filter(|b| *b > activation);
         if let Some(proposal) = boundary.map(&mut crossing_at).transpose()?.flatten() {
             return Ok(Some(proposal));
@@ -150,7 +146,7 @@ fn draw_crossing(
 
 /// Upstream's `propose_transfer` with our wallet in place of its storage.
 ///
-/// Ported from zcash_client_backend 0.24.0 `data_api/wallet.rs` lines 778–965,
+/// Ported from zcash_client_backend 0.25.0 `data_api/wallet.rs` lines 777–950,
 /// which needs a full `WalletWrite`: a payment of a canonical ZIP 318
 /// denomination into Ironwood is first tried as a canonical crossing (one
 /// Orchard note, bucketed anchor) so it looks like a migration transfer, and
@@ -167,10 +163,10 @@ fn propose(
     let params = wallet.network;
     let request = request(send, amount)?;
     let spend_policy = spend_policy(&send.from)?;
-    let policy = ConfirmationsPolicy::default();
+    let policy = ConfirmationsPolicy::MIN;
     let target_height = TargetHeight::from(wallet.tip + 1);
     let anchor_height = policy.anchor_height(target_height);
-    let zip318 = PoolMigrationParams::new(AnchorRetentionInterval::ZIP_318);
+    let zip318 = crate::migration::zip318(&params);
     let selector = GreedyInputSelector::<Wallet>::new();
     // A fully transparent send keeps its change transparent, on an internal
     // address: shielding it would need a proof and an anchor, cost more, and
@@ -189,7 +185,7 @@ fn propose(
         && request.payments().len() == 1
         && request.payments().values().all(|p| {
             p.amount()
-                .is_some_and(|v| crate::migration::Grid.is_canonical_denomination(v))
+                .is_some_and(|v| zip318.is_canonical_denomination(v))
         });
     let canonical_fee =
         zcash_client_backend::fees::canonical_crossing_fee(&params, target_height.into()).ok();
@@ -216,10 +212,7 @@ fn propose(
         ) {
             Ok(proposal) => Ok((proposal.steps().len() == 1
                 && canonical_fee.is_some_and(|fee| {
-                    proposal
-                        .steps()
-                        .first()
-                        .is_canonical_crossing(&crate::migration::Grid, fee)
+                    proposal.steps().first().is_canonical_crossing(&zip318, fee)
                 }))
             .then_some(proposal)),
             Err(InputSelectorError::InsufficientFunds { .. }) => Ok(None),
@@ -232,10 +225,9 @@ fn propose(
                 // Built as planned: the anchor the plan drew.
                 Some(boundary) => crossing_at(BlockHeight::from(boundary))?,
                 None => {
-                    let newest = zip318
-                        .anchor_bucket_interval()
-                        .boundary_at_or_below(policy.anchor_height(target_height));
-                    draw_crossing(&mut OsRng, newest, activation, crossing_at)?
+                    let grid = zip318.anchor_grid();
+                    let newest = grid.boundary_at_or_below(policy.anchor_height(target_height));
+                    draw_crossing(&mut crate::rng(), grid, newest, activation, crossing_at)?
                 }
             }
         }
@@ -263,7 +255,40 @@ fn propose(
     proposal
         .check_transaction_size()
         .map_err(|e| e.to_string())?;
+    check_block_limits(&params, target_height.into(), &proposal)?;
     Ok(proposal)
+}
+
+/// Refuses a plan no block could hold from NU7 (ZIP 218's action limits, which
+/// `check_transaction_size` doesn't know): 330 shielded actions, Sapling spends
+/// and outputs in all, at most 300 of them Sapling's.
+fn check_block_limits(
+    network: &Network,
+    target: BlockHeight,
+    proposal: &WalletProposal,
+) -> Result<(), String> {
+    if !network.is_nu_active(NetworkUpgrade::Nu7, target) {
+        return Ok(());
+    }
+    for step in proposal.steps() {
+        let spends = |pool| step.input_count_in_pool(pool);
+        let outputs = |pool| {
+            step.change_count_in_pool(pool)
+                + step
+                    .payment_pools()
+                    .values()
+                    .filter(|p| **p == pool)
+                    .count()
+        };
+        // Since NU6.3 an Orchard action can't hold a spend and an output.
+        let orchard = spends(PoolType::ORCHARD) + outputs(PoolType::ORCHARD);
+        let ironwood = spends(PoolType::IRONWOOD).max(outputs(PoolType::IRONWOOD));
+        let sapling = spends(PoolType::SAPLING) + outputs(PoolType::SAPLING);
+        if sapling > 300 || orchard + ironwood + sapling > 330 {
+            return Err("this spends too many notes for one transaction".into());
+        }
+    }
+    Ok(())
 }
 
 /// Least a shielding may move: below it the fee eats too much of the value.
@@ -276,7 +301,7 @@ fn propose_shield(
     wallet: &Wallet,
 ) -> Result<Proposal<StandardFeeRule, std::convert::Infallible>, String> {
     let params = wallet.network;
-    let policy = ConfirmationsPolicy::default();
+    let policy = ConfirmationsPolicy::MIN;
     let target_height = TargetHeight::from(wallet.tip + 1);
     let mut from: Vec<_> = wallet
         .utxos
@@ -301,7 +326,7 @@ fn propose_shield(
             ACCOUNT,
             target_height,
             policy.anchor_height(target_height),
-            &PoolMigrationParams::new(AnchorRetentionInterval::ZIP_318),
+            &crate::migration::zip318(&params),
             policy,
             zcash_client_backend::data_api::CoinbaseFilter::default(),
         )
@@ -314,7 +339,7 @@ fn propose_shield(
 
 /// The largest amount upstream will plan: its own fees decide, so this only
 /// searches. ponytail: ~40 plans per call. TODO: switch to upstream's
-/// `propose_send_max_transfer` once it takes only an `InputSource` (0.24's
+/// `propose_send_max_transfer` once it takes only an `InputSource` (0.25's
 /// needs `WalletWrite`; the `propose_send_max` it wraps is crate-private).
 fn max_amount(wallet: &Wallet, send: &SendRequest) -> Result<u64, String> {
     let plans = |amount: u64| -> Result<Option<WalletProposal>, String> {
@@ -511,7 +536,7 @@ pub fn send_pczt(
     let trees: crate::build::Trees =
         serde_wasm_bindgen::from_value(trees).map_err(|e| JsError::new(&e.to_string()))?;
     let ufvk = zcash_keys::keys::UnifiedFullViewingKey::decode(&wallet.network, ufvk)
-        .map_err(|e| JsError::new(&e))?;
+        .map_err(|e| JsError::new(&e.to_string()))?;
     let fingerprint = crate::hex_n::<32>(seed_fingerprint).map_err(|e| JsError::new(&e))?;
     let amount =
         Zatoshis::from_u64(send.amount).map_err(|_| JsError::new("amount out of range"))?;
@@ -554,7 +579,7 @@ pub fn shield_pczt(
     let trees: crate::build::Trees =
         serde_wasm_bindgen::from_value(trees).map_err(|e| JsError::new(&e.to_string()))?;
     let ufvk = zcash_keys::keys::UnifiedFullViewingKey::decode(&wallet.network, ufvk)
-        .map_err(|e| JsError::new(&e))?;
+        .map_err(|e| JsError::new(&e.to_string()))?;
     let fingerprint = crate::hex_n::<32>(seed_fingerprint).map_err(|e| JsError::new(&e))?;
     let proposal = propose_shield(&wallet).map_err(|e| JsError::new(&e))?;
     let pczt = crate::build::pczt(
@@ -718,12 +743,12 @@ pub(crate) mod tests {
 
     #[test]
     fn refuses_what_it_cannot_fund_and_unconfirmed_notes() {
-        let wallet_ = wallet(vec![ironwood_note(200_000, TIP, 1)]);
+        let wallet_ = wallet(vec![ironwood_note(200_000, TIP + 1, 1)]);
         let to =
             crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1)
                 .unwrap()
                 .remove(0);
-        // Mined at the tip: not confirmed enough to spend.
+        // Mined past the tip read: no confirmation yet.
         assert!(propose(
             &wallet_,
             &send(&to, 50_000),
@@ -851,6 +876,37 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_plan_no_block_can_hold_is_refused_from_nu7() {
+        let activation = u32::from(
+            Network::MainNetwork
+                .activation_height(NetworkUpgrade::Nu7)
+                .unwrap(),
+        );
+        let at = |tip: u32| {
+            let notes = (0..400)
+                .map(|i| ironwood_note(100_000, TIP - 100, i))
+                .collect();
+            let wallet = Wallet::new(
+                Network::MainNetwork,
+                &WalletData {
+                    tip,
+                    notes,
+                    utxos: vec![],
+                },
+            )
+            .unwrap();
+            let to = crate::keys::fresh(&wallet.network, &wallet_ufvk()).unwrap();
+            let amount = Zatoshis::from_u64(33_000_000).unwrap();
+            propose(&wallet, &send(&to, 33_000_000), amount)
+        };
+        assert!(at(activation - 2).is_ok());
+        assert_eq!(
+            at(activation - 1).err().as_deref(),
+            Some("this spends too many notes for one transaction")
+        );
+    }
+
+    #[test]
     fn a_memo_to_a_transparent_address_is_refused() {
         let wallet = wallet(vec![ironwood_note(200_000, TIP - 100, 1)]);
         let to =
@@ -950,7 +1006,9 @@ pub(crate) mod tests {
 
     #[test]
     fn draws_anchor_ages_as_zip_318_says() {
-        let draws: Vec<u32> = (0..20_000).map(|_| draw_age(&mut OsRng, 4)).collect();
+        let draws: Vec<u32> = (0..20_000)
+            .map(|_| draw_age(&mut crate::rng(), 4))
+            .collect();
         assert!(draws.iter().all(|a| (1..=4).contains(a)));
         // Geometric(1/2) truncated at 4: 8/15 of draws are age 1.
         let ones = draws.iter().filter(|a| **a == 1).count() as f64 / 20_000.0;
@@ -966,7 +1024,8 @@ pub(crate) mod tests {
         let mined = u32::from(newest) - 2 * 144;
         let mut tried = vec![];
         for _ in 0..200 {
-            let found = draw_crossing(&mut OsRng, newest, BlockHeight::from(0), |b| {
+            let grid = crate::migration::zip318(&Network::MainNetwork).anchor_grid();
+            let found = draw_crossing(&mut crate::rng(), grid, newest, BlockHeight::from(0), |b| {
                 tried.push(u32::from(newest) - u32::from(b));
                 Ok((u32::from(b) >= mined).then(|| plan_migration(&wallet_one(1_000_000))))
             })
@@ -977,7 +1036,9 @@ pub(crate) mod tests {
             .iter()
             .all(|d| d % 144 == 0 && (144..=576).contains(d)));
         // Never one past activation.
-        let none = draw_crossing(&mut OsRng, newest, newest, |_| unreachable!()).unwrap();
+        let grid = crate::migration::zip318(&Network::MainNetwork).anchor_grid();
+        let none =
+            draw_crossing(&mut crate::rng(), grid, newest, newest, |_| unreachable!()).unwrap();
         assert!(none.is_none());
     }
 
@@ -1004,5 +1065,6 @@ pub(crate) mod tests {
             .unwrap()
             .to_unified_full_viewing_key()
             .encode(&Network::MainNetwork)
+            .unwrap()
     }
 }

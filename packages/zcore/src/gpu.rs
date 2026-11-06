@@ -16,9 +16,7 @@ use ff::{BatchInvert, Field, PrimeField};
 use group::{Curve, GroupEncoding};
 use pasta_curves::arithmetic::{CurveAffine, CurveExt};
 use pasta_curves::pallas;
-use zcash_note_encryption::{
-    try_compact_note_decryption, Domain, ShieldedOutput, COMPACT_NOTE_SIZE,
-};
+use zcash_note_encryption::{try_compact_note_decryption, Domain, ShieldedOutput};
 
 /// Per (output, ivk): the secret's X, Y and Z as 8 little-endian words each,
 /// canonical, then a flag the shader sets when its formulas hit an
@@ -125,7 +123,7 @@ pub(crate) fn sapling_secret(eph_key: &[u8; 32], ivk: &[u8; 32]) -> Option<[u8; 
 /// shader's `secrets` (output-major, ivk-minor); `lead_ok` is the domain's
 /// lead byte rule. Fails when `cpu_secret(i, j)` disagrees on a spot check.
 #[allow(clippy::type_complexity)]
-pub(crate) fn finish<D: Domain, O: ShieldedOutput<D, COMPACT_NOTE_SIZE>>(
+pub(crate) fn finish<D: Domain, O: ShieldedOutput<D>>(
     ivks: &[D::IncomingViewingKey],
     outputs: &[(D, O)],
     secrets: &[Option<[u8; 32]>],
@@ -157,6 +155,7 @@ pub(crate) fn finish<D: Domain, O: ShieldedOutput<D, COMPACT_NOTE_SIZE>>(
         .enumerate()
         .map(|(i, (domain, output))| {
             let epk = output.ephemeral_key();
+            let head = output.enc_ciphertext_compact();
             ivks.iter().enumerate().find_map(|(j, ivk)| {
                 let plausible = secrets[i * n + j].is_none_or(|secret| {
                     let key = Params::new()
@@ -166,7 +165,7 @@ pub(crate) fn finish<D: Domain, O: ShieldedOutput<D, COMPACT_NOTE_SIZE>>(
                         .update(&secret)
                         .update(&epk.0)
                         .finalize();
-                    let mut lead = [output.enc_ciphertext()[0]];
+                    let mut lead = [head.as_ref()[0]];
                     let mut cipher = ChaCha20::new(key.as_bytes().into(), [0u8; 12][..].into());
                     cipher.seek(64);
                     cipher.apply_keystream(&mut lead);

@@ -18,6 +18,7 @@ import type { Note, PendingActivity } from "../lib/wallet/types";
 import { useAccount } from "./useAccount";
 import { internalAddress } from "./useAddresses";
 import { useDebouncedValue } from "./useDebouncedValue";
+import { useInvalidateOnSync } from "./useInvalidateOnSync";
 import { useSubmitStage } from "./useSubmitStage";
 import { useWallet } from "./useWallet";
 
@@ -33,6 +34,9 @@ export function useSendPlan(
   extra = 0n,
 ) {
   const wallet = useWallet();
+  // Synced notes change what a plan can spend.
+  useInvalidateOnSync({ queryKey: ["sendPlan", wallet.id] });
+  useInvalidateOnSync({ queryKey: ["maxSend", wallet.id] });
   const debouncedTo = useDebouncedValue(to);
   const debouncedAmount = useDebouncedValue(amount);
   const debouncedMemo = useDebouncedValue(memo);

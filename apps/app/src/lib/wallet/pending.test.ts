@@ -96,7 +96,7 @@ test("a pending transaction counts the blocks it has left to be mined", () => {
   expect(left(undefined)).toEqual([undefined, undefined]);
 });
 
-test("a mined transaction stays pending until it has the default confirmations", () => {
+test("a mined transaction is confirmed at its first confirmation", () => {
   const mined = (tx_type: "Sent" | "Received", block_height: number) =>
     ({ tx_type, block_height, confirmations: 0, status: "Confirmed" }) as never;
   const history = [mined("Sent", 100), mined("Received", 100)];
@@ -105,17 +105,15 @@ test("a mined transaction stays pending until it has the default confirmations",
       (a) => `${a.tx_type} ${a.status} ${a.confirmations}`,
     );
 
-  // Our own needs 3, a payment from someone else 10.
-  expect(at(101)).toEqual(["Sent Pending 2", "Received Pending 2"]);
-  expect(at(102)).toEqual(["Sent Confirmed 3", "Received Pending 3"]);
-  expect(at(109)).toEqual(["Sent Confirmed 10", "Received Confirmed 10"]);
+  expect(at(100)).toEqual(["Sent Confirmed 1", "Received Confirmed 1"]);
+  expect(at(101)).toEqual(["Sent Confirmed 2", "Received Confirmed 2"]);
   // The indexer ahead of the tip read still counts it mined once.
-  expect(at(99)).toEqual(["Sent Pending 1", "Received Pending 1"]);
+  expect(at(99)).toEqual(["Sent Confirmed 1", "Received Confirmed 1"]);
   // No tip yet: history stays as the indexer has it.
   expect(at(undefined)).toEqual(["Sent Confirmed 0", "Received Confirmed 0"]);
 });
 
-test("a send plans 4 minutes, and each event spreads what's left over the new time left", () => {
+test("a send plans 90 seconds, and is done once mined", () => {
   const sent = 1_000;
   const ms = (seconds: number) => (sent + seconds) * 1000;
   // `events` maps seconds after the broadcast to the confirmations seen then.
@@ -126,43 +124,14 @@ test("a send plans 4 minutes, and each event spreads what's left over the new ti
     return progressAt(p, ms(seconds));
   };
 
-  // 90 s to be mined, then 2 blocks of 75 s.
-  expect(run([], 0)).toEqual({ percent: 0, minutes: 4 });
-  expect(run([[90, 1]], 90)).toEqual({ percent: 37, minutes: 3 });
-  expect(
-    run(
-      [
-        [90, 1],
-        [165, 2],
-      ],
-      165,
-    ),
-  ).toEqual({ percent: 68, minutes: 2 });
-
-  // Mined late, at 180 s: the last 25% fills over the 150 s still needed.
-  expect(run([[180, 1]], 180)).toEqual({ percent: 75, minutes: 3 });
-  expect(run([[180, 1]], 255)).toEqual({ percent: 87, minutes: 2 });
-
-  // Past the estimate the percent is gone for good; once mined the time left is back.
-  expect(run([], 250)).toEqual({ percent: undefined, minutes: undefined });
-  expect(run([[300, 1]], 300)).toEqual({ percent: undefined, minutes: 3 });
-  expect(run([[300, 1]], 460)).toEqual({
+  // A block of 75 s and a 15 s tip check.
+  expect(run([], 0)).toEqual({ percent: 0, minutes: 2 });
+  expect(run([], 45)).toEqual({ percent: 50, minutes: 1 });
+  expect(run([[60, 1]], 60)).toEqual({
     percent: undefined,
     minutes: undefined,
   });
-});
 
-test("a payment received is planned from its block: 9 more blocks", () => {
-  const mined = 1_000;
-  const p = plan(
-    { tx_type: "Received", timestamp: mined, confirmations: 1 },
-    mined * 1000,
-  );
-  expect(progressAt(p, mined * 1000)).toEqual({ percent: 0, minutes: 12 });
-  // First seen later, it's already part way.
-  const late = plan(
-    { tx_type: "Received", timestamp: mined, confirmations: 1 },
-    (mined + 675) * 1000,
-  );
-  expect(progressAt(late, (mined + 675) * 1000).percent).toBe(50);
+  // Past the estimate the percent is gone for good.
+  expect(run([], 120)).toEqual({ percent: undefined, minutes: undefined });
 });

@@ -5,7 +5,7 @@ import { FormPage } from "../components/FormPage";
 import { FeeRow, PlannedFee } from "../components/PlannedFee";
 import {
   AmountField,
-  AvailableWithMax,
+  BalanceWithMax,
   Breakdown,
   FormCard,
   Notice,
@@ -15,6 +15,7 @@ import {
 import { TransferSuccess } from "../components/TransferSuccess";
 import { internalAddress, useInternalAddress } from "../hooks/useAddresses";
 import { useAmountField } from "../hooks/useAmountField";
+import { useConfirming } from "../hooks/useConfirming";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
@@ -43,18 +44,25 @@ function UnshieldRoute() {
   const { typed, isMax } = amountField;
   const planned = useSendPlan({ from: "shielded", to, amount: typed }, isMax);
   const { maxAmount, ceiling } = planned;
-  const amount = isMax ? (maxAmount.data ?? 0n) : typed;
+  const { available = 0n, waiting = 0n } = balance.data?.shielded ?? {};
+  // Max is the whole balance: what's spendable now, plus what's confirming.
+  const most =
+    maxAmount.data ?? (maxAmount.isError && waiting ? 0n : undefined);
+  const amount = isMax ? (most ?? 0n) + waiting : typed;
   const send = useSend();
-  const available = balance.data?.shielded.available ?? 0n;
-  const overBalance = Boolean(balance.data) && isOverBalance(amount, available);
+  const overBalance =
+    Boolean(balance.data) && isOverBalance(amount, available + waiting);
+  const confirming =
+    waiting > 0n &&
+    amount > 0n &&
+    !overBalance &&
+    (isMax || amount > available || Boolean(ceiling));
 
-  const clear = () => {
-    setAmountProblem("");
-    setFormProblem("");
-  };
+  const hold = useConfirming(confirming, overBalance);
 
   const onSubmit = () => {
-    clear();
+    setAmountProblem("");
+    setFormProblem("");
     if (!next) {
       setFormProblem(
         "Wait for the wallet to sync, or for earlier unshields to confirm",
@@ -66,7 +74,7 @@ function UnshieldRoute() {
         ? amountField.missing
         : overBalance
           ? "Insufficient balance"
-          : ceiling
+          : ceiling && !confirming
             ? planProblem(planned)
             : undefined;
     if (problem) {
@@ -74,6 +82,7 @@ function UnshieldRoute() {
       amountRef.current?.focus();
       return;
     }
+    if (hold.held()) return;
     send.mutate(
       {
         from: "shielded",
@@ -97,6 +106,12 @@ function UnshieldRoute() {
     );
   };
 
+  const clear = () => {
+    setAmountProblem("");
+    setFormProblem("");
+    hold.reset();
+  };
+
   if (send.data) {
     return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
   }
@@ -105,13 +120,13 @@ function UnshieldRoute() {
     amountProblem ||
     (overBalance
       ? "Insufficient balance"
-      : ceiling
+      : ceiling && !confirming
         ? planProblem(planned)
         : undefined);
   const formError =
     formProblem ||
     send.error?.message ||
-    (ceiling || overBalance ? undefined : planProblem(planned));
+    (ceiling || overBalance || confirming ? undefined : planProblem(planned));
   const planFee = planned.plan.data?.fee;
   const total =
     amount > 0n && planFee !== undefined ? amount + BigInt(planFee) : undefined;
@@ -127,9 +142,9 @@ function UnshieldRoute() {
         htmlFor="unshield-amount"
         aside={
           <div id="unshield-available">
-            <AvailableWithMax
-              available={available}
-              waiting={balance.data?.shielded.waiting ?? 0n}
+            <BalanceWithMax
+              balance={balance.data?.shielded.balance ?? 0n}
+              waiting={waiting}
               pool="shielded"
               isMax={isMax}
               onToggleMax={() => {
@@ -143,9 +158,7 @@ function UnshieldRoute() {
         <AmountField
           id="unshield-amount"
           ref={amountRef}
-          value={amountField.shown(
-            maxAmount.data === undefined ? undefined : amount,
-          )}
+          value={amountField.shown(most === undefined ? undefined : amount)}
           describedBy="unshield-available"
           error={amountError}
           onChange={(value) => {
@@ -173,6 +186,7 @@ function UnshieldRoute() {
         color="black"
         stages={send.stages}
         error={formError}
+        confirming={{ ...hold, waiting, verb: "unshield" }}
       >
         <Notice className="text-gray-600">
           Goes to a new transparent address of yours, visible on-chain
