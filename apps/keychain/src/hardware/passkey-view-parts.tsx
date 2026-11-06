@@ -23,6 +23,7 @@ import {
   pcztChallenge,
   prfBytes,
   verifyAssertion,
+  zeroBytes,
   PrfMissingError,
 } from "./passkey-core";
 import type { DeviceSignTx } from "./types";
@@ -125,21 +126,29 @@ export const createCredential = async (): Promise<{
       attestation: "none",
     },
   });
-  // Attestation "none" carries nothing more to prove; the response is
-  // still verified against our own origins and RP, and hands over the
-  // credential's COSE public key to store.
-  const registration = await verifyRegistrationResponse({
-    response: reg,
-    expectedChallenge: challenge,
-    expectedOrigin: await extensionOrigins(),
-    expectedRPID: RP_ID,
-    requireUserVerification: true,
-  });
-  if (!registration.verified || !registration.registrationInfo) {
-    throw new Error("The passkey creation failed verification");
+  const prfView = prfFromRegistration(reg);
+  try {
+    // Attestation "none" carries nothing more to prove; the response is
+    // still verified against our own origins and RP, and hands over the
+    // credential's COSE public key to store.
+    const registration = await verifyRegistrationResponse({
+      response: reg,
+      expectedChallenge: challenge,
+      expectedOrigin: await extensionOrigins(),
+      expectedRPID: RP_ID,
+      requireUserVerification: true,
+    });
+    if (!registration.verified || !registration.registrationInfo) {
+      throw new Error("The passkey creation failed verification");
+    }
+    const credential = registration.registrationInfo.credential;
+    return { reg, credential, prf: prfView };
+  } catch (e) {
+    // The create ceremony already evaluated the salt; nothing downstream
+    // will consume it on this path.
+    if (prfView) zeroBytes(prfView);
+    throw e;
   }
-  const credential = registration.registrationInfo.credential;
-  return { reg, credential, prf: prfFromRegistration(reg) };
 };
 
 /**
@@ -197,8 +206,15 @@ export const probePrf = async (
   });
   const prf = assertion.clientExtensionResults?.prf?.results?.first;
   if (!prf) throw new PrfMissingError();
-  await verifyAssertion(assertion, probeChallenge, credentialPublicKey);
-  return prfBytes(prf);
+  const output = prfBytes(prf);
+  try {
+    await verifyAssertion(assertion, probeChallenge, credentialPublicKey);
+  } catch (e) {
+    // The probe's PRF output has no consumer on this path.
+    zeroBytes(output);
+    throw e;
+  }
+  return output;
 };
 
 /**
@@ -244,7 +260,7 @@ type SignProps = {
 /** The spend screen's ceremony: the assertion binds to the spend's
  * digest and evaluates the PRF (both request forms, as in the probe);
  * assertion and PRF output leave as `deviceData` — the seed never
- * crosses the page. */
+ * crosses the page, and the PRF buffer is zero-filled once encoded. */
 const signCeremony = async (
   input: DeviceSignTx
 ): Promise<Record<string, unknown>> => {
@@ -274,7 +290,13 @@ const signCeremony = async (
   });
   const out = assertion.clientExtensionResults?.prf?.results?.first;
   if (!out) throw new PrfMissingError();
-  return { assertion, prf: b64url.encode(prfBytes(out)) };
+  // Encode, then scrub through the view: zeroing reaches the browser's
+  // own buffer, the copy the response object still references. What
+  // leaves for the engine is the base64 string alone.
+  const output = prfBytes(out);
+  const prf = b64url.encode(output);
+  zeroBytes(output);
+  return { assertion, prf };
 };
 
 /** The spend screen: `blurb` is the one-line custody story. */
