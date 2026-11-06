@@ -7,12 +7,12 @@ import clsx from "clsx";
 import { GoArrowLeft } from "react-icons/go";
 
 import { isLastStep, previousStep } from "../model/navigation";
-import { STEP_META } from "../model/steps";
+import { LANDING, STEP_META } from "../model/steps";
 import { useWizard } from "../SetupContext";
 
 export const StepHeader = () => {
   const { state, dispatch } = useWizard();
-  const meta = STEP_META[state.step];
+  const meta = STEP_META[state.flow][state.step] ?? LANDING;
 
   // No header on the landing screen.
   if (meta.total === 0) return null;

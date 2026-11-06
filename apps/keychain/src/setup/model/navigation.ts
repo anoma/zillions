@@ -25,11 +25,20 @@ const DEVICE_ORDER: Step[] = [
   "device.complete",
 ];
 
+// The passkey reuses the device steps but skips the picker — its first
+// step backs to the landing screen like any other branch's first step.
+const PASSKEY_ORDER: Step[] = [
+  "device.connect",
+  "device.name",
+  "device.complete",
+];
+
 const ORDERS: Record<Flow, Step[]> = {
   none: [],
   create: CREATE_ORDER,
   import: IMPORT_ORDER,
   device: DEVICE_ORDER,
+  passkey: PASSKEY_ORDER,
 };
 
 const orderFor = (flow: Flow): Step[] => ORDERS[flow];

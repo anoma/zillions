@@ -1,10 +1,12 @@
 /**
- * Landing step: choose Create, Import or a hardware wallet. The hardware
- * choice opens `device.choose`, which lists the devices this browser can reach.
+ * Landing step: choose Create, Import, a hardware wallet or a passkey. The
+ * hardware choice opens `device.choose`, which lists the devices this
+ * browser can reach; the passkey opens its connect screen's
+ * create-or-import chooser.
  */
 import { Heading, Stack } from "@zillions/components";
 import { ZEmblem } from "@zillions/components/assets/ZEmblem";
-import { PiDownloadSimple, PiPlus } from "react-icons/pi";
+import { PiDownloadSimple, PiFingerprint, PiPlus } from "react-icons/pi";
 
 import { wallets } from "../../hardware";
 import { useWizard } from "../SetupContext";
@@ -25,9 +27,12 @@ const HardwareIcon = () => (
 
 export const Start = () => {
   const { dispatch } = useWizard();
-  const hasDevice = Object.values(wallets).some((wallet) =>
-    wallet.isSupported()
+  // Ledger and Keystone belong to the picker behind the hardware card;
+  // the passkey connects from its own card, skipping the picker.
+  const hasHardware = Object.values(wallets).some(
+    (wallet) => wallet.kind !== "passkey-prf" && wallet.isSupported()
   );
+  const hasPasskey = wallets["passkey-prf"].isSupported();
 
   return (
     <div className="flex flex-col flex-1 justify-center">
@@ -52,7 +57,17 @@ export const Start = () => {
           data-testid="setup-import-keys-button"
           onClick={() => dispatch({ type: "chooseFlow", flow: "import" })}
         />
-        {hasDevice && (
+        {hasPasskey && (
+          <OptionCard
+            more
+            icon={<PiFingerprint />}
+            title="Passkey"
+            subtitle="Set up a secure account using a Passkey"
+            data-testid="setup-passkey-button"
+            onClick={() => dispatch({ type: "chooseFlow", flow: "passkey" })}
+          />
+        )}
+        {hasHardware && (
           <OptionCard
             more
             icon={<HardwareIcon />}
