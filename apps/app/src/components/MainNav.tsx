@@ -18,6 +18,7 @@ const navItems = [
   { label: "Wallet", to: "/", icon: HouseIcon },
   { label: "Send", to: "/send", icon: ArrowUpIcon },
   { label: "Receive", to: "/receive", icon: ArrowDownIcon },
+  { label: "Swap", to: "/swap", icon: ArrowUpIcon },
   { label: "Transactions", to: "/transactions", icon: RotateCcwIcon },
 ] as const;
 

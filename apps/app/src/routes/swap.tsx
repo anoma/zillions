@@ -1,0 +1,253 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import { twMerge } from "tailwind-merge";
+import { FormPage } from "../components/FormPage";
+import { FormCard, SubmitBlock } from "../components/TransferForm";
+import { SpinnerIcon } from "../icons/SpinnerIcon";
+
+export const Route = createFileRoute("/swap")({
+  component: SwapRoute,
+});
+
+function SwapRoute() {
+  const [fromToken, setFromToken] = useState({
+    assetId: "nep141:btc.omft.near",
+    symbol: "BTC",
+    blockchain: "btc",
+    logo: "/logos/btc.svg",
+  });
+  const [error, setError] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [fromAmount, setFromAmount] = useState("");
+  const [refundAddress, setRefundAddress] = useState("");
+  const [slippage, setSlippage] = useState("0.5");
+  const [loading, setLoading] = useState(true);
+  const [tokens, setTokens] = useState(null);
+  const [toAmount, setToAmount] = useState("--");
+  const [zecToken, setZecToken] = useState({
+    assetId: "nep141:zec.omft.near",
+    decimals: 8,
+    blockchain: "zec",
+    symbol: "ZEC",
+    price: 1315.9,
+    priceUpdatedAt: "2026-11-06T13:22:31.003Z",
+    coingeckoId: "zcash",
+  });
+
+  const [isPending, setIsPending] = useState(false);
+
+  const amountRef = useRef<HTMLInputElement>(null);
+  const refundRef = useRef<HTMLInputElement>(null);
+  const slippageRef = useRef<HTMLInputElement>(null);
+
+  // Placeholders for future computed values
+  const [fromTotalPrice, setFromTotalPrice] = useState("0.00");
+  const [toTotalPrice, setToTotalPrice] = useState("0.00");
+  const [zecPriceInFrom, setZecPriceInFrom] = useState("1");
+
+  const onSubmit = () => {
+    setIsPending(true);
+    // Placeholder for fetching quote logic
+    setTimeout(() => setIsPending(false), 1000);
+  };
+
+  useEffect(() => {
+    (async () => {
+      const totalPrice = fromAmount * fromToken.price;
+      setFromTotalPrice(totalPrice.toFixed(2));
+      setToTotalPrice(totalPrice.toFixed(2));
+      const toAmount = totalPrice / zecToken.price;
+      setToAmount(toAmount.toFixed(zecToken.decimals));
+      setZecPriceInFrom(zecToken.price / fromToken.price);
+    })();
+  }, [fromAmount, fromToken, toAmount, zecToken]);
+
+  useEffect(() => {
+    fetch("https://1click.chaindefuser.com/v0/tokens")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setTokens(data);
+        setFromToken(data[0]);
+        setZecToken(data.find((token) => token.assetId == zecToken.assetId));
+        setLoading(false);
+      })
+      .catch((error) => {
+        setError(error.message);
+        setLoading(false);
+      });
+  }, []);
+
+  if (error) {
+    return <PageError>{error}</PageError>;
+  } else if (loading) {
+    return (
+      <div className="size-52 grid place-items-center">
+        <SpinnerIcon className="size-5 text-gold" />
+      </div>
+    );
+  } else {
+    return (
+      <FormPage title="Swap" onSubmit={onSubmit}>
+        <FormCard heading="From" htmlFor="swap-from-amount">
+          <div className="flex flex-col gap-4">
+            <div
+              className="relative w-full"
+              tabIndex={0}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                  setDropdownOpen(false);
+                }
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex w-full items-center justify-between rounded-xl border border-line bg-card p-3 text-sm focus:border-black focus:outline-none"
+              >
+                <div className="flex items-center gap-3">
+                  <img
+                    src={fromToken.logo}
+                    alt={fromToken.symbol}
+                    className="size-5 rounded-full bg-gray-100"
+                  />
+                  <span className="font-medium">
+                    {fromToken.symbol} on {fromToken.blockchain}
+                  </span>
+                </div>
+                <span className="text-gray-400">▼</span>
+              </button>
+
+              {dropdownOpen && (
+                <div className="absolute z-10 w-full mt-1 bg-card border border-line rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                  {tokens.map((c) => (
+                    <button
+                      key={c.assetId}
+                      type="button"
+                      onClick={() => {
+                        setFromToken(c);
+                        setDropdownOpen(false);
+                      }}
+                      className={twMerge(
+                        "flex w-full items-center gap-3 p-3 text-sm transition-colors hover:bg-neutral-100",
+                        fromToken.assetId === c.assetId ? "bg-neutral-50" : "",
+                      )}
+                    >
+                      <img
+                        src={c.logo}
+                        alt={c.symbol}
+                        className="size-5 rounded-full bg-gray-100"
+                      />
+                      <span>
+                        {c.symbol} on {c.blockchain}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <input
+                id="swap-from-amount"
+                ref={amountRef}
+                type="number"
+                min="0"
+                step="any"
+                placeholder="0.00"
+                value={fromAmount}
+                onChange={(e) => {
+                  setFromAmount(e.target.value);
+                }}
+                className="w-full rounded-xl border border-line bg-transparent p-3 text-lg font-medium focus:border-black focus:outline-none"
+              />
+              <p className="px-1 text-xs text-neutral-500">
+                ~ ${fromTotalPrice} USD
+              </p>
+            </div>
+          </div>
+        </FormCard>
+
+        <FormCard heading="Refund Address" htmlFor="swap-refund-address">
+          <div className="flex flex-col gap-1.5">
+            <input
+              id="swap-refund-address"
+              ref={refundRef}
+              type="text"
+              placeholder="Address to refund if swap fails"
+              value={refundAddress}
+              onChange={(e) => setRefundAddress(e.target.value)}
+              className="w-full rounded-xl border border-line bg-transparent p-3 text-sm focus:border-black focus:outline-none"
+            />
+          </div>
+        </FormCard>
+
+        <FormCard heading="To">
+          <div className="flex flex-col gap-4">
+            <div className="flex w-full items-center gap-3 rounded-xl border border-line bg-neutral-50 p-3 text-sm">
+              <img
+                src="/logos/zec.svg"
+                alt="ZEC"
+                className="size-5 rounded-full bg-black"
+              />
+              <span className="font-medium">
+                {zecToken.symbol} on {zecToken.blockchain}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex w-full items-center rounded-xl border border-line bg-neutral-50 p-3 text-lg font-medium text-neutral-400">
+                {toAmount}
+              </div>
+              <p className="px-1 text-xs text-neutral-500">
+                ~ ${toTotalPrice} USD
+              </p>
+            </div>
+          </div>
+        </FormCard>
+
+        <FormCard heading="Swap Settings">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-4">
+              <label
+                htmlFor="swap-slippage"
+                className="text-sm font-medium text-neutral-700"
+              >
+                Slippage tolerance (%)
+              </label>
+              <input
+                id="swap-slippage"
+                ref={slippageRef}
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={slippage}
+                onChange={(e) => setSlippage(e.target.value)}
+                className="w-24 rounded-xl border border-line bg-transparent p-2 text-right text-sm focus:border-black focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-neutral-700">Rate</span>
+              <span className="font-medium">
+                1 {zecToken.symbol} = {zecPriceInFrom} {fromToken.symbol}
+              </span>
+            </div>
+          </div>
+        </FormCard>
+
+        <SubmitBlock
+          label="Get a quote"
+          pending={isPending}
+          pendingLabel="Getting quote..."
+          color="black"
+          stages={[]}
+        />
+      </FormPage>
+    );
+  }
+}
