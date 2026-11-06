@@ -54,7 +54,7 @@ for (const { name, version, patched } of crates) {
   const res = await fetch(`https://crates.io/api/v1/crates/${name}`, {
     headers: {
       "User-Agent":
-        "zillions-interface upstream-check (github.com/heliaxdev/zillions-interface)",
+        "zillions-interface upstream-check (github.com/anoma/zillions-interface)",
     },
   });
   if (!res.ok) throw new Error(`${name}: crates.io ${res.status}`);
