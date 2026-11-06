@@ -16,6 +16,7 @@ import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as ReceiveRouteImport } from './routes/receive'
 import { Route as SendRouteImport } from './routes/send'
 import { Route as ShieldRouteImport } from './routes/shield'
+import { Route as SwapRouteImport } from './routes/swap'
 import { Route as TransactionsRouteImport } from './routes/transactions'
 import { Route as UnshieldRouteImport } from './routes/unshield'
 import { Route as TxIdRouteImport } from './routes/tx.$id'
@@ -55,6 +56,11 @@ const ShieldRoute = ShieldRouteImport.update({
   path: '/shield',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SwapRoute = SwapRouteImport.update({
+  id: '/swap',
+  path: '/swap',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TransactionsRoute = TransactionsRouteImport.update({
   id: '/transactions',
   path: '/transactions',
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/shield': typeof ShieldRoute
+  '/swap': typeof SwapRoute
   '/transactions': typeof TransactionsRoute
   '/unshield': typeof UnshieldRoute
   '/tx/$id': typeof TxIdRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/shield': typeof ShieldRoute
+  '/swap': typeof SwapRoute
   '/transactions': typeof TransactionsRoute
   '/unshield': typeof UnshieldRoute
   '/tx/$id': typeof TxIdRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/receive': typeof ReceiveRoute
   '/send': typeof SendRoute
   '/shield': typeof ShieldRoute
+  '/swap': typeof SwapRoute
   '/transactions': typeof TransactionsRoute
   '/unshield': typeof UnshieldRoute
   '/tx/$id': typeof TxIdRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/receive'
     | '/send'
     | '/shield'
+    | '/swap'
     | '/transactions'
     | '/unshield'
     | '/tx/$id'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/receive'
     | '/send'
     | '/shield'
+    | '/swap'
     | '/transactions'
     | '/unshield'
     | '/tx/$id'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/receive'
     | '/send'
     | '/shield'
+    | '/swap'
     | '/transactions'
     | '/unshield'
     | '/tx/$id'
@@ -155,6 +167,7 @@ export interface RootRouteChildren {
   ReceiveRoute: typeof ReceiveRoute
   SendRoute: typeof SendRoute
   ShieldRoute: typeof ShieldRoute
+  SwapRoute: typeof SwapRoute
   TransactionsRoute: typeof TransactionsRoute
   UnshieldRoute: typeof UnshieldRoute
   TxIdRoute: typeof TxIdRoute
@@ -211,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShieldRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/swap': {
+      id: '/swap'
+      path: '/swap'
+      fullPath: '/swap'
+      preLoaderRoute: typeof SwapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/transactions': {
       id: '/transactions'
       path: '/transactions'
@@ -243,6 +263,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReceiveRoute: ReceiveRoute,
   SendRoute: SendRoute,
   ShieldRoute: ShieldRoute,
+  SwapRoute: SwapRoute,
   TransactionsRoute: TransactionsRoute,
   UnshieldRoute: UnshieldRoute,
   TxIdRoute: TxIdRoute,
