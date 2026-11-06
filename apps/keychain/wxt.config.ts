@@ -6,6 +6,8 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 import svgr from "vite-plugin-svgr";
 import { defineConfig } from "wxt";
 
+import { RP_ID, rpHostPermissions } from "./src/hardware/passkey-constants";
+
 const r = (p: string): string => resolve(__dirname, p);
 
 const pkg = JSON.parse(readFileSync(r("package.json"), "utf-8")) as {
@@ -145,6 +147,16 @@ export default defineConfig({
     // (browser.tabs.query({ url })) instead of opening duplicates. `idle`
     // drives auto-lock and shows no install warning.
     permissions: ["storage", "tabs", "idle"],
+    // The passkey RP claim: ceremonies in extension pages may pass
+    // `rpId: keychain.zillions.money` because this permission covers it.
+    // Derived from the same constant the ceremonies use (see
+    // `passkey-constants.ts`), so the manifest cannot drift from the code.
+    // Kept to the single RP host: nothing is ever served from it and no
+    // content script matches it, so it grants no site access.
+    host_permissions: rpHostPermissions(RP_ID),
+    // The RP-claiming feature itself: Chrome 122+ (and forks tracking it)
+    // allow an extension page to use an RP ID its host permissions cover.
+    minimum_chrome_version: "122",
     // Toolbar action opens the popup (`entrypoints/popup`). WXT fills in
     // `default_popup` from that entrypoint; we only set the title here. The
     // popup itself redirects to the Setup tab when no wallet exists yet.
@@ -183,9 +195,9 @@ export default defineConfig({
             // Firefox keys storage and IndexedDB by this ID; without it every
             // reinstall gets a fresh ID and an empty vault.
             id: "keychain@zillions.heliax.dev",
-            // MV3 content scripts need their host permission granted; 127+
-            // grants it at install instead of leaving it opt-in.
-            strict_min_version: "128.0",
+            // An extension page may claim an RP ID its host permissions
+            // cover only since Firefox 150 (WebAuthn in web extensions).
+            strict_min_version: "150.0",
             data_collection_permissions: { required: ["none"] },
           },
         },

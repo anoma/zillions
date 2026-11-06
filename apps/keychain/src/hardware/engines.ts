@@ -6,8 +6,10 @@
 import type { DeviceEngine, DeviceKind } from "./types";
 import { keystoneEngine } from "./keystone";
 import { ledgerEngine } from "./ledger";
+import { passkeyPrfEngine } from "./passkey-prf";
 
 export const engines: Record<DeviceKind, DeviceEngine> = {
   keystone: keystoneEngine,
   ledger: ledgerEngine,
+  "passkey-prf": passkeyPrfEngine,
 };

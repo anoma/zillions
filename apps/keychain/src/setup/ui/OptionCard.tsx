@@ -8,6 +8,8 @@ type OptionCardProps = {
   onClick: () => void;
   /** Shows a chevron: the choice opens a further list. */
   more?: boolean;
+  /** Greys the card and stops clicks (ActionButton's disabled idiom). */
+  disabled?: boolean;
   "data-testid"?: string;
 };
 
@@ -18,10 +20,12 @@ export const OptionCard = ({
   subtitle,
   onClick,
   more,
+  disabled = false,
   ...props
 }: OptionCardProps) => (
   <button
     type="button"
+    disabled={disabled}
     onClick={onClick}
     className={clsx(
       "group flex items-center gap-5 w-full min-h-[72px] px-5 py-4 rounded-xl text-left",
@@ -30,6 +34,7 @@ export const OptionCard = ({
       "hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-12px_rgb(0_0_0/0.25)]",
       "active:translate-y-0 active:shadow-none",
       "focus-visible:ring-2 focus-visible:ring-black/40",
+      "disabled:pointer-events-none disabled:cursor-auto disabled:opacity-25",
     )}
     {...props}
   >
