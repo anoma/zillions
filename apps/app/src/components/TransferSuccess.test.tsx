@@ -37,9 +37,7 @@ test("the banner counts down until history has the transaction mined, then says 
   );
 
   history = [{ txid: "t1", status: "Confirmed" }];
-  rerender(<TransferSuccess tx={tx} />, {
-    wrapper,
-  });
+  rerender(<TransferSuccess tx={tx} />);
   expect(screen.getByRole("status").textContent).toBe("Transaction completed");
   // The receipt's icon drops its clock.
   expect(screen.queryByText(/^Processing ·/)).toBeNull();
