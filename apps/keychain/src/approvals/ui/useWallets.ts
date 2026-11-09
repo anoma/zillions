@@ -24,9 +24,5 @@ export const useWallets = (enabled = true) => {
     accounts,
     wallets,
     active: wallets.find((a) => a.id === activeId),
-    setActive: async (wallet: StoredAccount): Promise<void> => {
-      await client?.setActiveAccount(wallet.id, wallet.type);
-      setActiveId(wallet.id);
-    },
   };
 };

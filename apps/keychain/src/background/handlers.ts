@@ -167,9 +167,9 @@ export const handlers: HandlerMap = {
   },
 
   "keyring/saveDeviceAccount": async (input) => {
-    const { keyring, broadcaster } = await getServices();
+    const { keyring, approvals, broadcaster } = await getServices();
     const result = await keyring.storeDeviceAccount(input);
-    void broadcaster.accountChanged();
+    void broadcaster.accountChanged(await approvals.followActiveAccount());
     return result;
   },
 
@@ -184,9 +184,9 @@ export const handlers: HandlerMap = {
   },
 
   "keyring/setActiveAccount": async ({ id, type }) => {
-    const { accounts, broadcaster } = await getServices();
+    const { accounts, approvals, broadcaster } = await getServices();
     await accounts.setActiveAccount(id, type);
-    void broadcaster.accountChanged();
+    void broadcaster.accountChanged(await approvals.followActiveAccount());
   },
 
   "keyring/revealMnemonic": async ({ accountId }) => {
@@ -205,9 +205,11 @@ export const handlers: HandlerMap = {
   },
 
   "keyring/deleteAccount": async ({ accountId }) => {
-    const { accounts, broadcaster } = await getServices();
+    const { accounts, approvals, broadcaster } = await getServices();
     await accounts.remove(accountId);
-    // Removing the active account repoints it, so dapps may see a new default.
+    await approvals.followActiveAccount();
+    // Any site may have lost its current wallet to the removal and moved on
+    // to another it was given.
     void broadcaster.accountChanged();
   },
 
@@ -292,9 +294,14 @@ export const handlers: HandlerMap = {
     return approvals.isConnectionApproved(origin);
   },
 
-  "approvals/resolveConnection": async ({ origin, allow }, ctx) => {
+  "approvals/resolveConnection": async ({ origin, allow, accountId }, ctx) => {
     const { approvals } = await getServices();
-    await approvals.resolveConnection(requireTabId(ctx), origin, allow);
+    await approvals.resolveConnection(
+      requireTabId(ctx),
+      origin,
+      allow,
+      accountId
+    );
   },
 
   "approvals/resolveDisconnection": async ({ origin, revoke }, ctx) => {
@@ -305,7 +312,7 @@ export const handlers: HandlerMap = {
 
   "approvals/connectedSites": async () => {
     const { approvals } = await getServices();
-    return approvals.approvedOrigins();
+    return approvals.connectedSites();
   },
 
   "approvals/revokeConnection": async ({ origin }) => {
@@ -352,6 +359,6 @@ export const handlers: HandlerMap = {
   "approvals/submitUpdateDefaultAccount": async ({ address }, ctx) => {
     const { approvals, broadcaster } = await getServices();
     await approvals.submitUpdateDefaultAccount(requireTabId(ctx), address);
-    void broadcaster.accountChanged();
+    void broadcaster.accountChanged(await approvals.followActiveAccount());
   },
 };

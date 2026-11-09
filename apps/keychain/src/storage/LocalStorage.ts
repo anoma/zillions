@@ -1,6 +1,6 @@
 /**
- * io-ts-validated storage over `browser.storage.local`. Holds the
- * approved-origins list the dapp connection flow needs, and the auto-lock
+ * io-ts-validated storage over `browser.storage.local`. Holds the dapp
+ * connections (each origin and the wallets it may see), and the auto-lock
  * setting.
  */
 import { KVStore } from "@zillions/storage";
@@ -9,17 +9,25 @@ import * as t from "io-ts";
 
 import { ExtStorage } from "./Storage";
 
-const ApprovedOrigins = t.array(t.string);
-type ApprovedOriginsType = t.TypeOf<typeof ApprovedOrigins>;
+const Connection = t.type({
+  /** Wallet (parent account) ids the user shared with the origin. */
+  accounts: t.array(t.string),
+  /** The one of `accounts` the origin sees keys for and signs with. */
+  current: t.string,
+});
+export type Connection = t.TypeOf<typeof Connection>;
+const Connections = t.record(t.string, Connection);
+type ConnectionsType = t.TypeOf<typeof Connections>;
 
-type LocalStorageTypes = ApprovedOriginsType | number;
+type LocalStorageTypes = ConnectionsType | number;
 
+// Replaces the "zillionsExtensionApprovedOrigins" origin list, which bound no
+// account; origins approved there must connect again.
 export type LocalStorageKeys =
-  | "zillionsExtensionApprovedOrigins"
+  | "zillionsExtensionConnections"
   | "zillionsExtensionAutoLockMinutes";
 
-const APPROVED_ORIGINS_KEY: LocalStorageKeys =
-  "zillionsExtensionApprovedOrigins";
+const CONNECTIONS_KEY: LocalStorageKeys = "zillionsExtensionConnections";
 const AUTO_LOCK_KEY: LocalStorageKeys = "zillionsExtensionAutoLockMinutes";
 
 export const AUTO_LOCK_OPTIONS = [0, 5, 15, 30, 60] as const;
@@ -30,29 +38,26 @@ export class LocalStorage extends ExtStorage {
     super(provider);
   }
 
-  async getApprovedOrigins(): Promise<ApprovedOriginsType | undefined> {
-    const data = await this.getRaw(APPROVED_ORIGINS_KEY);
-
-    const Schema = t.union([ApprovedOrigins, t.undefined]);
-    const decodedData = Schema.decode(data);
-
-    if (E.isLeft(decodedData)) {
-      throw new Error("Approved Origins are not valid");
+  async getConnections(): Promise<ConnectionsType> {
+    const decoded = t
+      .union([Connections, t.undefined])
+      .decode(await this.getRaw(CONNECTIONS_KEY));
+    if (E.isLeft(decoded)) {
+      throw new Error("Connections are not valid");
     }
-
-    return decodedData.right;
+    return decoded.right ?? {};
   }
 
-  async addApprovedOrigin(originToAdd: string): Promise<void> {
-    const data = (await this.getApprovedOrigins()) || [];
-    await this.setApprovedOrigins([...data, originToAdd]);
+  async setConnection(origin: string, connection: Connection): Promise<void> {
+    await this.setRaw(CONNECTIONS_KEY, {
+      ...(await this.getConnections()),
+      [origin]: connection,
+    });
   }
 
-  async removeApprovedOrigin(originToRemove: string): Promise<void> {
-    const data = (await this.getApprovedOrigins()) || [];
-    await this.setApprovedOrigins(
-      data.filter((origin) => origin !== originToRemove)
-    );
+  async removeConnection(origin: string): Promise<void> {
+    const { [origin]: _removed, ...rest } = await this.getConnections();
+    await this.setRaw(CONNECTIONS_KEY, rest);
   }
 
   /** Minutes of system idle time before locking; 0 never. */
@@ -66,11 +71,5 @@ export class LocalStorage extends ExtStorage {
       throw new Error(`Unsupported auto-lock value: ${minutes}`);
     }
     await this.setRaw(AUTO_LOCK_KEY, minutes);
-  }
-
-  private async setApprovedOrigins(
-    origins: ApprovedOriginsType
-  ): Promise<void> {
-    await this.setRaw(APPROVED_ORIGINS_KEY, origins);
   }
 }

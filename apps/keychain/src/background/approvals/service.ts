@@ -23,6 +23,7 @@ import { payments, transferAmount } from "../../approvals/utils/pczt";
 import type {
   ApprovalKind,
   ApprovalLogEntry,
+  ConnectedSite,
   DeviceSignTx,
 } from "../../ipc/contract";
 import { LocalStorage, type KeyStoreType } from "../../storage";
@@ -50,13 +51,9 @@ type Resolver = {
 
 const MAX_OPEN_APPROVALS = 3;
 
-/**
- * The active (parent) account and its derived children: the only accounts a
- * dapp may see key material for or sign with.
- */
-const isInActiveScope = (record: KeyStoreType, activeId?: string): boolean =>
-  activeId !== undefined &&
-  (record.id === activeId || record.parentId === activeId);
+/** `record` is the wallet `walletId` or one of its derived children. */
+const isInWallet = (record: KeyStoreType, walletId: string): boolean =>
+  record.id === walletId || record.parentId === walletId;
 
 /** A dapp's PCZT awaiting user approval, parked under its `msgId`. */
 type PendingSignTx = {
@@ -120,12 +117,15 @@ export class ApprovalsService {
 
   // ---- dapp-facing (origin always derived from the message sender) ----
 
-  /** Approved AND unlocked — what `window.zc.isConnected()` reports. */
+  /**
+   * Approved with a wallet that still exists, AND unlocked — what
+   * `window.zc.isConnected()` reports.
+   */
   async isConnectionApproved(origin: string): Promise<boolean> {
     if (await this.vaultService.isLocked()) {
       return false;
     }
-    return this.isDomainApproved(origin);
+    return (await this.siteWallet(origin)) !== undefined;
   }
 
   /**
@@ -165,32 +165,36 @@ export class ApprovalsService {
 
   /**
    * Every account for a connected dapp (so it can offer a switcher), with key
-   * material only on the active account and its children.
+   * material only on the site's current wallet and its children.
    */
   async dappAccounts(origin: string): Promise<ZCashKeychainAccount[]> {
-    await this.assertConnected(origin);
-    const activeId = (await this.accounts.getActiveAccount())?.id;
+    const wallet = await this.assertConnected(origin);
     return (await this.accounts.findAll()).map((record) =>
-      toPublicAccount(record, isInActiveScope(record, activeId))
+      toPublicAccount(record, isInWallet(record, wallet.id))
     );
   }
 
-  /** The active account for a connected dapp, or null when none is set. */
+  /**
+   * The site's current wallet; its shielded child instead when that is the
+   * globally active account (a site may have switched to it by address).
+   */
   async dappDefaultAccount(
     origin: string
   ): Promise<ZCashKeychainAccount | null> {
-    await this.assertConnected(origin);
-    const active = await this.accounts.getActiveAccount();
-    if (!active) return null;
-    const record = await this.accounts.findById(active.id);
-    return record ? toPublicAccount(record, true) : null;
+    const wallet = await this.assertConnected(origin);
+    const activeId = (await this.accounts.getActiveAccount())?.id;
+    const active = activeId && (await this.accounts.findById(activeId));
+    return toPublicAccount(
+      active && active.parentId === wallet.id ? active : wallet,
+      true
+    );
   }
 
   /**
    * Resolve a `sign()` call: park the PCZT under a msgId and open the
    * approval popup; resolves with the signed PCZT (base64) once the user
    * confirms. Requires an unlocked vault, a connected origin, and a signer
-   * within the active account.
+   * within the site's current wallet.
    */
   async approveSignTx(
     pczt: string,
@@ -200,9 +204,7 @@ export class ApprovalsService {
     if (await this.vaultService.isLocked()) {
       throw new Error("Keychain is locked");
     }
-    await this.assertConnected(origin);
-
-    const record = await this.activeSigner(signer);
+    const record = await this.activeSigner(origin, signer);
 
     const msgId = uuid();
     // The resolved address, so the summary and the signature use one account.
@@ -237,15 +239,11 @@ export class ApprovalsService {
   }
 
   /**
-   * Seal a payment link's key to the active account. No popup: a seal opens
-   * nothing, since unsealing a link needs that link's key already.
+   * Seal a payment link's key to the site's current wallet. No popup: a seal
+   * opens nothing, since unsealing a link needs that link's key already.
    */
   async sealLinkKey(key: string, origin: string): Promise<string> {
-    if (await this.vaultService.isLocked()) {
-      throw new Error("Keychain is locked");
-    }
-    await this.assertConnected(origin);
-    const record = await this.activeSigner();
+    const record = await this.activeSigner(origin);
     const sealed = await this.keyring.sealLinkKey(key, record.address);
     this.sealedLinks.add(linkAddress(key));
     return sealed;
@@ -260,18 +258,14 @@ export class ApprovalsService {
     sealed: string,
     nk: string
   ): Promise<string> {
-    if (await this.vaultService.isLocked()) {
-      throw new Error("Keychain is locked");
-    }
-    await this.assertConnected(origin);
-    const record = await this.activeSigner();
+    const record = await this.activeSigner(origin);
     const msgId = uuid();
     this.pendingLinks.set(msgId, { sealed, nk, signer: record.address });
     try {
       return await this.launchApprovalPopup<string>(
         { origin, kind: "open-link" },
         approvalRoutes.approveOpenLinkKey(),
-        { msgId, origin }
+        { msgId, origin, signer: record.address }
       );
     } finally {
       this.pendingLinks.delete(msgId);
@@ -299,8 +293,9 @@ export class ApprovalsService {
 
   /**
    * Resolve an `updateDefaultAccount(address)` call: require a connected,
-   * unlocked origin and an existing account, then open the approval popup. The
-   * popup confirms via `submitUpdateDefaultAccount`.
+   * unlocked origin and an existing account, then open the approval popup,
+   * which says when the switch shares a wallet the site hasn't seen. The popup
+   * confirms via `submitUpdateDefaultAccount`.
    */
   async approveUpdateDefaultAccount(
     origin: string,
@@ -311,6 +306,8 @@ export class ApprovalsService {
     if (!record) {
       throw new Error(`Account for ${address} not found!`);
     }
+    const connection = (await this.localStorage.getConnections())[origin];
+    const shared = connection.accounts.includes(record.parentId ?? record.id);
     return this.launchApprovalPopup(
       {
         origin,
@@ -318,7 +315,7 @@ export class ApprovalsService {
         describe: async () => ({ account: record.alias }),
       },
       approvalRoutes.approveUpdateDefaultAccount(),
-      { address, alias: record.alias, origin }
+      { address, alias: record.alias, origin, shared: String(shared) }
     );
   }
 
@@ -379,11 +376,12 @@ export class ApprovalsService {
     this.pendingTxs.delete(msgId);
 
     try {
-      // The site may have been disconnected while the popup was open.
-      await this.assertConnected(resolvers.meta.origin);
-      // The active account may have changed while the popup was open, and a
-      // site may only sign with the one active now.
-      const record = await this.activeSigner(signer || pending.signer);
+      // The site may have been disconnected, or moved to another wallet, while
+      // the popup was open; it may only sign with its wallet now.
+      const record = await this.activeSigner(
+        resolvers.meta.origin,
+        signer || pending.signer
+      );
       // A PCZT spans transparent + shielded; the keyring signs the whole PCZT
       // in one pass and returns the signed PCZT as base64.
       const signed = await this.keyring.sign(
@@ -408,19 +406,28 @@ export class ApprovalsService {
   }
 
   /**
-   * The approval popup confirmed the default-account change: point the active
-   * account at `address` and settle the dapp's promise.
+   * The approval popup confirmed the default-account change: share the wallet
+   * of `address` with the site, make it the site's current one and the active
+   * account, and settle the dapp's promise.
    */
   async submitUpdateDefaultAccount(
     popupTabId: number,
     address: string
   ): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
+    const { origin } = resolvers.meta;
     try {
+      await this.assertConnected(origin);
       const record = await this.accounts.findByAddress(address);
       if (!record) {
         throw new Error(`Account for ${address} not found!`);
       }
+      const walletId = record.parentId ?? record.id;
+      const { accounts } = (await this.localStorage.getConnections())[origin];
+      await this.localStorage.setConnection(origin, {
+        accounts: accounts.includes(walletId) ? accounts : [...accounts, walletId],
+        current: walletId,
+      });
       await this.accounts.setActiveAccount(
         record.id,
         record.type as ActiveAccountStore["type"]
@@ -433,11 +440,15 @@ export class ApprovalsService {
     }
   }
 
-  /** The approval popup's answer to a pending connection request. */
+  /**
+   * The approval popup's answer to a pending connection request; `accountId`
+   * is the wallet the user connects the site with.
+   */
   async resolveConnection(
     popupTabId: number,
     origin: string,
-    allow: boolean
+    allow: boolean,
+    accountId?: string
   ): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
 
@@ -449,8 +460,15 @@ export class ApprovalsService {
 
     try {
       // An approved origin only opened the window to log in: no new decision.
-      if (!(await this.localStorage.getApprovedOrigins())?.includes(origin)) {
-        await this.localStorage.addApprovedOrigin(origin);
+      if (!(await this.siteWallet(origin))) {
+        const wallet = accountId && (await this.accounts.findById(accountId));
+        if (!wallet || wallet.parentId) {
+          throw new Error("Choose an account to connect");
+        }
+        await this.localStorage.setConnection(origin, {
+          accounts: [wallet.id],
+          current: wallet.id,
+        });
         await this.record(resolvers.meta, "approved");
       }
     } catch (e) {
@@ -492,12 +510,44 @@ export class ApprovalsService {
     return this.log.clear();
   }
 
-  async approvedOrigins(): Promise<string[]> {
-    return (await this.localStorage.getApprovedOrigins()) ?? [];
+  /** Each connected origin and the wallet it currently sees. */
+  async connectedSites(): Promise<ConnectedSite[]> {
+    const sites: ConnectedSite[] = [];
+    for (const origin of Object.keys(await this.localStorage.getConnections())) {
+      const wallet = await this.siteWallet(origin);
+      if (wallet) sites.push({ origin, accountId: wallet.id });
+    }
+    return sites;
   }
 
   async revokeConnection(origin: string): Promise<void> {
-    await this.localStorage.removeApprovedOrigin(origin);
+    await this.localStorage.removeConnection(origin);
+  }
+
+  /**
+   * The active account changed: sites already sharing its wallet move to it.
+   * Returns those origins, the only ones to tell; the others keep their
+   * wallet and learn nothing of the switch.
+   */
+  async followActiveAccount(): Promise<string[]> {
+    const activeId = (await this.accounts.getActiveAccount())?.id;
+    const active = activeId && (await this.accounts.findById(activeId));
+    if (!active) return [];
+    const walletId = active.parentId ?? active.id;
+    const followers: string[] = [];
+    for (const [origin, connection] of Object.entries(
+      await this.localStorage.getConnections()
+    )) {
+      if (!connection.accounts.includes(walletId)) continue;
+      followers.push(origin);
+      if (connection.current !== walletId) {
+        await this.localStorage.setConnection(origin, {
+          ...connection,
+          current: walletId,
+        });
+      }
+    }
+    return followers;
   }
 
   // ---- internals ----
@@ -526,36 +576,47 @@ export class ApprovalsService {
     return (await this.accounts.findById(record.parentId))?.alias ?? record.alias;
   }
 
-  private async isDomainApproved(origin: string): Promise<boolean> {
-    const approvedOrigins = (await this.localStorage.getApprovedOrigins()) || [];
-    return approvedOrigins.includes(origin);
+  /**
+   * The wallet `origin` currently sees: its `current` one, else (once that
+   * was deleted) another it was given. Undefined when it has none left.
+   */
+  private async siteWallet(origin: string): Promise<KeyStoreType | undefined> {
+    const connection = (await this.localStorage.getConnections())[origin];
+    if (!connection) return undefined;
+    for (const id of [connection.current, ...connection.accounts]) {
+      const record = await this.accounts.findById(id);
+      if (record && !record.parentId) return record;
+    }
+    return undefined;
   }
 
-  /** The `signer` address's account (else the active one), if within the active account. */
-  private async activeSigner(signer?: string): Promise<KeyStoreType> {
-    const activeId = (await this.accounts.getActiveAccount())?.id;
-    const record = signer
-      ? await this.accounts.findByAddress(signer)
-      : activeId
-        ? await this.accounts.findById(activeId)
-        : undefined;
-    if (!signer && !record) {
-      throw new Error("No active account to sign with");
-    }
-    // One error for unknown and inactive addresses: a site learns nothing new.
-    if (!record || !isInActiveScope(record, activeId)) {
+  /**
+   * For a connected, unlocked `origin`: the `signer` address's account (else
+   * the site's wallet), if within the site's current wallet.
+   */
+  private async activeSigner(
+    origin: string,
+    signer?: string
+  ): Promise<KeyStoreType> {
+    const wallet = await this.assertConnected(origin);
+    const record = signer ? await this.accounts.findByAddress(signer) : wallet;
+    // One error for unknown and other addresses: a site learns nothing new.
+    if (!record || !isInWallet(record, wallet.id)) {
       throw new Error(`Signer ${signer} is not the active account`);
     }
     return record;
   }
 
-  private async assertConnected(origin: string): Promise<void> {
+  /** Throws unless unlocked and connected; returns the site's wallet. */
+  private async assertConnected(origin: string): Promise<KeyStoreType> {
     if (await this.vaultService.isLocked()) {
       throw new Error("Keychain is locked");
     }
-    if (!(await this.isDomainApproved(origin))) {
+    const wallet = await this.siteWallet(origin);
+    if (!wallet) {
       throw new Error(`Connection to ${origin} has not been approved`);
     }
+    return wallet;
   }
 
   private createPopup = (url: string): Promise<Windows.Window> => {

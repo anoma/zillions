@@ -1,7 +1,8 @@
 /**
  * Connection approval screen: the dapp at `interfaceOrigin` asked to connect.
- * Says what a connected site can see and do, and which account it will see
- * first (switchable here). If the origin turns out to be already approved
+ * Says what a connected site can see and do, and which account it connects
+ * with (the active one unless changed here; nothing changes until Connect).
+ * If the origin turns out to be already approved
  * (the popup was opened only because the vault was locked), the request
  * auto-approves after login.
  */
@@ -36,10 +37,16 @@ export const ApproveConnection = () => {
   const interfaceOrigin = params.get("interfaceOrigin") ?? "";
   const [isApproved, setIsApproved] = useState<boolean>();
   const [picking, setPicking] = useState(false);
-  const { wallets, active, setActive } = useWallets(isUnlocked);
+  const { wallets, active } = useWallets(isUnlocked);
+  const [chosenId, setChosenId] = useState<string>();
+  const chosen = wallets.find((w) => w.id === chosenId) ?? active;
 
   const handleResponse = async (allowConnection: boolean): Promise<void> => {
-    await client?.resolveConnection(interfaceOrigin, allowConnection);
+    await client?.resolveConnection(
+      interfaceOrigin,
+      allowConnection,
+      chosen?.id
+    );
     await closeCurrentTab();
   };
 
@@ -74,16 +81,18 @@ export const ApproveConnection = () => {
       <Eyebrow>It will be able to</Eyebrow>
       <ul className="m-0 p-0 list-none">
         <Ability allowed>See your account names and addresses</Ability>
-        <Ability allowed>See the active account&apos;s balance and history</Ability>
+        <Ability allowed>
+          See this account&apos;s balance and full history, past and future
+        </Ability>
         <Ability allowed>Ask you to approve transactions</Ability>
         <Ability allowed={false}>Spend without your approval</Ability>
       </ul>
 
-      <Eyebrow>Active account</Eyebrow>
-      {active && (
+      <Eyebrow>Account</Eyebrow>
+      {chosen && (
         <Row
-          lead={<Avatar accountId={active.id} alias={active.alias} />}
-          title={active.alias}
+          lead={<Avatar accountId={chosen.id} alias={chosen.alias} />}
+          title={chosen.alias}
           trail={
             wallets.length > 1 && (
               <Button variant="secondary" size="sm" onClick={() => setPicking(!picking)}>
@@ -95,7 +104,7 @@ export const ApproveConnection = () => {
       )}
       {picking &&
         wallets
-          .filter((w) => w.id !== active?.id)
+          .filter((w) => w.id !== chosen?.id)
           .map((wallet) => (
             <Row
               key={wallet.id}
@@ -104,7 +113,7 @@ export const ApproveConnection = () => {
               title={wallet.alias}
               trail={<Tag>Use</Tag>}
               onClick={() => {
-                void setActive(wallet);
+                setChosenId(wallet.id);
                 setPicking(false);
               }}
             />
@@ -114,7 +123,9 @@ export const ApproveConnection = () => {
         <Button variant="secondary" onClick={() => void handleResponse(false)}>
           Reject
         </Button>
-        <Button onClick={() => void handleResponse(true)}>Connect</Button>
+        <Button disabled={!chosen} onClick={() => void handleResponse(true)}>
+          Connect
+        </Button>
       </ActionBar>
     </>
   );

@@ -1,9 +1,8 @@
 /**
  * Map a stored vault record onto the public, dapp-facing account shape.
- * Only the active account and its children carry key material (shielded
- * accounts expose their UFVK as `viewingKey`); any other account is listed by
- * identity alone, so a site connected while one wallet is active cannot scan
- * or link the others.
+ * Only the site's current wallet and its children carry key material
+ * (shielded accounts expose their UFVK as `viewingKey`); any other account is
+ * listed by identity alone, so a site cannot scan or link the others.
  */
 import { AccountType, ZCashKeychainAccount } from "@zillions/types";
 

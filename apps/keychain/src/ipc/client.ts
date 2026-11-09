@@ -13,6 +13,7 @@ import {
   type AccountType,
   type ApprovalLogEntry,
   type ActiveAccount,
+  type ConnectedSite,
   type DerivedAccount,
   type DeviceSignTx,
   type IpcKind,
@@ -164,8 +165,12 @@ export class BackgroundClient {
   }
 
   /** Resolve the pending connection request owned by this popup's tab. */
-  resolveConnection(origin: string, allow: boolean): Promise<void> {
-    return this.send("approvals/resolveConnection", { origin, allow });
+  resolveConnection(
+    origin: string,
+    allow: boolean,
+    accountId?: string
+  ): Promise<void> {
+    return this.send("approvals/resolveConnection", { origin, allow, accountId });
   }
 
   /** Resolve the pending disconnection request owned by this popup's tab. */
@@ -173,8 +178,8 @@ export class BackgroundClient {
     return this.send("approvals/resolveDisconnection", { origin, revoke });
   }
 
-  /** All currently approved origins. */
-  connectedSites(): Promise<string[]> {
+  /** Connected origins and the wallet each sees. */
+  connectedSites(): Promise<ConnectedSite[]> {
     return this.send("approvals/connectedSites", {});
   }
 

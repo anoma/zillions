@@ -47,7 +47,6 @@ export const AccountList = () => {
   const [dropTarget, setDropTarget] = useState<string>();
 
   const accounts = sortByOrder(parentAccounts, order);
-  const active = accounts.find((a) => a.id === activeAccountId);
 
   const drop = (targetId: string): void => {
     if (dragging && dragging !== targetId) {
@@ -74,7 +73,10 @@ export const AccountList = () => {
           </IconButton>
         }
       />
-      <SiteStatus site={site} accountName={active?.alias} />
+      <SiteStatus
+        site={site}
+        accountName={accounts.find((a) => a.id === site?.accountId)?.alias}
+      />
       <div className="flex items-center justify-between mt-[18px] mb-1.5">
         <Eyebrow className="m-0">Accounts</Eyebrow>
         <Button variant="secondary" size="sm" onClick={() => void openSetupTab()}>

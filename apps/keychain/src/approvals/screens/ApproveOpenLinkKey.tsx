@@ -13,13 +13,15 @@ import { ClientContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 import { RequestCard } from "../ui/RequestCard";
 import { useWallets } from "../ui/useWallets";
+import { walletFor } from "../utils/accounts";
 
 export const ApproveOpenLinkKey = () => {
   const client = useContext(ClientContext);
   const [params] = useSearchParams();
   const msgId = params.get("msgId") ?? "";
   const origin = params.get("origin") ?? "";
-  const { active } = useWallets();
+  const signer = params.get("signer") ?? "";
+  const { accounts } = useWallets();
 
   const handleResponse = async (approved: boolean): Promise<void> => {
     if (approved && msgId) {
@@ -31,7 +33,7 @@ export const ApproveOpenLinkKey = () => {
   return (
     <>
       <ScreenHeader title="Show payment link" />
-      <RequestCard origin={origin} accountLabel="Link from" account={active} />
+      <RequestCard origin={origin} accountLabel="Link from" account={walletFor(accounts, signer)} />
       <Notice tone="gold" title="The link is cash" className="mt-4">
         Anyone who has it can claim the money. Approve only if you are showing
         it to yourself on this site.

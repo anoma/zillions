@@ -112,6 +112,12 @@ export type ActiveAccount = {
   type: AccountType;
 };
 
+/** A connected origin and the wallet (parent account) it currently sees. */
+export type ConnectedSite = {
+  origin: string;
+  accountId: string;
+};
+
 /** Vault lock snapshot the popup gates on. */
 export type LockState = {
   passwordInitialized: boolean;
@@ -346,7 +352,7 @@ export type IpcContract = {
     req: Record<string, never>;
     res: ZCashKeychainAccount[];
   };
-  /** The active account, or null when none is set; requires connection. */
+  /** The account this origin is connected with; requires connection. */
   "dapp/defaultAccount": {
     req: Record<string, never>;
     res: ZCashKeychainAccount | null;
@@ -368,7 +374,7 @@ export type IpcContract = {
     res: string;
   };
   /**
-   * Seal a payment link's key (base64) to the active account; no approval,
+   * Seal a payment link's key (base64) to the connected account; no approval,
    * as sealing opens nothing. Requires connection and an unlocked vault.
    */
   "dapp/sealLinkKey": {
@@ -390,9 +396,12 @@ export type IpcContract = {
     req: { origin: string };
     res: boolean;
   };
-  /** Resolve the pending connection request owned by the calling popup's tab. */
+  /**
+   * Resolve the pending connection request owned by the calling popup's tab;
+   * `accountId` is the wallet to connect with.
+   */
   "approvals/resolveConnection": {
-    req: { origin: string; allow: boolean };
+    req: { origin: string; allow: boolean; accountId?: string };
     res: void;
   };
   /** Resolve the pending disconnection request owned by the calling popup's tab. */
@@ -400,10 +409,10 @@ export type IpcContract = {
     req: { origin: string; revoke: boolean };
     res: void;
   };
-  /** All currently approved origins (Connected Sites screen). */
+  /** Connected origins and their wallets (Connected Sites screen). */
   "approvals/connectedSites": {
     req: Record<string, never>;
-    res: string[];
+    res: ConnectedSite[];
   };
   /** Revoke a previously approved origin (Connected Sites screen). */
   "approvals/revokeConnection": {
