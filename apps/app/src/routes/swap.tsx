@@ -3,13 +3,20 @@ import { useEffect, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { FormPage } from "../components/FormPage";
 import { FormCard, SubmitBlock } from "../components/TransferForm";
+import { useFreshAddress } from "../hooks/useAddresses";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
+
+enum Stage {
+  Swap,
+  ReviewQuote,
+}
 
 export const Route = createFileRoute("/swap")({
   component: SwapRoute,
 });
 
 function SwapRoute() {
+  const shielded = useFreshAddress();
   const [fromToken, setFromToken] = useState({
     assetId: "nep141:btc.omft.near",
     symbol: "BTC",
@@ -21,7 +28,7 @@ function SwapRoute() {
   const [fromAmount, setFromAmount] = useState("");
   const [refundAddress, setRefundAddress] = useState("");
   const [slippage, setSlippage] = useState("0.5");
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [tokens, setTokens] = useState(null);
   const [toAmount, setToAmount] = useState("--");
   const [zecToken, setZecToken] = useState({
@@ -35,6 +42,14 @@ function SwapRoute() {
   });
 
   const [isPending, setIsPending] = useState(false);
+  const [stage, setStage] = useState(Stage.Swap);
+  const [amountIn, setAmountIn] = useState("0");
+  const [amountOut, setAmountOut] = useState("0");
+
+  // New state variables for USD values
+  const [amountInUsd, setAmountInUsd] = useState("0.00");
+  const [amountOutUsd, setAmountOutUsd] = useState("0.00");
+  const [withdrawFee, setWithdrawFee] = useState("0");
 
   const amountRef = useRef<HTMLInputElement>(null);
   const refundRef = useRef<HTMLInputElement>(null);
@@ -49,6 +64,9 @@ function SwapRoute() {
     setIsPending(true);
     // Placeholder for fetching quote logic
     setTimeout(() => setIsPending(false), 1000);
+    setStage(Stage.ReviewQuote);
+    setIsLoading(true);
+    //e.preventDefault();
   };
 
   useEffect(() => {
@@ -63,34 +81,86 @@ function SwapRoute() {
   }, [fromAmount, fromToken, toAmount, zecToken]);
 
   useEffect(() => {
-    fetch("https://1click.chaindefuser.com/v0/tokens")
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Network response was not ok");
-        }
-        return response.json();
+    if (stage == Stage.Swap) {
+      fetch("https://1click.chaindefuser.com/v0/tokens")
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+          return response.json();
+        })
+        .then((data) => {
+          setTokens(data);
+          setFromToken(data[0]);
+          setZecToken(data.find((token) => token.assetId == zecToken.assetId));
+          setIsLoading(false);
+        })
+        .catch((error) => {
+          setError(error.message);
+          setIsLoading(false);
+        });
+    } else if (stage == Stage.ReviewQuote) {
+      const deadline = new Date(Date.now() + 10 * 60 * 1000);
+      const body = {
+        dry: false,
+        swapType: "EXACT_INPUT",
+        slippageTolerance: slippage * 100,
+        originAsset: fromToken.assetId,
+        depositType: "ORIGIN_CHAIN",
+        destinationAsset: zecToken.assetId,
+        amount: (fromAmount * 10 ** fromToken.decimals).toString(),
+        recipient: shielded,
+        recipientType: "DESTINATION_CHAIN",
+        refundTo: refundAddress,
+        refundType: "ORIGIN_CHAIN",
+        deadline: deadline.toISOString(),
+      };
+      console.log("Review Quote post request body", body);
+      fetch("https://1click.chaindefuser.com/v0/quote", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
       })
-      .then((data) => {
-        setTokens(data);
-        setFromToken(data[0]);
-        setZecToken(data.find((token) => token.assetId == zecToken.assetId));
-        setLoading(false);
-      })
-      .catch((error) => {
-        setError(error.message);
-        setLoading(false);
-      });
-  }, []);
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+          return response.json();
+        })
+        .then((data) => {
+          console.log("Review Quote post response body", data);
+          setAmountIn(data.quote.amountInFormatted);
+          setAmountOut(data.quote.amountOutFormatted);
+
+          // Populate USD equivalents
+          setAmountInUsd(Number(data.quote.amountInUsd).toFixed(2));
+          setAmountOutUsd(Number(data.quote.amountOutUsd).toFixed(2));
+
+          setWithdrawFee(
+            (data.quote.amountInUsd - data.quote.amountOutUsd) /
+              fromToken.price,
+          );
+          setIsLoading(false);
+        })
+        .catch((error) => {
+          setError(error.message);
+          setIsLoading(false);
+        });
+    }
+  }, [stage]);
 
   if (error) {
     return <PageError>{error}</PageError>;
-  } else if (loading) {
+  } else if (isLoading) {
     return (
       <div className="size-52 grid place-items-center">
         <SpinnerIcon className="size-5 text-gold" />
       </div>
     );
-  } else {
+  } else if (stage == Stage.Swap) {
     return (
       <FormPage title="Swap" onSubmit={onSubmit}>
         <FormCard heading="From" htmlFor="swap-from-amount">
@@ -247,6 +317,97 @@ function SwapRoute() {
           color="black"
           stages={[]}
         />
+      </FormPage>
+    );
+  } else if (stage == Stage.ReviewQuote) {
+    const onConfirm = (e) => {
+      e.preventDefault();
+      setIsPending(true);
+      // Placeholder for executing the actual swap transaction
+      setTimeout(() => {
+        setIsPending(false);
+        alert("Swap Confirmed!"); // Or route to a success screen
+      }, 2000);
+    };
+
+    return (
+      <FormPage title="Review Quote" onSubmit={onConfirm}>
+        <FormCard heading="Swap Summary">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-neutral-500">
+                You are swapping
+              </span>
+              <div className="flex flex-col items-end">
+                <span className="text-lg font-medium">
+                  {amountIn} {fromToken.symbol}
+                </span>
+                <span className="text-xs text-neutral-500">
+                  ~ ${amountInUsd} USD
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-neutral-500">
+                To receive
+              </span>
+              <div className="flex flex-col items-end">
+                <span className="text-lg font-medium">
+                  {amountOut} {zecToken.symbol}
+                </span>
+                <span className="text-xs text-neutral-500">
+                  ~ ${amountOutUsd} USD
+                </span>
+              </div>
+            </div>
+          </div>
+        </FormCard>
+
+        <FormCard heading="Transaction Details">
+          <div className="flex flex-col gap-4 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-neutral-500">Total fees</span>
+              <span className="font-medium">
+                {withdrawFee} {fromToken.symbol}
+              </span>
+            </div>
+
+            <div className="h-px w-full bg-line" />
+
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-neutral-700">
+                Total amount taken
+              </span>
+              <div className="flex flex-col items-end">
+                <span className="text-lg font-bold text-black">
+                  {amountIn} {fromToken.symbol}
+                </span>
+                <span className="text-xs text-neutral-500">
+                  ~ ${amountInUsd} USD
+                </span>
+              </div>
+            </div>
+          </div>
+        </FormCard>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => setStage(Stage.Swap)}
+            className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
+          >
+            Back
+          </button>
+          <div className="flex-1">
+            <SubmitBlock
+              label="Confirm"
+              pending={isPending}
+              pendingLabel="Confirming..."
+              color="black"
+              stages={[]}
+            />
+          </div>
+        </div>
       </FormPage>
     );
   }
