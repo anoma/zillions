@@ -298,10 +298,8 @@ fn action_outputs<V: DomainVersion>(
     let mut outputs = Vec::new();
     for action in bundle.actions() {
         let output = action.output();
-        // Padding carries no value and names no one.
-        if output.value().is_some_and(|v| v.inner() == 0) && output.user_address().is_none() {
-            continue;
-        }
+        // Checked before anything is skipped: the value a PCZT claims is the
+        // site's word until its commitment proves it.
         output
             .verify_note_commitment(action.spend())
             .map_err(|e| format!("an output doesn't match its note: {e:?}"))?;
@@ -310,6 +308,10 @@ fn action_outputs<V: DomainVersion>(
         else {
             unreachable!("a verified note has its receiver, value and seed");
         };
+        // Padding carries no value and names no one.
+        if value.inner() == 0 && output.user_address().is_none() {
+            continue;
+        }
         // A zero-valued output may carry a deliberately random ciphertext
         // (ZIP 326); it delivers nothing to lose.
         if value.inner() > 0 {
@@ -372,16 +374,15 @@ fn shielded_outputs(
     Verifier::new(pczt.clone())
         .with_sapling::<String, _>(|bundle| {
             for output in bundle.outputs() {
-                if output.value().is_some_and(|v| v.inner() == 0) && output.user_address().is_none()
-                {
-                    continue;
-                }
                 output.verify_note_commitment()?;
                 let (Some(recipient), Some(value), Some(rseed)) =
                     (*output.recipient(), *output.value(), *output.rseed())
                 else {
                     unreachable!("a verified note has its receiver, value and seed");
                 };
+                if value.inner() == 0 && output.user_address().is_none() {
+                    continue;
+                }
                 if value.inner() > 0 {
                     let note = sapling::Note::from_parts(
                         recipient,
@@ -881,6 +882,63 @@ mod tests {
         // The outgoing ciphertext is checked only when its key is given.
         let garbled = tamper(&honest, out);
         assert_eq!(summarize(&MAIN, &garbled, &ufvk()).is_err(), *has_ock);
+    }
+
+    /// `value` as postcard writes an `Option<u64>` holding it.
+    fn some_varint(mut value: u64) -> Vec<u8> {
+        let mut bytes = vec![1];
+        loop {
+            let byte = (value & 0x7f) as u8;
+            value >>= 7;
+            if value == 0 {
+                bytes.push(byte);
+                return bytes;
+            }
+            bytes.push(byte | 0x80);
+        }
+    }
+
+    /// The Ironwood outputs' claimed values, padding included.
+    fn ironwood_values(pczt: &Pczt) -> Vec<u64> {
+        let mut values = Vec::new();
+        Verifier::new(pczt.clone())
+            .with_ironwood::<Infallible, _>(|bundle| {
+                values.extend(
+                    bundle
+                        .actions()
+                        .iter()
+                        .filter_map(|a| a.output().value().map(|v| v.inner())),
+                );
+                Ok(())
+            })
+            .unwrap();
+        values
+    }
+
+    /// A site can't hide an output by claiming it's worth nothing: its claim
+    /// is checked against the commitment the chain will hold, padding or not.
+    #[test]
+    fn refuses_an_output_that_claims_zero_but_commits_to_value() {
+        let honest = ironwood_send();
+        let change = *ironwood_values(&honest).iter().max().unwrap();
+        assert!(change > 0);
+
+        let mut bytes = honest.clone().serialize().unwrap();
+        let claim = some_varint(change);
+        let at = bytes
+            .windows(claim.len())
+            .position(|w| w == claim)
+            .expect("the wire carries the change's value");
+        bytes.splice(at..at + claim.len(), some_varint(0));
+        let hidden = parse(&bytes).unwrap();
+        assert!(
+            !ironwood_values(&hidden).contains(&change),
+            "the claim is now 0"
+        );
+
+        let err = summarize(&MAIN, &hidden, &ufvk()).err().expect("refused");
+        assert!(err.contains("doesn't match its note"), "{err}");
+        assert!(sign(&MAIN, hidden, &SEED, 0).is_err());
     }
 
     #[test]
