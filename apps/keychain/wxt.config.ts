@@ -159,16 +159,9 @@ export default defineConfig({
       extension_pages:
         "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
     },
-    // `injected.js` is the MAIN-world provider script the content script
-    // injects into pages (sets `window.zc`). Keep this list minimal: every
-    // entry is fetchable by any site and lets it detect the wallet. The wasm
-    // binaries only load in extension contexts, which don't need an entry.
-    web_accessible_resources: [
-      {
-        resources: ["injected.js"],
-        matches: ["<all_urls>"],
-      },
-    ],
+    // No web_accessible_resources: any entry is fetchable by every site,
+    // which detects the wallet by it (and, on Firefox, its URL holds the
+    // per-install UUID). The wasm binaries only load in extension contexts.
     icons: {
       16: "icons/favicon-16x16.png",
       32: "icons/favicon-32x32.png",
@@ -190,7 +183,9 @@ export default defineConfig({
           },
         },
       }
-      : {}),
+      : // Older Chrome ignores the provider's `world: "MAIN"` and runs it
+        // isolated, where pages can't see `window.zc`.
+        { minimum_chrome_version: "111" }),
   }),
 
   vite: ({ browser, mode }) => ({

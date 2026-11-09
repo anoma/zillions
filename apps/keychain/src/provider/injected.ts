@@ -1,6 +1,6 @@
 /**
- * MAIN-world bootstrap: sets `window.zc`. Bundled as the unlisted `injected.js`
- * entrypoint and injected by the content script via `injectScript`.
+ * MAIN-world bootstrap: sets `window.zc`. Run by the MAIN-world content script
+ * `entrypoints/injected.content.ts`.
  */
 import { InjectedZillions } from "./InjectedZillions";
 
