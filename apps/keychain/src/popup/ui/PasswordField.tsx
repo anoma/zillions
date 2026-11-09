@@ -2,6 +2,8 @@ import clsx from "clsx";
 import { useId, useState } from "react";
 import { GoEye, GoEyeClosed } from "react-icons/go";
 
+import { secretInputProps } from "@zillions/components";
+
 type FieldProps = {
   label?: string;
   error?: string;
@@ -55,19 +57,20 @@ export const TextField = ({ label, error, hint, id, ...props }: FieldProps) => {
   );
 };
 
-export const PasswordField = ({ label, error, hint, id, ...props }: FieldProps) => {
+export const PasswordField = ({ label, error, hint, id, style, ...props }: FieldProps) => {
   const fallbackId = useId();
   const inputId = id ?? fallbackId;
   const [shown, setShown] = useState(false);
+  const secret = secretInputProps(!shown);
   return (
     <FieldShell id={inputId} label={label} error={error} hint={hint}>
       <div className="relative">
         <input
           id={inputId}
-          type={shown ? "text" : "password"}
-          autoComplete="current-password"
           className={clsx(inputClass(error), "pr-10")}
           {...props}
+          {...secret}
+          style={{ ...style, ...secret.style }}
         />
         <button
           type="button"
