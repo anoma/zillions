@@ -10,12 +10,12 @@ import { GoCheck, GoX } from "react-icons/go";
 import { useSearchParams } from "react-router-dom";
 
 import { Avatar, siteHost, SiteIcon } from "../../popup/ui/Avatar";
-import { ActionBar, Button } from "../../popup/ui/Button";
 import { Eyebrow, Row } from "../../popup/ui/Row";
 import { ScreenHeader } from "../../popup/ui/ScreenHeader";
 import { Tag } from "../../popup/ui/Tag";
 import { ClientContext, ExtensionLockContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
+import { GuardedButton, DecisionBar } from "../ui/DecisionBar";
 import { useWallets } from "../ui/useWallets";
 
 const Ability = ({ allowed, children }: { allowed: boolean; children: React.ReactNode }) => (
@@ -86,9 +86,9 @@ export const ApproveConnection = () => {
           title={active.alias}
           trail={
             wallets.length > 1 && (
-              <Button variant="secondary" size="sm" onClick={() => setPicking(!picking)}>
+              <GuardedButton variant="secondary" size="sm" onPress={() => setPicking(!picking)}>
                 {picking ? "Done" : "Change"}
-              </Button>
+              </GuardedButton>
             )
           }
         />
@@ -110,12 +110,11 @@ export const ApproveConnection = () => {
             />
           ))}
 
-      <ActionBar>
-        <Button variant="secondary" onClick={() => void handleResponse(false)}>
-          Reject
-        </Button>
-        <Button onClick={() => void handleResponse(true)}>Connect</Button>
-      </ActionBar>
+      <DecisionBar
+        approveLabel="Connect"
+        onApprove={() => handleResponse(true)}
+        onReject={() => handleResponse(false)}
+      />
     </>
   );
 };

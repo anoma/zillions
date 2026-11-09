@@ -32,4 +32,13 @@ export default defineBackground(() => {
         // Init failed, so no approval can be pending for this tab.
       });
   });
+
+  browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.url === undefined) return;
+    void getServices()
+      .then(({ approvals }) => approvals.handleTabUpdated(tabId, changeInfo.url))
+      .catch(() => {
+        // Init failed, so no approval can be pending for this tab.
+      });
+  });
 });
