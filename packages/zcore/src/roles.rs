@@ -6,23 +6,32 @@ use std::convert::Infallible;
 use std::sync::OnceLock;
 
 use orchard::circuit::{OrchardCircuitVersion, ProvingKey, VerifyingKey};
+use orchard::note::Rho;
+use orchard::note_encryption::{
+    DomainVersion, IronwoodVersion, NoteEncryptionDomain, OrchardVersion,
+};
 use pczt::roles::verifier::OrchardError;
 use pczt::roles::{
     combiner::Combiner, prover::Prover, signer::Signer, spend_finalizer::SpendFinalizer,
     tx_extractor::TransactionExtractor, updater::Updater, verifier::Verifier,
 };
 use pczt::Pczt;
+use sapling::note_encryption::{SaplingDomain, Zip212Enforcement};
 use serde::Serialize;
 use transparent::address::TransparentAddress;
 use transparent::keys::{NonHardenedChildIndex, TransparentKeyScope};
 use wasm_bindgen::prelude::*;
 use zcash_keys::address::{Address, UnifiedAddress};
 use zcash_keys::keys::{UnifiedFullViewingKey, UnifiedSpendingKey};
+use zcash_note_encryption::{
+    note_bytes::NoteBytesData, try_output_recovery_with_ock, try_output_recovery_with_pkd_esk,
+    Domain, EphemeralKeyBytes, OutgoingCipherKey, ShieldedOutput, OUT_CIPHERTEXT_SIZE,
+};
 use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 use zip32::fingerprint::SeedFingerprint;
 use zip32::{AccountId, Scope};
 
-use crate::parse_network;
+use crate::{parse_network, FullOutput};
 
 const HARDENED: u32 = 0x8000_0000;
 
@@ -43,6 +52,8 @@ pub(crate) fn sign(
     let fingerprint = SeedFingerprint::from_seed(seed).ok_or("seed must be 32 to 252 bytes")?;
     let account = AccountId::try_from(hd_index).map_err(|_| "account index out of range")?;
     let usk = UnifiedSpendingKey::from_seed(network, seed, account).map_err(to_pczt_error)?;
+    // The checks the approval's summary made, again on what is signed.
+    shielded_outputs(network, &pczt, &usk.to_unified_full_viewing_key())?;
     let coin = network.network_type().coin_type();
     let ours = |derivation: Option<AccountId>| derivation == Some(account);
 
@@ -239,43 +250,122 @@ pub(crate) fn payee(
     }
 }
 
-/// Every non-padding output, its note checked against its commitment so the
-/// value and receiver shown are the ones signed.
+/// Whether `output`'s ciphertexts deliver `note`, so its receiver's wallet
+/// finds it and can spend it. Decrypted with the key the note's own `rseed`
+/// derives (ZIP 212) toward its receiver, so it works for any receiver, in
+/// the pool's `domain`, which also refuses another pool's note version. With
+/// an `ock`, the outgoing ciphertext must recover the note as well.
+fn delivers<D: Domain, O: ShieldedOutput<D>>(
+    domain: &D,
+    note: &D::Note,
+    output: &O,
+    ock: &Option<OutgoingCipherKey>,
+    out_ciphertext: &[u8; OUT_CIPHERTEXT_SIZE],
+) -> bool
+where
+    D::Note: PartialEq,
+{
+    let Some(esk) = D::derive_esk(note) else {
+        return false;
+    };
+    let holds = |found: Option<(D::Note, D::Recipient, D::Memo)>| {
+        found.is_some_and(|(found, _, _)| &found == note)
+    };
+    holds(try_output_recovery_with_pkd_esk(
+        domain,
+        D::get_pk_d(note),
+        esk,
+        output,
+    )) && ock.as_ref().is_none_or(|ock| {
+        holds(try_output_recovery_with_ock(
+            domain,
+            ock,
+            output,
+            out_ciphertext,
+        ))
+    })
+}
+
+const UNDELIVERABLE: &str =
+    "an output's ciphertext doesn't hold its note, so its receiver could never find it";
+
+/// One Orchard or Ironwood bundle's outputs; `V` is the pool's note version.
+fn action_outputs<V: DomainVersion>(
+    network: &Network,
+    ufvk: &UnifiedFullViewingKey,
+    bundle: &orchard::pczt::Bundle,
+) -> Result<Vec<Output>, String> {
+    let mut outputs = Vec::new();
+    for action in bundle.actions() {
+        let output = action.output();
+        // Padding carries no value and names no one.
+        if output.value().is_some_and(|v| v.inner() == 0) && output.user_address().is_none() {
+            continue;
+        }
+        output
+            .verify_note_commitment(action.spend())
+            .map_err(|e| format!("an output doesn't match its note: {e:?}"))?;
+        let (Some(recipient), Some(value), Some(rseed)) =
+            (*output.recipient(), *output.value(), *output.rseed())
+        else {
+            unreachable!("a verified note has its receiver, value and seed");
+        };
+        // A zero-valued output may carry a deliberately random ciphertext
+        // (ZIP 326); it delivers nothing to lose.
+        if value.inner() > 0 {
+            let note = orchard::Note::from_parts(
+                recipient,
+                value,
+                // Rho is the spend's nullifier, as the commitment check used.
+                Rho::from_bytes(&action.spend().nullifier().to_bytes())
+                    .into_option()
+                    .expect("a nullifier is a valid rho"),
+                rseed,
+                *output.note_version(),
+            )
+            .into_option()
+            .expect("a verified note");
+            let encrypted = output.encrypted_note();
+            let sent = FullOutput {
+                eph_key: EphemeralKeyBytes(encrypted.epk_bytes),
+                cm: *output.cmx(),
+                enc: NoteBytesData(encrypted.enc_ciphertext.0),
+            };
+            let domain = NoteEncryptionDomain::<V>::for_pczt_action(action);
+            if !delivers(
+                &domain,
+                &note,
+                &sent,
+                output.ock(),
+                &encrypted.out_ciphertext,
+            ) {
+                return Err(UNDELIVERABLE.into());
+            }
+        }
+        let mine = ufvk
+            .orchard()
+            .is_some_and(|fvk| fvk.scope_for_address(&recipient).is_some());
+        let address = match mine {
+            true => None,
+            false => Some(payee(
+                network,
+                output.user_address(),
+                Receiver::Orchard(recipient),
+            )?),
+        };
+        outputs.push((address, value.inner(), mine));
+    }
+    Ok(outputs)
+}
+
+/// Every non-padding output, its note checked against its commitment and its
+/// ciphertexts, so the value and receiver shown are the ones signed and the
+/// receiver can find it.
 fn shielded_outputs(
     network: &Network,
     pczt: &Pczt,
     ufvk: &UnifiedFullViewingKey,
 ) -> Result<[Vec<Output>; 3], String> {
-    let action_outputs = |bundle: &orchard::pczt::Bundle| -> Result<Vec<Output>, String> {
-        let mut outputs = Vec::new();
-        for action in bundle.actions() {
-            let output = action.output();
-            // Padding carries no value and names no one.
-            if output.value().is_some_and(|v| v.inner() == 0) && output.user_address().is_none() {
-                continue;
-            }
-            output
-                .verify_note_commitment(action.spend())
-                .map_err(|e| format!("an output doesn't match its note: {e:?}"))?;
-            let (Some(recipient), Some(value)) = (*output.recipient(), *output.value()) else {
-                unreachable!("a verified note has its receiver and value");
-            };
-            let mine = ufvk
-                .orchard()
-                .is_some_and(|fvk| fvk.scope_for_address(&recipient).is_some());
-            let address = match mine {
-                true => None,
-                false => Some(payee(
-                    network,
-                    output.user_address(),
-                    Receiver::Orchard(recipient),
-                )?),
-            };
-            outputs.push((address, value.inner(), mine));
-        }
-        Ok(outputs)
-    };
-
     let mut sapling_outputs = Vec::new();
     let mut orchard_outputs = Vec::new();
     let mut ironwood_outputs = Vec::new();
@@ -287,9 +377,29 @@ fn shielded_outputs(
                     continue;
                 }
                 output.verify_note_commitment()?;
-                let (Some(recipient), Some(value)) = (*output.recipient(), *output.value()) else {
-                    unreachable!("a verified note has its receiver and value");
+                let (Some(recipient), Some(value), Some(rseed)) =
+                    (*output.recipient(), *output.value(), *output.rseed())
+                else {
+                    unreachable!("a verified note has its receiver, value and seed");
                 };
+                if value.inner() > 0 {
+                    let note = sapling::Note::from_parts(
+                        recipient,
+                        value,
+                        sapling::Rseed::AfterZip212(rseed),
+                    );
+                    let sent = FullOutput {
+                        eph_key: output.ephemeral_key().clone(),
+                        cm: *output.cmu(),
+                        enc: NoteBytesData(*output.enc_ciphertext()),
+                    };
+                    let domain = SaplingDomain::new(Zip212Enforcement::On);
+                    if !delivers(&domain, &note, &sent, output.ock(), output.out_ciphertext()) {
+                        return Err(pczt::roles::verifier::SaplingError::Custom(
+                            UNDELIVERABLE.into(),
+                        ));
+                    }
+                }
                 let mine = ufvk
                     .sapling()
                     .is_some_and(|dfvk| dfvk.decrypt_diversifier(&recipient).is_some());
@@ -306,12 +416,14 @@ fn shielded_outputs(
         })
         .map_err(to_pczt_error)?
         .with_orchard::<String, _>(|bundle| {
-            orchard_outputs = action_outputs(bundle).map_err(OrchardError::Custom)?;
+            orchard_outputs = action_outputs::<OrchardVersion>(network, ufvk, bundle)
+                .map_err(OrchardError::Custom)?;
             Ok(())
         })
         .map_err(to_pczt_error)?
         .with_ironwood::<String, _>(|bundle| {
-            ironwood_outputs = action_outputs(bundle).map_err(OrchardError::Custom)?;
+            ironwood_outputs = action_outputs::<IronwoodVersion>(network, ufvk, bundle)
+                .map_err(OrchardError::Custom)?;
             Ok(())
         })
         .map_err(to_pczt_error)?;
@@ -713,6 +825,62 @@ mod tests {
         let combined =
             parse(&combine_pczts(&unsigned.serialize().unwrap(), &from_device).unwrap()).unwrap();
         prove(combined, None).unwrap();
+    }
+
+    /// `pczt` with one byte flipped inside the first copy of `part` on the
+    /// wire; panics if the wire doesn't carry `part` as is.
+    fn tamper(pczt: &Pczt, part: &[u8]) -> Pczt {
+        let mut bytes = pczt.clone().serialize().unwrap();
+        let at = bytes
+            .windows(part.len())
+            .position(|w| w == part)
+            .expect("the wire carries the bytes");
+        bytes[at + part.len() / 2] ^= 1;
+        parse(&bytes).unwrap()
+    }
+
+    /// The ciphertexts of `pczt`'s Ironwood outputs that carry value.
+    fn ironwood_ciphertexts(pczt: &Pczt) -> Vec<(Vec<u8>, Vec<u8>, bool)> {
+        let mut found = Vec::new();
+        Verifier::new(pczt.clone())
+            .with_ironwood::<Infallible, _>(|bundle| {
+                for action in bundle.actions() {
+                    let output = action.output();
+                    if output.value().is_some_and(|v| v.inner() > 0) {
+                        let note = output.encrypted_note();
+                        found.push((
+                            note.enc_ciphertext.0.to_vec(),
+                            note.out_ciphertext.to_vec(),
+                            output.ock().is_some(),
+                        ));
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+        found
+    }
+
+    /// A site can't have its change, or a payment, land in a ciphertext no
+    /// wallet can read: the approval refuses to describe it and the keyring
+    /// to sign it.
+    #[test]
+    fn refuses_an_output_its_receiver_could_never_find() {
+        let honest = ironwood_send();
+        summarize(&MAIN, &honest, &ufvk()).unwrap();
+        let outputs = ironwood_ciphertexts(&honest);
+        assert_eq!(outputs.len(), 1, "the change");
+        let (enc, out, has_ock) = &outputs[0];
+
+        let garbled = tamper(&honest, enc);
+        let err = summarize(&MAIN, &garbled, &ufvk()).err().unwrap();
+        assert!(err.contains("could never find it"), "{err}");
+        let err = sign(&MAIN, garbled, &SEED, 0).err().unwrap();
+        assert!(err.contains("could never find it"), "{err}");
+
+        // The outgoing ciphertext is checked only when its key is given.
+        let garbled = tamper(&honest, out);
+        assert_eq!(summarize(&MAIN, &garbled, &ufvk()).is_err(), *has_ock);
     }
 
     #[test]
