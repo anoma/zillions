@@ -9,6 +9,7 @@ import { PaymentLinkToggle } from "../components/send/PaymentLinkToggle";
 import { PrivacyNotice } from "../components/send/PrivacyNotice";
 import { RecipientField } from "../components/send/RecipientField";
 import { ShieldedTransparentToggle } from "../components/ShieldedTransparentToggle";
+import { TransactionReceipt } from "../components/TransactionReceipt";
 import {
   AmountField,
   BalanceWithMax,
@@ -17,7 +18,6 @@ import {
   type Problem,
   SubmitBlock,
 } from "../components/TransferForm";
-import { TransferSuccess } from "../components/TransferSuccess";
 import { useAddressKind, useFreshAddress } from "../hooks/useAddresses";
 import { useAmountField } from "../hooks/useAmountField";
 import { useConfirming } from "../hooks/useConfirming";
@@ -149,7 +149,7 @@ function SendRoute() {
     return <PaymentLinkCreated {...createLink.data} />;
   }
   if (send.data && !isPaymentLink) {
-    return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
+    return <TransactionReceipt tx={{ ...send.data, status: "Pending" }} />;
   }
 
   const clear = () => {

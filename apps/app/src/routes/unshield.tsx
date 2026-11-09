@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { FormPage } from "../components/FormPage";
 import { FeeRow, PlannedFee } from "../components/PlannedFee";
+import { TransactionReceipt } from "../components/TransactionReceipt";
 import {
   AmountField,
   BalanceWithMax,
@@ -12,7 +13,6 @@ import {
   PoolRoute,
   SubmitBlock,
 } from "../components/TransferForm";
-import { TransferSuccess } from "../components/TransferSuccess";
 import { internalAddress, useInternalAddress } from "../hooks/useAddresses";
 import { useAmountField } from "../hooks/useAmountField";
 import { useConfirming } from "../hooks/useConfirming";
@@ -113,7 +113,7 @@ function UnshieldRoute() {
   };
 
   if (send.data) {
-    return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
+    return <TransactionReceipt tx={{ ...send.data, status: "Pending" }} />;
   }
 
   const amountError =

@@ -560,7 +560,7 @@ export class Wallet {
     );
     const mined = new Set(history.map((tx) => tx.txid));
     return [
-      ...pendingActivity(pending, mined, this.#tip),
+      ...pendingActivity(pending, mined),
       ...confirmedAt(history, this.#tip),
     ];
   }
@@ -727,19 +727,20 @@ export class Wallet {
    * Proves and broadcasts a signed PCZT, then holds the notes and coins it
    * spends out of the balance and of new plans until it's mined or expires.
    * `change` is what it returns to us, by pool, shown as pending meanwhile, and
-   * `receipt` what history lists for it. `onStage` follows proving and
-   * broadcasting.
+   * `receipt` what history lists for it, timed at the broadcast. `onStage`
+   * follows proving and broadcasting.
    */
   submit = async (
     signed: Uint8Array,
     change: Record<Source, bigint>,
-    receipt: PendingActivity,
+    receipt: Omit<PendingActivity, "timestamp">,
     onStage?: (stage: ProveStage) => void,
   ) => {
     const { txid, raw, expiryHeight } = await submitTransaction(
       signed,
       onStage,
     );
+    const timestamp = Math.floor(Date.now() / 1000);
     const tip = this.#tip;
     invariant(tip !== undefined, "The wallet is still syncing");
     await initZcore();
@@ -754,11 +755,11 @@ export class Wallet {
       outpoints: tx.inputs.map((i) => `${i.txid}:${i.index}`),
       change: Number(change.shielded + change.transparent),
       transparentChange: Number(change.transparent),
-      receipt,
+      receipt: { ...receipt, timestamp },
     });
     this.#save();
     this.#emitProgress();
-    return { txid, expiryHeight };
+    return { txid, expiryHeight, timestamp };
   };
 
   /** The next internal address, shown nowhere; see `nextInternalAddress` for when it's null. */

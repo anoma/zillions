@@ -405,7 +405,7 @@ function ConfirmingNotice({
         `Your funds have confirmed. You can ${verb} now.`
       ) : (
         <>
-          <ZecValue zat={waiting} /> of your balance is still confirming.{" "}
+          <ZecValue zat={waiting} /> of your balance is still processing.{" "}
           {/* Read out once a minute, not every second. */}
           <span
             aria-hidden="true"
