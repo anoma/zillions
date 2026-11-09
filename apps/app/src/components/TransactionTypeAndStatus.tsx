@@ -13,7 +13,7 @@ import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
 import type { Activity } from "../lib/wallet/types";
 import { Tooltip } from "./Tooltip";
 
-/** The type icon in `children` with a clock on it; hovering or tapping it says how far along it is. */
+/** The type icon in `children` with a clock on its corner; hovering or tapping it says how far along it is. */
 export function PendingIcon({
   tx,
   children,
@@ -32,14 +32,14 @@ export function PendingIcon({
       }
     >
       <Tooltip
-        className="z-10 w-60 p-3 left-0 translate-x-0 text-left font-normal"
+        className="z-10 w-max px-3 py-2 left-0 translate-x-0 whitespace-nowrap font-normal"
         content={<span className="font-medium">Processing · {detail}</span>}
       >
-        <span className="relative inline-flex">
+        <span className="relative flex">
           {children}
           <ClockIcon
             aria-hidden="true"
-            className="absolute -right-0.5 -bottom-0.5 size-3.5 rounded-full bg-surface text-gray-600"
+            className="absolute -right-1 -bottom-1 size-3.5 rounded-full bg-surface text-gray-600"
           />
         </span>
       </Tooltip>
@@ -70,19 +70,12 @@ export function TransactionTypeAndStatus({
   tx,
   iconClassName,
 }: {
-  tx: PendingTx & Partial<Pick<Activity, "status">>;
+  tx: Pick<Activity, "tx_type"> & Partial<Pick<Activity, "status">>;
   iconClassName?: string;
 }) {
-  const icon = (
-    <TransactionTypeIcon tx_type={tx.tx_type} className={iconClassName} />
-  );
   return (
     <div className="flex items-center gap-2">
-      {tx.status === "Pending" ? (
-        <PendingIcon tx={tx}>{icon}</PendingIcon>
-      ) : (
-        icon
-      )}
+      <TransactionTypeIcon tx_type={tx.tx_type} className={iconClassName} />
       {tx.tx_type}
       {tx.status === "Expired" && " (Expired)"}
     </div>

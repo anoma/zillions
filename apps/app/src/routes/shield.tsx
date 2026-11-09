@@ -6,13 +6,13 @@ import { AmountDisplay } from "../components/AmountInput";
 import { FormPage } from "../components/FormPage";
 import { HeldFunds } from "../components/HeldFunds";
 import { FeeRow } from "../components/PlannedFee";
+import { TransactionReceipt } from "../components/TransactionReceipt";
 import {
   Breakdown,
   FormCard,
   PoolRoute,
   SubmitBlock,
 } from "../components/TransferForm";
-import { TransferSuccess } from "../components/TransferSuccess";
 import { useAccount } from "../hooks/useAccount";
 import { useConfirming } from "../hooks/useConfirming";
 import { useGetBalance } from "../hooks/useGetBalance";
@@ -93,7 +93,7 @@ function ShieldRoute() {
   });
 
   if (shield.data) {
-    return <TransferSuccess tx={{ ...shield.data, status: "Pending" }} />;
+    return <TransactionReceipt tx={{ ...shield.data, status: "Pending" }} />;
   }
 
   const onSubmit = () => {

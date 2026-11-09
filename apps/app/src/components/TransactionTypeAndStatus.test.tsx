@@ -26,23 +26,19 @@ test("a send's clock counts down its time left, then says it's late", () => {
   ).toBeTruthy();
 });
 
-test("the detail page's title is the type alone, the clock on its icon says it's processing", () => {
+test("the receipt's title is the type alone, and says only when it expired", () => {
   const { rerender, container } = render(
     <TransactionTypeAndStatus
-      tx={{
-        txid: "c",
-        tx_type: "Shielded",
-        status: "Pending",
-        confirmations: 2,
-      }}
+      tx={{ tx_type: "Shielded", status: "Pending" }}
     />,
   );
-  // The tooltip, then the title.
-  expect(container.textContent).toMatch(/^Processing · .+Shielded$/);
+  expect(container.textContent).toBe("Shielded");
   rerender(
-    <TransactionTypeAndStatus
-      tx={{ txid: "c", tx_type: "Sent", status: "Confirmed" }}
-    />,
+    <TransactionTypeAndStatus tx={{ tx_type: "Sent", status: "Expired" }} />,
+  );
+  expect(container.textContent).toBe("Sent (Expired)");
+  rerender(
+    <TransactionTypeAndStatus tx={{ tx_type: "Sent", status: "Confirmed" }} />,
   );
   expect(container.textContent).toBe("Sent");
 });

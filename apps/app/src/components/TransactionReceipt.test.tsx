@@ -9,7 +9,7 @@ let history: Pick<Activity, "txid" | "status">[] = [];
 vi.mock("../hooks/useGetTransactionHistory", () => ({
   useGetTransactionHistory: () => ({ data: history }),
 }));
-const { TransferSuccess } = await import("./TransferSuccess");
+const { TransactionReceipt } = await import("./TransactionReceipt");
 
 afterEach(cleanup);
 
@@ -29,7 +29,7 @@ test("the banner counts down until history has the transaction mined, then says 
     from: { pool: "shielded" as const },
     to: { address: "u1theirs" },
   };
-  const { rerender } = render(<TransferSuccess tx={tx} />, {
+  const { rerender } = render(<TransactionReceipt tx={tx} />, {
     wrapper,
   });
   expect(screen.getByRole("status").textContent).toMatch(
@@ -37,8 +37,25 @@ test("the banner counts down until history has the transaction mined, then says 
   );
 
   history = [{ txid: "t1", status: "Confirmed" }];
-  rerender(<TransferSuccess tx={tx} />);
+  rerender(<TransactionReceipt tx={{ ...tx, status: "Confirmed" }} />);
   expect(screen.getByRole("status").textContent).toBe("Transaction completed");
-  // The receipt's icon drops its clock.
-  expect(screen.queryByText(/^Processing ·/)).toBeNull();
+});
+
+test("a receipt opened once it's mined has no banner", () => {
+  render(
+    <TransactionReceipt
+      tx={{
+        txid: "t2",
+        tx_type: "Sent",
+        status: "Confirmed",
+        value: -1_000n,
+        fee: 100n,
+        timestamp: 1,
+        from: { pool: "shielded" },
+        to: { address: "u1theirs" },
+      }}
+    />,
+    { wrapper },
+  );
+  expect(screen.queryByRole("status")).toBeNull();
 });

@@ -225,10 +225,10 @@ Moves shielded funds to one of the account's own transparent addresses.
     proof can take many seconds: the next block and a tip check of a fifth
     of a block, 30 seconds). Past the estimate it says "Taking longer than
     usual", with no percent, block count or minutes: the expiry window is
-    about 50 minutes, which reads as a wait. The detail page shows only the
-    type, as for any other transaction, with the same clock on its icon; the
-    receipt right after a send says "Processing · 25s left" in its
-    "Transaction submitted" banner, which turns to "Transaction completed"
+    about 50 minutes, which reads as a wait. The receipt's title shows only the type.
+    The receipt right after a send, and the detail page opened while the
+    transaction is pending, show the same "Transaction submitted" banner
+    with "Processing · 25s left", which turns to "Transaction completed"
     once history has it mined. One that
     expires unmined drops off the list;
   - **Time**.

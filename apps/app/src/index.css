@@ -14,6 +14,8 @@
   --color-card: #f6f5f2;
   --color-line: #e6e4df;
   --color-line-strong: #cdcac2;
+  /* Sage, as muted as the gold: for what's done. */
+  --color-green: oklch(56% 0.09 148);
 
   /* Tailwind's stone: greys warm enough to sit on the cream surfaces. */
   --color-gray-400: oklch(70.9% 0.01 56.259);
@@ -90,6 +92,7 @@
   --color-neutral-800: oklch(90% 0.006 60);
 
   --color-red-700: oklch(70.4% 0.191 22.216);
+  --color-green: oklch(74% 0.1 148);
 }
 
 body {
