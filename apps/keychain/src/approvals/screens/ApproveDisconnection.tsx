@@ -5,11 +5,11 @@
 import { useContext } from "react";
 import { useSearchParams } from "react-router-dom";
 
-import { ActionBar, Button } from "../../popup/ui/Button";
 import { Notice } from "../../popup/ui/Notice";
 import { ScreenHeader } from "../../popup/ui/ScreenHeader";
 import { ClientContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
+import { DecisionBar } from "../ui/DecisionBar";
 import { RequestCard } from "../ui/RequestCard";
 
 export const ApproveDisconnection = () => {
@@ -32,12 +32,12 @@ export const ApproveDisconnection = () => {
         The site asks to disconnect. It will no longer see your accounts until
         you connect it again.
       </Notice>
-      <ActionBar>
-        <Button variant="secondary" onClick={() => void handleResponse(false)}>
-          Keep connected
-        </Button>
-        <Button onClick={() => void handleResponse(true)}>Disconnect</Button>
-      </ActionBar>
+      <DecisionBar
+        rejectLabel="Keep connected"
+        approveLabel="Disconnect"
+        onApprove={() => handleResponse(true)}
+        onReject={() => handleResponse(false)}
+      />
     </>
   );
 };

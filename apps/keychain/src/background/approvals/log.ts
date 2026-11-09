@@ -15,6 +15,9 @@ const LOG_KEY = "entries";
 const MAX_ENTRIES = 200;
 
 export class ApprovalLog {
+  /** Records are read-modify-write; run one at a time or one overwrites another. */
+  private tail: Promise<void> = Promise.resolve();
+
   constructor(
     private readonly store: KVStore<CryptoRecord>,
     private readonly vaultService: VaultService
@@ -31,7 +34,12 @@ export class ApprovalLog {
    * Never throws: a lost entry must not fail the approval it records. A
    * decision taken while locked (a closed login window) is not recorded.
    */
-  async record(entry: Omit<ApprovalLogEntry, "id" | "at">): Promise<void> {
+  record(entry: Omit<ApprovalLogEntry, "id" | "at">): Promise<void> {
+    this.tail = this.tail.then(() => this.append(entry));
+    return this.tail;
+  }
+
+  private async append(entry: Omit<ApprovalLogEntry, "id" | "at">): Promise<void> {
     try {
       const entries = await this.entries();
       if (await this.vaultService.isLocked()) return;

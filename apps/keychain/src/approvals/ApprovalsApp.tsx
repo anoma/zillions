@@ -2,6 +2,10 @@
  * Approvals window composition root. Opened by the background's
  * ApprovalsService as `approvals.html#<route>?interfaceOrigin=...`; every
  * screen is wrapped in WithAuth so a locked vault shows the Login gate first.
+ *
+ * The route is read from the URL once, at load, then kept in memory: other
+ * extensions can change this window's URL fragment, and must not be able to
+ * move it to another screen (say, past the summary to the password step).
  */
 import {
   Component,
@@ -13,7 +17,7 @@ import {
   type ReactNode,
   type SetStateAction
 } from "react";
-import { HashRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import type { PcztSummary } from "@zillions/types";
 
@@ -68,6 +72,7 @@ export const ApprovalsApp = () => {
   const client = useMemo(() => createBackgroundClient(), []);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [details, setDetails] = useState<ApprovalDetails>();
+  const [initialEntries] = useState(() => [window.location.hash.slice(1) || "/"]);
 
   useEffect(() => {
     client
@@ -77,7 +82,7 @@ export const ApprovalsApp = () => {
   }, [client]);
 
   return (
-    <HashRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <main className="flex flex-col h-screen overflow-hidden bg-surface text-black">
         <ClientContext.Provider value={client}>
           <ExtensionLockContext.Provider value={{ isUnlocked, setIsUnlocked }}>
@@ -134,6 +139,6 @@ export const ApprovalsApp = () => {
           </ExtensionLockContext.Provider>
         </ClientContext.Provider>
       </main>
-    </HashRouter>
+    </MemoryRouter>
   );
 };
