@@ -2,8 +2,9 @@
  * Landing step: choose Create, Import or a hardware wallet. The hardware
  * choice opens `device.choose`, which lists the devices this browser can reach.
  */
-import { Heading, Stack } from "@zillions/components";
+import { Alert, Heading, Stack } from "@zillions/components";
 import { ZEmblem } from "@zillions/components/assets/ZEmblem";
+import { useEffect, useState } from "react";
 import { PiDownloadSimple, PiPlus } from "react-icons/pi";
 
 import { wallets } from "../../hardware";
@@ -24,7 +25,11 @@ const HardwareIcon = () => (
 );
 
 export const Start = () => {
-  const { dispatch } = useWizard();
+  const { dispatch, client } = useWizard();
+  const [lost, setLost] = useState(false);
+  useEffect(() => {
+    client.vaultLost().then(setLost).catch(console.error);
+  }, [client]);
   const hasDevice = Object.values(wallets).some((wallet) =>
     wallet.isSupported()
   );
@@ -37,6 +42,13 @@ export const Start = () => {
       <Heading level="h1" className="mb-8 text-xl text-black text-center">
         Set up your Zcash keys
       </Heading>
+      {lost && (
+        <Alert type="warning" title="Your wallet was removed" className="mb-6">
+          The browser deleted the Keychain&apos;s data, so its accounts are
+          gone from here. Your funds are safe on the chain: import your
+          recovery phrase, or reconnect your hardware wallet, to get them back.
+        </Alert>
+      )}
       <Stack as="div" direction="vertical" gap={2.5}>
         <OptionCard
           icon={<PiPlus />}

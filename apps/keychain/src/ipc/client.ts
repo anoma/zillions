@@ -51,6 +51,11 @@ export class BackgroundClient {
     return this.send("vault/isPasswordInitialized", {});
   }
 
+  /** Whether the browser deleted a vault this install had created. */
+  vaultLost(): Promise<boolean> {
+    return this.send("vault/lost", {});
+  }
+
   createPassword(password: string): Promise<void> {
     return this.send("vault/createPassword", { password });
   }

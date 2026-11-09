@@ -179,6 +179,7 @@ export const validateResponse = <K extends IpcKind>(
 
     case "vault/unlock":
     case "vault/checkPassword":
+    case "vault/lost":
     case "vault/requiresAuth":
     case "dapp/isConnected":
     case "approvals/isConnectionApproved":

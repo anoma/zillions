@@ -67,6 +67,11 @@ export const getServices = (): Promise<Services> => {
           set: area.set.bind(area),
         })
       );
+      if (await vaultService.passwordInitialized()) {
+        await localStorage.noteVaultCreated();
+      } else {
+        await localStorage.noteVaultMissing();
+      }
       // IndexedDB: the encrypted log holds Uint8Arrays, which
       // `storage.local` would not round-trip.
       const approvalLog = new ApprovalLog(

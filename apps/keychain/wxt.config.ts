@@ -143,8 +143,17 @@ export default defineConfig({
     version: pkg.version,
     // `tabs` lets the background find/focus an already-open Setup tab by URL
     // (browser.tabs.query({ url })) instead of opening duplicates. `idle`
-    // drives auto-lock and shows no install warning.
-    permissions: ["storage", "tabs", "idle"],
+    // drives auto-lock and shows no install warning. On Chrome,
+    // `unlimitedStorage` keeps the vault's IndexedDB out of quota eviction,
+    // which would otherwise delete the wallet under disk pressure; it has no
+    // install warning there. Firefox never evicts extension data, and would
+    // ask for it at install.
+    permissions: [
+      "storage",
+      "tabs",
+      "idle",
+      ...(browser === "firefox" ? [] : ["unlimitedStorage"]),
+    ],
     // Toolbar action opens the popup (`entrypoints/popup`). WXT fills in
     // `default_popup` from that entrypoint; we only set the title here. The
     // popup itself redirects to the Setup tab when no wallet exists yet.

@@ -81,8 +81,14 @@ export const handlers: HandlerMap = {
   },
 
   "vault/createPassword": async ({ password }) => {
-    const { vaultService } = await getServices();
+    const { vaultService, localStorage } = await getServices();
     await vaultService.createPassword(password);
+    await localStorage.noteVaultCreated();
+  },
+
+  "vault/lost": async () => {
+    const { localStorage } = await getServices();
+    return localStorage.vaultLost();
   },
 
   "vault/lockState": async () => {

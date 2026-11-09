@@ -180,6 +180,11 @@ export type IpcContract = {
     req: Record<string, never>;
     res: boolean;
   };
+  /** Whether the browser deleted a vault this install had created. */
+  "vault/lost": {
+    req: Record<string, never>;
+    res: boolean;
+  };
   "vault/createPassword": {
     req: { password: string };
     res: void;

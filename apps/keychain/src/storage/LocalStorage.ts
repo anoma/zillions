@@ -19,16 +19,22 @@ export type Connection = t.TypeOf<typeof Connection>;
 const Connections = t.record(t.string, Connection);
 type ConnectionsType = t.TypeOf<typeof Connections>;
 
-type LocalStorageTypes = ConnectionsType | number;
+type LocalStorageTypes = ConnectionsType | number | boolean;
 
 // Replaces the "zillionsExtensionApprovedOrigins" origin list, which bound no
 // account; origins approved there must connect again.
 export type LocalStorageKeys =
   | "zillionsExtensionConnections"
-  | "zillionsExtensionAutoLockMinutes";
+  | "zillionsExtensionAutoLockMinutes"
+  | "zillionsExtensionVaultCreated"
+  | "zillionsExtensionVaultLost";
 
 const CONNECTIONS_KEY: LocalStorageKeys = "zillionsExtensionConnections";
 const AUTO_LOCK_KEY: LocalStorageKeys = "zillionsExtensionAutoLockMinutes";
+// Kept here, not beside the vault in IndexedDB: Chrome may evict IndexedDB,
+// but not `storage.local`, so a vault that vanishes leaves this behind.
+const VAULT_CREATED_KEY: LocalStorageKeys = "zillionsExtensionVaultCreated";
+const VAULT_LOST_KEY: LocalStorageKeys = "zillionsExtensionVaultLost";
 
 export const AUTO_LOCK_OPTIONS = [0, 5, 15, 30, 60] as const;
 export const DEFAULT_AUTO_LOCK_MINUTES = 15;
@@ -58,6 +64,28 @@ export class LocalStorage extends ExtStorage {
   async removeConnection(origin: string): Promise<void> {
     const { [origin]: _removed, ...rest } = await this.getConnections();
     await this.setRaw(CONNECTIONS_KEY, rest);
+  }
+
+  /** A password was set, so the vault holds a wallet. */
+  async noteVaultCreated(): Promise<void> {
+    await this.setRaw(VAULT_CREATED_KEY, true);
+    await this.setRaw(VAULT_LOST_KEY, false);
+  }
+
+  /**
+   * At startup, with no password in the vault: a vault created before can
+   * only be gone because the browser deleted its data. Then its site grants
+   * go too, and setup says so until a new password is set.
+   */
+  async noteVaultMissing(): Promise<void> {
+    if ((await this.getRaw(VAULT_CREATED_KEY)) === true) {
+      await this.setRaw(VAULT_LOST_KEY, true);
+      await this.setRaw(CONNECTIONS_KEY, {});
+    }
+  }
+
+  async vaultLost(): Promise<boolean> {
+    return (await this.getRaw(VAULT_LOST_KEY)) === true;
   }
 
   /** Minutes of system idle time before locking; 0 never. */
