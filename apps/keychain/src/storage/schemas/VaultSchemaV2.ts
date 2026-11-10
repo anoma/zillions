@@ -76,7 +76,8 @@ export const KeyStore = t.exact(
     t.type({
       /** ZIP-32 seed fingerprint (hex). Empty string for accounts with no seed (private-key/spending-key imports). */
       seedFingerprint: t.string,
-      /** Block height at which this account was created/imported. Used by the app wallet to skip scanning earlier blocks. */
+      /** Block height this account was created/imported at. Used by the app
+       * wallet to skip scanning earlier blocks. */
       birthday: t.number,
     }),
     t.partial({
@@ -86,6 +87,19 @@ export const KeyStore = t.exact(
       diversifierIndex: t.number,
       /** The hardware wallet the keys live on, if any. */
       device: t.string,
+      /** A passkey's WebAuthn credential: id (base64url), rpId, and COSE
+       * public key (base64) when the credential was created here — an
+       * imported one carries no public key, WebAuthn never re-reveals
+       * one. Not a secret. */
+      credential: t.intersection([
+        t.type({
+          id: t.string,
+          rpId: t.string,
+        }),
+        t.partial({
+          publicKey: t.string,
+        }),
+      ]),
     }),
   ])
 );

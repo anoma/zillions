@@ -37,6 +37,10 @@ let submit: typeof import("./submit");
 beforeEach(async () => {
   FakeWorker.all = [];
   vi.resetModules();
+  // A local `.env` may turn the dry run on (it rejects after proving);
+  // these tests exercise the broadcasting path, so force it off before
+  // the module — which reads the variable at import time — is loaded.
+  vi.stubEnv("VITE_DRY_RUN", "");
   submit = await import("./submit");
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});

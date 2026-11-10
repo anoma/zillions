@@ -177,6 +177,7 @@ export const createDeviceAccount = async (
       seedFingerprint: keys.seedFingerprint,
       // The device may already hold funds from any point in history.
       birthday: 0,
+      credential: keys.credential,
     });
     return { ok: true, ...result };
   } catch (e) {
