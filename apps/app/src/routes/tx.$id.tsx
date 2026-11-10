@@ -3,10 +3,8 @@ import { createFileRoute, notFound, useParams } from "@tanstack/react-router";
 import { PageError } from "../components/PageError";
 import { PageLoader } from "../components/PageLoader";
 import { LinkShare } from "../components/send/PaymentLinkCreated";
-import {
-  PublicReceiptCard,
-  TransactionReceiptCard,
-} from "../components/TransactionReceiptCard";
+import { TransactionReceipt } from "../components/TransactionReceipt";
+import { PublicReceiptCard } from "../components/TransactionReceiptCard";
 import { ActionButton } from "../components/ui/ActionButton";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { useShowLink } from "../hooks/usePaymentLink";
@@ -47,7 +45,7 @@ function TransactionRoute() {
   if (tx) {
     return (
       <>
-        <TransactionReceiptCard tx={tx} />
+        <TransactionReceipt tx={tx} />
         <PaymentLink tx={tx} />
       </>
     );

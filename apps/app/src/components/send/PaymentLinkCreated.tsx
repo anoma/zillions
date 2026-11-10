@@ -72,9 +72,7 @@ function Funding({ tx, zec }: { tx: PendingTx; zec: string }) {
         <SpinnerIcon aria-hidden="true" className="size-6 text-gold" />
         <div className="flex flex-col gap-1">
           <p className="text-sm font-semibold">Moving {zec} into the link</p>
-          <p className="text-xs text-gray-600">
-            {detail ?? "Waiting for the network to confirm it."}
-          </p>
+          <p className="text-xs text-gray-600">{detail}</p>
         </div>
         <div
           role="progressbar"

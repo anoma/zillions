@@ -10,12 +10,12 @@ import { useSearchParams } from "react-router-dom";
 import { shortenAddress } from "@zillions/utils";
 
 import { Avatar, siteHost } from "../../popup/ui/Avatar";
-import { ActionBar, Button } from "../../popup/ui/Button";
 import { Notice } from "../../popup/ui/Notice";
 import { Eyebrow, Row } from "../../popup/ui/Row";
 import { ScreenHeader } from "../../popup/ui/ScreenHeader";
 import { ClientContext } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
+import { DecisionBar } from "../ui/DecisionBar";
 import { RequestCard } from "../ui/RequestCard";
 import { useWallets } from "../ui/useWallets";
 import { walletFor } from "../utils/accounts";
@@ -63,12 +63,11 @@ export const ApproveUpdateDefaultAccount = () => {
           Disconnecting later won&apos;t undo this.
         </Notice>
       )}
-      <ActionBar>
-        <Button variant="secondary" onClick={() => void handleResponse(false)}>
-          Reject
-        </Button>
-        <Button onClick={() => void handleResponse(true)}>Switch</Button>
-      </ActionBar>
+      <DecisionBar
+        approveLabel="Switch"
+        onApprove={() => handleResponse(true)}
+        onReject={() => handleResponse(false)}
+      />
     </>
   );
 };

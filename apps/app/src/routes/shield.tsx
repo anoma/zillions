@@ -6,13 +6,13 @@ import { AmountDisplay } from "../components/AmountInput";
 import { FormPage } from "../components/FormPage";
 import { HeldFunds } from "../components/HeldFunds";
 import { FeeRow } from "../components/PlannedFee";
+import { TransactionReceipt } from "../components/TransactionReceipt";
 import {
   Breakdown,
   FormCard,
   PoolRoute,
   SubmitBlock,
 } from "../components/TransferForm";
-import { TransferSuccess } from "../components/TransferSuccess";
 import { useAccount } from "../hooks/useAccount";
 import { useConfirming } from "../hooks/useConfirming";
 import { useGetBalance } from "../hooks/useGetBalance";
@@ -77,24 +77,23 @@ function ShieldRoute() {
         tx_type: "Shielded" as const,
         value,
         fee,
-        timestamp: Math.floor(Date.now() / 1000),
         from: { pool: "transparent" as const },
         to: { pool: "shielded" as const },
       };
       // Everything shielded comes back to us, in Ironwood.
-      const { txid } = await wallet.submit(
+      const { txid, timestamp } = await wallet.submit(
         base64ToBytes(signed),
         { shielded: value, transparent: 0n },
         receipt,
         track,
       );
-      return { ...receipt, txid };
+      return { ...receipt, timestamp, txid };
     },
     onSettled: (_, error) => track(undefined, error),
   });
 
   if (shield.data) {
-    return <TransferSuccess tx={{ ...shield.data, status: "Pending" }} />;
+    return <TransactionReceipt tx={{ ...shield.data, status: "Pending" }} />;
   }
 
   const onSubmit = () => {

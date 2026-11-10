@@ -9,7 +9,7 @@ vi.mock("../../hooks/useGetTransactionHistory", () => ({
   useGetTransactionHistory: () => ({ data: history }),
 }));
 vi.mock("../../hooks/usePendingProgress", () => ({
-  usePendingProgress: () => ({ percent: 40, detail: "About 3 min left" }),
+  usePendingProgress: () => ({ percent: 40, detail: "2m 40s left" }),
 }));
 
 afterEach(cleanup);
@@ -29,7 +29,7 @@ test("the link stays hidden while its funding is pending", () => {
   history = [{ txid: "aa", status: "Pending" }];
   renderLink();
   expect(screen.getByText("Creating payment link")).toBeTruthy();
-  expect(screen.getByText("About 3 min left")).toBeTruthy();
+  expect(screen.getByText("2m 40s left")).toBeTruthy();
   expect(screen.queryByText("Copy link")).toBeNull();
   expect(document.body.innerHTML).not.toContain("secret");
 });

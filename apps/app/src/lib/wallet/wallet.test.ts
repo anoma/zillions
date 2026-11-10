@@ -304,10 +304,11 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
   await wallet.sync();
   expect((await wallet.getBalance()).shielded.balance).toBe(5_000n);
 
-  vi.mocked(submitTransaction).mockResolvedValue({
-    txid: "t1",
-    raw: new Uint8Array(),
-    expiryHeight: 3_240,
+  vi.useFakeTimers({ now: 1_000_000, toFake: ["Date"] });
+  // The proof takes a minute before the broadcast.
+  vi.mocked(submitTransaction).mockImplementation(async () => {
+    vi.setSystemTime(61_000_000);
+    return { txid: "t1", raw: new Uint8Array(), expiryHeight: 3_240 };
   });
   vi.mocked(zcore.parse_transaction).mockReturnValue({
     inputs: [],
@@ -315,22 +316,25 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
     nullifiers: [nf("bb")],
     value_balance: 1_000,
   });
-  await wallet.submit(
+  const { timestamp } = await wallet.submit(
     new Uint8Array(),
     { shielded: 1_000n, transparent: 0n },
     {
       tx_type: "Sent",
       value: -3_000n,
       fee: 1_000n,
-      timestamp: 1,
       from: { pool: "shielded" },
       to: { address: "zs1" },
     },
   );
+  vi.useRealTimers();
+  // Timed at the broadcast, so the proof doesn't count against the wait.
+  expect(timestamp).toBe(61_000);
   expect((await wallet.getTransactionHistory())[0]).toMatchObject({
     txid: "t1",
     status: "Pending",
     value: -3_000n,
+    timestamp: 61_000,
   });
 
   const pending = await wallet.getBalance();
@@ -397,7 +401,6 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
       tx_type: "Sent",
       value: -4_000n,
       fee: 1_000n,
-      timestamp: 1,
       from: { pool: "shielded" },
       to: { address: "u1theirs" },
     },

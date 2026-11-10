@@ -8,9 +8,10 @@
  * the message sender), which settles the parked promise and so the dapp's
  * original request. Closing the popup rejects with "Window closed".
  *
- * Each origin may have one popup open at a time, and at most
- * `MAX_OPEN_APPROVALS` popups are open overall, so a page cannot flood the
- * user with windows.
+ * Each origin may have one request pending at a time, and at most
+ * `MAX_PENDING_APPROVALS` are pending overall, so a page cannot flood the
+ * user with windows. Only one popup is open at a time; the rest queue, so a
+ * site's window can never open over another's and catch a click meant for it.
  */
 import { v4 as uuid } from "uuid";
 import browser, { Windows } from "webextension-polyfill";
@@ -47,9 +48,15 @@ type Resolver = {
   resolve: (result?: unknown) => void;
   reject: (error?: unknown) => void;
   meta: RequestMeta;
+  /** The popup's URL as the browser reports it; see handleTabUpdated. */
+  url?: string;
 };
 
-const MAX_OPEN_APPROVALS = 3;
+/** Firefox reports a new window's tab as blank before its page loads. */
+const reportedUrl = (url?: string): string | undefined =>
+  url && url !== "about:blank" ? url : undefined;
+
+const MAX_PENDING_APPROVALS = 3;
 
 /** `record` is the wallet `walletId` or one of its derived children. */
 const isInWallet = (record: KeyStoreType, walletId: string): boolean =>
@@ -88,14 +95,17 @@ export class ApprovalsService {
   >();
 
   /**
-   * Origins with an approval popup open, mapped to its window id. Reserved
-   * (window id undefined) before the window exists, so concurrent requests
-   * from one origin cannot all pass the check.
+   * Origins with a request pending, mapped to its popup's window id. Reserved
+   * (window id undefined) while queued and before the window exists, so
+   * concurrent requests from one origin cannot all pass the check.
    */
   protected readonly popupWindowByOrigin = new Map<
     string,
     number | undefined
   >();
+
+  private popupOpen = false;
+  private readonly popupQueue: Array<() => void> = [];
 
   constructor(
     protected readonly localStorage: LocalStorage,
@@ -113,6 +123,26 @@ export class ApprovalsService {
       resolver.reject(new Error("Window closed"));
       this.removeResolver(tabId);
     }
+  }
+
+  /**
+   * `tabs.onUpdated` handler, registered by the background entrypoint. The
+   * approvals page never changes its own URL (it routes in memory), so a
+   * change means another extension navigated the window: fail the request
+   * and close the window instead of letting the new page answer it.
+   */
+  handleTabUpdated(tabId: number, url?: string): void {
+    const resolver = this.resolverMap[tabId];
+    const reported = reportedUrl(url);
+    if (!resolver || !reported) return;
+    if (!resolver.url) {
+      resolver.url = reported;
+      return;
+    }
+    if (reported === resolver.url) return;
+    void this.record(resolver.meta, "failed");
+    resolver.reject(new Error("Approval window was navigated away"));
+    void browser.tabs.remove(tabId).catch(() => undefined);
   }
 
   // ---- dapp-facing (origin always derived from the message sender) ----
@@ -376,6 +406,11 @@ export class ApprovalsService {
     this.pendingTxs.delete(msgId);
 
     try {
+      // The approval UI asks for the password when this holds; enforced here
+      // too, so no UI path can sign without it.
+      if (await this.vaultService.requiresAuth()) {
+        throw new Error("Password required to sign");
+      }
       // The site may have been disconnected, or moved to another wallet, while
       // the popup was open; it may only sign with its wallet now.
       const record = await this.activeSigner(
@@ -400,9 +435,9 @@ export class ApprovalsService {
   /** The approval popup rejected: drop the PCZT and fail the dapp's promise. */
   async rejectSignTx(popupTabId: number, msgId: string): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
-    await this.record(resolvers.meta, "rejected");
     this.pendingTxs.delete(msgId);
     resolvers.reject(new Error("Sign Tx rejected"));
+    void this.record(resolvers.meta, "rejected");
   }
 
   /**
@@ -453,8 +488,8 @@ export class ApprovalsService {
     const resolvers = this.getResolver(popupTabId);
 
     if (!allow) {
-      await this.record(resolvers.meta, "rejected");
       resolvers.reject(new Error("Connection request rejected"));
+      void this.record(resolvers.meta, "rejected");
       return;
     }
 
@@ -469,7 +504,9 @@ export class ApprovalsService {
           accounts: [wallet.id],
           current: wallet.id,
         });
-        await this.record(resolvers.meta, "approved");
+        // The log write runs two Argon2 derivations; the window must not
+        // linger that long under the user's next click.
+        void this.record(resolvers.meta, "approved");
       }
     } catch (e) {
       resolvers.reject(e);
@@ -487,19 +524,19 @@ export class ApprovalsService {
     const resolvers = this.getResolver(popupTabId);
 
     if (!revoke) {
-      await this.record(resolvers.meta, "rejected");
       resolvers.reject(new Error("Disconnection request rejected"));
+      void this.record(resolvers.meta, "rejected");
       return;
     }
 
     try {
       await this.revokeConnection(origin);
-      await this.record(resolvers.meta, "approved");
     } catch (e) {
       resolvers.reject(e);
       return;
     }
     resolvers.resolve();
+    void this.record(resolvers.meta, "approved");
   }
 
   approvalLog(): Promise<ApprovalLogEntry[]> {
@@ -648,35 +685,22 @@ export class ApprovalsService {
     params?: Record<string, string>
   ): Promise<T> => {
     const { origin } = meta;
+    // Raising the pending window here would let a page put it under the
+    // user's cursor or keystrokes on demand.
     if (this.popupWindowByOrigin.has(origin)) {
-      const windowId = this.popupWindowByOrigin.get(origin);
-      if (windowId !== undefined) {
-        void browser.windows
-          .update(windowId, { focused: true })
-          .catch(() => undefined);
-      }
       throw new Error("A request from this site is already pending");
     }
-    if (this.popupWindowByOrigin.size >= MAX_OPEN_APPROVALS) {
+    if (this.popupWindowByOrigin.size >= MAX_PENDING_APPROVALS) {
       throw new Error(
         "Too many pending Keychain approvals; resolve one and try again"
       );
     }
     // No await between the checks above and this reservation.
     this.popupWindowByOrigin.set(origin, undefined);
+    this.showPendingCount();
 
     const baseUrl = `${browser.runtime.getURL("/approvals.html")}#${route}`;
     const url = params ? paramsToUrl(baseUrl, params) : baseUrl;
-
-    let popupTabId: number;
-    try {
-      const window = await this.createPopup(url);
-      popupTabId = this.getPopupTabId(window);
-      this.popupWindowByOrigin.set(origin, window.id);
-    } catch (e) {
-      this.popupWindowByOrigin.delete(origin);
-      throw e;
-    }
 
     // Chrome stops an idle MV3 worker after 30 s, taking the parked resolver
     // with it; any extension API call resets that timer.
@@ -685,21 +709,83 @@ export class ApprovalsService {
       KEEPALIVE_INTERVAL_MS
     );
 
+    let popupTabId: number;
+    let popupUrl: string | undefined;
+    try {
+      await this.acquirePopup();
+      let window: Windows.Window | undefined;
+      try {
+        window = await this.createPopup(url);
+        popupTabId = this.getPopupTabId(window);
+        const tab = window.tabs?.[0];
+        popupUrl = reportedUrl(tab?.url) ?? reportedUrl(tab?.pendingUrl);
+        this.popupWindowByOrigin.set(origin, window.id);
+      } catch (e) {
+        if (window?.id !== undefined) {
+          void browser.windows.remove(window.id).catch(() => undefined);
+        }
+        this.releasePopup();
+        throw e;
+      }
+    } catch (e) {
+      this.popupWindowByOrigin.delete(origin);
+      this.showPendingCount();
+      clearInterval(keepAlive);
+      throw e;
+    }
+
     return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const settle = () => {
+        // A second release would free the slot under the next open popup.
+        if (settled) return;
+        settled = true;
+        this.removeResolver(popupTabId);
+        this.popupWindowByOrigin.delete(origin);
+        this.showPendingCount();
+        this.releasePopup();
+      };
       this.resolverMap[popupTabId] = {
         meta,
+        url: popupUrl,
         resolve: (args) => {
-          this.removeResolver(popupTabId);
-          this.popupWindowByOrigin.delete(origin);
+          settle();
           return resolve(args as T);
         },
         reject: (args) => {
-          this.removeResolver(popupTabId);
-          this.popupWindowByOrigin.delete(origin);
+          settle();
           return reject(args);
         },
       };
     }).finally(() => clearInterval(keepAlive));
+  };
+
+  /** Waits until no other approval popup is open, then claims the slot. */
+  private acquirePopup = async (): Promise<void> => {
+    if (!this.popupOpen) {
+      this.popupOpen = true;
+      return;
+    }
+    await new Promise<void>((resolve) => this.popupQueue.push(resolve));
+  };
+
+  /**
+   * Pending requests on the toolbar badge. The open popup is never raised
+   * again, so if it gets buried this is how the user learns that it, and the
+   * requests queued behind it, are waiting.
+   */
+  private showPendingCount = (): void => {
+    const count = this.popupWindowByOrigin.size;
+    void browser.action
+      .setBadgeText({ text: count ? String(count) : "" })
+      .catch(() => undefined);
+  };
+
+  /** Hands the slot to the next queued request, or frees it. */
+  private releasePopup = (): void => {
+    const next = this.popupQueue.shift();
+    if (next) next();
+    else this.popupOpen = false;
   };
 
   private getResolver = (popupTabId: number): Resolver => {

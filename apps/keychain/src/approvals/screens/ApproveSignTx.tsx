@@ -1,19 +1,21 @@
 /**
  * PCZT approval screen: who asks and with which account, what the
  * transaction does (amount, recipients, fee, change), then its every input
- * and output, with Approve → ConfirmSignTx and Reject → fail the dapp
- * promise + close.
+ * and output. Approve signs from the click itself when the password was
+ * entered in the last 30 minutes and the keys are in software; otherwise it
+ * goes on to ConfirmSignTx. Reject fails the dapp promise and closes.
  */
 import { useCallback, useContext, useEffect, useState } from "react";
+import { CgSpinner } from "react-icons/cg";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { ActionBar, Button } from "../../popup/ui/Button";
 import { Notice } from "../../popup/ui/Notice";
 import { ScreenHeader } from "../../popup/ui/ScreenHeader";
 import { ClientContext, type ApprovalDetails } from "../ApprovalsApp";
 import { closeCurrentTab } from "../closeCurrentTab";
 import routes from "../routes";
 import { NetworkTag } from "../ui/NetworkTag";
+import { DecisionBar } from "../ui/DecisionBar";
 import { RequestCard } from "../ui/RequestCard";
 import { TransactionDetails } from "../ui/TransactionDetails";
 import { TransferSummary } from "../ui/TransferSummary";
@@ -41,6 +43,8 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const signer = params.signer ?? "";
   const [summaryError, setSummaryError] = useState<string>();
   const [highFeeAccepted, setHighFeeAccepted] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [signError, setSignError] = useState<string>();
   const { accounts } = useWallets();
   const wallet = walletFor(accounts, signer);
   const highFee = details ? isHighFee(details.summary) : false;
@@ -60,25 +64,39 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
     });
   }, []);
 
-  const handleApproveSubmit = useCallback((e: React.FormEvent): void => {
-    e.preventDefault();
-    navigate(routes.confirmSignTx());
-  }, []);
+  const handleApprove = async (): Promise<void> => {
+    if (!client) return;
+    try {
+      const [authRequired, device] = await Promise.all([
+        client.requiresAuth(),
+        client.queryDeviceSignTx(msgId),
+      ]);
+      if (authRequired || device) {
+        await navigate(routes.confirmSignTx());
+        return;
+      }
+      setSigning(true);
+      await client.submitSignTx(msgId, signer);
+      await closeCurrentTab();
+    } catch (e) {
+      setSigning(false);
+      setSignError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const handleReject = useCallback(async (): Promise<void> => {
     try {
-      if (msgId) {
-        await client?.rejectSignTx(msgId);
-        return await closeCurrentTab();
-      }
-      throw new Error("msgId was not provided!");
+      if (!msgId) throw new Error("msgId was not provided!");
+      await client?.rejectSignTx(msgId);
     } catch (e) {
+      // A failed sign already settled the request; closing is all that's left.
       console.warn(e);
     }
+    await closeCurrentTab();
   }, [msgId]);
 
   return (
-    <form className="flex flex-col flex-1" onSubmit={handleApproveSubmit}>
+    <div className="flex flex-col flex-1">
       <ScreenHeader
         title={
           details?.summary.paymentLink ? "Confirm payment link" : "Confirm transaction"
@@ -117,14 +135,23 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
           </label>
         </Notice>
       )}
-      <ActionBar>
-        <Button variant="secondary" onClick={() => void handleReject()}>
-          Reject
-        </Button>
-        <Button type="submit" disabled={!details || (highFee && !highFeeAccepted)}>
-          Approve
-        </Button>
-      </ActionBar>
-    </form>
+      {signError && (
+        <Notice tone="danger" title="Couldn't sign" className="mt-4">
+          {signError}
+        </Notice>
+      )}
+      {signing && (
+        <p className="flex items-center justify-center gap-2 mt-4 text-[12.5px] font-medium text-muted">
+          <CgSpinner className="size-4 animate-spin text-gold" />
+          Signing transaction…
+        </p>
+      )}
+      <DecisionBar
+        approveLabel="Approve"
+        approveDisabled={!details || (highFee && !highFeeAccepted) || !!signError}
+        onApprove={handleApprove}
+        onReject={handleReject}
+      />
+    </div>
   );
 };
