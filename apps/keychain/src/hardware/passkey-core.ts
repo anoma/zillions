@@ -116,10 +116,9 @@ export const withPrfSeed = async <T>(
  * The scheme gate excludes browsers whose extension pages use another
  * scheme (Edge and Opera use `extension://`), where every ceremony's
  * origin check would fail — the passkey option is never offered there.
- * The RP claim itself needs the browser versions the manifest already
- * floors (Chrome 122+, Firefox 150+); older browsers fail loudly at the
- * ceremony, which `describeError` turns into copy (spike pending:
- * FINDINGS §9.6). */
+ * The RP claim itself needs Chrome 122+ (the manifest's floor) or
+ * Firefox 150+ (above it); older browsers fail loudly at the ceremony,
+ * which `describeError` turns into copy. */
 export const passkeySupported = (): boolean => {
   if (
     typeof navigator.credentials?.get !== "function" ||

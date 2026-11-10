@@ -303,9 +303,8 @@ export class Keyring {
       throw new Error("Spending key is only available for shielded accounts");
     }
 
-    // Device accounts never reveal key material — the connect flow's backup
-    // phrase is the only display. resolveSeed admits the vault kind for
-    // signing, so the refusal happens here, at the reveal door.
+    // Device accounts never reveal key material; resolveSeed would refuse
+    // too, but with a message about the vault rather than the reveal.
     const holder = record.parentId
       ? await this.accounts.findById(record.parentId)
       : record;
@@ -337,14 +336,10 @@ export class Keyring {
     if (!secretHolder) {
       throw new Error(`Parent account not found: ${record.parentId}`);
     }
-    const device = deviceOf(secretHolder);
-    if (device) {
+    if (deviceOf(secretHolder)) {
       throw new Error("A device account's keys never live in the vault");
     }
-    if (
-      !device &&
-      (secretHolder.type as string) !== "mnemonic"
-    ) {
+    if ((secretHolder.type as string) !== "mnemonic") {
       throw new Error(
         "Only mnemonic-backed accounts are supported (imported raw keys are not supported yet)"
       );
