@@ -42,10 +42,10 @@ export const NameAndPassword = ({ nextStep }: Props) => {
 
     // A device account skips the seed derivation: its keys come from the
     // device, the orchestration is saveDevice's.
-    if (state.flow === "device") {
+    if (state.flow === "device" || state.flow === "passkey") {
       await saveDevice(client, dispatch, {
         device: state.deviceKind!,
-        keys: state.deviceKeys!,
+        keys: { ...state.deviceKeys!, alias },
         passwordRequired: state.passwordRequired,
         password,
       });
