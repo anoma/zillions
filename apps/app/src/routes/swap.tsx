@@ -1,14 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { QRCode } from "react-qr-code";
 import { twMerge } from "tailwind-merge";
+import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
 import { FormPage } from "../components/FormPage";
 import { FormCard, SubmitBlock } from "../components/TransferForm";
+import { qrClassName } from "../components/ui/utils";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
+import { shortenAddress } from "../lib/utils";
 
 enum Stage {
   Swap,
   ReviewQuote,
+  DepositAmount,
 }
 
 export const Route = createFileRoute("/swap")({
@@ -45,6 +50,7 @@ function SwapRoute() {
   const [stage, setStage] = useState(Stage.Swap);
   const [amountIn, setAmountIn] = useState("0");
   const [amountOut, setAmountOut] = useState("0");
+  const [depositAddress, setDepositAddress] = useState("");
 
   // New state variables for USD values
   const [amountInUsd, setAmountInUsd] = useState("0.00");
@@ -60,13 +66,24 @@ function SwapRoute() {
   const [toTotalPrice, setToTotalPrice] = useState("0.00");
   const [zecPriceInFrom, setZecPriceInFrom] = useState("1");
 
-  const onSubmit = () => {
+  const onGetQuote = () => {
     setIsPending(true);
     // Placeholder for fetching quote logic
     setTimeout(() => setIsPending(false), 1000);
     setStage(Stage.ReviewQuote);
     setIsLoading(true);
     //e.preventDefault();
+  };
+
+  const onConfirm = () => {
+    //e.preventDefault();
+    setStage(Stage.DepositAmount);
+    //setIsPending(true);
+    // Placeholder for executing the actual swap transaction
+    /*setTimeout(() => {
+      setIsPending(false);
+      alert("Swap Confirmed!"); // Or route to a success screen
+      }, 2000);*/
   };
 
   useEffect(() => {
@@ -135,6 +152,9 @@ function SwapRoute() {
           setAmountIn(data.quote.amountInFormatted);
           setAmountOut(data.quote.amountOutFormatted);
 
+          // Save the deposit address
+          setDepositAddress(data.quote.depositAddress);
+
           // Populate USD equivalents
           setAmountInUsd(Number(data.quote.amountInUsd).toFixed(2));
           setAmountOutUsd(Number(data.quote.amountOutUsd).toFixed(2));
@@ -162,7 +182,7 @@ function SwapRoute() {
     );
   } else if (stage == Stage.Swap) {
     return (
-      <FormPage title="Swap" onSubmit={onSubmit}>
+      <FormPage title="Swap" onSubmit={onGetQuote}>
         <FormCard heading="From" htmlFor="swap-from-amount">
           <div className="flex flex-col gap-4">
             <div
@@ -320,16 +340,6 @@ function SwapRoute() {
       </FormPage>
     );
   } else if (stage == Stage.ReviewQuote) {
-    const onConfirm = (e) => {
-      e.preventDefault();
-      setIsPending(true);
-      // Placeholder for executing the actual swap transaction
-      setTimeout(() => {
-        setIsPending(false);
-        alert("Swap Confirmed!"); // Or route to a success screen
-      }, 2000);
-    };
-
     return (
       <FormPage title="Review Quote" onSubmit={onConfirm}>
         <FormCard heading="Swap Summary">
@@ -403,6 +413,83 @@ function SwapRoute() {
               label="Confirm"
               pending={isPending}
               pendingLabel="Confirming..."
+              color="black"
+              stages={[]}
+            />
+          </div>
+        </div>
+      </FormPage>
+    );
+  } else if (stage == Stage.DepositAmount) {
+    return (
+      <FormPage
+        title="Deposit Funds"
+        onSubmit={(e) => {
+          e.preventDefault();
+          alert("Funds sent! Waiting for confirmation...");
+        }}
+      >
+        <FormCard>
+          <div className="flex flex-col items-center gap-6 py-4">
+            {/* Amount Display */}
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-sm font-medium text-neutral-700">
+                Deposit Amount
+              </span>
+              <span className="text-3xl font-bold text-black">
+                {amountIn} {fromToken.symbol}
+              </span>
+              <span className="text-sm font-medium text-neutral-500">
+                ~ ${amountInUsd} USD
+              </span>
+            </div>
+
+            {/* QR Code */}
+            <div className="mx-auto w-fit flex flex-col items-center gap-3 rounded-xl border border-line bg-card p-4 pb-3">
+              {depositAddress ? (
+                <QRCode
+                  value={depositAddress}
+                  size={200}
+                  key={depositAddress}
+                  bgColor="transparent"
+                  fgColor="#000000"
+                  level="M"
+                  title={`QR code of your deposit address`}
+                  className={qrClassName}
+                />
+              ) : (
+                <div className="size-52 grid place-items-center">
+                  <SpinnerIcon className="size-5 text-gold" />
+                </div>
+              )}
+              {depositAddress && (
+                <CopyToClipboardControl
+                  value={depositAddress}
+                  className="gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors duration-300 hover:bg-gold/15"
+                  iconClassName="size-3.5"
+                >
+                  <span className="font-mono text-neutral-700">
+                    {shortenAddress(depositAddress, 8, 6, "…")}
+                  </span>
+                </CopyToClipboardControl>
+              )}
+            </div>
+          </div>
+        </FormCard>
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => setStage(Stage.ReviewQuote)}
+            className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
+          >
+            Back
+          </button>
+          <div className="flex-1">
+            <SubmitBlock
+              label="I've sent the funds"
+              pending={isPending}
+              pendingLabel="Verifying..."
               color="black"
               stages={[]}
             />
