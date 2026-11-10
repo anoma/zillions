@@ -195,9 +195,10 @@ export default defineConfig({
             // Firefox keys storage and IndexedDB by this ID; without it every
             // reinstall gets a fresh ID and an empty vault.
             id: "keychain@zillions.heliax.dev",
-            // An extension page may claim an RP ID its host permissions
-            // cover only since Firefox 150 (WebAuthn in web extensions).
-            strict_min_version: "150.0",
+            // MV3 content scripts need their host permission granted; 127+
+            // grants it at install instead of leaving it opt-in. Passkeys
+            // need 150+; older versions get an error at the ceremony.
+            strict_min_version: "128.0",
             data_collection_permissions: { required: ["none"] },
           },
         },
