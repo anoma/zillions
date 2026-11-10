@@ -111,6 +111,8 @@ export type DeviceViews = {
   Connect: ComponentType<{
     onKeys: (keys: DeviceKeys) => Promise<void> | void;
     onClose: () => void;
+    /** Account names already in the Keychain, to suggest a free one. */
+    takenAliases?: string[];
   }>;
   /**
    * Have the device sign `input`, then hand the opaque signing output to

@@ -77,7 +77,10 @@ const canVerifyEd25519 = async (): Promise<boolean> => {
  * ceremony; the probe handles the rest (CTAP2.0-era keys, get-only
  * providers) via `prfFromRegistration`'s verdict.
  */
-export const createCredential = async (): Promise<{
+export const createCredential = async (
+  /** The account's name, also the passkey's in the password manager. */
+  name: string
+): Promise<{
   reg: Awaited<ReturnType<typeof startRegistration>>;
   credential: CreatedCredential;
   /** The PRF output, when the provider evaluated the salt at create. */
@@ -102,8 +105,8 @@ export const createCredential = async (): Promise<{
       rp: { id: RP_ID, name: RP_NAME },
       user: {
         id: randomChallenge(),
-        name: "Zillions account",
-        displayName: "Zillions account",
+        name,
+        displayName: name,
       },
       pubKeyCredParams,
       authenticatorSelection: {

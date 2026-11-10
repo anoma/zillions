@@ -29,6 +29,7 @@ import {
   deriveAccount,
 } from "../background/crypto/zillions";
 import type { DeviceCredential } from "../ipc/contract";
+import { freeAlias } from "../setup/model/alias";
 import { OptionCard } from "../setup/ui/OptionCard";
 import { engines } from "./engines";
 import {
@@ -71,13 +72,13 @@ const errorCopy = (e: unknown, path: "create" | "import"): string => {
 
 export const PasskeyConnect = ({
   onKeys,
+  takenAliases = [],
 }: {
   onKeys: (keys: DeviceKeys) => Promise<void> | void;
+  takenAliases?: string[];
 }) => {
-  // choose: create or import; busy: the ceremony running, then the
-  // wizard storing the account. A dismissed or empty picker comes back
-  // here — both are the same NotAllowedError.
-  const [stage, setStage] = useState<"choose" | "busy">("choose");
+  // busy: a ceremony running, then the wizard storing the account.
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   // The browser-level PRF support, once and only when it can be known:
   // `undefined` (capability API absent) means nothing and the probe
@@ -94,13 +95,14 @@ export const PasskeyConnect = ({
   // no phrase is ever built as text: the passkey itself is the backup.
   const connectKeys = async (
     credential: DeviceCredential,
-    prfOutput: Uint8Array<ArrayBuffer>
+    prfOutput: Uint8Array<ArrayBuffer>,
+    alias: string
   ) => {
     await withPrfSeed(prfOutput, async (seed) => {
       const account = await deriveAccount(seed, 0);
       await onKeys({
         device: "passkey-prf",
-        alias: "Passkey",
+        alias,
         viewingKey: account.ufvk,
         seedFingerprint: computeSeedFingerprint(seed),
         hdIndex: 0,
@@ -112,15 +114,18 @@ export const PasskeyConnect = ({
   };
 
   const createAndConnect = async () => {
+    // The password manager lists the passkey under this name, so passkeys
+    // stay told apart when importing.
+    const alias = freeAlias("Passkey", takenAliases);
     setError(undefined);
-    setStage("busy");
+    setBusy(true);
     try {
       // Create the credential with the PRF salt evaluated inline:
       // providers that evaluate at create return the output here — one
       // ceremony, one dialog. Otherwise probe: a get() ceremony
       // evaluating the salt for the new credential (CTAP2.0-era keys
       // and get-only providers answer here, not at create).
-      const { reg, credential, prf } = await createCredential();
+      const { reg, credential, prf } = await createCredential(alias);
       const prfOutput = prf ?? (await probePrf(reg, credential.publicKey));
       await connectKeys(
         {
@@ -128,23 +133,30 @@ export const PasskeyConnect = ({
           rpId: RP_ID,
           publicKey: b64.encode(credential.publicKey),
         },
-        prfOutput
+        prfOutput,
+        alias
       );
     } catch (e) {
       setError(errorCopy(e, "create"));
-      setStage("choose");
+      setBusy(false);
     }
   };
 
   const importAndConnect = async () => {
     setError(undefined);
-    setStage("busy");
+    setBusy(true);
     try {
       const { assertion, prf: prfOutput } = await importCredential();
-      await connectKeys({ id: assertion.id, rpId: RP_ID }, prfOutput);
+      // The passkey's own name can't be read back; setup numbers this
+      // default like any device's.
+      await connectKeys(
+        { id: assertion.id, rpId: RP_ID },
+        prfOutput,
+        "Passkey"
+      );
     } catch (e) {
       setError(errorCopy(e, "import"));
-      setStage("choose");
+      setBusy(false);
     }
   };
 
@@ -178,7 +190,7 @@ export const PasskeyConnect = ({
             is the way out, like the hardware picker's. */}
         <OptionCard
           more
-          disabled={prfSupport === false || stage === "busy"}
+          disabled={prfSupport === false || busy}
           icon={<PiPlusCircle />}
           title="Create a new passkey"
           subtitle="A new passkey makes a new account"
@@ -187,7 +199,7 @@ export const PasskeyConnect = ({
         />
         <OptionCard
           more
-          disabled={prfSupport === false || stage === "busy"}
+          disabled={prfSupport === false || busy}
           icon={<PiFingerprint />}
           title="Use an existing passkey"
           subtitle="Recover the account it was created for"

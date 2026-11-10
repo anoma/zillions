@@ -587,6 +587,11 @@ Challenges to check, one by one:
   holds for the Keychain and recovers the account one of them was
   created for — the same passkey re-derives the same account on any
   install, so the passkey is the backup.
+- **Each passkey account takes the next free name**, "Passkey",
+  "Passkey 2"…, as hardware wallets do ("Ledger 2"). A new passkey gets
+  the same name in the password manager, so the user can tell passkeys
+  apart when importing. An imported passkey's name can't be read back,
+  so its account gets the next free name too.
 - **The account keeps no secret in the Keychain.** The seed itself is
   never stored anywhere — not on disk, not in the Keychain's encrypted
   vault. The seed and the PRF output it comes from are cleared from
