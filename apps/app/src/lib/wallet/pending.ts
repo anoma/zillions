@@ -30,19 +30,15 @@ export const prunePending = (
         seen.tip <= p.expiryHeight + EXPIRY_MARGIN),
   );
 
-/**
- * What history lists for pending transactions not in `mined`, newest first,
- * with the blocks each has left to be mined once `tip` is known.
- */
+/** What history lists for pending transactions not in `mined`, newest first. */
 export const pendingActivity = (
   pending: PendingTx[],
   mined: Set<string>,
-  tip?: number,
 ): Activity[] =>
   pending
     .filter((p) => p.receipt && !mined.has(p.txid))
     .reverse()
-    .map(({ txid, receipt, expiryHeight }) => ({
+    .map(({ txid, receipt }) => ({
       ...receipt!,
       txid,
       status: "Pending",
@@ -50,26 +46,20 @@ export const pendingActivity = (
       confirmations: 0,
       memo: receipt!.memo,
       pool: "mixed",
-      ...(expiryHeight > 0 &&
-        tip !== undefined && {
-          expires_in: Math.max(0, expiryHeight - tip),
-        }),
     }));
 
 /** Confirmations a mined transaction needs to show as completed, as zcore's `ConfirmationsPolicy::MIN` spends it. */
 export const REQUIRED_CONFIRMATIONS = 1;
 
-/** Mined `history` with its confirmations at `tip`, Pending until it has enough; an unknown tip leaves it as is. */
+/** Mined `history` with its confirmations at `tip`, each already enough to complete it; an unknown tip leaves it as is. */
 export const confirmedAt = (history: Activity[], tip: number | undefined) =>
   tip === undefined
     ? history
-    : history.map((tx): Activity => {
+    : history.map((tx): Activity => ({
+        ...tx,
         // The indexer can be past the tip this session last read.
-        const confirmations = Math.max(1, tip - tx.block_height + 1);
-        return confirmations < REQUIRED_CONFIRMATIONS
-          ? { ...tx, confirmations, status: "Pending" }
-          : { ...tx, confirmations };
-      });
+        confirmations: Math.max(1, tip - tx.block_height + 1),
+      }));
 
 /** Between syncs the tip is checked this often, and a new block syncs at once. */
 export const tipCheckMs = () => (blockSeconds() / 5) * 1000;
@@ -93,12 +83,9 @@ export type Progress = {
 type Tracked = Pick<Activity, "tx_type"> &
   Partial<Pick<Activity, "confirmations" | "timestamp">>;
 
-/** What's left of `tx`'s wait: the processing until it's mined, then a block per missing confirmation. */
+/** What's left of `tx`'s wait: the processing until it's mined, which confirms it. */
 const leftMs = ({ confirmations = 0 }: Tracked) =>
-  (REQUIRED_CONFIRMATIONS - Math.max(1, confirmations)) *
-    blockSeconds() *
-    1000 +
-  (confirmations ? 0 : processingMs());
+  confirmations ? 0 : processingMs();
 
 const barAt = (p: Progress, now: number) =>
   p.until > p.at
@@ -135,12 +122,9 @@ export function plan(tx: Tracked, now: number, prev?: Progress): Progress {
   };
 }
 
-/** The whole percent done, none once late, and whole minutes left while the plan runs. */
+/** The whole percent done, none once late, and the ms left while the plan runs. */
 export const progressAt = (p: Progress, now: number) => ({
   percent:
     p.late || now >= p.until ? undefined : Math.floor(barAt(p, now) * 100),
-  minutes:
-    now < p.until
-      ? Math.max(1, Math.ceil((p.until - now) / 60_000))
-      : undefined,
+  left: now < p.until ? p.until - now : undefined,
 });

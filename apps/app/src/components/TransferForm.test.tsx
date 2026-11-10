@@ -13,7 +13,7 @@ vi.mock("../hooks/useConfirming", async (actual) => ({
   ...(await actual<typeof import("../hooks/useConfirming")>()),
   useReadyIn: () => 84_000,
 }));
-const { countdown } = await import("../hooks/useConfirming");
+const { countdown } = await import("../hooks/usePendingProgress");
 
 afterEach(cleanup);
 
@@ -73,7 +73,7 @@ test("a submit waiting on confirming funds says why, counting down, then that it
   const notice = screen.getByRole("status");
   expect(button.getAttribute("aria-describedby")).toBe(notice.id);
   expect(notice.textContent).toBe(
-    "0.5 ZEC of your balance is still confirming. It'll be ready in about 1 min 24 s.It'll be ready in about 2 min.",
+    "0.5 ZEC of your balance is still processing. It'll be ready in 1m 24s.It'll be ready in about 2 min.",
   );
 
   rerender(block("ready"));
@@ -83,27 +83,23 @@ test("a submit waiting on confirming funds says why, counting down, then that it
 });
 
 test("a countdown reads in seconds, then minutes and seconds", () => {
-  expect(countdown(41_200)).toBe("42 s");
-  expect(countdown(65_000)).toBe("1 min 05 s");
-  expect(countdown(0)).toBe("1 s");
+  expect(countdown(41_200)).toBe("42s");
+  expect(countdown(65_000)).toBe("1m 05s");
+  expect(countdown(0)).toBe("1s");
 });
 
-test("progress lists only the optional steps that ran, up to the current one", () => {
-  render(
-    <SubmitProgress
-      stages={[
-        { stage: "approval", at: 0 },
-        { stage: "ironwood-proof", at: 1 },
-      ]}
-    />,
+test("progress asks for approval, then says it's processing", () => {
+  const { rerender } = render(
+    <SubmitProgress stages={[{ stage: "building", at: 0 }]} />,
   );
-  const steps = screen.getAllByRole("listitem").map((li) => li.textContent);
-  expect(steps).toEqual([
-    "Approve in your keychain",
-    expect.stringMatching(/^Generating the proof · Ironwood/),
-    "Verifying",
-    "Broadcasting",
-  ]);
+  const status = screen.getByRole("status");
+  expect(status.textContent).toBe("Approve in your Keychain");
+  rerender(<SubmitProgress stages={[{ stage: "approval", at: 0 }]} />);
+  expect(status.textContent).toBe("Approve in your Keychain");
+  rerender(<SubmitProgress stages={[{ stage: "ironwood-proof", at: 0 }]} />);
+  expect(status.textContent).toBe(
+    "Processing your transactionKeep this page open until it's done.",
+  );
 });
 
 test("a fee row shows the fee, a spinner while planning, or a dash", () => {

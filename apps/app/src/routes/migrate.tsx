@@ -3,8 +3,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { PageLoader } from "../components/PageLoader";
+import { TransactionReceipt } from "../components/TransactionReceipt";
 import { FormError, SubmitProgress } from "../components/TransferForm";
-import { TransferSuccess } from "../components/TransferSuccess";
 import { ActionButton } from "../components/ui/ActionButton";
 import { ZecValue } from "../components/ZecValue";
 import { useFreshAddress } from "../hooks/useAddresses";
@@ -76,7 +76,7 @@ function MigrateRoute() {
   );
 
   if (send.data) {
-    return <TransferSuccess tx={{ ...send.data, status: "Pending" }} />;
+    return <TransactionReceipt tx={{ ...send.data, status: "Pending" }} />;
   }
   if (balance.isPending || status.isPending) return <PageLoader />;
   if (status.data) return <MigrationSteps status={status.data} />;
@@ -438,9 +438,9 @@ function MigrationSteps({ status }: { status: Status }) {
 
   if (send.data) {
     return (
-      <TransferSuccess tx={{ ...send.data, status: "Pending" }}>
+      <TransactionReceipt tx={{ ...send.data, status: "Pending" }}>
         <Primary onClick={() => send.reset()}>Back to migration</Primary>
-      </TransferSuccess>
+      </TransactionReceipt>
     );
   }
   return (

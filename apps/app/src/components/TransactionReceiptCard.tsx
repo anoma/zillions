@@ -1,4 +1,3 @@
-import { usePendingProgress } from "../hooks/usePendingProgress";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
 import type { PublicActivity } from "../lib/wallet/activity";
@@ -30,16 +29,10 @@ export type TransactionReceiptCardProps = {
     | "to"
     | "self"
   > &
-    Partial<Pick<Activity, "confirmations" | "expires_in">> & {
+    Partial<Pick<Activity, "confirmations">> & {
       memo?: string;
     };
 };
-
-/** The time left of a pending transaction, why it's late, or nothing once it's mined and late. */
-function ProcessingHint({ tx }: TransactionReceiptCardProps) {
-  const { detail } = usePendingProgress(tx);
-  return detail && <div className="text-xs text-gray-600">{detail}</div>;
-}
 
 /** Every address on a side that has several, each recipient with what it got. */
 function PartyList({ label, party }: { label: string; party: Party }) {
@@ -174,7 +167,6 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
         <div className="text-sm font-medium">
           <TransactionTypeAndStatus tx={tx} />
         </div>
-        {tx.status === "Pending" && <ProcessingHint tx={tx} />}
         <div
           className="py-3 leading-none font-medium"
           style={{ fontSize: fitFontSize(valueChars, "3.75rem") }}

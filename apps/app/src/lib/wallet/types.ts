@@ -46,8 +46,7 @@ export type Note = DecryptedNote & {
 
 /** Whether a note was spent, as far as the sync has checked; `at` is the spending transaction. */
 export type Spend =
-  | { status: "unchecked" | "unspent" }
-  | { status: "spent"; at: TxLocator };
+  { status: "unchecked" | "unspent" } | { status: "spent"; at: TxLocator };
 
 /** Main → worker: decrypt one chunk of one pool. */
 export interface ChunkRequest {
@@ -127,9 +126,7 @@ export type GpuReply = { secrets: Uint32Array | null } | { gpuError: string };
 
 /** Worker → main: a chunk's result, the error that chunk hit, or a GPU request. */
 export type ChunkWorkerResponse =
-  | ChunkWorkerSuccess
-  | ChunkWorkerError
-  | GpuRequest;
+  ChunkWorkerSuccess | ChunkWorkerError | GpuRequest;
 
 /** Chunks read newest-first: `from` to `to` are read (none when `from > to`), `floor` to `from - 1` are left. */
 export interface Segment {
@@ -208,8 +205,6 @@ export type Activity = {
   to: Party;
   /** A payment to the account itself: it shows no sign. */
   self?: true;
-  /** Blocks left to mine one still processing; absent when it never expires or the tip is unknown. */
-  expires_in?: number;
 };
 
 /** Someone else's address, with what it was paid when it's a recipient. */

@@ -120,12 +120,12 @@ holds only what the device supports (3.6).
 - **From**: choose the shielded or the transparent balance. Within that
   balance the wallet picks the funds itself (see 1); there is no pool choice.
 - Shows the **balance** of the chosen source, as the home screen does. Part
-  of it may not be spendable yet: pending change and funds still confirming,
+  of it may not be spendable yet: pending change and funds still processing,
   one confirmation for any transaction (`zcash_client_backend`'s
   `ConfirmationsPolicy::MIN`; transparent coins count once mined). When
   something is confirming, a small info icon by the balance says how much,
   and counts down to when it's spendable. — _Built_
-- **Waiting on confirming funds**: a send that needs funds still confirming
+- **Waiting on confirming funds**: a send that needs funds still processing
   isn't an error. Pressing Send shows a notice (not an error) with how much
   is confirming and a live countdown to when it's ready, from the same plan
   as the pending transaction's clock; once that runs late it says so instead.
@@ -218,15 +218,18 @@ Moves shielded funds to one of the account's own transparent addresses.
     broadcast (a payment received: once it's mined) until it has its
     confirmations, then "Completed" (a payment link: Unclaimed, Claimed or
     Cancelled). The confirmations are zcash_client_backend's
-    `ConfirmationsPolicy::MIN`: one for any transaction. A pending transaction's icon carries a clock; hovering or tapping
-    it shows how far along it is as a percent and the minutes left, planned
-    upfront from the block time at the tip: 25 seconds from NU7, 75 before
-    (for its own, the next block, a tip check of a fifth of a block, 2 more
-    blocks: 80 seconds; for a payment received, 9 more blocks). Each event (mined, a new block) spreads what's left of the
-    percent over the new time left, so it only moves forward. Past the
-    estimate the percent is gone for good: before it's mined it says it's
-    taking longer and how many blocks are left before it expires; once
-    mined, the minutes left. The detail page shows the same line. One that
+    `ConfirmationsPolicy::MIN`: one for any transaction. A pending transaction's icon carries a clock;
+    hovering or tapping it shows "Processing · 25s left", a countdown
+    planned upfront from the block time at the tip: 25 seconds from NU7, 75
+    before (for its own, from its broadcast, not its approval, since the
+    proof can take many seconds: the next block and a tip check of a fifth
+    of a block, 30 seconds). Past the estimate it says "Taking longer than
+    usual", with no percent, block count or minutes: the expiry window is
+    about 50 minutes, which reads as a wait. The receipt's title shows only the type.
+    The receipt right after a send, and the detail page opened while the
+    transaction is pending, show the same "Transaction submitted" banner
+    with "Processing · 25s left", which turns to "Transaction completed"
+    once history has it mined. One that
     expires unmined drops off the list;
   - **Time**.
 - A **detail page** per transaction: type, status, amounts broken down (e.g.

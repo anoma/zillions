@@ -1,13 +1,13 @@
 /**
- * Final sign confirmation: re-verifies the password when the 30-minute auth
- * window expired, then submits the approved sign request (the background
- * decrypts the seed and signs the PCZT) and closes. A hardware-wallet
- * account's PCZT is signed on the device from here instead — the device's
- * own Sign view runs the session and hands over its opaque signing output,
- * which its engine verifies and folds into the PCZT keyring-side.
+ * Sign step after Approve, for requests the Approve click can't sign by
+ * itself. A seed account always enters its password here: nothing on this
+ * route signs without input, so reaching it by navigation alone signs
+ * nothing. A hardware-wallet account re-verifies the password only when the
+ * 30-minute auth window expired, then signs on the device — the device's own
+ * Sign view runs the session and hands over its opaque signing output, which
+ * its engine verifies and folds into the PCZT keyring-side.
  */
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { CgSpinner } from "react-icons/cg";
 import { useNavigate } from "react-router-dom";
 
 import { wallets } from "../../hardware";
@@ -31,13 +31,15 @@ export const ConfirmSignTx = ({ details }: Props) => {
   const client = useContext(ClientContext);
   const [password, setPassword] = useState("");
   const [requiresAuth, setRequiresAuth] = useState<boolean>();
-  const [error, setError] = useState<string>();
+  const [passwordError, setPasswordError] = useState<string>();
+  const [signError, setSignError] = useState<string>();
   const [status, setStatus] = useState<Status>();
   // Undefined until known; null when the keys aren't on a device.
   const [device, setDevice] = useState<DeviceSignTx | null>();
+  const passwordStep = device === null || (!!device && requiresAuth === true);
 
-  // The background consumes the request on the first submit, and StrictMode
-  // runs the auto-submit effect twice: a ref survives both, state would not.
+  // The background consumes the request on the first submit: a second one
+  // (double submit before the re-render) must not reach it.
   const submitted = useRef(false);
 
   const signTx = async (): Promise<void> => {
@@ -49,7 +51,7 @@ export const ConfirmSignTx = ({ details }: Props) => {
       await client?.submitSignTx(msgId, signer);
       setStatus(Status.Completed);
     } catch (e) {
-      setError(`${e}`);
+      setSignError(`${e}`);
       setStatus(Status.Failed);
     }
   };
@@ -77,22 +79,18 @@ export const ConfirmSignTx = ({ details }: Props) => {
     );
   };
 
-  const handleApproveSignTx = useCallback(
+  const handleSubmit = useCallback(
     async (e: React.FormEvent): Promise<void> => {
       e.preventDefault();
 
+      setPasswordError(undefined);
+      setStatus(Status.Pending);
       try {
-        if (requiresAuth) {
-          setError(undefined);
-          setStatus(Status.Pending);
-          const isAuthenticated = await client?.checkPassword(password);
-
-          if (!isAuthenticated) {
-            throw new Error("Incorrect password");
-          }
+        if (!(await client?.checkPassword(password))) {
+          throw new Error("Incorrect password");
         }
       } catch (e) {
-        setError(e instanceof Error ? e.message : `${e}`);
+        setPasswordError(e instanceof Error ? e.message : `${e}`);
         setStatus(Status.Failed);
         return;
       }
@@ -104,7 +102,7 @@ export const ConfirmSignTx = ({ details }: Props) => {
       }
       await signTx();
     },
-    [requiresAuth, password, device],
+    [password, device],
   );
 
   useEffect(() => {
@@ -116,71 +114,68 @@ export const ConfirmSignTx = ({ details }: Props) => {
       ?.queryDeviceSignTx(msgId)
       .then(setDevice)
       .catch((e: unknown) => {
-        setError(`${e}`);
+        setSignError(`${e}`);
         setStatus(Status.Failed);
       });
   }, []);
 
   useEffect(() => {
-    // User is authenticated with a valid session, so submit signed Tx:
-    if (requiresAuth !== false || device === undefined || device) return;
-    void signTx();
-  }, [requiresAuth, device]);
-
-  useEffect(() => {
     if (status === Status.Completed) void closeCurrentTab();
   }, [status]);
+
+  if (signError) {
+    return (
+      <>
+        <ScreenHeader title="Signing" />
+        <Notice tone="danger" title="Couldn't sign" className="mt-3.5">
+          {signError}
+        </Notice>
+        <ActionBar>
+          <Button variant="secondary" className="col-span-2" onClick={() => void closeCurrentTab()}>
+            Close
+          </Button>
+        </ActionBar>
+      </>
+    );
+  }
 
   return (
     <form
       className="flex flex-col flex-1"
-      onSubmit={(e: React.FormEvent) => void handleApproveSignTx(e)}
+      onSubmit={(e: React.FormEvent) => void handleSubmit(e)}
     >
-      <ScreenHeader title={requiresAuth ? "Confirm it's you" : "Signing"} />
-      {requiresAuth && (
+      <ScreenHeader title={passwordStep ? "Confirm it's you" : "Signing"} />
+      {passwordStep && (
         <>
           <Notice tone="neutral" className="mt-3.5">
-            It&apos;s been a while since you entered your password. Enter it to
-            sign.
+            {requiresAuth
+              ? "It's been a while since you entered your password. Enter it to sign."
+              : "Enter your password to sign."}
           </Notice>
           <div className="mt-4">
             <PasswordField
               autoFocus
               label="Password"
               value={password}
-              error={status === Status.Failed ? error : undefined}
+              error={passwordError}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
+          <ActionBar>
+            <Button variant="secondary" onClick={() => navigate(-1)}>
+              Back
+            </Button>
+            <Button
+              type="submit"
+              disabled={!password || status === Status.Pending || submitted.current}
+            >
+              Sign
+            </Button>
+          </ActionBar>
         </>
       )}
-      {!requiresAuth && device && (
+      {device && requiresAuth === false && (
         <div className="mt-3.5">{signOnDeviceView(device)}</div>
-      )}
-      {!requiresAuth &&
-        !device &&
-        (status === Status.Failed ? (
-          <Notice tone="danger" title="Couldn't sign" className="mt-3.5">
-            {error}
-          </Notice>
-        ) : (
-          <div className="flex flex-col items-center gap-3 pt-24 text-[12.5px] font-medium text-muted">
-            <CgSpinner className="size-6 animate-spin text-gold" />
-            Signing transaction…
-          </div>
-        ))}
-      {requiresAuth && (
-        <ActionBar>
-          <Button variant="secondary" onClick={() => navigate(-1)}>
-            Back
-          </Button>
-          <Button
-            type="submit"
-            disabled={!password || status === Status.Pending || submitted.current}
-          >
-            Sign
-          </Button>
-        </ActionBar>
       )}
     </form>
   );
