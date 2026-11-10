@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.19.0](https://github.com/anoma/zillions-interface/compare/zillions-app-v1.18.0...zillions-app-v1.19.0) (2026-11-10)
+
+
+### Features
+
+* passkey support ([#177](https://github.com/anoma/zillions-interface/issues/177)) ([9297c26](https://github.com/anoma/zillions-interface/commit/9297c26e543eed3449d4ff722293edbd6921ee12))
+* simpler send progress ([#224](https://github.com/anoma/zillions-interface/issues/224)) ([8a6a2eb](https://github.com/anoma/zillions-interface/commit/8a6a2ebad4d99ede510e6ef55988bd1fb3eb501b))
+
+
+### Bug Fixes
+
+* pending send timing and text ([#213](https://github.com/anoma/zillions-interface/issues/213)) ([f9c796b](https://github.com/anoma/zillions-interface/commit/f9c796bc0c0e1ea09c2ba812cf72ea0e6e9c6a1e))
+
 ## [1.18.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-app-v1.17.0...zillions-app-v1.18.0) (2026-11-03)
 
 
