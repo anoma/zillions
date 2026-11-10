@@ -589,9 +589,9 @@ Challenges to check, one by one:
   install, so the passkey is the backup.
 - **The account keeps no secret in the Keychain.** The seed itself is
   never stored anywhere — not on disk, not in the Keychain's encrypted
-  vault — and nothing secret is held in memory between uses either: the
-  seed and the PRF output it comes from are wiped from memory the moment
-  they're used. What's in the vault can't spend by itself. The Keychain
+  vault. The seed and the PRF output it comes from are cleared from
+  memory as soon as they're used, as far as the browser allows. What's
+  in the vault can't spend by itself. The Keychain
   keeps only what lets it see the account (its viewing key and
   addresses) and the passkey credential's public part.
 - **Each passkey is its own account** — its own seed, its own addresses.
@@ -600,9 +600,8 @@ Challenges to check, one by one:
   Ledgers. Importing a passkey whose account is already in the Keychain
   is refused.
 - **The browser's passkey dialog is the device's screen.** The Keychain
-  asks for the passkey it registered as `keychain.zillions.money`, only
-  from its own pages, so only this extension can use it — no website
-  can. What the user verifies there is themselves (a fingerprint, a
+  asks for the passkey it registered as `keychain.zillions.money` from
+  its own pages. What the user verifies there is themselves (a fingerprint, a
   PIN), not the transaction: the Keychain's send-approval screen is
   where the transaction is reviewed, and the signing is bound to
   exactly the transaction that screen described.
@@ -610,7 +609,7 @@ Challenges to check, one by one:
   phrase would restore identically in any Zcash wallet, but the
   Keychain never builds it as text, let alone shows it: the seed is
   derived from the passkey's PRF output directly, re-derived at every
-  spend, and wiped from memory when the signature exists. The passkey
+  spend, and cleared from memory once the signature exists. The passkey
   is the backup, and the recovery phrase and the spending keys can't be
   revealed, like a Ledger's.
 - Needs Chromium 122+ or Firefox 150+: earlier browsers can't hand a
