@@ -5,6 +5,7 @@ vi.mock("webextension-polyfill", () => ({ default: { runtime: { id: "x" } } }));
 const signPczt = vi.fn();
 vi.mock("../background/crypto/zillions", () => ({
   signPczt: (...args: unknown[]) => signPczt(...args),
+  computeSeedFingerprint: (seed: Uint8Array) => seed.slice(0, 8).join(","),
 }));
 
 const verifyAssertion = vi.fn();
@@ -26,10 +27,17 @@ const deviceData = JSON.stringify({
 });
 const created = { id: "cred", rpId: "rp", publicKey: b64.encode(PUBLIC_KEY) };
 const imported = { id: "cred", rpId: "rp" };
+const seedFingerprint = (await deriveSeed(new Uint8Array(ENTROPY)))
+  .slice(0, 8)
+  .join(",");
 
 const assemble = (
   context?: Parameters<typeof passkeyPrfEngine.assembleSignedPczt>[2],
-) => passkeyPrfEngine.assembleSignedPczt(PCZT, deviceData, context);
+) =>
+  passkeyPrfEngine.assembleSignedPczt(PCZT, deviceData, {
+    seedFingerprint,
+    ...context,
+  });
 
 describe("passkey engine: assembleSignedPczt", () => {
   beforeEach(() => {
@@ -79,6 +87,13 @@ describe("passkey engine: assembleSignedPczt", () => {
     await expect(assemble({ credential: created })).rejects.toThrow(
       "account index is missing",
     );
+    expect(signPczt).not.toHaveBeenCalled();
+  });
+
+  it("refuses a passkey whose seed doesn't match the account's fingerprint", async () => {
+    await expect(
+      assemble({ credential: imported, hdIndex: 0, seedFingerprint: "other" }),
+    ).rejects.toThrow("This passkey doesn't match this account");
     expect(signPczt).not.toHaveBeenCalled();
   });
 });

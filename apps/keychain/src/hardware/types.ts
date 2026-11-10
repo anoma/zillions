@@ -64,6 +64,8 @@ export type DeviceSignContext = {
   credential?: DeviceCredential;
   /** The account's ZIP-32 index: the seed's account the engine signs with. */
   hdIndex?: number;
+  /** The seed's fingerprint stored at setup, for a re-derived seed to match. */
+  seedFingerprint?: string;
 };
 
 /** What the approval popup needs to drive signing on a device. */

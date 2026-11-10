@@ -20,7 +20,10 @@
  */
 import { type AuthenticationResponseJSON } from "@simplewebauthn/server";
 
-import { signPczt } from "../background/crypto/zillions";
+import {
+  computeSeedFingerprint,
+  signPczt,
+} from "../background/crypto/zillions";
 import type { DeviceEngine, DeviceSignContext } from "./types";
 import {
   b64,
@@ -71,12 +74,16 @@ const assemble = async (
   // key, so there is nothing to verify the assertion against — the
   // approval gate is the extension's own review screen and the OS
   // verification dialog. Strictly weaker than a created account (the
-  // design doc records the asymmetry); a foreign PRF output still signs
-  // nothing, as signatures under the wrong seed authorize none of this
-  // account's spends.
-  return withPrfSeed(b64url.decode(prf), async (seed) =>
-    signPczt(unsignedPczt, seed, hdIndex)
-  );
+  // design doc records the asymmetry); a foreign PRF output is refused by
+  // the fingerprint check below.
+  return withPrfSeed(b64url.decode(prf), async (seed) => {
+    // A different PRF output would sign under another seed and fail only
+    // at broadcast, after proving; say so now instead.
+    if (computeSeedFingerprint(seed) !== context.seedFingerprint) {
+      throw new Error("This passkey doesn't match this account");
+    }
+    return signPczt(unsignedPczt, seed, hdIndex);
+  });
 };
 
 export const passkeyPrfEngine: DeviceEngine = {
@@ -90,9 +97,9 @@ export const passkeyPrfEngine: DeviceEngine = {
    * stored credential's, the challenge is SHA-256 of `unsignedPczt`, and
    * UV is required — no other transaction can be approved by this
    * assertion, and no website can mint one. The PRF output then re-derives
-   * the seed (same salt at every ceremony) inside `withPrfSeed`: the seed
-   * and the decoded output are zero-filled the moment the signature
-   * exists, on every exit.
+   * the seed (same salt at every ceremony) inside `withPrfSeed`, which must
+   * match the fingerprint stored at setup: the seed and the decoded output
+   * are zero-filled the moment the signature exists, on every exit.
    */
   assembleSignedPczt: (unsignedPczt, deviceData, context) =>
     assemble(unsignedPczt, deviceData, context),

@@ -161,6 +161,7 @@ export class Keyring {
       return engines[device.device].assembleSignedPczt(pczt, deviceData, {
         credential: device.credential,
         hdIndex: device.hdIndex,
+        seedFingerprint: record.seedFingerprint,
       });
     }
     const { seed, hdIndex } = await this.resolveSeed(record);
