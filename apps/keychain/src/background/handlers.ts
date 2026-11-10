@@ -223,12 +223,12 @@ export const handlers: HandlerMap = {
 
   "dapp/connect": async (_payload, ctx) => {
     const { approvals } = await getServices();
-    await approvals.approveConnection(requireOrigin(ctx));
+    await approvals.approveConnection(requireOrigin(ctx), ctx.tabId);
   },
 
   "dapp/disconnect": async (_payload, ctx) => {
     const { approvals } = await getServices();
-    await approvals.approveDisconnection(requireOrigin(ctx));
+    await approvals.approveDisconnection(requireOrigin(ctx), ctx.tabId);
   },
 
   "dapp/isConnected": async (_payload, ctx) => {
@@ -253,7 +253,11 @@ export const handlers: HandlerMap = {
       throw new Error("zc.updateDefaultAccount: invalid arguments");
     }
     const { approvals } = await getServices();
-    await approvals.approveUpdateDefaultAccount(requireOrigin(ctx), address);
+    await approvals.approveUpdateDefaultAccount(
+      requireOrigin(ctx),
+      address,
+      ctx.tabId
+    );
   },
 
   "dapp/sign": async (payload, ctx) => {
@@ -270,7 +274,7 @@ export const handlers: HandlerMap = {
       throw new Error("zc.sign: PCZT exceeds the 2 MiB limit");
     }
     const { approvals } = await getServices();
-    return approvals.approveSignTx(pczt, requireOrigin(ctx), signer);
+    return approvals.approveSignTx(pczt, requireOrigin(ctx), signer, ctx.tabId);
   },
 
   "dapp/sealLinkKey": async (payload, ctx) => {
@@ -290,7 +294,7 @@ export const handlers: HandlerMap = {
       throw new Error("zc.openLinkKey: invalid arguments");
     }
     const { approvals } = await getServices();
-    return approvals.approveOpenLinkKey(requireOrigin(ctx), sealed, nk);
+    return approvals.approveOpenLinkKey(requireOrigin(ctx), sealed, nk, ctx.tabId);
   },
 
   // --- approvals (trusted UIs) ---

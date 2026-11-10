@@ -12,6 +12,10 @@
  * `MAX_PENDING_APPROVALS` are pending overall, so a page cannot flood the
  * user with windows. Only one popup is open at a time; the rest queue, so a
  * site's window can never open over another's and catch a click meant for it.
+ * A request belongs to the tab that made it and dies with it, or when it
+ * leaves the site, so one tab cannot hold several sites' slots. A site whose
+ * window the user closes or rejects is refused new ones for a while, so it
+ * cannot reopen it the moment it goes.
  */
 import { v4 as uuid } from "uuid";
 import browser, { Windows } from "webextension-polyfill";
@@ -40,6 +44,8 @@ import { toPublicAccount } from "./publicAccount";
 type RequestMeta = {
   origin: string;
   kind: ApprovalKind;
+  /** The tab that asked; the request is cancelled when it closes or leaves `origin`. */
+  tabId?: number;
   /** Read at decision time, once the popup has loaded what it shows. */
   describe?: () => Promise<Partial<ApprovalLogEntry>>;
 };
@@ -57,6 +63,16 @@ const reportedUrl = (url?: string): string | undefined =>
   url && url !== "about:blank" ? url : undefined;
 
 const MAX_PENDING_APPROVALS = 3;
+
+/**
+ * How long a site waits after its Nth dismissed window in a row (closed or
+ * rejected): a mistaken Reject or two costs an honest site seconds, while a
+ * site that reopens its window on every dismissal soon waits minutes.
+ */
+const DISMISSAL_COOLDOWNS_MS = [3_000, 10_000, 30_000, 60_000, 2 * 60_000, 5 * 60_000];
+
+/** Dismissals further apart than this start the count again; above the cap. */
+const DISMISSAL_MEMORY_MS = 10 * 60_000;
 
 /** `record` is the wallet `walletId` or one of its derived children. */
 const isInWallet = (record: KeyStoreType, walletId: string): boolean =>
@@ -105,7 +121,21 @@ export class ApprovalsService {
   >();
 
   private popupOpen = false;
-  private readonly popupQueue: Array<() => void> = [];
+  /** Requests waiting for the popup slot, with the tab each came from. */
+  private readonly popupQueue: Array<{
+    tabId?: number;
+    resolve: () => void;
+    reject: (e: Error) => void;
+  }> = [];
+
+  /** Per origin: dismissals in a row, when the last was, and until when it waits. */
+  private readonly dismissals = new Map<
+    string,
+    { count: number; at: number; until: number }
+  >();
+
+  /** In-memory clock, replaceable in tests. */
+  protected now = (): number => Date.now();
 
   constructor(
     protected readonly localStorage: LocalStorage,
@@ -123,6 +153,7 @@ export class ApprovalsService {
       resolver.reject(new Error("Window closed"));
       this.removeResolver(tabId);
     }
+    this.cancelRequestsFrom(tabId, () => true);
   }
 
   /**
@@ -132,6 +163,16 @@ export class ApprovalsService {
    * and close the window instead of letting the new page answer it.
    */
   handleTabUpdated(tabId: number, url?: string): void {
+    // A requesting tab that left its site: in-page navigation keeps the request.
+    if (url) {
+      let origin: string | undefined;
+      try {
+        origin = new URL(url).origin;
+      } catch {
+        // Not a URL with an origin: it left the site.
+      }
+      this.cancelRequestsFrom(tabId, (meta) => meta.origin !== origin);
+    }
     const resolver = this.resolverMap[tabId];
     const reported = reportedUrl(url);
     if (!resolver || !reported) return;
@@ -163,7 +204,7 @@ export class ApprovalsService {
    * otherwise open the approval popup (which doubles as a login gate when the
    * vault is locked) and wait for the user's verdict.
    */
-  async approveConnection(origin: string): Promise<void> {
+  async approveConnection(origin: string, tabId?: number): Promise<void> {
     // Without a password the approval popup's Login gate can never succeed.
     if (!(await this.vaultService.passwordInitialized())) {
       throw new Error("Keychain is not set up");
@@ -173,7 +214,7 @@ export class ApprovalsService {
 
     if (needsApproval || isLocked) {
       return this.launchApprovalPopup(
-        { origin, kind: "connect" },
+        { origin, kind: "connect", tabId },
         approvalRoutes.approveConnection(),
         { interfaceOrigin: origin }
       );
@@ -181,12 +222,12 @@ export class ApprovalsService {
   }
 
   /** Resolve a `disconnect()` call; a never-approved origin is a no-op. */
-  async approveDisconnection(origin: string): Promise<void> {
+  async approveDisconnection(origin: string, tabId?: number): Promise<void> {
     const isConnected = await this.isConnectionApproved(origin);
 
     if (isConnected) {
       return this.launchApprovalPopup(
-        { origin, kind: "disconnect" },
+        { origin, kind: "disconnect", tabId },
         approvalRoutes.approveDisconnection(),
         { interfaceOrigin: origin }
       );
@@ -229,7 +270,8 @@ export class ApprovalsService {
   async approveSignTx(
     pczt: string,
     origin: string,
-    signer?: string
+    signer?: string,
+    tabId?: number
   ): Promise<string> {
     if (await this.vaultService.isLocked()) {
       throw new Error("Keychain is locked");
@@ -253,7 +295,7 @@ export class ApprovalsService {
 
     try {
       return await this.launchApprovalPopup<string>(
-        { origin, kind: "sign", describe },
+        { origin, kind: "sign", describe, tabId },
         approvalRoutes.approveSignTx(
           msgId,
           encodeURIComponent(origin),
@@ -286,14 +328,15 @@ export class ApprovalsService {
   async approveOpenLinkKey(
     origin: string,
     sealed: string,
-    nk: string
+    nk: string,
+    tabId?: number
   ): Promise<string> {
     const record = await this.activeSigner(origin);
     const msgId = uuid();
     this.pendingLinks.set(msgId, { sealed, nk, signer: record.address });
     try {
       return await this.launchApprovalPopup<string>(
-        { origin, kind: "open-link" },
+        { origin, kind: "open-link", tabId },
         approvalRoutes.approveOpenLinkKey(),
         { msgId, origin, signer: record.address }
       );
@@ -329,7 +372,8 @@ export class ApprovalsService {
    */
   async approveUpdateDefaultAccount(
     origin: string,
-    address: string
+    address: string,
+    tabId?: number
   ): Promise<void> {
     await this.assertConnected(origin);
     const record = await this.accounts.findByAddress(address);
@@ -343,6 +387,7 @@ export class ApprovalsService {
         origin,
         kind: "default-account",
         describe: async () => ({ account: record.alias }),
+        tabId,
       },
       approvalRoutes.approveUpdateDefaultAccount(),
       { address, alias: record.alias, origin, shared: String(shared) }
@@ -598,6 +643,8 @@ export class ApprovalsService {
     meta: RequestMeta,
     outcome: ApprovalLogEntry["outcome"]
   ): Promise<void> {
+    // Before any await: the site's retry may already be on its way.
+    this.noteOutcome(meta.origin, outcome);
     let details: Partial<ApprovalLogEntry> = {};
     try {
       details = (await meta.describe?.()) ?? {};
@@ -695,6 +742,12 @@ export class ApprovalsService {
     if (this.popupWindowByOrigin.has(origin)) {
       throw new Error("A request from this site is already pending");
     }
+    const waiting = this.dismissals.get(origin);
+    if (waiting && this.now() < waiting.until) {
+      throw new Error(
+        "The user dismissed this site's last Keychain request; try again later"
+      );
+    }
     if (this.popupWindowByOrigin.size >= MAX_PENDING_APPROVALS) {
       throw new Error(
         "Too many pending Keychain approvals; resolve one and try again"
@@ -717,7 +770,7 @@ export class ApprovalsService {
     let popupTabId: number;
     let popupUrl: string | undefined;
     try {
-      await this.acquirePopup();
+      await this.acquirePopup(meta.tabId);
       let window: Windows.Window | undefined;
       try {
         window = await this.createPopup(url);
@@ -765,14 +818,60 @@ export class ApprovalsService {
     }).finally(() => clearInterval(keepAlive));
   };
 
-  /** Waits until no other approval popup is open, then claims the slot. */
-  private acquirePopup = async (): Promise<void> => {
+  /**
+   * Waits until no other approval popup is open, then claims the slot.
+   * Rejects if the requesting tab goes first (see cancelRequestsFrom).
+   */
+  private acquirePopup = async (tabId?: number): Promise<void> => {
     if (!this.popupOpen) {
       this.popupOpen = true;
       return;
     }
-    await new Promise<void>((resolve) => this.popupQueue.push(resolve));
+    await new Promise<void>((resolve, reject) =>
+      this.popupQueue.push({ tabId, resolve, reject })
+    );
   };
+
+  /**
+   * Fails the requests `tabId` made that `gone` says it no longer stands
+   * behind: queued ones leave the queue, an open one's window closes.
+   */
+  private cancelRequestsFrom(
+    tabId: number,
+    gone: (meta: RequestMeta) => boolean
+  ): void {
+    for (const [popupTabId, resolver] of Object.entries(this.resolverMap)) {
+      if (resolver.meta.tabId !== tabId || !gone(resolver.meta)) continue;
+      void this.record(resolver.meta, "failed");
+      resolver.reject(new Error("The page that asked is gone"));
+      void browser.tabs.remove(Number(popupTabId)).catch(() => undefined);
+    }
+    for (let i = this.popupQueue.length - 1; i >= 0; i--) {
+      const queued = this.popupQueue[i];
+      if (queued.tabId !== tabId) continue;
+      this.popupQueue.splice(i, 1);
+      queued.reject(new Error("The page that asked is gone"));
+    }
+  }
+
+  /**
+   * A dismissed window (closed or rejected) makes its site wait, longer each
+   * time in a row; an approval clears the count.
+   */
+  private noteOutcome(origin: string, outcome: ApprovalLogEntry["outcome"]): void {
+    if (outcome === "approved") {
+      this.dismissals.delete(origin);
+      return;
+    }
+    if (outcome !== "closed" && outcome !== "rejected") return;
+    const now = this.now();
+    const last = this.dismissals.get(origin);
+    const count =
+      last && now - last.at < DISMISSAL_MEMORY_MS ? last.count + 1 : 1;
+    const wait =
+      DISMISSAL_COOLDOWNS_MS[Math.min(count, DISMISSAL_COOLDOWNS_MS.length) - 1];
+    this.dismissals.set(origin, { count, at: now, until: now + wait });
+  }
 
   /**
    * Pending requests on the toolbar badge. The open popup is never raised
@@ -789,7 +888,7 @@ export class ApprovalsService {
   /** Hands the slot to the next queued request, or frees it. */
   private releasePopup = (): void => {
     const next = this.popupQueue.shift();
-    if (next) next();
+    if (next) next.resolve();
     else this.popupOpen = false;
   };
 
