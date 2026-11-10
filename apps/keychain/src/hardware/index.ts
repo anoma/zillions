@@ -7,6 +7,7 @@ import type { DeviceKind, HardwareWallet } from "./types";
 import { engines } from "./engines";
 import { keystoneViews } from "./keystone-views";
 import { ledgerViews } from "./ledger-views";
+import { passkeyPrfViews } from "./passkey-prf-views";
 
 export * from "./types";
 export { engines } from "./engines";
@@ -14,4 +15,5 @@ export { engines } from "./engines";
 export const wallets: Record<DeviceKind, HardwareWallet> = {
   keystone: { ...engines.keystone, views: keystoneViews },
   ledger: { ...engines.ledger, views: ledgerViews },
+  "passkey-prf": { ...engines["passkey-prf"], views: passkeyPrfViews },
 };

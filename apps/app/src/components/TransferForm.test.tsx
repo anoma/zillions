@@ -88,22 +88,18 @@ test("a countdown reads in seconds, then minutes and seconds", () => {
   expect(countdown(0)).toBe("1s");
 });
 
-test("progress lists only the optional steps that ran, up to the current one", () => {
-  render(
-    <SubmitProgress
-      stages={[
-        { stage: "approval", at: 0 },
-        { stage: "ironwood-proof", at: 1 },
-      ]}
-    />,
+test("progress asks for approval, then says it's processing", () => {
+  const { rerender } = render(
+    <SubmitProgress stages={[{ stage: "building", at: 0 }]} />,
   );
-  const steps = screen.getAllByRole("listitem").map((li) => li.textContent);
-  expect(steps).toEqual([
-    "Approve in your keychain",
-    expect.stringMatching(/^Generating the proof · Ironwood/),
-    "Verifying",
-    "Broadcasting",
-  ]);
+  const status = screen.getByRole("status");
+  expect(status.textContent).toBe("Approve in your Keychain");
+  rerender(<SubmitProgress stages={[{ stage: "approval", at: 0 }]} />);
+  expect(status.textContent).toBe("Approve in your Keychain");
+  rerender(<SubmitProgress stages={[{ stage: "ironwood-proof", at: 0 }]} />);
+  expect(status.textContent).toBe(
+    "Processing your transactionKeep this page open until it's done.",
+  );
 });
 
 test("a fee row shows the fee, a spinner while planning, or a dash", () => {

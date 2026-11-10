@@ -10,6 +10,7 @@ use zcash_address::unified::{Encoding, Fvk, Revision, Ufvk, Uitem};
 use zcash_keys::address::UnifiedAddress;
 use zcash_keys::keys::UnifiedSpendingKey;
 use zcash_protocol::consensus::{Network, Parameters};
+use zeroize::Zeroizing;
 use zip32::{AccountId, Scope};
 
 use crate::parse_network;
@@ -130,25 +131,27 @@ fn open(
 #[wasm_bindgen]
 pub fn seal_link_key(
     network: &str,
-    seed: &[u8],
+    seed: Vec<u8>,
     hd_index: u32,
     key: &[u8],
 ) -> Result<Vec<u8>, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
-    seal(&network, seed, hd_index, key).map_err(|e| JsError::new(&e))
+    // The wasm copy of the seed is zero-filled when the call ends.
+    seal(&network, &Zeroizing::new(seed), hd_index, key).map_err(|e| JsError::new(&e))
 }
 
 /// The link key back from its seal and nullifier key, both from the memo.
 #[wasm_bindgen]
 pub fn open_link_key(
     network: &str,
-    seed: &[u8],
+    seed: Vec<u8>,
     hd_index: u32,
     sealed: &[u8],
     nk: &[u8],
 ) -> Result<Vec<u8>, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
-    open(&network, seed, hd_index, sealed, nk).map_err(|e| JsError::new(&e))
+    // The wasm copy of the seed is zero-filled when the call ends.
+    open(&network, &Zeroizing::new(seed), hd_index, sealed, nk).map_err(|e| JsError::new(&e))
 }
 
 /// `0xFF | "PAYLINK" | version`, then `nk` and the sealed key, then the description.

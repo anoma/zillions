@@ -1,10 +1,11 @@
 # Hardware wallets
 
 Status: built in October 2026 on `tiago/generic-hw-wallet` (the
-abstraction) and `tiago/keystone-support` (the second device). Behaviour
-doesn't change; the Ledger-only code became a device abstraction so the
-next device slots in without touching the IPC contract or the keyring.
-What the user sees stays in [product.md](../product.md) (§3.6, §3.7); this
+abstraction), `tiago/keystone-support` (the second device) and
+`tiago/passkey-support` (the third). Behaviour doesn't change; the
+Ledger-only code became a device abstraction so the next device slots in
+without touching the IPC contract or the keyring.
+What the user sees stays in [product.md](../product.md) (§3.6–§3.8); this
 is how the code is laid out.
 
 ## Why
@@ -43,11 +44,14 @@ and the wizard.
   list; the Ledger views feed it their copy (`LEDGER_STEPS` in
   `ledger-session.ts`), and the next device brings its own.
 - **The wizard's device branch is generic** (`setup/`): the landing
-  screen lists every registered device this browser supports, then the
-  `device.connect` step renders that device's Connect view,
-  `device.name` is the shared name-and-password step with the alias
-  prefilled from the device, and `device.complete` is the shared
-  completion step. Nothing in the wizard names a device.
+  screen's hardware card opens a picker of the registered devices this
+  browser supports (the passkey is a top-level card with its own flow —
+  same steps, no picker; its Connect view offers create-or-import in the
+  picker's place); the `device.connect` step renders that
+  device's Connect view, `device.name` is the shared name-and-password
+  step with the alias prefilled from the device, and `device.complete`
+  is the shared completion step. The step components don't name a
+  device — the views and the per-flow header metadata do.
 - **Storage.** Account records gained an optional `device` field
   (vault schema V2 takes new fields without a migration). The parent of
   a Ledger account keeps the legacy `"ledger"` type; a device that only
@@ -105,6 +109,144 @@ change, no wizard change — just a kind, an engine, views.
   errors through the engine's `describeError` and re-mount it to
   re-ask for the camera.
 
+### The Passkey modules
+
+The third device needs no zcore work (`deriveAccount`, `signPczt` and the
+rest already exist) and no wasm rebuild — it rides the second device's
+abstraction. What's different is where its keys live: nowhere. There is
+one kind, `passkey-prf` — the account's seed re-derives from the
+credential's PRF output at every ceremony — sharing one pure core
+(`passkey-core.ts`) and one set of view parts. A passkey that can't
+evaluate a PRF cannot open an account: connect fails with an explicit
+error and the user picks another import mechanism. There is no fallback
+kind, and a dismissed dialog is a cancel, never a custody switch. The
+connect screen offers both directions — create a credential here, or
+import one the browser already holds (a synced passkey re-derives the
+same account anywhere).
+
+- **One custody model, no secret at rest.** A `passkey-prf` account
+  carries no secret anywhere — not even inside the vault — only public
+  material: the UFVK, the addresses, the ZIP-32 seed fingerprint, and the
+  credential (`id`, `rpId`, plus its COSE public key when created here —
+  an imported credential's record holds the id and RP alone) in the
+  record's `credential` field.
+- **The seed re-derives at every ceremony, and nothing lingers.** The
+  passkey evaluates its PRF for the fixed salt `zillions/zcash-seed/v1`,
+  and the PRF output is the entropy of a BIP-39 24-word phrase that
+  never exists as text: `passkey-seed.ts` packs the entropy straight to
+  the phrase's ASCII bytes (the encoding is deterministic bit-packing,
+  not crypto) and WebCrypto's PBKDF2-HMAC-SHA-512 with the fixed
+  `"mnemonic"` salt does the rest. The same salt and the same path
+  reproduce the seed on every machine; the passkey is the backup. Every
+  derivation runs inside `withPrfSeed`, which zero-fills the PRF output
+  and the seed on every exit, throws included — the page-side
+  ceremonies zero the PRF buffer once encoded, and the wasm's seed
+  copies die zero-filled with each call (`Zeroizing` at zcore's
+  boundary). Two residuals, both inside the extension: the PRF output
+  rides to the engine as base64 inside the `deviceData` string
+  (unzeroizable, GC-bound), and WebCrypto's `importKey` holds a
+  non-extractable copy of the phrase bytes until GC. The wasm
+  `MnemonicService` path stays the seed authority for the phrase
+  wallets; the passkey runtime no longer touches it. The seed pin tests
+  (`passkey-seed.test.ts`) tie the new path to the official BIP-39
+  vectors, the `@scure` string path, and a fixed seed.
+- **The consensus constants live alone (`passkey-constants.ts`).** The
+  RP ID `keychain.zillions.money` and the PRF salt are a zero-import
+  module the build (`wxt.config.ts`) and the ceremonies
+  (`passkey-core.ts`) both import, so the manifest cannot drift from
+  what the ceremonies claim. Nothing is ever served from the
+  RP host — no DNS record, no catch-all — so no web page can claim it:
+  an RP ID must be a registrable-domain suffix of the caller's origin,
+  and a child of `zillions.money` is never a suffix of it. The salt is
+  fixed and domain-separated; either constant is a migration, not a fix
+  (the pin tests in `passkey-constants.test.ts` fail on a silent edit).
+- **Connect asks for the PRF at create, probes on fallthrough.** The
+  create ceremony requests the PRF extension with the salt evaluated
+  inline — one ceremony, one dialog, on synced providers that evaluate
+  at create — and its response is verified locally
+  (`verifyRegistrationResponse`); `prfFromRegistration` reads the
+  output out of it, `enabled === false` failing fast. No output → the
+  probe: a get() ceremony on the still-unstored credential evaluating
+  the same salt, with both PRF request forms sent (`eval` and
+  `evalByCredential` — some providers process only one). A missing
+  output — or a ceremony refusing the extension outright
+  (`NotSupportedError`) — is the explicit no-PRF outcome
+  (`isPrfMissing` in the prf views' catch); a user cancellation
+  (`NotAllowedError`) is just a cancel. The probe's assertion is
+  verified like any later spend's. The connect screen pre-flights the
+  browser's PRF capability (`browserPrfSupport`) and shows the same
+  error before any dialog when it's known absent.
+- **Import recovers the account; it cannot recover the verifying key.**
+  The second path runs a discovery get() — no `allowCredentials`, so the
+  browser's picker lists every synced passkey for the RP and the user
+  picks the one whose account to re-establish (the `eval` PRF form only:
+  `evalByCredential` names credential ids, which discovery can't know).
+  An authentication response never carries the credential's public key —
+  only a create response does — so an imported account's record holds
+  the credential's id and RP alone. Its spends are gated by the
+  extension's own review screen and the OS verification dialog instead
+  of a verified assertion: strictly weaker than a created account, since
+  the PRF output is constant per credential and replayable by a
+  compromised page that once saw one. Documented rather than papered
+  over — no WebAuthn API re-reads an existing credential's key, so the
+  gap has no in-protocol close (it's why every PRF deployment keeps an
+  RP-side record or recovery code). The import refuses a passkey whose
+  account is already stored (same seed → same addresses, found before
+  naming); a dismissed or empty picker is one `NotAllowedError`, and the
+  chooser's copy reads true for both. This is what makes "the passkey is
+  the backup" exercisable: a fresh install recovers the account from the
+  synced passkey alone.
+- **The credential request stays browser-generous.** `residentKey` is
+  `"preferred"` (discoverability is never used — every ceremony names
+  its credential in `allowCredentials`), and `pubKeyCredParams` offers
+  ES256 and RS256, with Ed25519 added only when the browser's WebCrypto
+  can verify it (`canVerifyEd25519`, cached feature detect) — so
+  CTAP2.0-era security keys and Ed25519-only ones can register.
+- **Nothing reveals the seed, ever.** Both reveal paths refuse device
+  accounts: `revealMnemonic` by its type check, `revealSpendingKey` by
+  walking to the secret holder and refusing every device kind.
+- **The contract change is one optional parameter.** The verifying
+  public key must come from the STORED credential — trusting a key the
+  page handed over would let any page have its assertions checked
+  against keys it chose. So `assembleSignedPczt` takes an optional
+  `context` (`DeviceSignContext`: the credential at rest and the
+  account's ZIP-32 index), which the keyring fills from its records;
+  Ledger and Keystone verify against the transaction alone and keep
+  their two-parameter engines.
+- **The verification is one library call** (`@simplewebauthn/server`,
+  v14, WebCrypto-only — it imports cleanly in the service worker): the
+  assertion is checked against the stored key; the expected challenge is
+  SHA-256 of the unsigned PCZT's bytes (the view hashed the same
+  transaction); the expected origin is both extension-origin forms,
+  computed at runtime (Chrome's `chrome-extension://<id>`; Firefox's
+  SHA-256-of-the-id encoding, two base-16 characters per byte, a–p); the
+  expected RP is `keychain.zillions.money`; user verification is required.
+  An imported account's record carries no key, so its assertions go
+  unverified (see the import bullet above) — created accounts get the
+  full check.
+  Attestation chains and signature counters are skipped: synced passkeys
+  don't advance counters, and authenticator models aren't the threat
+  model.
+- **The transport is the browser's own passkey dialog.** The extension
+  claims the `keychain.zillions.money` RP through the manifest's host
+  permissions — derived from `RP_ID` in `wxt.config.ts`, so the manifest
+  cannot drift from what the ceremonies claim; the CI manifest guard
+  knows the one extra host and nothing else (Chrome 122+, Firefox
+  150+) — so every ceremony runs in an extension page, every assertion's
+  origin is the extension's own, and no site can mint one. Nothing
+  travels by wire; the error/retry posture is the Keystone's: the views
+  render `describeError` and re-arm.
+- **Spend gates, not verifies, at the page.** The Sign view binds the
+  ceremony to `credentialId` from the background (`allowCredentials` and
+  the PRF evaluation key on it), and the challenge is SHA-256 of the
+  unsigned PCZT; the engine re-checks everything after the page. The
+  PRF output rides the same response as the assertion, so the page
+  can't assemble a seed from one ceremony and a signature from another.
+- **Safari is unspiked**: extension-page WebAuthn there is unknown
+  territory, so the module gates on WebAuthn presence like the others
+  and older browsers fail loudly at the ceremony with copy in
+  `describeError`.
+
 ## Layout
 
 - `src/hardware/types.ts` — the abstraction's types.
@@ -114,6 +256,15 @@ change, no wizard change — just a kind, an engine, views.
 - `src/hardware/ledger-views.tsx` — the Ledger screens.
 - `src/hardware/keystone.ts` — the Keystone engine.
 - `src/hardware/keystone-views.tsx` — the Keystone screens.
+- `src/hardware/passkey-constants.ts` — the consensus constants (RP ID,
+  PRF salt), a zero-import leaf the build, the runtime and the CI guard
+  share (pin-tested).
+- `src/hardware/passkey-core.ts` — the ceremonies' shared pure frame (RP,
+  salt, challenge binding, origin checks, entropy → seed).
+- `src/hardware/passkey-view-parts.tsx` — the shared view parts
+  (create, probe and import ceremonies, sign screen).
+- `src/hardware/passkey-prf.ts` — the `passkey-prf` engine.
+- `src/hardware/passkey-prf-views.tsx` — the `passkey-prf` screens.
 - `src/hardware/device-progress.tsx` — the shared progress screen.
 - `src/hardware/engines.ts` / `index.ts` — the registries.
 
@@ -121,5 +272,9 @@ change, no wizard change — just a kind, an engine, views.
 
 An entry in `DeviceKind`, an engine, views, a `wallets` entry, and —
 only if the device needs data the request doesn't carry yet — an
-optional field on `saveDeviceAccount`. The contract's signing channel,
-the keyring's `sign` and the wizard don't change.
+optional field on `saveDeviceAccount`. The keyring's `sign` and the
+wizard don't change. The passkey also gave `assembleSignedPczt` an
+optional third parameter: the keyring passes the device's at-rest state
+(its credential and ZIP-32 index — the engine never trusts it from the
+page) — where Ledger and Keystone verify against the transaction alone
+and need none of it.

@@ -28,6 +28,7 @@ use zcash_note_encryption::{
     Domain, EphemeralKeyBytes, OutgoingCipherKey, ShieldedOutput, OUT_CIPHERTEXT_SIZE,
 };
 use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
+use zeroize::Zeroizing;
 use zip32::fingerprint::SeedFingerprint;
 use zip32::{AccountId, Scope};
 
@@ -679,11 +680,13 @@ fn serialize(pczt: Pczt) -> Result<Vec<u8>, JsError> {
 pub fn sign_pczt(
     network: &str,
     pczt: &[u8],
-    seed: &[u8],
+    seed: Vec<u8>,
     hd_index: u32,
 ) -> Result<Vec<u8>, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
-    let signed = sign(&network, parse(pczt)?, seed, hd_index).map_err(|e| JsError::new(&e))?;
+    // The wasm copy of the seed is zero-filled when the call ends.
+    let signed = sign(&network, parse(pczt)?, &Zeroizing::new(seed), hd_index)
+        .map_err(|e| JsError::new(&e))?;
     serialize(signed)
 }
 

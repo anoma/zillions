@@ -15,6 +15,7 @@ use zcash_keys::keys::{
 };
 use zcash_protocol::consensus::{Network, Parameters};
 use zcash_protocol::{PoolType, ShieldedPool};
+use zeroize::Zeroizing;
 use zip32::{fingerprint::SeedFingerprint, AccountId, DiversifierIndex};
 
 use crate::parse_network;
@@ -72,16 +73,18 @@ pub fn derive_account_from_ufvk(network: &str, ufvk: &str) -> Result<JsValue, Js
 
 /// The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
 #[wasm_bindgen]
-pub fn derive_account(network: &str, seed: &[u8], hd_index: u32) -> Result<JsValue, JsError> {
+pub fn derive_account(network: &str, seed: Vec<u8>, hd_index: u32) -> Result<JsValue, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
-    let account = account(&network, seed, hd_index).map_err(|e| JsError::new(&e))?;
+    // The wasm copy of the seed is zero-filled when the call ends.
+    let account =
+        account(&network, &Zeroizing::new(seed), hd_index).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&account).map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// The seed's ZIP-32 fingerprint, hex. Names the seed without revealing it.
 #[wasm_bindgen]
-pub fn seed_fingerprint(seed: &[u8]) -> Result<String, JsError> {
-    let fp = SeedFingerprint::from_seed(seed)
+pub fn seed_fingerprint(seed: Vec<u8>) -> Result<String, JsError> {
+    let fp = SeedFingerprint::from_seed(&Zeroizing::new(seed))
         .ok_or_else(|| JsError::new("seed must be 32 to 252 bytes"))?;
     Ok(hex::encode(fp.to_bytes()))
 }
@@ -175,9 +178,10 @@ struct SpendingKeys {
 
 /// The account's spending secret in both encodings: `{ orchard, sapling }`.
 #[wasm_bindgen]
-pub fn spending_keys(network: &str, seed: &[u8], hd_index: u32) -> Result<JsValue, JsError> {
+pub fn spending_keys(network: &str, seed: Vec<u8>, hd_index: u32) -> Result<JsValue, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
-    let usk = spending_key(&network, seed, hd_index).map_err(|e| JsError::new(&e))?;
+    let seed = Zeroizing::new(seed);
+    let usk = spending_key(&network, &seed, hd_index).map_err(|e| JsError::new(&e))?;
     let keys = SpendingKeys {
         orchard: hex::encode(usk.to_bytes(Era::Orchard).expose_secret()),
         sapling: encode_extended_spending_key(

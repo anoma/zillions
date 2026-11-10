@@ -384,7 +384,12 @@ export class ApprovalsService {
     }
     const device = await this.keyring.signingDevice(pending.signer);
     return device
-      ? { device: device.device, pczt: pending.pczt, hdIndex: device.hdIndex }
+      ? {
+          device: device.device,
+          pczt: pending.pczt,
+          hdIndex: device.hdIndex,
+          credentialId: device.credentialId,
+        }
       : null;
   }
 

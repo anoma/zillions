@@ -55,10 +55,28 @@ export type AccountSecret =
   | { t: "ShieldedKeys"; spendingKey: string };
 
 /** Which hardware wallet an account's keys live on. */
-export type DeviceKind = "ledger" | "keystone";
+export type DeviceKind = "ledger" | "keystone" | "passkey-prf";
+
+/** A passkey credential at rest: its id (base64url) and the RP it was made
+ * under, plus its COSE public key (base64) when the credential was created
+ * here. An imported credential carries no public key — WebAuthn never
+ * re-reveals one for an existing credential — so its record holds the id
+ * and RP alone. Only the passkey module interprets it; the keychain
+ * stores it as-is. */
+export type DeviceCredential = {
+  id: string;
+  rpId: string;
+  publicKey?: string;
+};
 
 /** A pending PCZT for a device account, its kind and the account's ZIP-32 index. */
-export type DeviceSignTx = { device: DeviceKind; pczt: string; hdIndex: number };
+export type DeviceSignTx = {
+  device: DeviceKind;
+  pczt: string;
+  hdIndex: number;
+  /** The passkey credential to assert with, when the account's is one. */
+  credentialId?: string;
+};
 
 /** A stored parent account (transparent or shielded), as returned to the UI. */
 export type AccountStore = {
@@ -275,9 +293,10 @@ export type IpcContract = {
     res: DerivedAccount;
   };
   /**
-   * Store a hardware-wallet account (no secret: keys stay on the device) with
-   * its shielded child, and make it active. Re-connecting an already imported
-   * device just re-activates it.
+   * Store a hardware-wallet account with its shielded child, and make it
+   * active. Re-connecting an already imported device just re-activates
+   * it. The keys stay on the device or derive per ceremony — no secret
+   * ever arrives here.
    */
   "keyring/saveDeviceAccount": {
     req: {
@@ -296,6 +315,8 @@ export type IpcContract = {
       /** ZIP-32 seed fingerprint (hex) the PCZT's zip32_derivation carries. */
       seedFingerprint: string;
       birthday: number;
+      /** The WebAuthn credential, for passkey accounts. */
+      credential?: DeviceCredential;
     };
     res: {
       parentAccount: AccountStore;
