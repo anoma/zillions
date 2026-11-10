@@ -1,8 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-// Node is enough: the invariant tests import only the zero-import
-// modules (`passkey-constants.ts`, `passkey-seed.ts`), never browser
-// modules.
+// Node is enough: tests mock the browser modules they reach.
 export default defineConfig({
   test: {
     environment: "node",
