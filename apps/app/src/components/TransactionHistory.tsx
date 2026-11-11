@@ -1,7 +1,12 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
-import type { Activity } from "../lib/wallet/types";
+import type {
+  Activity,
+  CheckSwapExecutionStatusResponse,
+  Token,
+} from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -29,6 +34,15 @@ export function TransactionHistory({
   limit?: number;
 }) {
   const transactionHistory = useGetTransactionHistory();
+  const [tokens, setTokens] = useState<Token[]>([]);
+
+  // Fetch available tokens. Required for displaying token assets un human readable form.
+  useEffect(() => {
+    fetch("https://1click.chaindefuser.com/v0/tokens")
+      .then((res) => res.json())
+      .then((data) => setTokens(data))
+      .catch((err) => console.error("Failed to fetch tokens", err));
+  }, []);
 
   if (transactionHistory.isPending) {
     return <PageLoader />;
@@ -38,8 +52,11 @@ export function TransactionHistory({
     return <PageError>{String(transactionHistory.error)}</PageError>;
   }
 
-  const all = transactionHistory.data;
-  const shown = limit ? all.slice(0, limit) : all;
+  // Grab limit entries if limit is defined. Prioritize swaps over ordinary transactions.
+  const allSwaps = transactionHistory.data.swaps;
+  const shownSwaps = limit ? allSwaps.slice(0, limit) : allSwaps;
+  const all = transactionHistory.data.activities;
+  const shown = limit ? all.slice(0, limit - shownSwaps.length) : all;
 
   return (
     <section
@@ -84,11 +101,102 @@ export function TransactionHistory({
             No transactions yet
           </p>
         )}
+        {shownSwaps.map((swap) => (
+          <SwapRow key={swap.correlationId} swap={swap} tokens={tokens} />
+        ))}
         {shown.map((tx) => (
           <Row key={tx.txid} tx={tx} />
         ))}
       </div>
     </section>
+  );
+}
+
+/**
+ * Display a pending swap. I.e. the time at which the quotation was produced, the original
+ * asset, the destination asset, and the balance increase expected in the destination asset.
+ */
+function SwapRow({
+  swap,
+  tokens,
+}: {
+  swap: CheckSwapExecutionStatusResponse;
+  tokens: Token[];
+}) {
+  // Use the first intent hash for the dynamic URL
+  const txHash = swap.quoteResponse.quote.depositAddress;
+
+  // Look up symbols from the tokens array, fallback to the raw asset string if not found
+  const originSymbol =
+    tokens.find(
+      (t) => t.assetId === swap.quoteResponse.quoteRequest.originAsset,
+    )?.symbol || swap.quoteResponse.quoteRequest.originAsset;
+
+  const destinationSymbol =
+    tokens.find(
+      (t) => t.assetId === swap.quoteResponse.quoteRequest.destinationAsset,
+    )?.symbol || swap.quoteResponse.quoteRequest.destinationAsset;
+
+  return (
+    <a
+      href={`https://explorer.near-intents.org/transactions/${txHash}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={twMerge(
+        rowClassName,
+        "py-4 px-4 transition-colors duration-300 hover:bg-card",
+        "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black",
+      )}
+    >
+      <span className="size-9 grid place-items-center rounded-full bg-black/5 text-gray-600">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className="size-5"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+          />
+        </svg>
+      </span>
+
+      <div>
+        <div>Pending Swap</div>
+        <div className="mt-0.5 text-xs text-gray-600">
+          <time>
+            {new Date(swap.updatedAt).toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </time>
+        </div>
+      </div>
+
+      <div
+        className={twMerge(
+          "min-w-0 flex items-center gap-3 text-gray-600",
+          routeClassName,
+        )}
+      >
+        <span className="text-sm font-medium">{originSymbol}</span>
+        <span aria-hidden="true" className="text-black/30">
+          →
+        </span>
+        <span className="text-sm font-medium">{destinationSymbol}</span>
+      </div>
+
+      <div className="text-right text-base font-semibold">
+        +{swap.quoteResponse.quote.amountOutFormatted}
+        <span className="text-[max(0.7rem,0.5em)]"> {destinationSymbol}</span>
+      </div>
+    </a>
   );
 }
 
