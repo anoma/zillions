@@ -4,8 +4,9 @@
  * browser can reach; the passkey opens its connect screen's
  * create-or-import chooser.
  */
-import { Heading, Stack } from "@zillions/components";
+import { Alert, Heading, Stack } from "@zillions/components";
 import { ZEmblem } from "@zillions/components/assets/ZEmblem";
+import { useEffect, useState } from "react";
 import { PiDownloadSimple, PiFingerprint, PiPlus } from "react-icons/pi";
 
 import { wallets } from "../../hardware";
@@ -26,7 +27,11 @@ const HardwareIcon = () => (
 );
 
 export const Start = () => {
-  const { dispatch } = useWizard();
+  const { dispatch, client } = useWizard();
+  const [lost, setLost] = useState(false);
+  useEffect(() => {
+    client.vaultLost().then(setLost).catch(console.error);
+  }, [client]);
   // Ledger and Keystone belong to the picker behind the hardware card;
   // the passkey connects from its own card, skipping the picker.
   const hasHardware = Object.values(wallets).some(
@@ -42,6 +47,14 @@ export const Start = () => {
       <Heading level="h1" className="mb-8 text-xl text-black text-center">
         Set up your Zcash keys
       </Heading>
+      {lost && (
+        <Alert type="warning" title="Your wallet was removed" className="mb-6">
+          The browser deleted the Keychain&apos;s data, so its accounts are
+          gone from here. Your funds are safe on the chain: import your
+          recovery phrase, or reconnect your passkey or hardware wallet, to get
+          them back.
+        </Alert>
+      )}
       <Stack as="div" direction="vertical" gap={2.5}>
         <OptionCard
           icon={<PiPlus />}

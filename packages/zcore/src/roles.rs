@@ -6,24 +6,33 @@ use std::convert::Infallible;
 use std::sync::OnceLock;
 
 use orchard::circuit::{OrchardCircuitVersion, ProvingKey, VerifyingKey};
+use orchard::note::Rho;
+use orchard::note_encryption::{
+    DomainVersion, IronwoodVersion, NoteEncryptionDomain, OrchardVersion,
+};
 use pczt::roles::verifier::OrchardError;
 use pczt::roles::{
     combiner::Combiner, prover::Prover, signer::Signer, spend_finalizer::SpendFinalizer,
     tx_extractor::TransactionExtractor, updater::Updater, verifier::Verifier,
 };
 use pczt::Pczt;
+use sapling::note_encryption::{SaplingDomain, Zip212Enforcement};
 use serde::Serialize;
 use transparent::address::TransparentAddress;
 use transparent::keys::{NonHardenedChildIndex, TransparentKeyScope};
 use wasm_bindgen::prelude::*;
 use zcash_keys::address::{Address, UnifiedAddress};
 use zcash_keys::keys::{UnifiedFullViewingKey, UnifiedSpendingKey};
+use zcash_note_encryption::{
+    note_bytes::NoteBytesData, try_output_recovery_with_ock, try_output_recovery_with_pkd_esk,
+    Domain, EphemeralKeyBytes, OutgoingCipherKey, ShieldedOutput, OUT_CIPHERTEXT_SIZE,
+};
 use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 use zeroize::Zeroizing;
 use zip32::fingerprint::SeedFingerprint;
 use zip32::{AccountId, Scope};
 
-use crate::parse_network;
+use crate::{parse_network, FullOutput};
 
 const HARDENED: u32 = 0x8000_0000;
 
@@ -44,6 +53,9 @@ pub(crate) fn sign(
     let fingerprint = SeedFingerprint::from_seed(seed).ok_or("seed must be 32 to 252 bytes")?;
     let account = AccountId::try_from(hd_index).map_err(|_| "account index out of range")?;
     let usk = UnifiedSpendingKey::from_seed(network, seed, account).map_err(to_pczt_error)?;
+    // The checks the approval's summary made, again on what is signed.
+    check_values(&pczt)?;
+    shielded_outputs(network, &pczt, &usk.to_unified_full_viewing_key())?;
     let coin = network.network_type().coin_type();
     let ours = |derivation: Option<AccountId>| derivation == Some(account);
 
@@ -199,6 +211,18 @@ struct Flow {
     /// key proves. Any other output is a payment.
     #[serde(skip_serializing_if = "Option::is_none")]
     mine: Option<bool>,
+    /// A transparent output of ours: where in the account, so the keychain
+    /// can tell an address other wallets scan from one they never reach.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<ChangePath>,
+}
+
+/// A transparent address's place in the account: scope 0 external, 1
+/// internal, 2 ephemeral (ZIP 320), and its index.
+#[derive(Clone, Copy, Serialize)]
+pub(crate) struct ChangePath {
+    scope: u32,
+    index: u32,
 }
 
 /// An output as the summary shows it: where it pays (`None` when it's ours),
@@ -240,57 +264,157 @@ pub(crate) fn payee(
     }
 }
 
-/// Every non-padding output, its note checked against its commitment so the
-/// value and receiver shown are the ones signed.
+/// Whether `output`'s ciphertexts deliver `note`, so its receiver's wallet
+/// finds it and can spend it. Decrypted with the key the note's own `rseed`
+/// derives (ZIP 212) toward its receiver, so it works for any receiver, in
+/// the pool's `domain`, which also refuses another pool's note version. With
+/// an `ock`, the outgoing ciphertext must recover the note as well.
+fn delivers<D: Domain, O: ShieldedOutput<D>>(
+    domain: &D,
+    note: &D::Note,
+    output: &O,
+    ock: &Option<OutgoingCipherKey>,
+    out_ciphertext: &[u8; OUT_CIPHERTEXT_SIZE],
+) -> bool
+where
+    D::Note: PartialEq,
+{
+    let Some(esk) = D::derive_esk(note) else {
+        return false;
+    };
+    let holds = |found: Option<(D::Note, D::Recipient, D::Memo)>| {
+        found.is_some_and(|(found, _, _)| &found == note)
+    };
+    holds(try_output_recovery_with_pkd_esk(
+        domain,
+        D::get_pk_d(note),
+        esk,
+        output,
+    )) && ock.as_ref().is_none_or(|ock| {
+        holds(try_output_recovery_with_ock(
+            domain,
+            ock,
+            output,
+            out_ciphertext,
+        ))
+    })
+}
+
+const UNDELIVERABLE: &str =
+    "an output's ciphertext doesn't hold its note, so its receiver could never find it";
+
+/// One Orchard or Ironwood bundle's outputs; `V` is the pool's note version.
+fn action_outputs<V: DomainVersion>(
+    network: &Network,
+    ufvk: &UnifiedFullViewingKey,
+    bundle: &orchard::pczt::Bundle,
+) -> Result<Vec<Output>, String> {
+    let mut outputs = Vec::new();
+    for action in bundle.actions() {
+        let output = action.output();
+        // Checked before anything is skipped: the value a PCZT claims is the
+        // site's word until its commitment proves it.
+        output
+            .verify_note_commitment(action.spend())
+            .map_err(|e| format!("an output doesn't match its note: {e:?}"))?;
+        let (Some(recipient), Some(value), Some(rseed)) =
+            (*output.recipient(), *output.value(), *output.rseed())
+        else {
+            unreachable!("a verified note has its receiver, value and seed");
+        };
+        // Padding carries no value and names no one.
+        if value.inner() == 0 && output.user_address().is_none() {
+            continue;
+        }
+        // A zero-valued output may carry a deliberately random ciphertext
+        // (ZIP 326); it delivers nothing to lose.
+        if value.inner() > 0 {
+            let note = orchard::Note::from_parts(
+                recipient,
+                value,
+                // Rho is the spend's nullifier, as the commitment check used.
+                Rho::from_bytes(&action.spend().nullifier().to_bytes())
+                    .into_option()
+                    .expect("a nullifier is a valid rho"),
+                rseed,
+                *output.note_version(),
+            )
+            .into_option()
+            .expect("a verified note");
+            let encrypted = output.encrypted_note();
+            let sent = FullOutput {
+                eph_key: EphemeralKeyBytes(encrypted.epk_bytes),
+                cm: *output.cmx(),
+                enc: NoteBytesData(encrypted.enc_ciphertext.0),
+            };
+            let domain = NoteEncryptionDomain::<V>::for_pczt_action(action);
+            if !delivers(
+                &domain,
+                &note,
+                &sent,
+                output.ock(),
+                &encrypted.out_ciphertext,
+            ) {
+                return Err(UNDELIVERABLE.into());
+            }
+        }
+        let mine = ufvk
+            .orchard()
+            .is_some_and(|fvk| fvk.scope_for_address(&recipient).is_some());
+        let address = match mine {
+            true => None,
+            false => Some(payee(
+                network,
+                output.user_address(),
+                Receiver::Orchard(recipient),
+            )?),
+        };
+        outputs.push((address, value.inner(), mine));
+    }
+    Ok(outputs)
+}
+
+/// Every non-padding output, its note checked against its commitment and its
+/// ciphertexts, so the value and receiver shown are the ones signed and the
+/// receiver can find it.
 fn shielded_outputs(
     network: &Network,
     pczt: &Pczt,
     ufvk: &UnifiedFullViewingKey,
 ) -> Result<[Vec<Output>; 3], String> {
-    let action_outputs = |bundle: &orchard::pczt::Bundle| -> Result<Vec<Output>, String> {
-        let mut outputs = Vec::new();
-        for action in bundle.actions() {
-            let output = action.output();
-            // Padding carries no value and names no one.
-            if output.value().is_some_and(|v| v.inner() == 0) && output.user_address().is_none() {
-                continue;
-            }
-            output
-                .verify_note_commitment(action.spend())
-                .map_err(|e| format!("an output doesn't match its note: {e:?}"))?;
-            let (Some(recipient), Some(value)) = (*output.recipient(), *output.value()) else {
-                unreachable!("a verified note has its receiver and value");
-            };
-            let mine = ufvk
-                .orchard()
-                .is_some_and(|fvk| fvk.scope_for_address(&recipient).is_some());
-            let address = match mine {
-                true => None,
-                false => Some(payee(
-                    network,
-                    output.user_address(),
-                    Receiver::Orchard(recipient),
-                )?),
-            };
-            outputs.push((address, value.inner(), mine));
-        }
-        Ok(outputs)
-    };
-
     let mut sapling_outputs = Vec::new();
     let mut orchard_outputs = Vec::new();
     let mut ironwood_outputs = Vec::new();
     Verifier::new(pczt.clone())
         .with_sapling::<String, _>(|bundle| {
             for output in bundle.outputs() {
-                if output.value().is_some_and(|v| v.inner() == 0) && output.user_address().is_none()
-                {
+                output.verify_note_commitment()?;
+                let (Some(recipient), Some(value), Some(rseed)) =
+                    (*output.recipient(), *output.value(), *output.rseed())
+                else {
+                    unreachable!("a verified note has its receiver, value and seed");
+                };
+                if value.inner() == 0 && output.user_address().is_none() {
                     continue;
                 }
-                output.verify_note_commitment()?;
-                let (Some(recipient), Some(value)) = (*output.recipient(), *output.value()) else {
-                    unreachable!("a verified note has its receiver and value");
-                };
+                if value.inner() > 0 {
+                    let note = sapling::Note::from_parts(
+                        recipient,
+                        value,
+                        sapling::Rseed::AfterZip212(rseed),
+                    );
+                    let sent = FullOutput {
+                        eph_key: output.ephemeral_key().clone(),
+                        cm: *output.cmu(),
+                        enc: NoteBytesData(*output.enc_ciphertext()),
+                    };
+                    let domain = SaplingDomain::new(Zip212Enforcement::On);
+                    if !delivers(&domain, &note, &sent, output.ock(), output.out_ciphertext()) {
+                        return Err(pczt::roles::verifier::SaplingError::Custom(
+                            UNDELIVERABLE.into(),
+                        ));
+                    }
+                }
                 let mine = ufvk
                     .sapling()
                     .is_some_and(|dfvk| dfvk.decrypt_diversifier(&recipient).is_some());
@@ -307,25 +431,30 @@ fn shielded_outputs(
         })
         .map_err(to_pczt_error)?
         .with_orchard::<String, _>(|bundle| {
-            orchard_outputs = action_outputs(bundle).map_err(OrchardError::Custom)?;
+            orchard_outputs = action_outputs::<OrchardVersion>(network, ufvk, bundle)
+                .map_err(OrchardError::Custom)?;
             Ok(())
         })
         .map_err(to_pczt_error)?
         .with_ironwood::<String, _>(|bundle| {
-            ironwood_outputs = action_outputs(bundle).map_err(OrchardError::Custom)?;
+            ironwood_outputs = action_outputs::<IronwoodVersion>(network, ufvk, bundle)
+                .map_err(OrchardError::Custom)?;
             Ok(())
         })
         .map_err(to_pczt_error)?;
     Ok([sapling_outputs, orchard_outputs, ironwood_outputs])
 }
 
-/// Transparent outputs. One is ours when it names a BIP 44 path whose key,
-/// derived from the viewing key, is the one its script pays.
+/// Transparent outputs, with the path of each that is ours. One is ours when
+/// it names a BIP 44 path, `m/44'/coin'/account'/scope/index`, whose key,
+/// derived from the viewing key, is the one its script pays, at a scope
+/// wallets scan. Any other path, a custom scope or a hardened step, would put
+/// the money where no wallet restoring the phrase looks: shown as a payment.
 fn transparent_outputs(
     network: &Network,
     pczt: &Pczt,
     ufvk: &UnifiedFullViewingKey,
-) -> Result<Vec<Output>, String> {
+) -> Result<Vec<(Output, Option<ChangePath>)>, String> {
     let address = |script: &[u8]| crate::transparent_tx::script_address(network, script);
     let mut derivations = Vec::new();
     Verifier::new(pczt.clone())
@@ -343,12 +472,22 @@ fn transparent_outputs(
             Ok(())
         })
         .map_err(to_pczt_error)?;
-    let ours = |paths: &[([u8; 33], Vec<bip32::ChildNumber>)]| -> Option<String> {
+    let coin = network.network_type().coin_type();
+    let ours = |paths: &[([u8; 33], Vec<bip32::ChildNumber>)]| -> Option<(String, ChangePath)> {
         let account = ufvk.p2pkh()?;
         paths.iter().find_map(|(pubkey, path)| {
-            let [.., scope, index] = path[..] else {
+            let [purpose, coin_type, account_index, scope, index] = path[..] else {
                 return None;
             };
+            let standard = purpose == bip32::ChildNumber(44 | HARDENED)
+                && coin_type == bip32::ChildNumber(coin | HARDENED)
+                && account_index.is_hardened()
+                && !scope.is_hardened()
+                && scope.index() <= 2
+                && !index.is_hardened();
+            if !standard {
+                return None;
+            }
             let derived = account
                 .derive_address_pubkey(
                     TransparentKeyScope::custom(scope.index())?,
@@ -356,7 +495,13 @@ fn transparent_outputs(
                 )
                 .ok()?;
             (derived.serialize() == *pubkey).then(|| {
-                Address::Transparent(TransparentAddress::from_pubkey(&derived)).encode(network)
+                let address =
+                    Address::Transparent(TransparentAddress::from_pubkey(&derived)).encode(network);
+                let path = ChangePath {
+                    scope: scope.index(),
+                    index: index.index(),
+                };
+                (address, path)
             })
         })
     };
@@ -367,10 +512,28 @@ fn transparent_outputs(
         .zip(derivations)
         .map(|(o, paths)| {
             let pays = address(o.script_pubkey());
-            let mine = pays.is_some() && ours(&paths) == pays;
-            (pays, *o.value(), mine)
+            let path = ours(&paths)
+                .filter(|(derived, _)| pays.as_ref() == Some(derived))
+                .map(|(_, path)| path);
+            ((pays, *o.value(), path.is_some()), path)
         })
         .collect())
+}
+
+/// A bundle the transaction drops (no spends or outputs, no actions) must
+/// claim no value: its `value_sum` would count in the fee shown but never in
+/// the one signed. And no pool can bring in less than nothing.
+fn check_values(pczt: &Pczt) -> Result<(), String> {
+    let sapling = pczt.sapling();
+    if sapling.spends().is_empty() && sapling.outputs().is_empty() && *sapling.value_sum() != 0 {
+        return Err("an empty Sapling bundle claims a value".into());
+    }
+    for (pool, bundle) in [("Orchard", pczt.orchard()), ("Ironwood", pczt.ironwood())] {
+        if bundle.actions().is_empty() && bundle.value_sum().0 != 0 {
+            return Err(format!("an empty {pool} bundle claims a value"));
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn summarize(
@@ -385,7 +548,11 @@ pub(crate) fn summarize(
         .iter()
         .map(|i| (address(i.script_pubkey()), *i.value()))
         .collect();
-    let transparent_outputs = transparent_outputs(network, pczt, ufvk)?;
+    check_values(pczt)?;
+    let (transparent_outputs, change_paths): (Vec<Output>, Vec<Option<ChangePath>>) =
+        transparent_outputs(network, pczt, ufvk)?
+            .into_iter()
+            .unzip();
     let [sapling_outputs, orchard_outputs, ironwood_outputs] =
         shielded_outputs(network, pczt, ufvk)?;
 
@@ -413,6 +580,9 @@ pub(crate) fn summarize(
         + sapling_net
         + orchard_net
         + ironwood_net;
+    if fee < 0 || sapling_in < 0 || orchard_in < 0 || ironwood_in < 0 {
+        return Err("the transaction's values don't add up".into());
+    }
 
     let flows = |list: Vec<Output>| {
         list.into_iter()
@@ -420,8 +590,9 @@ pub(crate) fn summarize(
                 address,
                 value: value.to_string(),
                 mine: Some(mine),
+                path: None,
             })
-            .collect()
+            .collect::<Vec<_>>()
     };
     let total = |value: i128| {
         (value > 0)
@@ -429,6 +600,7 @@ pub(crate) fn summarize(
                 address: None,
                 value: value.to_string(),
                 mine: None,
+                path: None,
             })
             .into_iter()
             .collect()
@@ -444,9 +616,14 @@ pub(crate) fn summarize(
                 address,
                 value: value.to_string(),
                 mine: None,
+                path: None,
             })
             .collect(),
-        transparent_outputs: flows(transparent_outputs),
+        transparent_outputs: flows(transparent_outputs)
+            .into_iter()
+            .zip(change_paths)
+            .map(|(flow, path)| Flow { path, ..flow })
+            .collect(),
         sapling_inputs: total(sapling_in),
         sapling_outputs: flows(sapling_outputs),
         orchard_inputs: total(orchard_in),
@@ -716,6 +893,207 @@ mod tests {
         let combined =
             parse(&combine_pczts(&unsigned.serialize().unwrap(), &from_device).unwrap()).unwrap();
         prove(combined, None).unwrap();
+    }
+
+    /// `pczt` with one byte flipped inside the first copy of `part` on the
+    /// wire; panics if the wire doesn't carry `part` as is.
+    fn tamper(pczt: &Pczt, part: &[u8]) -> Pczt {
+        let mut bytes = pczt.clone().serialize().unwrap();
+        let at = bytes
+            .windows(part.len())
+            .position(|w| w == part)
+            .expect("the wire carries the bytes");
+        bytes[at + part.len() / 2] ^= 1;
+        parse(&bytes).unwrap()
+    }
+
+    /// The ciphertexts of `pczt`'s Ironwood outputs that carry value.
+    fn ironwood_ciphertexts(pczt: &Pczt) -> Vec<(Vec<u8>, Vec<u8>, bool)> {
+        let mut found = Vec::new();
+        Verifier::new(pczt.clone())
+            .with_ironwood::<Infallible, _>(|bundle| {
+                for action in bundle.actions() {
+                    let output = action.output();
+                    if output.value().is_some_and(|v| v.inner() > 0) {
+                        let note = output.encrypted_note();
+                        found.push((
+                            note.enc_ciphertext.0.to_vec(),
+                            note.out_ciphertext.to_vec(),
+                            output.ock().is_some(),
+                        ));
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+        found
+    }
+
+    /// A site can't have its change, or a payment, land in a ciphertext no
+    /// wallet can read: the approval refuses to describe it and the keyring
+    /// to sign it.
+    #[test]
+    fn refuses_an_output_its_receiver_could_never_find() {
+        let honest = ironwood_send();
+        summarize(&MAIN, &honest, &ufvk()).unwrap();
+        let outputs = ironwood_ciphertexts(&honest);
+        assert_eq!(outputs.len(), 1, "the change");
+        let (enc, out, has_ock) = &outputs[0];
+
+        let garbled = tamper(&honest, enc);
+        let err = summarize(&MAIN, &garbled, &ufvk()).err().unwrap();
+        assert!(err.contains("could never find it"), "{err}");
+        let err = sign(&MAIN, garbled, &SEED, 0).err().unwrap();
+        assert!(err.contains("could never find it"), "{err}");
+
+        // The outgoing ciphertext is checked only when its key is given.
+        let garbled = tamper(&honest, out);
+        assert_eq!(summarize(&MAIN, &garbled, &ufvk()).is_err(), *has_ock);
+    }
+
+    /// `value` as postcard writes an `Option<u64>` holding it.
+    fn some_varint(mut value: u64) -> Vec<u8> {
+        let mut bytes = vec![1];
+        loop {
+            let byte = (value & 0x7f) as u8;
+            value >>= 7;
+            if value == 0 {
+                bytes.push(byte);
+                return bytes;
+            }
+            bytes.push(byte | 0x80);
+        }
+    }
+
+    /// The Ironwood outputs' claimed values, padding included.
+    fn ironwood_values(pczt: &Pczt) -> Vec<u64> {
+        let mut values = Vec::new();
+        Verifier::new(pczt.clone())
+            .with_ironwood::<Infallible, _>(|bundle| {
+                values.extend(
+                    bundle
+                        .actions()
+                        .iter()
+                        .filter_map(|a| a.output().value().map(|v| v.inner())),
+                );
+                Ok(())
+            })
+            .unwrap();
+        values
+    }
+
+    /// A site can't hide an output by claiming it's worth nothing: its claim
+    /// is checked against the commitment the chain will hold, padding or not.
+    #[test]
+    fn refuses_an_output_that_claims_zero_but_commits_to_value() {
+        let honest = ironwood_send();
+        let change = *ironwood_values(&honest).iter().max().unwrap();
+        assert!(change > 0);
+
+        let mut bytes = honest.clone().serialize().unwrap();
+        let claim = some_varint(change);
+        let at = bytes
+            .windows(claim.len())
+            .position(|w| w == claim)
+            .expect("the wire carries the change's value");
+        bytes.splice(at..at + claim.len(), some_varint(0));
+        let hidden = parse(&bytes).unwrap();
+        assert!(
+            !ironwood_values(&hidden).contains(&change),
+            "the claim is now 0"
+        );
+
+        let err = summarize(&MAIN, &hidden, &ufvk()).err().expect("refused");
+        assert!(err.contains("doesn't match its note"), "{err}");
+        assert!(sign(&MAIN, hidden, &SEED, 0).is_err());
+    }
+
+    /// 50,000 from a 200,000 Ironwood note to our own transparent address at
+    /// `scope`/`index`, its output labelled with `path`, as a site may.
+    fn send_to_own(scope: u32, index: u32, path: Vec<u32>) -> Pczt {
+        let (wallet, trees, _) = wallet_and_trees("ironwood", 200_000);
+        let pubkey = ufvk()
+            .p2pkh()
+            .unwrap()
+            .derive_address_pubkey(
+                TransparentKeyScope::custom(scope).unwrap(),
+                NonHardenedChildIndex::from_index(index).unwrap(),
+            )
+            .unwrap();
+        let to = Address::Transparent(TransparentAddress::from_pubkey(&pubkey)).encode(&MAIN);
+        let pczt = crate::build::pczt(
+            &wallet,
+            &ufvk(),
+            SeedFingerprint::from_seed(&SEED).unwrap().to_bytes(),
+            0,
+            &plan(&wallet, &to, 50_000),
+            &trees,
+            None,
+        )
+        .unwrap();
+        let derivation = transparent::pczt::Bip32Derivation::parse(
+            SeedFingerprint::from_seed(&SEED).unwrap().to_bytes(),
+            path,
+        )
+        .unwrap();
+        Updater::new(pczt)
+            .update_transparent_with(|mut updater| {
+                updater.update_output_with(0, |mut output| {
+                    output.set_bip32_derivation(pubkey.serialize(), derivation);
+                    Ok(())
+                })
+            })
+            .unwrap()
+            .finish()
+    }
+
+    fn own_transparent_outputs(pczt: &Pczt) -> Vec<(bool, Option<(u32, u32)>)> {
+        let summary = summarize(&MAIN, pczt, &ufvk()).unwrap();
+        summary
+            .transparent_outputs
+            .iter()
+            .map(|f| (f.mine == Some(true), f.path.map(|p| (p.scope, p.index))))
+            .collect()
+    }
+
+    /// Change counts as ours only where a wallet restoring the phrase looks:
+    /// the account's own BIP 44 path, at a scope wallets scan.
+    #[test]
+    fn calls_transparent_change_ours_only_on_a_standard_path() {
+        let h = |n: u32| n | HARDENED;
+        let standard = send_to_own(0, 5, vec![h(44), h(133), h(0), 0, 5]);
+        assert_eq!(
+            own_transparent_outputs(&standard),
+            vec![(true, Some((0, 5)))]
+        );
+
+        // A custom scope no wallet scans, though the key is truly the account's.
+        let custom = send_to_own(1_234_567, 9, vec![h(44), h(133), h(0), 1_234_567, 9]);
+        assert_eq!(own_transparent_outputs(&custom), vec![(false, None)]);
+
+        // A path whose prefix isn't BIP 44, or shorter, names no standard place.
+        let odd = send_to_own(0, 5, vec![h(45), h(133), h(0), 0, 5]);
+        assert_eq!(own_transparent_outputs(&odd), vec![(false, None)]);
+        let short = send_to_own(0, 5, vec![0, 5]);
+        assert_eq!(own_transparent_outputs(&short), vec![(false, None)]);
+    }
+
+    /// A fee the transaction can't pay means the values were made up.
+    #[test]
+    fn refuses_values_that_dont_add_up() {
+        let honest = ironwood_send();
+        summarize(&MAIN, &honest, &ufvk()).unwrap();
+        // The payment's 50,000 raised past what was spent.
+        let mut bytes = honest.serialize().unwrap();
+        let claim = some_varint(50_000)[1..].to_vec();
+        let at = bytes
+            .windows(claim.len())
+            .position(|w| w == claim)
+            .expect("the wire carries the payment's value");
+        bytes.splice(at..at + claim.len(), some_varint(5_000_000)[1..].to_vec());
+        let inflated = parse(&bytes).unwrap();
+        let err = summarize(&MAIN, &inflated, &ufvk()).err().expect("refused");
+        assert!(err.contains("don't add up"), "{err}");
     }
 
     #[test]

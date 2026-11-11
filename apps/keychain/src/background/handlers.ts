@@ -81,8 +81,14 @@ export const handlers: HandlerMap = {
   },
 
   "vault/createPassword": async ({ password }) => {
-    const { vaultService } = await getServices();
+    const { vaultService, localStorage } = await getServices();
     await vaultService.createPassword(password);
+    await localStorage.noteVaultCreated();
+  },
+
+  "vault/lost": async () => {
+    const { localStorage } = await getServices();
+    return localStorage.vaultLost();
   },
 
   "vault/lockState": async () => {
@@ -167,9 +173,9 @@ export const handlers: HandlerMap = {
   },
 
   "keyring/saveDeviceAccount": async (input) => {
-    const { keyring, broadcaster } = await getServices();
+    const { keyring, approvals, broadcaster } = await getServices();
     const result = await keyring.storeDeviceAccount(input);
-    void broadcaster.accountChanged();
+    void broadcaster.accountChanged(await approvals.followActiveAccount());
     return result;
   },
 
@@ -184,9 +190,9 @@ export const handlers: HandlerMap = {
   },
 
   "keyring/setActiveAccount": async ({ id, type }) => {
-    const { accounts, broadcaster } = await getServices();
+    const { accounts, approvals, broadcaster } = await getServices();
     await accounts.setActiveAccount(id, type);
-    void broadcaster.accountChanged();
+    void broadcaster.accountChanged(await approvals.followActiveAccount());
   },
 
   "keyring/revealMnemonic": async ({ accountId }) => {
@@ -205,9 +211,11 @@ export const handlers: HandlerMap = {
   },
 
   "keyring/deleteAccount": async ({ accountId }) => {
-    const { accounts, broadcaster } = await getServices();
+    const { accounts, approvals, broadcaster } = await getServices();
     await accounts.remove(accountId);
-    // Removing the active account repoints it, so dapps may see a new default.
+    await approvals.followActiveAccount();
+    // Any site may have lost its current wallet to the removal and moved on
+    // to another it was given.
     void broadcaster.accountChanged();
   },
 
@@ -215,12 +223,12 @@ export const handlers: HandlerMap = {
 
   "dapp/connect": async (_payload, ctx) => {
     const { approvals } = await getServices();
-    await approvals.approveConnection(requireOrigin(ctx));
+    await approvals.approveConnection(requireOrigin(ctx), ctx.tabId);
   },
 
   "dapp/disconnect": async (_payload, ctx) => {
     const { approvals } = await getServices();
-    await approvals.approveDisconnection(requireOrigin(ctx));
+    await approvals.approveDisconnection(requireOrigin(ctx), ctx.tabId);
   },
 
   "dapp/isConnected": async (_payload, ctx) => {
@@ -245,7 +253,11 @@ export const handlers: HandlerMap = {
       throw new Error("zc.updateDefaultAccount: invalid arguments");
     }
     const { approvals } = await getServices();
-    await approvals.approveUpdateDefaultAccount(requireOrigin(ctx), address);
+    await approvals.approveUpdateDefaultAccount(
+      requireOrigin(ctx),
+      address,
+      ctx.tabId
+    );
   },
 
   "dapp/sign": async (payload, ctx) => {
@@ -262,7 +274,7 @@ export const handlers: HandlerMap = {
       throw new Error("zc.sign: PCZT exceeds the 2 MiB limit");
     }
     const { approvals } = await getServices();
-    return approvals.approveSignTx(pczt, requireOrigin(ctx), signer);
+    return approvals.approveSignTx(pczt, requireOrigin(ctx), signer, ctx.tabId);
   },
 
   "dapp/sealLinkKey": async (payload, ctx) => {
@@ -282,7 +294,7 @@ export const handlers: HandlerMap = {
       throw new Error("zc.openLinkKey: invalid arguments");
     }
     const { approvals } = await getServices();
-    return approvals.approveOpenLinkKey(requireOrigin(ctx), sealed, nk);
+    return approvals.approveOpenLinkKey(requireOrigin(ctx), sealed, nk, ctx.tabId);
   },
 
   // --- approvals (trusted UIs) ---
@@ -292,9 +304,14 @@ export const handlers: HandlerMap = {
     return approvals.isConnectionApproved(origin);
   },
 
-  "approvals/resolveConnection": async ({ origin, allow }, ctx) => {
+  "approvals/resolveConnection": async ({ origin, allow, accountId }, ctx) => {
     const { approvals } = await getServices();
-    await approvals.resolveConnection(requireTabId(ctx), origin, allow);
+    await approvals.resolveConnection(
+      requireTabId(ctx),
+      origin,
+      allow,
+      accountId
+    );
   },
 
   "approvals/resolveDisconnection": async ({ origin, revoke }, ctx) => {
@@ -305,7 +322,7 @@ export const handlers: HandlerMap = {
 
   "approvals/connectedSites": async () => {
     const { approvals } = await getServices();
-    return approvals.approvedOrigins();
+    return approvals.connectedSites();
   },
 
   "approvals/revokeConnection": async ({ origin }) => {
@@ -334,9 +351,9 @@ export const handlers: HandlerMap = {
     await approvals.rejectSignTx(requireTabId(ctx), msgId);
   },
 
-  "approvals/submitOpenLinkKey": async ({ msgId }, ctx) => {
+  "approvals/submitOpenLinkKey": async ({ msgId, password }, ctx) => {
     const { approvals } = await getServices();
-    await approvals.submitOpenLinkKey(requireTabId(ctx), msgId);
+    await approvals.submitOpenLinkKey(requireTabId(ctx), msgId, password);
   },
 
   "approvals/log": async () => {
@@ -352,6 +369,6 @@ export const handlers: HandlerMap = {
   "approvals/submitUpdateDefaultAccount": async ({ address }, ctx) => {
     const { approvals, broadcaster } = await getServices();
     await approvals.submitUpdateDefaultAccount(requireTabId(ctx), address);
-    void broadcaster.accountChanged();
+    void broadcaster.accountChanged(await approvals.followActiveAccount());
   },
 };

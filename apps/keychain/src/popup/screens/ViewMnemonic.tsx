@@ -9,7 +9,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAccounts } from "../context/AccountContext";
 import routes from "../routes";
 import { Button } from "../ui/Button";
-import { CopyButton } from "../ui/CopyButton";
 import { Notice } from "../ui/Notice";
 import { PasswordGate } from "../ui/PasswordGate";
 import { ScreenHeader } from "../ui/ScreenHeader";
@@ -58,7 +57,8 @@ export const ViewMnemonic = () => {
         <>
           <Notice tone="danger" title="Never share these words" className="mt-3.5">
             Anyone with them controls this account. Zillions will never ask for
-            them.
+            them. Write them on paper: a copy or screenshot can be read by other
+            apps and synced backups.
           </Notice>
           <ol className="m-0 mt-3.5 grid grid-cols-3 gap-x-2.5 gap-y-1.5 rounded-xl bg-card p-3.5 list-none">
             {words.map((word, i) => (
@@ -72,12 +72,6 @@ export const ViewMnemonic = () => {
             Hidden again in {formatCountdown(secondsLeft)}
           </p>
           <div className="mt-auto flex flex-col gap-2 pt-4 pb-5">
-            <CopyButton
-              value={mnemonic}
-              className="h-[38px] rounded-pill border border-line-strong text-[13px] font-semibold cursor-pointer hover:bg-black/5"
-            >
-              Copy to clipboard
-            </CopyButton>
             <Button variant="secondary" block onClick={() => setMnemonic(undefined)}>
               Hide now
             </Button>

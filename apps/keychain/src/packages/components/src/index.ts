@@ -14,6 +14,7 @@ export * from "./LinkButton";
 export * from "./Loading";
 export * from "./ProgressIndicator";
 export * from "./RadioGroup";
+export * from "./secretInput";
 export * from "./SeedPhraseInstructions";
 export * from "./Stack";
 export * from "./Text";

@@ -43,7 +43,7 @@ export interface Zillions {
    */
   sign(props: SignProps): Promise<PcztBase64>;
   /**
-   * Seal a payment link's key (base64, 32 bytes) to the active account, for
+   * Seal a payment link's key (base64, 32 bytes) to the connected account, for
    * the link's funding memo. Only that account's seed opens it again.
    */
   sealLinkKey(key: string): Promise<string>;

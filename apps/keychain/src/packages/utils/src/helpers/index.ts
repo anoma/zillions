@@ -137,10 +137,12 @@ export const isEmptyObject = (object: Record<string, unknown>): boolean => {
   return Object.keys(object).length === 0;
 };
 
-export const copyToClipboard = (value: string): void => {
-  if (typeof navigator !== "undefined") {
-    navigator.clipboard.writeText(value);
+/** Rejects when the browser refuses the write (e.g. the page isn't focused). */
+export const copyToClipboard = async (value: string): Promise<void> => {
+  if (typeof navigator === "undefined") {
+    throw new Error("No clipboard here");
   }
+  await navigator.clipboard.writeText(value);
 };
 
 export const matchMapFn = (

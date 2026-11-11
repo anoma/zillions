@@ -1,14 +1,16 @@
 /**
  * Default-account approval screen: the connected dapp asked to make `address`
- * the active/default account. Approve → submit (background sets the active
- * account) + close; Reject → fail the dapp promise + close.
+ * the active/default account, warning when that shares an account the site
+ * hasn't seen. Approve → submit (background sets the active account) + close;
+ * Reject → fail the dapp promise + close.
  */
 import { useContext } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { shortenAddress } from "@zillions/utils";
 
-import { Avatar } from "../../popup/ui/Avatar";
+import { Avatar, siteHost } from "../../popup/ui/Avatar";
+import { Notice } from "../../popup/ui/Notice";
 import { Eyebrow, Row } from "../../popup/ui/Row";
 import { ScreenHeader } from "../../popup/ui/ScreenHeader";
 import { ClientContext } from "../ApprovalsApp";
@@ -24,6 +26,7 @@ export const ApproveUpdateDefaultAccount = () => {
   const address = params.get("address") ?? "";
   const alias = params.get("alias") ?? "";
   const origin = params.get("origin") ?? "";
+  const shared = params.get("shared") === "true";
   const { accounts, active } = useWallets();
   const next = walletFor(accounts, address);
 
@@ -53,6 +56,13 @@ export const ApproveUpdateDefaultAccount = () => {
         title={alias}
         subtitle={<span className="font-mono text-[11px]">{shortenAddress(address, 8, 8, "…")}</span>}
       />
+      {!shared && (
+        <Notice tone="gold" title="Shares this account" className="mt-4">
+          {siteHost(origin)} will see {alias}&apos;s balance and full history,
+          past and future, and can ask you to approve payments from it.
+          Disconnecting later won&apos;t undo this.
+        </Notice>
+      )}
       <DecisionBar
         approveLabel="Switch"
         onApprove={() => handleResponse(true)}

@@ -145,8 +145,17 @@ export default defineConfig({
     version: pkg.version,
     // `tabs` lets the background find/focus an already-open Setup tab by URL
     // (browser.tabs.query({ url })) instead of opening duplicates. `idle`
-    // drives auto-lock and shows no install warning.
-    permissions: ["storage", "tabs", "idle"],
+    // drives auto-lock and shows no install warning. On Chrome,
+    // `unlimitedStorage` keeps the vault's IndexedDB out of quota eviction,
+    // which would otherwise delete the wallet under disk pressure; it has no
+    // install warning there. Firefox never evicts extension data, and would
+    // ask for it at install.
+    permissions: [
+      "storage",
+      "tabs",
+      "idle",
+      ...(browser === "firefox" ? [] : ["unlimitedStorage"]),
+    ],
     // The passkey RP claim: ceremonies in extension pages may pass
     // `rpId: keychain.zillions.money` because this permission covers it.
     // Derived from the same constant the ceremonies use (see
@@ -156,6 +165,7 @@ export default defineConfig({
     host_permissions: rpHostPermissions(RP_ID),
     // The RP-claiming feature itself: Chrome 122+ (and forks tracking it)
     // allow an extension page to use an RP ID its host permissions cover.
+    // It also covers the provider's `world: "MAIN"` content script (111+).
     minimum_chrome_version: "122",
     // Toolbar action opens the popup (`entrypoints/popup`). WXT fills in
     // `default_popup` from that entrypoint; we only set the title here. The
@@ -171,16 +181,9 @@ export default defineConfig({
       extension_pages:
         "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
     },
-    // `injected.js` is the MAIN-world provider script the content script
-    // injects into pages (sets `window.zc`). Keep this list minimal: every
-    // entry is fetchable by any site and lets it detect the wallet. The wasm
-    // binaries only load in extension contexts, which don't need an entry.
-    web_accessible_resources: [
-      {
-        resources: ["injected.js"],
-        matches: ["<all_urls>"],
-      },
-    ],
+    // No web_accessible_resources: any entry is fetchable by every site,
+    // which detects the wallet by it (and, on Firefox, its URL holds the
+    // per-install UUID). The wasm binaries only load in extension contexts.
     icons: {
       16: "icons/favicon-16x16.png",
       32: "icons/favicon-32x32.png",

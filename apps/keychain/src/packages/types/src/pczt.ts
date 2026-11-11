@@ -25,9 +25,13 @@ export type PcztTransparentIo = {
    * output comes back to it (change); false for a payment.
    */
   mine?: boolean;
+  /** Outputs of ours only: the address's scope (0 external, 1 internal, 2 ephemeral) and index. */
+  path?: TransparentPath;
   // Anything else present in the JSON is kept for the raw view.
   [key: string]: unknown;
 };
+
+export type TransparentPath = { scope: number; index: number };
 
 /**
  * A shielded (sapling/orchard/ironwood) value flow as surfaced by `pczt.to_json()`.
@@ -67,6 +71,11 @@ export type PcztSummary = {
    * includes the claim fee.
    */
   paymentLink?: boolean;
+  /**
+   * A transparent output of ours past the addresses wallets scan: one
+   * restoring the recovery phrase may never find the money it holds.
+   */
+  unusualChange?: TransparentPath & { value: string };
   /** The full `to_json()` structure for the raw expandable view. */
   raw: unknown;
 };

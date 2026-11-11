@@ -25,7 +25,7 @@ const KeyBlock = ({ label, value }: { label: string; value: string }) => (
         <CopyButton value={value} label={`Copy ${label} key`} />
       </div>
     </div>
-    <p className="m-0 rounded-xl bg-card p-3.5 font-mono text-[11px] leading-relaxed break-all select-all">
+    <p className="m-0 rounded-xl bg-card p-3.5 font-mono text-[11px] leading-relaxed break-all">
       {value}
     </p>
   </>
@@ -56,7 +56,9 @@ export const SpendingKey = () => {
         <div className="pb-5">
           <Notice tone="danger" title="Keep this secret" className="mt-3.5">
             Anyone with a spending key can spend this account&apos;s shielded
-            funds.
+            funds. A copied key stays on your clipboard, where other apps,
+            extensions and clipboard history can read it: paste it straight
+            where it goes, then copy something else.
           </Notice>
           <KeyBlock label="Sapling" value={keys.sapling} />
           <KeyBlock label="Orchard" value={keys.orchard} />

@@ -12,6 +12,10 @@
  * `MAX_PENDING_APPROVALS` are pending overall, so a page cannot flood the
  * user with windows. Only one popup is open at a time; the rest queue, so a
  * site's window can never open over another's and catch a click meant for it.
+ * A request belongs to the tab that made it and dies with it, or when it
+ * leaves the site, so one tab cannot hold several sites' slots. A site whose
+ * window the user closes or rejects is refused new ones for a while, so it
+ * cannot reopen it the moment it goes.
  */
 import { v4 as uuid } from "uuid";
 import browser, { Windows } from "webextension-polyfill";
@@ -24,10 +28,11 @@ import { payments, transferAmount } from "../../approvals/utils/pczt";
 import type {
   ApprovalKind,
   ApprovalLogEntry,
+  ConnectedSite,
   DeviceSignTx,
 } from "../../ipc/contract";
 import { LocalStorage, type KeyStoreType } from "../../storage";
-import { buildPcztSummary, linkAddress } from "../crypto/zillions";
+import { buildPcztSummary, linkAddress, transparentGapLimits } from "../crypto/zillions";
 import { Keyring } from "../keyring";
 import { VaultService } from "../vault";
 import { AccountRepository } from "../vault/accounts";
@@ -39,6 +44,8 @@ import { toPublicAccount } from "./publicAccount";
 type RequestMeta = {
   origin: string;
   kind: ApprovalKind;
+  /** The tab that asked; the request is cancelled when it closes or leaves `origin`. */
+  tabId?: number;
   /** Read at decision time, once the popup has loaded what it shows. */
   describe?: () => Promise<Partial<ApprovalLogEntry>>;
 };
@@ -58,12 +65,18 @@ const reportedUrl = (url?: string): string | undefined =>
 const MAX_PENDING_APPROVALS = 3;
 
 /**
- * The active (parent) account and its derived children: the only accounts a
- * dapp may see key material for or sign with.
+ * How long a site waits after its Nth dismissed window in a row (closed or
+ * rejected): a mistaken Reject or two costs an honest site seconds, while a
+ * site that reopens its window on every dismissal soon waits minutes.
  */
-const isInActiveScope = (record: KeyStoreType, activeId?: string): boolean =>
-  activeId !== undefined &&
-  (record.id === activeId || record.parentId === activeId);
+const DISMISSAL_COOLDOWNS_MS = [3_000, 10_000, 30_000, 60_000, 2 * 60_000, 5 * 60_000];
+
+/** Dismissals further apart than this start the count again; above the cap. */
+const DISMISSAL_MEMORY_MS = 10 * 60_000;
+
+/** `record` is the wallet `walletId` or one of its derived children. */
+const isInWallet = (record: KeyStoreType, walletId: string): boolean =>
+  record.id === walletId || record.parentId === walletId;
 
 /** A dapp's PCZT awaiting user approval, parked under its `msgId`. */
 type PendingSignTx = {
@@ -108,7 +121,21 @@ export class ApprovalsService {
   >();
 
   private popupOpen = false;
-  private readonly popupQueue: Array<() => void> = [];
+  /** Requests waiting for the popup slot, with the tab each came from. */
+  private readonly popupQueue: Array<{
+    tabId?: number;
+    resolve: () => void;
+    reject: (e: Error) => void;
+  }> = [];
+
+  /** Per origin: dismissals in a row, when the last was, and until when it waits. */
+  private readonly dismissals = new Map<
+    string,
+    { count: number; at: number; until: number }
+  >();
+
+  /** In-memory clock, replaceable in tests. */
+  protected now = (): number => Date.now();
 
   constructor(
     protected readonly localStorage: LocalStorage,
@@ -126,6 +153,7 @@ export class ApprovalsService {
       resolver.reject(new Error("Window closed"));
       this.removeResolver(tabId);
     }
+    this.cancelRequestsFrom(tabId, () => true);
   }
 
   /**
@@ -135,6 +163,16 @@ export class ApprovalsService {
    * and close the window instead of letting the new page answer it.
    */
   handleTabUpdated(tabId: number, url?: string): void {
+    // A requesting tab that left its site: in-page navigation keeps the request.
+    if (url) {
+      let origin: string | undefined;
+      try {
+        origin = new URL(url).origin;
+      } catch {
+        // Not a URL with an origin: it left the site.
+      }
+      this.cancelRequestsFrom(tabId, (meta) => meta.origin !== origin);
+    }
     const resolver = this.resolverMap[tabId];
     const reported = reportedUrl(url);
     if (!resolver || !reported) return;
@@ -150,12 +188,15 @@ export class ApprovalsService {
 
   // ---- dapp-facing (origin always derived from the message sender) ----
 
-  /** Approved AND unlocked — what `window.zc.isConnected()` reports. */
+  /**
+   * Approved with a wallet that still exists, AND unlocked — what
+   * `window.zc.isConnected()` reports.
+   */
   async isConnectionApproved(origin: string): Promise<boolean> {
     if (await this.vaultService.isLocked()) {
       return false;
     }
-    return this.isDomainApproved(origin);
+    return (await this.siteWallet(origin)) !== undefined;
   }
 
   /**
@@ -163,7 +204,7 @@ export class ApprovalsService {
    * otherwise open the approval popup (which doubles as a login gate when the
    * vault is locked) and wait for the user's verdict.
    */
-  async approveConnection(origin: string): Promise<void> {
+  async approveConnection(origin: string, tabId?: number): Promise<void> {
     // Without a password the approval popup's Login gate can never succeed.
     if (!(await this.vaultService.passwordInitialized())) {
       throw new Error("Keychain is not set up");
@@ -173,7 +214,7 @@ export class ApprovalsService {
 
     if (needsApproval || isLocked) {
       return this.launchApprovalPopup(
-        { origin, kind: "connect" },
+        { origin, kind: "connect", tabId },
         approvalRoutes.approveConnection(),
         { interfaceOrigin: origin }
       );
@@ -181,12 +222,12 @@ export class ApprovalsService {
   }
 
   /** Resolve a `disconnect()` call; a never-approved origin is a no-op. */
-  async approveDisconnection(origin: string): Promise<void> {
+  async approveDisconnection(origin: string, tabId?: number): Promise<void> {
     const isConnected = await this.isConnectionApproved(origin);
 
     if (isConnected) {
       return this.launchApprovalPopup(
-        { origin, kind: "disconnect" },
+        { origin, kind: "disconnect", tabId },
         approvalRoutes.approveDisconnection(),
         { interfaceOrigin: origin }
       );
@@ -195,44 +236,47 @@ export class ApprovalsService {
 
   /**
    * Every account for a connected dapp (so it can offer a switcher), with key
-   * material only on the active account and its children.
+   * material only on the site's current wallet and its children.
    */
   async dappAccounts(origin: string): Promise<ZCashKeychainAccount[]> {
-    await this.assertConnected(origin);
-    const activeId = (await this.accounts.getActiveAccount())?.id;
+    const wallet = await this.assertConnected(origin);
     return (await this.accounts.findAll()).map((record) =>
-      toPublicAccount(record, isInActiveScope(record, activeId))
+      toPublicAccount(record, isInWallet(record, wallet.id))
     );
   }
 
-  /** The active account for a connected dapp, or null when none is set. */
+  /**
+   * The site's current wallet; its shielded child instead when that is the
+   * globally active account (a site may have switched to it by address).
+   */
   async dappDefaultAccount(
     origin: string
   ): Promise<ZCashKeychainAccount | null> {
-    await this.assertConnected(origin);
-    const active = await this.accounts.getActiveAccount();
-    if (!active) return null;
-    const record = await this.accounts.findById(active.id);
-    return record ? toPublicAccount(record, true) : null;
+    const wallet = await this.assertConnected(origin);
+    const activeId = (await this.accounts.getActiveAccount())?.id;
+    const active = activeId && (await this.accounts.findById(activeId));
+    return toPublicAccount(
+      active && active.parentId === wallet.id ? active : wallet,
+      true
+    );
   }
 
   /**
    * Resolve a `sign()` call: park the PCZT under a msgId and open the
    * approval popup; resolves with the signed PCZT (base64) once the user
    * confirms. Requires an unlocked vault, a connected origin, and a signer
-   * within the active account.
+   * within the site's current wallet.
    */
   async approveSignTx(
     pczt: string,
     origin: string,
-    signer?: string
+    signer?: string,
+    tabId?: number
   ): Promise<string> {
     if (await this.vaultService.isLocked()) {
       throw new Error("Keychain is locked");
     }
-    await this.assertConnected(origin);
-
-    const record = await this.activeSigner(signer);
+    const record = await this.activeSigner(origin, signer);
 
     const msgId = uuid();
     // The resolved address, so the summary and the signature use one account.
@@ -251,7 +295,7 @@ export class ApprovalsService {
 
     try {
       return await this.launchApprovalPopup<string>(
-        { origin, kind: "sign", describe },
+        { origin, kind: "sign", describe, tabId },
         approvalRoutes.approveSignTx(
           msgId,
           encodeURIComponent(origin),
@@ -267,15 +311,11 @@ export class ApprovalsService {
   }
 
   /**
-   * Seal a payment link's key to the active account. No popup: a seal opens
-   * nothing, since unsealing a link needs that link's key already.
+   * Seal a payment link's key to the site's current wallet. No popup: a seal
+   * opens nothing, since unsealing a link needs that link's key already.
    */
   async sealLinkKey(key: string, origin: string): Promise<string> {
-    if (await this.vaultService.isLocked()) {
-      throw new Error("Keychain is locked");
-    }
-    await this.assertConnected(origin);
-    const record = await this.activeSigner();
+    const record = await this.activeSigner(origin);
     const sealed = await this.keyring.sealLinkKey(key, record.address);
     this.sealedLinks.add(linkAddress(key));
     return sealed;
@@ -288,20 +328,17 @@ export class ApprovalsService {
   async approveOpenLinkKey(
     origin: string,
     sealed: string,
-    nk: string
+    nk: string,
+    tabId?: number
   ): Promise<string> {
-    if (await this.vaultService.isLocked()) {
-      throw new Error("Keychain is locked");
-    }
-    await this.assertConnected(origin);
-    const record = await this.activeSigner();
+    const record = await this.activeSigner(origin);
     const msgId = uuid();
     this.pendingLinks.set(msgId, { sealed, nk, signer: record.address });
     try {
       return await this.launchApprovalPopup<string>(
-        { origin, kind: "open-link" },
+        { origin, kind: "open-link", tabId },
         approvalRoutes.approveOpenLinkKey(),
-        { msgId, origin }
+        { msgId, origin, signer: record.address }
       );
     } finally {
       this.pendingLinks.delete(msgId);
@@ -309,13 +346,24 @@ export class ApprovalsService {
   }
 
   /** The popup approved: open the key and settle the dapp's promise. */
-  async submitOpenLinkKey(popupTabId: number, msgId: string): Promise<void> {
+  async submitOpenLinkKey(
+    popupTabId: number,
+    msgId: string,
+    password: string
+  ): Promise<void> {
     const pending = this.pendingLinks.get(msgId);
     const resolvers = this.getResolver(popupTabId);
     if (!pending) {
       throw new Error(`Pending link request not found for ${msgId}`);
     }
-    this.pendingLinks.delete(msgId);
+    // Asked every time, as a seed account's signature is: the key is the
+    // link's money. A wrong password leaves the request open to retry.
+    if (!(await this.vaultService.checkPassword(password))) {
+      throw new Error("Incorrect password");
+    }
+    if (!this.pendingLinks.delete(msgId)) {
+      throw new Error(`Pending link request not found for ${msgId}`);
+    }
     try {
       resolvers.resolve(
         await this.keyring.openLinkKey(pending.sealed, pending.nk, pending.signer)
@@ -329,26 +377,31 @@ export class ApprovalsService {
 
   /**
    * Resolve an `updateDefaultAccount(address)` call: require a connected,
-   * unlocked origin and an existing account, then open the approval popup. The
-   * popup confirms via `submitUpdateDefaultAccount`.
+   * unlocked origin and an existing account, then open the approval popup,
+   * which says when the switch shares a wallet the site hasn't seen. The popup
+   * confirms via `submitUpdateDefaultAccount`.
    */
   async approveUpdateDefaultAccount(
     origin: string,
-    address: string
+    address: string,
+    tabId?: number
   ): Promise<void> {
     await this.assertConnected(origin);
     const record = await this.accounts.findByAddress(address);
     if (!record) {
       throw new Error(`Account for ${address} not found!`);
     }
+    const connection = (await this.localStorage.getConnections())[origin];
+    const shared = connection.accounts.includes(record.parentId ?? record.id);
     return this.launchApprovalPopup(
       {
         origin,
         kind: "default-account",
         describe: async () => ({ account: record.alias }),
+        tabId,
       },
       approvalRoutes.approveUpdateDefaultAccount(),
-      { address, alias: record.alias, origin }
+      { address, alias: record.alias, origin, shared: String(shared) }
     );
   }
 
@@ -361,7 +414,11 @@ export class ApprovalsService {
       throw new Error(`Transaction data not found for ${msgId}`);
     }
     const ufvk = await this.keyring.viewingKey(pending.signer);
-    const summary = await buildPcztSummary(pending.pczt, ufvk);
+    const built = await buildPcztSummary(pending.pczt, ufvk);
+    const summary = {
+      ...built,
+      unusualChange: await this.unusualChange(pending.signer, built),
+    };
     pending.summary = summary;
     const paid = [
       ...summary.transparentOutputs,
@@ -419,11 +476,12 @@ export class ApprovalsService {
       if (await this.vaultService.requiresAuth()) {
         throw new Error("Password required to sign");
       }
-      // The site may have been disconnected while the popup was open.
-      await this.assertConnected(resolvers.meta.origin);
-      // The active account may have changed while the popup was open, and a
-      // site may only sign with the one active now.
-      const record = await this.activeSigner(signer || pending.signer);
+      // The site may have been disconnected, or moved to another wallet, while
+      // the popup was open; it may only sign with its wallet now.
+      const record = await this.activeSigner(
+        resolvers.meta.origin,
+        signer || pending.signer
+      );
       // A PCZT spans transparent + shielded; the keyring signs the whole PCZT
       // in one pass and returns the signed PCZT as base64.
       const signed = await this.keyring.sign(
@@ -432,6 +490,7 @@ export class ApprovalsService {
         deviceData
       );
       void this.record(resolvers.meta, "approved");
+      void this.rememberChange(pending).catch(console.error);
       resolvers.resolve(signed);
     } catch (e) {
       void this.record(resolvers.meta, "failed");
@@ -448,19 +507,28 @@ export class ApprovalsService {
   }
 
   /**
-   * The approval popup confirmed the default-account change: point the active
-   * account at `address` and settle the dapp's promise.
+   * The approval popup confirmed the default-account change: share the wallet
+   * of `address` with the site, make it the site's current one and the active
+   * account, and settle the dapp's promise.
    */
   async submitUpdateDefaultAccount(
     popupTabId: number,
     address: string
   ): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
+    const { origin } = resolvers.meta;
     try {
+      await this.assertConnected(origin);
       const record = await this.accounts.findByAddress(address);
       if (!record) {
         throw new Error(`Account for ${address} not found!`);
       }
+      const walletId = record.parentId ?? record.id;
+      const { accounts } = (await this.localStorage.getConnections())[origin];
+      await this.localStorage.setConnection(origin, {
+        accounts: accounts.includes(walletId) ? accounts : [...accounts, walletId],
+        current: walletId,
+      });
       await this.accounts.setActiveAccount(
         record.id,
         record.type as ActiveAccountStore["type"]
@@ -473,11 +541,15 @@ export class ApprovalsService {
     }
   }
 
-  /** The approval popup's answer to a pending connection request. */
+  /**
+   * The approval popup's answer to a pending connection request; `accountId`
+   * is the wallet the user connects the site with.
+   */
   async resolveConnection(
     popupTabId: number,
     origin: string,
-    allow: boolean
+    allow: boolean,
+    accountId?: string
   ): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
 
@@ -489,8 +561,15 @@ export class ApprovalsService {
 
     try {
       // An approved origin only opened the window to log in: no new decision.
-      if (!(await this.localStorage.getApprovedOrigins())?.includes(origin)) {
-        await this.localStorage.addApprovedOrigin(origin);
+      if (!(await this.siteWallet(origin))) {
+        const wallet = accountId && (await this.accounts.findById(accountId));
+        if (!wallet || wallet.parentId) {
+          throw new Error("Choose an account to connect");
+        }
+        await this.localStorage.setConnection(origin, {
+          accounts: [wallet.id],
+          current: wallet.id,
+        });
         // The log write runs two Argon2 derivations; the window must not
         // linger that long under the user's next click.
         void this.record(resolvers.meta, "approved");
@@ -534,12 +613,44 @@ export class ApprovalsService {
     return this.log.clear();
   }
 
-  async approvedOrigins(): Promise<string[]> {
-    return (await this.localStorage.getApprovedOrigins()) ?? [];
+  /** Each connected origin and the wallet it currently sees. */
+  async connectedSites(): Promise<ConnectedSite[]> {
+    const sites: ConnectedSite[] = [];
+    for (const origin of Object.keys(await this.localStorage.getConnections())) {
+      const wallet = await this.siteWallet(origin);
+      if (wallet) sites.push({ origin, accountId: wallet.id });
+    }
+    return sites;
   }
 
   async revokeConnection(origin: string): Promise<void> {
-    await this.localStorage.removeApprovedOrigin(origin);
+    await this.localStorage.removeConnection(origin);
+  }
+
+  /**
+   * The active account changed: sites already sharing its wallet move to it.
+   * Returns those origins, the only ones to tell; the others keep their
+   * wallet and learn nothing of the switch.
+   */
+  async followActiveAccount(): Promise<string[]> {
+    const activeId = (await this.accounts.getActiveAccount())?.id;
+    const active = activeId && (await this.accounts.findById(activeId));
+    if (!active) return [];
+    const walletId = active.parentId ?? active.id;
+    const followers: string[] = [];
+    for (const [origin, connection] of Object.entries(
+      await this.localStorage.getConnections()
+    )) {
+      if (!connection.accounts.includes(walletId)) continue;
+      followers.push(origin);
+      if (connection.current !== walletId) {
+        await this.localStorage.setConnection(origin, {
+          ...connection,
+          current: walletId,
+        });
+      }
+    }
+    return followers;
   }
 
   // ---- internals ----
@@ -548,6 +659,8 @@ export class ApprovalsService {
     meta: RequestMeta,
     outcome: ApprovalLogEntry["outcome"]
   ): Promise<void> {
+    // Before any await: the site's retry may already be on its way.
+    this.noteOutcome(meta.origin, outcome);
     let details: Partial<ApprovalLogEntry> = {};
     try {
       details = (await meta.describe?.()) ?? {};
@@ -562,42 +675,98 @@ export class ApprovalsService {
     });
   }
 
+  /** The wallet (parent account) id behind a signer address. */
+  private async walletIdOf(signer?: string): Promise<string | undefined> {
+    const record = signer ? await this.accounts.findByAddress(signer) : undefined;
+    return record ? (record.parentId ?? record.id) : undefined;
+  }
+
+  /**
+   * The first transparent output of ours past the last address this Keychain
+   * approved plus the gap wallets scan: a wallet restoring the phrase walks
+   * the addresses in order and stops at that gap, so it may never reach it.
+   */
+  private async unusualChange(
+    signer: string | undefined,
+    summary: PcztSummary
+  ): Promise<PcztSummary["unusualChange"]> {
+    const walletId = await this.walletIdOf(signer);
+    if (!walletId) return undefined;
+    const approved = await this.localStorage.changeIndexes(walletId);
+    const gaps = transparentGapLimits();
+    for (const output of summary.transparentOutputs) {
+      const { path } = output;
+      if (!output.mine || !path) continue;
+      const highest = approved[path.scope] ?? -1;
+      if (path.index > highest + (gaps[path.scope] ?? 0)) {
+        return { ...path, value: String(output.value ?? "0") };
+      }
+    }
+    return undefined;
+  }
+
+  /** A signed transaction's own transparent outputs move the approved mark. */
+  private async rememberChange(pending: PendingSignTx): Promise<void> {
+    const walletId = await this.walletIdOf(pending.signer);
+    if (!walletId || !pending.summary) return;
+    for (const output of pending.summary.transparentOutputs) {
+      if (output.mine && output.path) {
+        await this.localStorage.raiseChangeIndex(
+          walletId,
+          output.path.scope,
+          output.path.index
+        );
+      }
+    }
+  }
+
   /** A shielded account is named after the wallet (its parent) it belongs to. */
   private async walletName(record: KeyStoreType): Promise<string> {
     if (!record.parentId) return record.alias;
     return (await this.accounts.findById(record.parentId))?.alias ?? record.alias;
   }
 
-  private async isDomainApproved(origin: string): Promise<boolean> {
-    const approvedOrigins = (await this.localStorage.getApprovedOrigins()) || [];
-    return approvedOrigins.includes(origin);
+  /**
+   * The wallet `origin` currently sees: its `current` one, else (once that
+   * was deleted) another it was given. Undefined when it has none left.
+   */
+  private async siteWallet(origin: string): Promise<KeyStoreType | undefined> {
+    const connection = (await this.localStorage.getConnections())[origin];
+    if (!connection) return undefined;
+    for (const id of [connection.current, ...connection.accounts]) {
+      const record = await this.accounts.findById(id);
+      if (record && !record.parentId) return record;
+    }
+    return undefined;
   }
 
-  /** The `signer` address's account (else the active one), if within the active account. */
-  private async activeSigner(signer?: string): Promise<KeyStoreType> {
-    const activeId = (await this.accounts.getActiveAccount())?.id;
-    const record = signer
-      ? await this.accounts.findByAddress(signer)
-      : activeId
-        ? await this.accounts.findById(activeId)
-        : undefined;
-    if (!signer && !record) {
-      throw new Error("No active account to sign with");
-    }
-    // One error for unknown and inactive addresses: a site learns nothing new.
-    if (!record || !isInActiveScope(record, activeId)) {
+  /**
+   * For a connected, unlocked `origin`: the `signer` address's account (else
+   * the site's wallet), if within the site's current wallet.
+   */
+  private async activeSigner(
+    origin: string,
+    signer?: string
+  ): Promise<KeyStoreType> {
+    const wallet = await this.assertConnected(origin);
+    const record = signer ? await this.accounts.findByAddress(signer) : wallet;
+    // One error for unknown and other addresses: a site learns nothing new.
+    if (!record || !isInWallet(record, wallet.id)) {
       throw new Error(`Signer ${signer} is not the active account`);
     }
     return record;
   }
 
-  private async assertConnected(origin: string): Promise<void> {
+  /** Throws unless unlocked and connected; returns the site's wallet. */
+  private async assertConnected(origin: string): Promise<KeyStoreType> {
     if (await this.vaultService.isLocked()) {
       throw new Error("Keychain is locked");
     }
-    if (!(await this.isDomainApproved(origin))) {
+    const wallet = await this.siteWallet(origin);
+    if (!wallet) {
       throw new Error(`Connection to ${origin} has not been approved`);
     }
+    return wallet;
   }
 
   private createPopup = (url: string): Promise<Windows.Window> => {
@@ -634,6 +803,12 @@ export class ApprovalsService {
     if (this.popupWindowByOrigin.has(origin)) {
       throw new Error("A request from this site is already pending");
     }
+    const waiting = this.dismissals.get(origin);
+    if (waiting && this.now() < waiting.until) {
+      throw new Error(
+        "The user dismissed this site's last Keychain request; try again later"
+      );
+    }
     if (this.popupWindowByOrigin.size >= MAX_PENDING_APPROVALS) {
       throw new Error(
         "Too many pending Keychain approvals; resolve one and try again"
@@ -656,7 +831,7 @@ export class ApprovalsService {
     let popupTabId: number;
     let popupUrl: string | undefined;
     try {
-      await this.acquirePopup();
+      await this.acquirePopup(meta.tabId);
       let window: Windows.Window | undefined;
       try {
         window = await this.createPopup(url);
@@ -704,14 +879,60 @@ export class ApprovalsService {
     }).finally(() => clearInterval(keepAlive));
   };
 
-  /** Waits until no other approval popup is open, then claims the slot. */
-  private acquirePopup = async (): Promise<void> => {
+  /**
+   * Waits until no other approval popup is open, then claims the slot.
+   * Rejects if the requesting tab goes first (see cancelRequestsFrom).
+   */
+  private acquirePopup = async (tabId?: number): Promise<void> => {
     if (!this.popupOpen) {
       this.popupOpen = true;
       return;
     }
-    await new Promise<void>((resolve) => this.popupQueue.push(resolve));
+    await new Promise<void>((resolve, reject) =>
+      this.popupQueue.push({ tabId, resolve, reject })
+    );
   };
+
+  /**
+   * Fails the requests `tabId` made that `gone` says it no longer stands
+   * behind: queued ones leave the queue, an open one's window closes.
+   */
+  private cancelRequestsFrom(
+    tabId: number,
+    gone: (meta: RequestMeta) => boolean
+  ): void {
+    for (const [popupTabId, resolver] of Object.entries(this.resolverMap)) {
+      if (resolver.meta.tabId !== tabId || !gone(resolver.meta)) continue;
+      void this.record(resolver.meta, "failed");
+      resolver.reject(new Error("The page that asked is gone"));
+      void browser.tabs.remove(Number(popupTabId)).catch(() => undefined);
+    }
+    for (let i = this.popupQueue.length - 1; i >= 0; i--) {
+      const queued = this.popupQueue[i];
+      if (queued.tabId !== tabId) continue;
+      this.popupQueue.splice(i, 1);
+      queued.reject(new Error("The page that asked is gone"));
+    }
+  }
+
+  /**
+   * A dismissed window (closed or rejected) makes its site wait, longer each
+   * time in a row; an approval clears the count.
+   */
+  private noteOutcome(origin: string, outcome: ApprovalLogEntry["outcome"]): void {
+    if (outcome === "approved") {
+      this.dismissals.delete(origin);
+      return;
+    }
+    if (outcome !== "closed" && outcome !== "rejected") return;
+    const now = this.now();
+    const last = this.dismissals.get(origin);
+    const count =
+      last && now - last.at < DISMISSAL_MEMORY_MS ? last.count + 1 : 1;
+    const wait =
+      DISMISSAL_COOLDOWNS_MS[Math.min(count, DISMISSAL_COOLDOWNS_MS.length) - 1];
+    this.dismissals.set(origin, { count, at: now, until: now + wait });
+  }
 
   /**
    * Pending requests on the toolbar badge. The open popup is never raised
@@ -728,7 +949,7 @@ export class ApprovalsService {
   /** Hands the slot to the next queued request, or frees it. */
   private releasePopup = (): void => {
     const next = this.popupQueue.shift();
-    if (next) next();
+    if (next) next.resolve();
     else this.popupOpen = false;
   };
 

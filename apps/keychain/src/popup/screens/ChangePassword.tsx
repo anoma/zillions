@@ -68,7 +68,6 @@ export const ChangePassword = () => {
         />
         <PasswordField
           label="New password"
-          autoComplete="new-password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           error={
@@ -79,7 +78,6 @@ export const ChangePassword = () => {
         />
         <PasswordField
           label="Confirm new password"
-          autoComplete="new-password"
           value={confirmNewPassword}
           onChange={(e) => setConfirmNewPassword(e.target.value)}
           error={
