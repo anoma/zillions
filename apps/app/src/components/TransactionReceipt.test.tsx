@@ -7,7 +7,7 @@ import type { Activity } from "../lib/wallet/types";
 
 let history: Pick<Activity, "txid" | "status">[] = [];
 vi.mock("../hooks/useGetTransactionHistory", () => ({
-  useGetTransactionHistory: () => ({ data: history }),
+  useGetTransactionHistory: () => ({ data: { activities: history } }),
 }));
 const { TransactionReceipt } = await import("./TransactionReceipt");
 
