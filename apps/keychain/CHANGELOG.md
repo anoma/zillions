@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/anoma/zillions-interface/compare/zillions-keychain-v0.13.0...zillions-keychain-v0.13.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* security review fixes (part 2) ([#223](https://github.com/anoma/zillions-interface/issues/223)) ([ac1a239](https://github.com/anoma/zillions-interface/commit/ac1a23930dc3854474f4ac4691312e7be3eaddbe))
+
 ## [0.13.0](https://github.com/anoma/zillions-interface/compare/zillions-keychain-v0.12.0...zillions-keychain-v0.13.0) (2026-11-10)
 
 
