@@ -11,7 +11,7 @@ import { TransactionReceiptCard } from "./TransactionReceiptCard";
 /** "Transaction submitted" with `tx`'s time left, followed in history until it's mined, then "Transaction completed". */
 function SubmittedBanner({ tx }: { tx: PendingTx }) {
   const { detail } = usePendingProgress(tx);
-  const mined = useGetTransactionHistory().data?.some(
+  const mined = useGetTransactionHistory().data?.activities.some(
     (h) => h.txid === tx.txid && h.status === "Confirmed",
   );
   return (

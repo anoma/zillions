@@ -179,6 +179,8 @@ export interface WalletState {
   txs: Map<string, ParsedTx>;
   /** A migration to Ironwood in progress (2.9). */
   migration?: Migration;
+  /** All NEAR intents in progress. */
+  swaps: string[];
 }
 
 /** One transaction as history shows it. */
@@ -219,3 +221,166 @@ export type Counterparty = { address: string; value?: bigint };
 export type Party =
   | (Counterparty & { more?: Counterparty[] })
   | { pool: "shielded" | "transparent" | "sapling" | "orchard" | "ironwood" };
+
+/** Query parameters for the Check Swap Execution Status GET request. */
+export interface CheckSwapExecutionStatusQueryParams {
+  /** Unique deposit address from the quote. */
+  depositAddress: string;
+  /** Deposit memo from the quote. Required if it was included in the quote response. */
+  depositMemo?: string;
+}
+
+/** Headers for the API request. */
+export interface CheckSwapExecutionStatusHeaders {
+  /** API key for partner authentication (recommended). */
+  "X-API-Key"?: string;
+}
+
+/** Represents the execution state of the swap. */
+export type SwapStatus =
+  | "KNOWN_DEPOSIT_TX"
+  | "PENDING_DEPOSIT"
+  | "INCOMPLETE_DEPOSIT"
+  | "PROCESSING"
+  | "SUCCESS"
+  | "REFUNDED"
+  | "FAILED";
+
+/** Details mapping a transaction hash to its block explorer URL. */
+export interface TxHashDetails {
+  hash: string;
+  explorerUrl: string;
+}
+
+/** Details of the actual swap execution and withdrawals. */
+export interface SwapDetails {
+  intentHashes?: string[];
+  nearTxHashes?: string[];
+  originChainTxHashes?: TxHashDetails[];
+  destinationChainTxHashes?: TxHashDetails[];
+  amountIn?: string;
+  amountInFormatted?: string;
+  amountInUsd?: string;
+  amountOut?: string;
+  amountOutFormatted?: string;
+  amountOutUsd?: string;
+  slippage?: number;
+  refundedAmount?: string;
+  refundedAmountFormatted?: string;
+  refundedAmountUsd?: string;
+  refundReason?: string;
+  depositedAmount?: string;
+  depositedAmountFormatted?: string;
+  depositedAmountUsd?: string;
+  withdrawFee?: string;
+  referral?: string;
+}
+
+/** Recipient mapping for fee rebates. */
+export interface Rebate {
+  recipient: string;
+  share: number;
+}
+
+/** Application fee configuration. */
+export interface AppFee {
+  recipient: string;
+  fee: number;
+}
+
+/** Details of the original request used to generate the quote. */
+export interface QuoteRequest {
+  dry?: boolean;
+  swapType: string;
+  slippageTolerance: number;
+  originAsset: string;
+  depositType: string;
+  destinationAsset: string;
+  amount: string;
+  refundTo: string;
+  refundType: string;
+  recipient: string;
+  recipientType: string;
+  deadline: string;
+  depositMode: string;
+  connectedWallets?: string[];
+  sessionId?: string;
+  virtualChainRecipient?: string;
+  virtualChainRefundRecipient?: string;
+  customRecipientMsg?: string;
+  confidentiality?: string;
+  referral?: string;
+  rebates?: Rebate[];
+  quoteWaitingTimeMs?: number;
+  appFees?: AppFee[];
+  insured?: boolean;
+}
+
+export interface ChainDepositAddress {
+  blockchain: string;
+  address: string;
+  memo?: string;
+}
+
+/** Details of the generated quote. */
+export interface Quote {
+  amountIn: string;
+  amountInFormatted: string;
+  amountInUsd: string;
+  minAmountIn?: string;
+  amountOut: string;
+  amountOutFormatted: string;
+  amountOutUsd: string;
+  minAmountOut?: string;
+  timeEstimate: number;
+  depositAddress: string;
+  depositMemo?: string;
+  chainDepositAddresses?: ChainDepositAddress[];
+  deadline: string;
+  timeWhenInactive?: string;
+  virtualChainRecipient?: string;
+  virtualChainRefundRecipient?: string;
+  customRecipientMsg?: string;
+  refundFee?: string;
+  withdrawFee?: string;
+}
+
+/** Quote response from the original request. */
+export interface QuoteResponse {
+  correlationId: string;
+  timestamp: string;
+  signature?: string;
+  quoteRequest: QuoteRequest;
+  quote: Quote;
+}
+
+/** Standard HTTP 200 Response for the Check Swap Execution Status endpoint. */
+export interface CheckSwapExecutionStatusResponse {
+  /** Unique identifier for request tracing and debugging */
+  correlationId: string;
+  /** Quote response from the original request */
+  quoteResponse: QuoteResponse;
+  /** The current status of the swap */
+  status: SwapStatus;
+  /** Last time the state was updated (ISO 8601 Date-Time string) */
+  updatedAt: string;
+  /** Details of actual swaps and withdrawals */
+  swapDetails: SwapDetails;
+}
+
+/** Standard HTTP 404/Error Response. */
+export interface ErrorResponse {
+  message: string;
+}
+
+// Add type definition for the tokens endpoint
+export type Token = {
+  assetId: string;
+  decimals: number;
+  blockchain: string;
+  symbol: string;
+  price: number;
+  priceUpdatedAt: string;
+  contractAddress?: string;
+  coingeckoId: string;
+};
