@@ -5,12 +5,10 @@
  */
 import {
   ActionButton,
-  FeedbackButton,
   RadioGroup,
   SeedPhraseInstructions,
   Stack,
 } from "@zillions/components";
-import { copyToClipboard } from "@zillions/utils";
 import { useEffect } from "react";
 
 import { useWizard } from "../../SetupContext";
@@ -55,15 +53,6 @@ export const CreateSeed = () => {
             columns={mnemonicLength === 24 ? 4 : 3}
             words={mnemonic}
           />
-          <FeedbackButton
-            data-testid="setup-copy-to-clipboard-button"
-            className="text-center mx-auto block cursor-pointer"
-            successMessage="Copied to clipboard"
-            errorMessage="Error trying to copy"
-            onAction={() => copyToClipboard(mnemonic.join(" "))}
-          >
-            Copy to Clipboard
-          </FeedbackButton>
           <div className="border-t border-line pt-4 pb-6 text-sm">
             <SeedPhraseInstructions />
           </div>

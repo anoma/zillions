@@ -27,7 +27,7 @@ export const CopyToClipboardControl = ({
   const onClick = (e: React.MouseEvent): void => {
     e.preventDefault();
     if (copied) return;
-    copyToClipboard(value || "");
+    void copyToClipboard(value || "").catch(console.error);
     showConfirmation();
   };
 

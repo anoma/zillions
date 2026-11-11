@@ -481,7 +481,7 @@ export type IpcContract = {
    * the calling popup's tab: opens the key and settles the dapp's request.
    */
   "approvals/submitOpenLinkKey": {
-    req: { msgId: string };
+    req: { msgId: string; password: string };
     res: void;
   };
   "approvals/submitUpdateDefaultAccount": {

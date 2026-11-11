@@ -54,6 +54,7 @@ pub(crate) fn sign(
     let account = AccountId::try_from(hd_index).map_err(|_| "account index out of range")?;
     let usk = UnifiedSpendingKey::from_seed(network, seed, account).map_err(to_pczt_error)?;
     // The checks the approval's summary made, again on what is signed.
+    check_values(&pczt)?;
     shielded_outputs(network, &pczt, &usk.to_unified_full_viewing_key())?;
     let coin = network.network_type().coin_type();
     let ours = |derivation: Option<AccountId>| derivation == Some(account);
@@ -210,6 +211,18 @@ struct Flow {
     /// key proves. Any other output is a payment.
     #[serde(skip_serializing_if = "Option::is_none")]
     mine: Option<bool>,
+    /// A transparent output of ours: where in the account, so the keychain
+    /// can tell an address other wallets scan from one they never reach.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<ChangePath>,
+}
+
+/// A transparent address's place in the account: scope 0 external, 1
+/// internal, 2 ephemeral (ZIP 320), and its index.
+#[derive(Clone, Copy, Serialize)]
+pub(crate) struct ChangePath {
+    scope: u32,
+    index: u32,
 }
 
 /// An output as the summary shows it: where it pays (`None` when it's ours),
@@ -432,13 +445,16 @@ fn shielded_outputs(
     Ok([sapling_outputs, orchard_outputs, ironwood_outputs])
 }
 
-/// Transparent outputs. One is ours when it names a BIP 44 path whose key,
-/// derived from the viewing key, is the one its script pays.
+/// Transparent outputs, with the path of each that is ours. One is ours when
+/// it names a BIP 44 path, `m/44'/coin'/account'/scope/index`, whose key,
+/// derived from the viewing key, is the one its script pays, at a scope
+/// wallets scan. Any other path, a custom scope or a hardened step, would put
+/// the money where no wallet restoring the phrase looks: shown as a payment.
 fn transparent_outputs(
     network: &Network,
     pczt: &Pczt,
     ufvk: &UnifiedFullViewingKey,
-) -> Result<Vec<Output>, String> {
+) -> Result<Vec<(Output, Option<ChangePath>)>, String> {
     let address = |script: &[u8]| crate::transparent_tx::script_address(network, script);
     let mut derivations = Vec::new();
     Verifier::new(pczt.clone())
@@ -456,12 +472,22 @@ fn transparent_outputs(
             Ok(())
         })
         .map_err(to_pczt_error)?;
-    let ours = |paths: &[([u8; 33], Vec<bip32::ChildNumber>)]| -> Option<String> {
+    let coin = network.network_type().coin_type();
+    let ours = |paths: &[([u8; 33], Vec<bip32::ChildNumber>)]| -> Option<(String, ChangePath)> {
         let account = ufvk.p2pkh()?;
         paths.iter().find_map(|(pubkey, path)| {
-            let [.., scope, index] = path[..] else {
+            let [purpose, coin_type, account_index, scope, index] = path[..] else {
                 return None;
             };
+            let standard = purpose == bip32::ChildNumber(44 | HARDENED)
+                && coin_type == bip32::ChildNumber(coin | HARDENED)
+                && account_index.is_hardened()
+                && !scope.is_hardened()
+                && scope.index() <= 2
+                && !index.is_hardened();
+            if !standard {
+                return None;
+            }
             let derived = account
                 .derive_address_pubkey(
                     TransparentKeyScope::custom(scope.index())?,
@@ -469,7 +495,13 @@ fn transparent_outputs(
                 )
                 .ok()?;
             (derived.serialize() == *pubkey).then(|| {
-                Address::Transparent(TransparentAddress::from_pubkey(&derived)).encode(network)
+                let address =
+                    Address::Transparent(TransparentAddress::from_pubkey(&derived)).encode(network);
+                let path = ChangePath {
+                    scope: scope.index(),
+                    index: index.index(),
+                };
+                (address, path)
             })
         })
     };
@@ -480,10 +512,28 @@ fn transparent_outputs(
         .zip(derivations)
         .map(|(o, paths)| {
             let pays = address(o.script_pubkey());
-            let mine = pays.is_some() && ours(&paths) == pays;
-            (pays, *o.value(), mine)
+            let path = ours(&paths)
+                .filter(|(derived, _)| pays.as_ref() == Some(derived))
+                .map(|(_, path)| path);
+            ((pays, *o.value(), path.is_some()), path)
         })
         .collect())
+}
+
+/// A bundle the transaction drops (no spends or outputs, no actions) must
+/// claim no value: its `value_sum` would count in the fee shown but never in
+/// the one signed. And no pool can bring in less than nothing.
+fn check_values(pczt: &Pczt) -> Result<(), String> {
+    let sapling = pczt.sapling();
+    if sapling.spends().is_empty() && sapling.outputs().is_empty() && *sapling.value_sum() != 0 {
+        return Err("an empty Sapling bundle claims a value".into());
+    }
+    for (pool, bundle) in [("Orchard", pczt.orchard()), ("Ironwood", pczt.ironwood())] {
+        if bundle.actions().is_empty() && bundle.value_sum().0 != 0 {
+            return Err(format!("an empty {pool} bundle claims a value"));
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn summarize(
@@ -498,7 +548,11 @@ pub(crate) fn summarize(
         .iter()
         .map(|i| (address(i.script_pubkey()), *i.value()))
         .collect();
-    let transparent_outputs = transparent_outputs(network, pczt, ufvk)?;
+    check_values(pczt)?;
+    let (transparent_outputs, change_paths): (Vec<Output>, Vec<Option<ChangePath>>) =
+        transparent_outputs(network, pczt, ufvk)?
+            .into_iter()
+            .unzip();
     let [sapling_outputs, orchard_outputs, ironwood_outputs] =
         shielded_outputs(network, pczt, ufvk)?;
 
@@ -526,6 +580,9 @@ pub(crate) fn summarize(
         + sapling_net
         + orchard_net
         + ironwood_net;
+    if fee < 0 || sapling_in < 0 || orchard_in < 0 || ironwood_in < 0 {
+        return Err("the transaction's values don't add up".into());
+    }
 
     let flows = |list: Vec<Output>| {
         list.into_iter()
@@ -533,8 +590,9 @@ pub(crate) fn summarize(
                 address,
                 value: value.to_string(),
                 mine: Some(mine),
+                path: None,
             })
-            .collect()
+            .collect::<Vec<_>>()
     };
     let total = |value: i128| {
         (value > 0)
@@ -542,6 +600,7 @@ pub(crate) fn summarize(
                 address: None,
                 value: value.to_string(),
                 mine: None,
+                path: None,
             })
             .into_iter()
             .collect()
@@ -557,9 +616,14 @@ pub(crate) fn summarize(
                 address,
                 value: value.to_string(),
                 mine: None,
+                path: None,
             })
             .collect(),
-        transparent_outputs: flows(transparent_outputs),
+        transparent_outputs: flows(transparent_outputs)
+            .into_iter()
+            .zip(change_paths)
+            .map(|(flow, path)| Flow { path, ..flow })
+            .collect(),
         sapling_inputs: total(sapling_in),
         sapling_outputs: flows(sapling_outputs),
         orchard_inputs: total(orchard_in),
@@ -942,6 +1006,94 @@ mod tests {
         let err = summarize(&MAIN, &hidden, &ufvk()).err().expect("refused");
         assert!(err.contains("doesn't match its note"), "{err}");
         assert!(sign(&MAIN, hidden, &SEED, 0).is_err());
+    }
+
+    /// 50,000 from a 200,000 Ironwood note to our own transparent address at
+    /// `scope`/`index`, its output labelled with `path`, as a site may.
+    fn send_to_own(scope: u32, index: u32, path: Vec<u32>) -> Pczt {
+        let (wallet, trees, _) = wallet_and_trees("ironwood", 200_000);
+        let pubkey = ufvk()
+            .p2pkh()
+            .unwrap()
+            .derive_address_pubkey(
+                TransparentKeyScope::custom(scope).unwrap(),
+                NonHardenedChildIndex::from_index(index).unwrap(),
+            )
+            .unwrap();
+        let to = Address::Transparent(TransparentAddress::from_pubkey(&pubkey)).encode(&MAIN);
+        let pczt = crate::build::pczt(
+            &wallet,
+            &ufvk(),
+            SeedFingerprint::from_seed(&SEED).unwrap().to_bytes(),
+            0,
+            &plan(&wallet, &to, 50_000),
+            &trees,
+            None,
+        )
+        .unwrap();
+        let derivation = transparent::pczt::Bip32Derivation::parse(
+            SeedFingerprint::from_seed(&SEED).unwrap().to_bytes(),
+            path,
+        )
+        .unwrap();
+        Updater::new(pczt)
+            .update_transparent_with(|mut updater| {
+                updater.update_output_with(0, |mut output| {
+                    output.set_bip32_derivation(pubkey.serialize(), derivation);
+                    Ok(())
+                })
+            })
+            .unwrap()
+            .finish()
+    }
+
+    fn own_transparent_outputs(pczt: &Pczt) -> Vec<(bool, Option<(u32, u32)>)> {
+        let summary = summarize(&MAIN, pczt, &ufvk()).unwrap();
+        summary
+            .transparent_outputs
+            .iter()
+            .map(|f| (f.mine == Some(true), f.path.map(|p| (p.scope, p.index))))
+            .collect()
+    }
+
+    /// Change counts as ours only where a wallet restoring the phrase looks:
+    /// the account's own BIP 44 path, at a scope wallets scan.
+    #[test]
+    fn calls_transparent_change_ours_only_on_a_standard_path() {
+        let h = |n: u32| n | HARDENED;
+        let standard = send_to_own(0, 5, vec![h(44), h(133), h(0), 0, 5]);
+        assert_eq!(
+            own_transparent_outputs(&standard),
+            vec![(true, Some((0, 5)))]
+        );
+
+        // A custom scope no wallet scans, though the key is truly the account's.
+        let custom = send_to_own(1_234_567, 9, vec![h(44), h(133), h(0), 1_234_567, 9]);
+        assert_eq!(own_transparent_outputs(&custom), vec![(false, None)]);
+
+        // A path whose prefix isn't BIP 44, or shorter, names no standard place.
+        let odd = send_to_own(0, 5, vec![h(45), h(133), h(0), 0, 5]);
+        assert_eq!(own_transparent_outputs(&odd), vec![(false, None)]);
+        let short = send_to_own(0, 5, vec![0, 5]);
+        assert_eq!(own_transparent_outputs(&short), vec![(false, None)]);
+    }
+
+    /// A fee the transaction can't pay means the values were made up.
+    #[test]
+    fn refuses_values_that_dont_add_up() {
+        let honest = ironwood_send();
+        summarize(&MAIN, &honest, &ufvk()).unwrap();
+        // The payment's 50,000 raised past what was spent.
+        let mut bytes = honest.serialize().unwrap();
+        let claim = some_varint(50_000)[1..].to_vec();
+        let at = bytes
+            .windows(claim.len())
+            .position(|w| w == claim)
+            .expect("the wire carries the payment's value");
+        bytes.splice(at..at + claim.len(), some_varint(5_000_000)[1..].to_vec());
+        let inflated = parse(&bytes).unwrap();
+        let err = summarize(&MAIN, &inflated, &ufvk()).err().expect("refused");
+        assert!(err.contains("don't add up"), "{err}");
     }
 
     #[test]

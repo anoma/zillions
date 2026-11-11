@@ -43,6 +43,7 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const signer = params.signer ?? "";
   const [summaryError, setSummaryError] = useState<string>();
   const [highFeeAccepted, setHighFeeAccepted] = useState(false);
+  const [changeAccepted, setChangeAccepted] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState<string>();
   const { accounts } = useWallets();
@@ -135,6 +136,24 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
           </label>
         </Notice>
       )}
+      {details?.summary.unusualChange && (
+        <Notice tone="danger" title="Change to an address wallets may not find" className="mt-4">
+          {formatZec(details.summary.unusualChange.value)} goes to transparent
+          address {details.summary.unusualChange.index} of your wallet, far past
+          the ones it has used. A wallet restoring your recovery phrase checks
+          addresses in order and stops a few past the last used, so it may
+          never find this money.
+          <label className="flex items-center gap-2 mt-2 font-bold cursor-pointer">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--color-danger)]"
+              checked={changeAccepted}
+              onChange={(e) => setChangeAccepted(e.target.checked)}
+            />
+            I understand and want to send it there
+          </label>
+        </Notice>
+      )}
       {signError && (
         <Notice tone="danger" title="Couldn't sign" className="mt-4">
           {signError}
@@ -148,7 +167,12 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
       )}
       <DecisionBar
         approveLabel="Approve"
-        approveDisabled={!details || (highFee && !highFeeAccepted) || !!signError}
+        approveDisabled={
+          !details ||
+          (highFee && !highFeeAccepted) ||
+          (!!details.summary.unusualChange && !changeAccepted) ||
+          !!signError
+        }
         onApprove={handleApprove}
         onReject={handleReject}
       />

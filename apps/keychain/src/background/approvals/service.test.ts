@@ -30,9 +30,11 @@ vi.mock("webextension-polyfill", () => {
   };
   return { default: browser, ...browser };
 });
+const summaries = vi.hoisted(() => ({ next: undefined as unknown }));
 vi.mock("../crypto/zillions", () => ({
-  buildPcztSummary: vi.fn(),
+  buildPcztSummary: vi.fn(async () => summaries.next),
   linkAddress: vi.fn(),
+  transparentGapLimits: () => ({ 0: 10, 1: 5, 2: 10 }),
 }));
 vi.mock("../keyring", () => ({ Keyring: class {} }));
 vi.mock("../vault", () => ({ VaultService: class {} }));
@@ -58,7 +60,16 @@ const wallet = {
 class TestService extends ApprovalsService {
   clock = 1_000_000;
   protected override now = (): number => this.clock;
+  park(msgId: string, signer: string): void {
+    this.pendingTxs.set(msgId, { pczt: "", signer });
+  }
+  parkLink(msgId: string, signer: string): void {
+    this.pendingLinks.set(msgId, { sealed: "s", nk: "n", signer });
+  }
 }
+
+let storage: LocalStorage;
+const opened: string[] = [];
 
 let svc: TestService;
 
@@ -86,17 +97,27 @@ beforeEach(() => {
     get: async (k: string) => kv.get(k),
     set: async (k: string, v: unknown) => void kv.set(k, v),
   };
+  storage = new LocalStorage(store as never);
+  opened.length = 0;
   svc = new TestService(
-    new LocalStorage(store as never),
+    storage,
     {
       isLocked: async () => false,
       passwordInitialized: async () => true,
       requiresAuth: async () => false,
+      checkPassword: async (password: string) => password === "right",
     } as never,
     {
       findById: async (id: string) => (id === wallet.id ? wallet : undefined),
+      findByAddress: async (a: string) => (a === wallet.address ? wallet : undefined),
     } as never,
-    {} as never,
+    {
+      viewingKey: async () => "uview",
+      openLinkKey: async (sealed: string) => {
+        opened.push(sealed);
+        return "the-key";
+      },
+    } as never,
     { record: async () => undefined } as never
   );
 });
@@ -185,5 +206,69 @@ describe("a request belongs to the tab that made it", () => {
     svc.handleTabRemoved(TAB);
     await flush();
     expect((await askToConnect(A, 9)).popup).toBeDefined();
+  });
+});
+
+describe("payment links", () => {
+  it("can't be sealed or opened from any site but the Zillions app", async () => {
+    const lookalike = "https://app-zillions.money";
+    expect(await svc.sealLinkKey("k", lookalike).catch((e: Error) => e.message)).toBe(
+      "Payment links work only in the Zillions app"
+    );
+    expect(
+      await svc.approveOpenLinkKey(lookalike, "s", "n").catch((e: Error) => e.message)
+    ).toBe("Payment links work only in the Zillions app");
+    // The app itself gets past that check, to the usual connection one.
+    expect(
+      await svc.sealLinkKey("k", "https://app.zillions.money").catch((e: Error) => e.message)
+    ).toMatch(/not been approved/);
+  });
+
+  it("opens a link only with the password, and a wrong one can be retried", async () => {
+    const result = new Promise<string>((resolve, reject) => {
+      (svc as unknown as { resolverMap: Record<number, unknown> }).resolverMap[5] = {
+        meta: { origin: "https://app.zillions.money", kind: "open-link" },
+        resolve,
+        reject,
+      };
+    });
+    svc.parkLink("m", wallet.address);
+
+    expect(await svc.submitOpenLinkKey(5, "m", "wrong").catch((e: Error) => e.message)).toBe(
+      "Incorrect password"
+    );
+    expect(opened).toEqual([]);
+
+    await svc.submitOpenLinkKey(5, "m", "right");
+    expect(await result).toBe("the-key");
+  });
+});
+
+describe("transparent change", () => {
+  const change = (scope: number, index: number) => ({
+    transparentOutputs: [{ address: "t1x", value: "9000", mine: true, path: { scope, index } }],
+    saplingOutputs: [],
+    orchardOutputs: [],
+    ironwoodOutputs: [],
+  });
+
+  it("is flagged past the addresses approved so far plus the gap wallets scan", async () => {
+    summaries.next = change(1, 4);
+    svc.park("a", wallet.address);
+    expect((await svc.queryPcztSummary("a")).unusualChange).toBeUndefined();
+
+    summaries.next = change(1, 5);
+    svc.park("b", wallet.address);
+    expect((await svc.queryPcztSummary("b")).unusualChange).toEqual({
+      scope: 1,
+      index: 5,
+      value: "9000",
+    });
+
+    // Once address 38 has been approved, the next few are expected.
+    await storage.raiseChangeIndex(wallet.id, 1, 38);
+    summaries.next = change(1, 43);
+    svc.park("c", wallet.address);
+    expect((await svc.queryPcztSummary("c")).unusualChange).toBeUndefined();
   });
 });

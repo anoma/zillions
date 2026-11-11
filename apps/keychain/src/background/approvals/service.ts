@@ -31,8 +31,9 @@ import type {
   ConnectedSite,
   DeviceSignTx,
 } from "../../ipc/contract";
+import { ZILLIONS_APP_URL } from "../../popup/links";
 import { LocalStorage, type KeyStoreType } from "../../storage";
-import { buildPcztSummary, linkAddress } from "../crypto/zillions";
+import { buildPcztSummary, linkAddress, transparentGapLimits } from "../crypto/zillions";
 import { Keyring } from "../keyring";
 import { VaultService } from "../vault";
 import { AccountRepository } from "../vault/accounts";
@@ -73,6 +74,27 @@ const DISMISSAL_COOLDOWNS_MS = [3_000, 10_000, 30_000, 60_000, 2 * 60_000, 5 * 6
 
 /** Dismissals further apart than this start the count again; above the cap. */
 const DISMISSAL_MEMORY_MS = 10 * 60_000;
+
+/**
+ * The only sites that may seal and reopen payment links: links are the
+ * Zillions app's (product §2.10), and a link's key is as good as its money,
+ * so a lookalike site the user connected must not be able to ask for one.
+ * Other deployments of the app are added at build time.
+ */
+const LINK_ORIGINS: ReadonlySet<string> = new Set([
+  new URL(ZILLIONS_APP_URL).origin,
+  ...(process.env.Z_INTERFACE_LINK_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean)
+    .map((o) => new URL(o).origin),
+]);
+
+const assertLinkOrigin = (origin: string): void => {
+  if (!LINK_ORIGINS.has(origin)) {
+    throw new Error("Payment links work only in the Zillions app");
+  }
+};
 
 /** `record` is the wallet `walletId` or one of its derived children. */
 const isInWallet = (record: KeyStoreType, walletId: string): boolean =>
@@ -315,6 +337,7 @@ export class ApprovalsService {
    * opens nothing, since unsealing a link needs that link's key already.
    */
   async sealLinkKey(key: string, origin: string): Promise<string> {
+    assertLinkOrigin(origin);
     const record = await this.activeSigner(origin);
     const sealed = await this.keyring.sealLinkKey(key, record.address);
     this.sealedLinks.add(linkAddress(key));
@@ -331,6 +354,7 @@ export class ApprovalsService {
     nk: string,
     tabId?: number
   ): Promise<string> {
+    assertLinkOrigin(origin);
     const record = await this.activeSigner(origin);
     const msgId = uuid();
     this.pendingLinks.set(msgId, { sealed, nk, signer: record.address });
@@ -346,13 +370,24 @@ export class ApprovalsService {
   }
 
   /** The popup approved: open the key and settle the dapp's promise. */
-  async submitOpenLinkKey(popupTabId: number, msgId: string): Promise<void> {
+  async submitOpenLinkKey(
+    popupTabId: number,
+    msgId: string,
+    password: string
+  ): Promise<void> {
     const pending = this.pendingLinks.get(msgId);
     const resolvers = this.getResolver(popupTabId);
     if (!pending) {
       throw new Error(`Pending link request not found for ${msgId}`);
     }
-    this.pendingLinks.delete(msgId);
+    // Asked every time, as a seed account's signature is: the key is the
+    // link's money. A wrong password leaves the request open to retry.
+    if (!(await this.vaultService.checkPassword(password))) {
+      throw new Error("Incorrect password");
+    }
+    if (!this.pendingLinks.delete(msgId)) {
+      throw new Error(`Pending link request not found for ${msgId}`);
+    }
     try {
       resolvers.resolve(
         await this.keyring.openLinkKey(pending.sealed, pending.nk, pending.signer)
@@ -403,7 +438,11 @@ export class ApprovalsService {
       throw new Error(`Transaction data not found for ${msgId}`);
     }
     const ufvk = await this.keyring.viewingKey(pending.signer);
-    const summary = await buildPcztSummary(pending.pczt, ufvk);
+    const built = await buildPcztSummary(pending.pczt, ufvk);
+    const summary = {
+      ...built,
+      unusualChange: await this.unusualChange(pending.signer, built),
+    };
     pending.summary = summary;
     const paid = [
       ...summary.transparentOutputs,
@@ -475,6 +514,7 @@ export class ApprovalsService {
         deviceData
       );
       void this.record(resolvers.meta, "approved");
+      void this.rememberChange(pending).catch(console.error);
       resolvers.resolve(signed);
     } catch (e) {
       void this.record(resolvers.meta, "failed");
@@ -657,6 +697,51 @@ export class ApprovalsService {
       kind: meta.kind,
       outcome,
     });
+  }
+
+  /** The wallet (parent account) id behind a signer address. */
+  private async walletIdOf(signer?: string): Promise<string | undefined> {
+    const record = signer ? await this.accounts.findByAddress(signer) : undefined;
+    return record ? (record.parentId ?? record.id) : undefined;
+  }
+
+  /**
+   * The first transparent output of ours past the last address this Keychain
+   * approved plus the gap wallets scan: a wallet restoring the phrase walks
+   * the addresses in order and stops at that gap, so it may never reach it.
+   */
+  private async unusualChange(
+    signer: string | undefined,
+    summary: PcztSummary
+  ): Promise<PcztSummary["unusualChange"]> {
+    const walletId = await this.walletIdOf(signer);
+    if (!walletId) return undefined;
+    const approved = await this.localStorage.changeIndexes(walletId);
+    const gaps = transparentGapLimits();
+    for (const output of summary.transparentOutputs) {
+      const { path } = output;
+      if (!output.mine || !path) continue;
+      const highest = approved[path.scope] ?? -1;
+      if (path.index > highest + (gaps[path.scope] ?? 0)) {
+        return { ...path, value: String(output.value ?? "0") };
+      }
+    }
+    return undefined;
+  }
+
+  /** A signed transaction's own transparent outputs move the approved mark. */
+  private async rememberChange(pending: PendingSignTx): Promise<void> {
+    const walletId = await this.walletIdOf(pending.signer);
+    if (!walletId || !pending.summary) return;
+    for (const output of pending.summary.transparentOutputs) {
+      if (output.mine && output.path) {
+        await this.localStorage.raiseChangeIndex(
+          walletId,
+          output.path.scope,
+          output.path.index
+        );
+      }
+    }
   }
 
   /** A shielded account is named after the wallet (its parent) it belongs to. */

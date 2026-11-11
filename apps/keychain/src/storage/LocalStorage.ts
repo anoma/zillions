@@ -19,7 +19,11 @@ export type Connection = t.TypeOf<typeof Connection>;
 const Connections = t.record(t.string, Connection);
 type ConnectionsType = t.TypeOf<typeof Connections>;
 
-type LocalStorageTypes = ConnectionsType | number | boolean;
+/** Per wallet id, per transparent scope: the highest address index approved. */
+const ChangeIndexes = t.record(t.string, t.record(t.string, t.number));
+type ChangeIndexesType = t.TypeOf<typeof ChangeIndexes>;
+
+type LocalStorageTypes = ConnectionsType | ChangeIndexesType | number | boolean;
 
 // Replaces the "zillionsExtensionApprovedOrigins" origin list, which bound no
 // account; origins approved there must connect again.
@@ -27,7 +31,8 @@ export type LocalStorageKeys =
   | "zillionsExtensionConnections"
   | "zillionsExtensionAutoLockMinutes"
   | "zillionsExtensionVaultCreated"
-  | "zillionsExtensionVaultLost";
+  | "zillionsExtensionVaultLost"
+  | "zillionsExtensionChangeIndexes";
 
 const CONNECTIONS_KEY: LocalStorageKeys = "zillionsExtensionConnections";
 const AUTO_LOCK_KEY: LocalStorageKeys = "zillionsExtensionAutoLockMinutes";
@@ -35,6 +40,7 @@ const AUTO_LOCK_KEY: LocalStorageKeys = "zillionsExtensionAutoLockMinutes";
 // but not `storage.local`, so a vault that vanishes leaves this behind.
 const VAULT_CREATED_KEY: LocalStorageKeys = "zillionsExtensionVaultCreated";
 const VAULT_LOST_KEY: LocalStorageKeys = "zillionsExtensionVaultLost";
+const CHANGE_INDEXES_KEY: LocalStorageKeys = "zillionsExtensionChangeIndexes";
 
 export const AUTO_LOCK_OPTIONS = [0, 5, 15, 30, 60] as const;
 export const DEFAULT_AUTO_LOCK_MINUTES = 15;
@@ -86,6 +92,28 @@ export class LocalStorage extends ExtStorage {
 
   async vaultLost(): Promise<boolean> {
     return (await this.getRaw(VAULT_LOST_KEY)) === true;
+  }
+
+  /** The highest transparent index approved per scope for `walletId`. */
+  async changeIndexes(walletId: string): Promise<Record<string, number>> {
+    const decoded = t
+      .union([ChangeIndexes, t.undefined])
+      .decode(await this.getRaw(CHANGE_INDEXES_KEY));
+    return (E.isRight(decoded) && decoded.right?.[walletId]) || {};
+  }
+
+  /** Raises the highest approved index of `scope` for `walletId` to `index`. */
+  async raiseChangeIndex(walletId: string, scope: number, index: number): Promise<void> {
+    const decoded = t
+      .union([ChangeIndexes, t.undefined])
+      .decode(await this.getRaw(CHANGE_INDEXES_KEY));
+    const all = (E.isRight(decoded) && decoded.right) || {};
+    const mine = all[walletId] ?? {};
+    if ((mine[scope] ?? -1) >= index) return;
+    await this.setRaw(CHANGE_INDEXES_KEY, {
+      ...all,
+      [walletId]: { ...mine, [scope]: index },
+    });
   }
 
   /** Minutes of system idle time before locking; 0 never. */

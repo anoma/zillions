@@ -218,8 +218,8 @@ export class BackgroundClient {
   }
 
   /** Confirm the pending "show a payment link again" request `msgId`. */
-  submitOpenLinkKey(msgId: string): Promise<void> {
-    return this.send("approvals/submitOpenLinkKey", { msgId });
+  submitOpenLinkKey(msgId: string, password: string): Promise<void> {
+    return this.send("approvals/submitOpenLinkKey", { msgId, password });
   }
 
   /** Approval decisions, newest first. */

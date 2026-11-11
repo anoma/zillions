@@ -351,9 +351,9 @@ export const handlers: HandlerMap = {
     await approvals.rejectSignTx(requireTabId(ctx), msgId);
   },
 
-  "approvals/submitOpenLinkKey": async ({ msgId }, ctx) => {
+  "approvals/submitOpenLinkKey": async ({ msgId, password }, ctx) => {
     const { approvals } = await getServices();
-    await approvals.submitOpenLinkKey(requireTabId(ctx), msgId);
+    await approvals.submitOpenLinkKey(requireTabId(ctx), msgId, password);
   },
 
   "approvals/log": async () => {
