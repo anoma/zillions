@@ -4,29 +4,44 @@ import { QRCode } from "react-qr-code";
 import { twMerge } from "tailwind-merge";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
 import { FormPage } from "../components/FormPage";
+import { PageError } from "../components/PageError";
 import { FormCard, SubmitBlock } from "../components/TransferForm";
+import { ActionButton } from "../components/ui/ActionButton";
 import { qrClassName } from "../components/ui/utils";
 import { useFreshAddress } from "../hooks/useAddresses";
+import { useWallet } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { shortenAddress } from "../lib/utils";
+import type { Token } from "../lib/wallet/types";
 
-enum Stage {
-  Swap,
-  ReviewQuote,
-  DepositAmount,
-}
+const Stage = {
+  Swap: "SWAP",
+  ReviewQuote: "REVIEW_QUOTE",
+  DepositAmount: "DEPOSIT_AMOUNT",
+};
 
 export const Route = createFileRoute("/swap")({
   component: SwapRoute,
 });
 
 function SwapRoute() {
+  const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
+  const UNKNOWN_SYMBOL_LOGO = "/logos/unknown_symbol.svg";
+  const UNKNOWN_BLOCKCHAIN_LOGO = "/logos/unknown_blockchain.svg";
+  // Map blockchains to logo paths
+  const blockchainLogos = new Map<string, string>();
+  // Map cryptocurrency symbols to logo paths
+  const symbolLogos = new Map<string, string>();
+  const wallet = useWallet();
   const shielded = useFreshAddress();
   const [fromToken, setFromToken] = useState({
     assetId: "nep141:btc.omft.near",
     symbol: "BTC",
     blockchain: "btc",
-    logo: "/logos/btc.svg",
+    price: 73978,
+    priceUpdatedAt: "2026-11-11T11:20:05.389Z",
+    coingeckoId: "bitcoin",
+    decimals: 8,
   });
   const [error, setError] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -34,10 +49,10 @@ function SwapRoute() {
   const [refundAddress, setRefundAddress] = useState("");
   const [slippage, setSlippage] = useState("0.5");
   const [isLoading, setIsLoading] = useState(true);
-  const [tokens, setTokens] = useState(null);
+  const [tokens, setTokens] = useState([]);
   const [toAmount, setToAmount] = useState("--");
   const [zecToken, setZecToken] = useState({
-    assetId: "nep141:zec.omft.near",
+    assetId: ZEC_TOKEN_ASSET_ID,
     decimals: 8,
     blockchain: "zec",
     symbol: "ZEC",
@@ -86,91 +101,105 @@ function SwapRoute() {
       }, 2000);*/
   };
 
+  const onFundsSend = () => {
+    wallet.pushSwap(depositAddress);
+  };
+
   useEffect(() => {
     (async () => {
-      const totalPrice = fromAmount * fromToken.price;
+      const totalPrice = Number(fromAmount) * fromToken.price;
       setFromTotalPrice(totalPrice.toFixed(2));
       setToTotalPrice(totalPrice.toFixed(2));
       const toAmount = totalPrice / zecToken.price;
       setToAmount(toAmount.toFixed(zecToken.decimals));
-      setZecPriceInFrom(zecToken.price / fromToken.price);
+      setZecPriceInFrom((zecToken.price / fromToken.price).toString());
     })();
   }, [fromAmount, fromToken, toAmount, zecToken]);
 
   useEffect(() => {
-    if (stage == Stage.Swap) {
-      fetch("https://1click.chaindefuser.com/v0/tokens")
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error("Network response was not ok");
-          }
-          return response.json();
-        })
-        .then((data) => {
-          setTokens(data);
-          setFromToken(data[0]);
-          setZecToken(data.find((token) => token.assetId == zecToken.assetId));
-          setIsLoading(false);
-        })
-        .catch((error) => {
-          setError(error.message);
-          setIsLoading(false);
-        });
-    } else if (stage == Stage.ReviewQuote) {
-      const deadline = new Date(Date.now() + 10 * 60 * 1000);
-      const body = {
-        dry: false,
-        swapType: "EXACT_INPUT",
-        slippageTolerance: slippage * 100,
-        originAsset: fromToken.assetId,
-        depositType: "ORIGIN_CHAIN",
-        destinationAsset: zecToken.assetId,
-        amount: (fromAmount * 10 ** fromToken.decimals).toString(),
-        recipient: shielded,
-        recipientType: "DESTINATION_CHAIN",
-        refundTo: refundAddress,
-        refundType: "ORIGIN_CHAIN",
-        deadline: deadline.toISOString(),
-      };
-      console.log("Review Quote post request body", body);
-      fetch("https://1click.chaindefuser.com/v0/quote", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(body),
-      })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error("Network response was not ok");
-          }
-          return response.json();
-        })
-        .then((data) => {
-          console.log("Review Quote post response body", data);
-          setAmountIn(data.quote.amountInFormatted);
-          setAmountOut(data.quote.amountOutFormatted);
-
-          // Save the deposit address
-          setDepositAddress(data.quote.depositAddress);
-
-          // Populate USD equivalents
-          setAmountInUsd(Number(data.quote.amountInUsd).toFixed(2));
-          setAmountOutUsd(Number(data.quote.amountOutUsd).toFixed(2));
-
-          setWithdrawFee(
-            (data.quote.amountInUsd - data.quote.amountOutUsd) /
-              fromToken.price,
-          );
-          setIsLoading(false);
-        })
-        .catch((error) => {
-          setError(error.message);
-          setIsLoading(false);
-        });
+    if (stage !== Stage.Swap) {
+      return;
     }
+    fetch("https://1click.chaindefuser.com/v0/tokens")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setTokens(data);
+        setFromToken(data[0]);
+        setZecToken(
+          data.find((token: Token) => token.assetId == ZEC_TOKEN_ASSET_ID),
+        );
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        setError(error.message);
+        setIsLoading(false);
+      });
   }, [stage]);
+
+  useEffect(() => {
+    if (stage !== Stage.ReviewQuote) {
+      return;
+    }
+    const deadline = new Date(Date.now() + 60 * 60 * 1000);
+    const body = {
+      dry: false,
+      swapType: "EXACT_INPUT",
+      slippageTolerance: Number(slippage) * 100,
+      originAsset: fromToken.assetId,
+      depositType: "ORIGIN_CHAIN",
+      destinationAsset: ZEC_TOKEN_ASSET_ID,
+      amount: (Number(fromAmount) * 10 ** fromToken.decimals).toString(),
+      recipient: shielded,
+      recipientType: "DESTINATION_CHAIN",
+      refundTo: refundAddress,
+      refundType: "ORIGIN_CHAIN",
+      deadline: deadline.toISOString(),
+    };
+    console.log("Review Quote post request body", body);
+    fetch("https://1click.chaindefuser.com/v0/quote", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        console.log("Review Quote post response body", data);
+        setAmountIn(data.quote.amountInFormatted);
+        setAmountOut(data.quote.amountOutFormatted);
+
+        // Save the deposit address
+        setDepositAddress(data.quote.depositAddress);
+
+        // Populate USD equivalents
+        setAmountInUsd(Number(data.quote.amountInUsd).toFixed(2));
+        setAmountOutUsd(Number(data.quote.amountOutUsd).toFixed(2));
+
+        setWithdrawFee(
+          (
+            (data.quote.amountInUsd - data.quote.amountOutUsd) /
+            fromToken.price
+          ).toString(),
+        );
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        setError(error.message);
+        setIsLoading(false);
+      });
+  }, [stage, fromAmount, fromToken, refundAddress, shielded, slippage]);
 
   if (error) {
     return <PageError>{error}</PageError>;
@@ -201,8 +230,18 @@ function SwapRoute() {
               >
                 <div className="flex items-center gap-3">
                   <img
-                    src={fromToken.logo}
+                    src={
+                      symbolLogos.get(fromToken.symbol) ?? UNKNOWN_SYMBOL_LOGO
+                    }
                     alt={fromToken.symbol}
+                    className="size-5 rounded-full bg-gray-100"
+                  />
+                  <img
+                    src={
+                      blockchainLogos.get(fromToken.blockchain) ??
+                      UNKNOWN_BLOCKCHAIN_LOGO
+                    }
+                    alt={fromToken.blockchain}
                     className="size-5 rounded-full bg-gray-100"
                   />
                   <span className="font-medium">
@@ -214,7 +253,7 @@ function SwapRoute() {
 
               {dropdownOpen && (
                 <div className="absolute z-10 w-full mt-1 bg-card border border-line rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                  {tokens.map((c) => (
+                  {tokens.map((c: Token) => (
                     <button
                       key={c.assetId}
                       type="button"
@@ -228,8 +267,16 @@ function SwapRoute() {
                       )}
                     >
                       <img
-                        src={c.logo}
+                        src={symbolLogos.get(c.symbol) ?? UNKNOWN_SYMBOL_LOGO}
                         alt={c.symbol}
+                        className="size-5 rounded-full bg-gray-100"
+                      />
+                      <img
+                        src={
+                          blockchainLogos.get(c.blockchain) ??
+                          UNKNOWN_BLOCKCHAIN_LOGO
+                        }
+                        alt={c.blockchain}
                         className="size-5 rounded-full bg-gray-100"
                       />
                       <span>
@@ -422,14 +469,8 @@ function SwapRoute() {
     );
   } else if (stage == Stage.DepositAmount) {
     return (
-      <FormPage
-        title="Deposit Funds"
-        onSubmit={(e) => {
-          e.preventDefault();
-          alert("Funds sent! Waiting for confirmation...");
-        }}
-      >
-        <FormCard>
+      <FormPage title="Deposit Funds">
+        <section aria-label="Your address" className="flex flex-col gap-4">
           <div className="flex flex-col items-center gap-6 py-4">
             {/* Amount Display */}
             <div className="flex flex-col items-center gap-1">
@@ -475,26 +516,19 @@ function SwapRoute() {
               )}
             </div>
           </div>
-        </FormCard>
-
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => setStage(Stage.ReviewQuote)}
-            className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
-          >
-            Back
-          </button>
-          <div className="flex-1">
-            <SubmitBlock
-              label="I've sent the funds"
-              pending={isPending}
-              pendingLabel="Verifying..."
-              color="black"
-              stages={[]}
-            />
+          <div className="flex gap-3 justify-center">
+            <button
+              type="button"
+              onClick={() => setStage(Stage.ReviewQuote)}
+              className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
+            >
+              Back
+            </button>
+            <ActionButton color="black" onClick={onFundsSend} href="/">
+              I've sent the funds
+            </ActionButton>
           </div>
-        </div>
+        </section>
       </FormPage>
     );
   }

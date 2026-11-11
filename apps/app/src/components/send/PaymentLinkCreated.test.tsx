@@ -6,7 +6,7 @@ import { PaymentLinkCreated } from "./PaymentLinkCreated";
 
 let history: Partial<Activity>[] = [];
 vi.mock("../../hooks/useGetTransactionHistory", () => ({
-  useGetTransactionHistory: () => ({ data: history }),
+  useGetTransactionHistory: () => ({ data: { activities: history } }),
 }));
 vi.mock("../../hooks/usePendingProgress", () => ({
   usePendingProgress: () => ({ percent: 40, detail: "2m 40s left" }),

@@ -72,9 +72,11 @@ import {
 } from "./transparent";
 import type {
   Activity,
+  CheckSwapExecutionStatusResponse,
   Note,
   PendingActivity,
   SentOutput,
+  TxHashDetails,
   WalletState,
 } from "./types";
 
@@ -391,6 +393,18 @@ export class Wallet {
     this.#history = undefined;
   };
 
+  /** Push the given swap to the state. */
+  pushSwap = async (depositAddress: string) => {
+    this.#state.swaps ??= [];
+    this.#state.swaps.push(depositAddress);
+    this.#save();
+  };
+
+  /** Get all the swaps in the state. */
+  getSwaps = () => {
+    return this.#state.swaps;
+  };
+
   /** Runs history on every core, or back on 2, for the rest of this session. */
   setSpeedUp = (on: boolean) => {
     this.#speedUp = on;
@@ -543,9 +557,12 @@ export class Wallet {
   }
 
   /** Newest first, pending transactions on top until sync finds them mined. */
-  async getTransactionHistory(): Promise<Activity[]> {
+  async getTransactionHistory(): Promise<{
+    activities: Activity[];
+    swaps: CheckSwapExecutionStatusResponse[];
+  }> {
     await this.#seed();
-    const { notes, sent, blocks, pending } = this.#state;
+    const { notes, sent, blocks, pending, swaps } = this.#state;
     // Until the transparent side names our addresses, an unshield to one of
     // them would read as a payment.
     const addresses = this.#transparent?.addresses;
@@ -558,10 +575,58 @@ export class Wallet {
       addresses,
     );
     const mined = new Set(history.map((tx) => tx.txid));
-    return [
-      ...pendingActivity(pending, mined),
-      ...confirmedAt(history, this.#tip),
-    ];
+    // Wait for all requests to finish
+    const swapPromises = await Promise.all(
+      (swaps ?? []).map((depositAddress) => {
+        const statusUrl = new URL("https://1click.chaindefuser.com/v0/status");
+        statusUrl.searchParams.append("depositAddress", depositAddress);
+
+        // Return the fetch promise
+        return fetch(statusUrl)
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error("Network response was not ok");
+            }
+            return response.json();
+          })
+          .catch((error) => {
+            console.log(`Failed for ${depositAddress}:`, error);
+            return null; // Return null (or a custom flag) on error
+          });
+      }),
+    );
+
+    // then filter out the nulls and all the swapStatuses for
+    // which any of its destinationChainTxHashes are already contained in history so we don't
+    // print the same "transaction" twice.
+    const newSwaps: string[] = [];
+    const swapStatuses = swapPromises.filter((swap) => {
+      if (swap == null) return false;
+      const destHashes = swap.swapDetails?.destinationChainTxHashes || [];
+      if (
+        destHashes.some((destinationChainTxHash: TxHashDetails) =>
+          mined.has(destinationChainTxHash.hash),
+        )
+      ) {
+        return false;
+      } else {
+        newSwaps.push(swap.quoteResponse.quote.depositAddress);
+        return true;
+      }
+    });
+    this.#state.swaps = newSwaps;
+    this.#save();
+
+    // Please also filter out all the swapStatuses for which any of its destinationChainTxHashes
+    // are already contained in history. The idea is that we don't want to print the same
+    // "transaction" twice.
+    return {
+      swaps: swapStatuses,
+      activities: [
+        ...pendingActivity(pending, mined),
+        ...confirmedAt(history, this.#tip),
+      ],
+    };
   }
 
   /**
