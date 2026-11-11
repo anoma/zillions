@@ -210,20 +210,6 @@ describe("a request belongs to the tab that made it", () => {
 });
 
 describe("payment links", () => {
-  it("can't be sealed or opened from any site but the Zillions app", async () => {
-    const lookalike = "https://app-zillions.money";
-    expect(await svc.sealLinkKey("k", lookalike).catch((e: Error) => e.message)).toBe(
-      "Payment links work only in the Zillions app"
-    );
-    expect(
-      await svc.approveOpenLinkKey(lookalike, "s", "n").catch((e: Error) => e.message)
-    ).toBe("Payment links work only in the Zillions app");
-    // The app itself gets past that check, to the usual connection one.
-    expect(
-      await svc.sealLinkKey("k", "https://app.zillions.money").catch((e: Error) => e.message)
-    ).toMatch(/not been approved/);
-  });
-
   it("opens a link only with the password, and a wrong one can be retried", async () => {
     const result = new Promise<string>((resolve, reject) => {
       (svc as unknown as { resolverMap: Record<number, unknown> }).resolverMap[5] = {

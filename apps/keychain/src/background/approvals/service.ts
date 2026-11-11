@@ -31,7 +31,6 @@ import type {
   ConnectedSite,
   DeviceSignTx,
 } from "../../ipc/contract";
-import { ZILLIONS_APP_URL } from "../../popup/links";
 import { LocalStorage, type KeyStoreType } from "../../storage";
 import { buildPcztSummary, linkAddress, transparentGapLimits } from "../crypto/zillions";
 import { Keyring } from "../keyring";
@@ -74,27 +73,6 @@ const DISMISSAL_COOLDOWNS_MS = [3_000, 10_000, 30_000, 60_000, 2 * 60_000, 5 * 6
 
 /** Dismissals further apart than this start the count again; above the cap. */
 const DISMISSAL_MEMORY_MS = 10 * 60_000;
-
-/**
- * The only sites that may seal and reopen payment links: links are the
- * Zillions app's (product §2.10), and a link's key is as good as its money,
- * so a lookalike site the user connected must not be able to ask for one.
- * Other deployments of the app are added at build time.
- */
-const LINK_ORIGINS: ReadonlySet<string> = new Set([
-  new URL(ZILLIONS_APP_URL).origin,
-  ...(process.env.Z_INTERFACE_LINK_ORIGINS ?? "")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean)
-    .map((o) => new URL(o).origin),
-]);
-
-const assertLinkOrigin = (origin: string): void => {
-  if (!LINK_ORIGINS.has(origin)) {
-    throw new Error("Payment links work only in the Zillions app");
-  }
-};
 
 /** `record` is the wallet `walletId` or one of its derived children. */
 const isInWallet = (record: KeyStoreType, walletId: string): boolean =>
@@ -337,7 +315,6 @@ export class ApprovalsService {
    * opens nothing, since unsealing a link needs that link's key already.
    */
   async sealLinkKey(key: string, origin: string): Promise<string> {
-    assertLinkOrigin(origin);
     const record = await this.activeSigner(origin);
     const sealed = await this.keyring.sealLinkKey(key, record.address);
     this.sealedLinks.add(linkAddress(key));
@@ -354,7 +331,6 @@ export class ApprovalsService {
     nk: string,
     tabId?: number
   ): Promise<string> {
-    assertLinkOrigin(origin);
     const record = await this.activeSigner(origin);
     const msgId = uuid();
     this.pendingLinks.set(msgId, { sealed, nk, signer: record.address });
