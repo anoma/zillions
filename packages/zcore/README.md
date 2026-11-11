@@ -78,16 +78,20 @@ passed through unchanged.
 
 ## Build
 
-You'll need Rust 1.89+ with the `wasm32-unknown-unknown` target,
-[wasm-pack](https://rustwasm.github.io/wasm-pack/), and a clang that targets
-wasm32. On macOS, Apple's clang can't target wasm32; `brew install llvm` and the
-script picks it up.
+You'll need [rustup](https://rustup.rs) and a clang that targets wasm32. On
+macOS, Apple's clang can't target wasm32; `brew install llvm` and the script
+picks it up.
 
 ```bash
 ./build.sh
 ```
 
 This rebuilds `pkg/`. Commit it along with the Rust change.
+
+Every tool is pinned: Rust in `rust-toolchain.toml`, and in `build.sh` the
+`wasm-bindgen` CLI (to `Cargo.lock`'s version) and binaryen's `wasm-opt` (with
+its SHA-256). `build.sh` installs the last two into `.tools/` on first run.
+CI builds with the same script (`.github/workflows/build-wasm.yml`).
 
 The build first runs `./patch-crates.sh`, which unpacks two patched curve crates
 into `patched/` (see [patches/README.md](patches/README.md)). Cargo needs them,
