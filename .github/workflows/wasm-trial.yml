@@ -94,6 +94,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter zillions-keychain exec wxt prepare
+      # Netlify sets these for production; the build fetches from the indexer.
+      - run: cp apps/app/.env.example apps/app/.env
       - run: pnpm build
       - run: |
           {
