@@ -186,6 +186,7 @@ export function AmountField({
   error,
   describedBy,
   ref,
+  unit = "ZEC",
 }: {
   id: string;
   value: string;
@@ -193,6 +194,7 @@ export function AmountField({
   error?: string;
   describedBy?: string;
   ref?: Ref<HTMLInputElement>;
+  unit?: string;
 }) {
   const errorId = `${id}-error`;
   return (
@@ -201,6 +203,7 @@ export function AmountField({
         id={id}
         ref={ref}
         value={value}
+        unit={unit}
         // Digits have no descenders; this takes back the empty space under them.
         className={twMerge("h-20 -mb-3", error && "text-red-700")}
         maxFontSize="4.5rem"

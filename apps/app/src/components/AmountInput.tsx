@@ -1,11 +1,11 @@
 import type { ComponentProps } from "react";
 import { twMerge } from "tailwind-merge";
-import { fitFontSize, zatoshiToZec } from "../lib/utils";
+import { fitFontSize } from "../lib/utils";
 import { placeholderClassName } from "./ui/utils";
 
 /** "ZEC" after a hero amount, sized relative to it. */
-export function AmountUnit() {
-  return <span className="ml-[0.4em] text-[0.4em]">ZEC</span>;
+export function AmountUnit({ unit = "ZEC" }: { unit: string }) {
+  return <span className="ml-[0.4em] text-[0.4em]">{unit}</span>;
 }
 
 /**
@@ -16,8 +16,13 @@ export function AmountInput({
   value,
   className,
   maxFontSize = "6rem",
+  unit = "ZEC",
   ...props
-}: ComponentProps<"input"> & { value: string; maxFontSize?: string }) {
+}: ComponentProps<"input"> & {
+  value: string;
+  maxFontSize?: string;
+  unit: string;
+}) {
   return (
     <div
       className={twMerge(
@@ -67,7 +72,7 @@ export function AmountInput({
             {...props}
           />
         </span>
-        <AmountUnit />
+        <AmountUnit unit={unit} />
       </div>
     </div>
   );
@@ -75,13 +80,14 @@ export function AmountInput({
 
 /** A fixed hero amount, drawn like `AmountInput`. */
 export function AmountDisplay({
-  zat,
+  value,
   className,
+  unit = "ZEC",
 }: {
-  zat: bigint;
+  value: string;
   className?: string;
+  unit?: string;
 }) {
-  const zec = zatoshiToZec(zat);
   return (
     <div
       className={twMerge(
@@ -91,10 +97,10 @@ export function AmountDisplay({
     >
       <span
         className="flex items-baseline leading-none font-medium"
-        style={{ fontSize: fitFontSize(zec.length + 2, "4.5rem") }}
+        style={{ fontSize: fitFontSize(value.length + 2, "4.5rem") }}
       >
-        {zec}
-        <AmountUnit />
+        {value}
+        <AmountUnit unit={unit} />
       </span>
     </div>
   );
