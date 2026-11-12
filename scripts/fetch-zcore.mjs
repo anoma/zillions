@@ -19,7 +19,9 @@ const zcore = new URL("../packages/zcore/", import.meta.url).pathname;
 const token = process.env.ZCORE_GITHUB_TOKEN ?? process.env.GITHUB_TOKEN;
 const repo =
   process.env.GITHUB_REPOSITORY ??
-  process.env.REPOSITORY_URL?.replace(/^https:\/\/github\.com\//, "");
+  process.env.REPOSITORY_URL?.match(
+    /github\.com[:/](.+?\/.+?)(\.git)?\/?$/,
+  )?.[1];
 const commit = process.env.COMMIT_REF ?? process.env.GITHUB_SHA;
 const production = process.env.CONTEXT === "production";
 if (!token || !repo || !commit) {
@@ -40,8 +42,12 @@ async function gh(path) {
       Accept: "application/vnd.github+json",
     },
   });
+  // GitHub says 404, not 403, when the token can't see the repo.
   if (!res.ok)
-    throw new Error(`GET ${path}: ${res.status} ${await res.text()}`);
+    throw new Error(
+      `GET ${repo}${path}: ${res.status} ${await res.text()}` +
+        (res.status === 404 ? " (wrong repo, or the token can't read it)" : ""),
+    );
   return res;
 }
 
