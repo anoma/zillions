@@ -1,8 +1,7 @@
 name: netlify-probe
 
-# Temporary, read-only: can Netlify build zcore's wasm itself? Reads the site's
-# build settings (env var names only) and runs build.sh inside Netlify's own
-# build image. Deploys nothing. Delete after the test.
+# Temporary, read-only: the Netlify site's build settings, recent deploys and
+# env var names (never values). Deploys nothing. Delete after the test.
 on:
   pull_request:
     paths:
@@ -20,35 +19,13 @@ jobs:
       - run: |
           api() { curl -sSf -H "Authorization: Bearer $NETLIFY_AUTH_TOKEN" "https://api.netlify.com/api/v1$1"; }
           site=$(api /sites/zillions-app.netlify.app)
-          echo "$site" | jq '{name, url, build_image, processing_settings, published_deploy: .published_deploy | {branch, context, commit_ref, created_at},
-            build: .build_settings | {provider, repo_url, repo_branch, base, cmd, dir, allowed_branches, skip_prs, stop_builds, installation_id: (.installation_id != null), env_keys: (.env // {} | keys)}}'
+          echo "$site" | jq '{name, url, build_image, published_deploy: .published_deploy | {branch, context, commit_ref, created_at},
+            build: .build_settings | {provider, repo_url, repo_branch, base, cmd, dir, allowed_branches, skip_prs, stop_builds, installation_id: (.installation_id != null)}}'
           id=$(echo "$site" | jq -r .id)
+          account=$(echo "$site" | jq -r .account_id)
           echo "recent deploys:"
-          api "/sites/$id/deploys?per_page=8" | jq -r '.[] | [.created_at, .context, .branch, .commit_ref, .state, (.title // "")] | @tsv'
+          api "/sites/$id/deploys?per_page=12" | jq -r '.[] | [.created_at, .context, .branch, (.commit_ref // "-")[0:8], .state, .deploy_ssl_url] | @tsv'
+          echo "env var names and contexts:"
+          api "/accounts/$account/env?site_id=$id" | jq -r '.[] | "\(.key)\t\([.values[].context] | join(","))"'
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-
-  build-image:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Pull Netlify's build image (noble, amd64)
-        run: time docker pull -q netlify/build@sha256:2129b2c13cb992466f26d47df7bc0fb12f22f8a19527a66c66efa2049a7d6d00
-      - name: Build zcore inside it, as Netlify's build user would
-        run: |
-          chmod -R a+rwX .
-          docker run --rm -v "$PWD:/opt/build/repo" -w /opt/build/repo/packages/zcore \
-            netlify/build@sha256:2129b2c13cb992466f26d47df7bc0fb12f22f8a19527a66c66efa2049a7d6d00 \
-            bash -c '
-              set -x
-              id; head -2 /etc/os-release; nproc; free -g | head -2
-              [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
-              command -v rustup cargo clang gcc node curl shasum tar
-              clang --version
-              rustup --version
-              time rustup toolchain install
-              time ./build.sh
-              sha256sum pkg/zcore_bg.wasm
-            '
-      - run: node packages/zcore/smoke.mjs
