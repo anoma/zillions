@@ -13,6 +13,11 @@ import type {
 import { gpuSecrets } from "./gpu";
 import DecryptWorker from "./worker.ts?worker";
 
+export const config = {
+  // Maximum time that a decryption can take in milliseconds
+  DECRYPTION_TIMEOUT_MS: 30000,
+};
+
 /**
  * Wraps a worker as a request/response channel: one chunk in flight at a time.
  * Aborting `signal` terminates the worker and rejects the chunk in flight.
@@ -77,6 +82,31 @@ export const CORES = navigator.hardwareConcurrency ?? 4;
 /** `VITE_GPU_DISABLED=true` keeps trial decryption on the CPU, to compare. */
 const GPU = import.meta.env.VITE_GPU_DISABLED !== "true";
 
+// Error that occurs when a timeout is exceeded
+class TimeoutError extends Error {
+  constructor(ms: number) {
+    super(`Operation timed out after ${ms}ms`);
+    this.name = "TimeoutError";
+  }
+}
+
+// Constructs a promise that is guaranteed to resolve within ms milliseconds regardless
+// of whether the given promise has resolved or not.
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timerId: ReturnType<typeof setTimeout>;
+  // Make promise that rejects in ms milliseconds
+  const timeout = new Promise<never>((_, reject) => {
+    // Wait ms milliseconds
+    timerId = setTimeout(() => {
+      // Then reject the promise
+      reject(new TimeoutError(ms));
+    }, ms);
+  });
+  // Make promise that evaluates to either the timeout or the given promise;
+  // whichever evaluates sooner.
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timerId));
+}
+
 export async function crawlChunks(options: {
   ufvk: string;
   pool: Pool;
@@ -102,8 +132,6 @@ export async function crawlChunks(options: {
 
   let nextChunk = to;
   try {
-    // ponytail: a hung worker stalls its channel forever; add a per-chunk
-    // timeout + retry if the indexer turns out to drop requests.
     await Promise.all(
       Array.from({ length: Math.min(CORES, total) }, async (_, i) => {
         while (nextChunk >= from && !signal?.aborted) {
@@ -114,12 +142,46 @@ export async function crawlChunks(options: {
             await new Promise((resolve) => setTimeout(resolve, 1000));
             continue;
           }
-          const channel = (channels[i] ??= workerChannel(signal));
+          // Grab the next pending chunk
           const chunk = nextChunk--;
-          release(
-            chunk,
-            await channel.run({ ufvk, chunk, pool, tried, gpu: GPU }),
-          ).forEach(onChunk);
+          // Repeatedly attempt to decrypt chunk until successful
+          for (;;) {
+            // Ensure that the worker for decrypting the current chunk is initialized
+            const channel = (channels[i] ??= workerChannel(signal));
+            try {
+              // Start decrypting this chunk
+              const decryptionPromise = channel.run({
+                ufvk,
+                chunk,
+                pool,
+                tried,
+                gpu: GPU,
+              });
+              // Add timeout to the decryption to  prevent hanging
+              const delimitedDecryptionPromise = withTimeout(
+                decryptionPromise,
+                config.DECRYPTION_TIMEOUT_MS,
+              );
+              // Release the decrypted chunks in order
+              release(chunk, await delimitedDecryptionPromise).forEach(onChunk);
+              // Given our success, break out of the retry loop
+              break;
+            } catch (error) {
+              if (error instanceof TimeoutError) {
+                // Try again only if the previous decryption attempt timed out
+                console.log("Decryption timed out:", error);
+                // The decryption timed out or an error ocurred during it, so terminate the worker
+                channels[i]?.terminate();
+                // Uninitialize the worker to ensure that a neew one is created in the next iteration
+                channels[i] = undefined;
+                // We were not sucessful, so try again
+                continue;
+              } else {
+                // Otherwise propagate all other errors upwards
+                throw error;
+              }
+            }
+          }
         }
       }),
     );
