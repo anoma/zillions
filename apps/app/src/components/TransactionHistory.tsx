@@ -22,6 +22,16 @@ const gridClassName =
 const rowClassName = "col-span-full grid grid-cols-subgrid items-center";
 const routeClassName = "max-lg:hidden";
 
+const SWAP_STATUS_DESCRIPTIONS = {
+  PENDING_DEPOSIT: "Awaiting your token deposit",
+  KNOWN_DEPOSIT_TX: "Deposit transaction detected",
+  PROCESSING: "Swap being executed",
+  SUCCESS: "Tokens delivered to destination address",
+  INCOMPLETE_DEPOSIT: "Deposit below required amount",
+  REFUNDED: "Swap failed, funds returned to refund address",
+  FAILED: "Swap encountered an error",
+};
+
 /**
  * The transaction list. As a page it's the full history under its own title;
  * as a section (`limit`) it's the latest few with a link to the rest.
@@ -166,10 +176,10 @@ function SwapRow({
       </span>
 
       <div>
-        <div>Pending Swap</div>
+        <div>Swap: {SWAP_STATUS_DESCRIPTIONS[swap.status]}</div>
         <div className="mt-0.5 text-xs text-gray-600">
           <time>
-            {new Date(swap.updatedAt).toLocaleString(undefined, {
+            {new Date(swap.quoteResponse.timestamp).toLocaleString(undefined, {
               month: "short",
               day: "numeric",
               hour: "numeric",
