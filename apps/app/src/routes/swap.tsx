@@ -2,15 +2,19 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { QRCode } from "react-qr-code";
 import { twMerge } from "tailwind-merge";
+import { AmountDisplay } from "../components/AmountInput";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
 import { FormPage } from "../components/FormPage";
 import { PageError } from "../components/PageError";
-import { FormCard, SubmitBlock } from "../components/TransferForm";
+import { AmountField, FormCard, SubmitBlock } from "../components/TransferForm";
 import { ActionButton } from "../components/ui/ActionButton";
 import { qrClassName } from "../components/ui/utils";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useWallet } from "../hooks/useWallet";
+import { BitcoinIcon } from "../icons/BitcoinIcon";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
+import { UnknownIcon } from "../icons/UnknownIcon";
+import { ZcashIcon } from "../icons/ZcashIcon";
 import { shortenAddress } from "../lib/utils";
 import type { Token } from "../lib/wallet/types";
 
@@ -21,18 +25,49 @@ const Stage = {
 };
 
 const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
+const UNKNOWN_SYMBOL_LOGO: React.JSX.Element = <UnknownIcon />;
+const UNKNOWN_BLOCKCHAIN_LOGO: React.JSX.Element = <UnknownIcon />;
+// Map blockchains to logo paths
+const blockchainLogos = new Map<string, React.JSX.Element>([
+  ["btc", <BitcoinIcon />],
+  ["zec", <ZcashIcon />],
+]);
+// Map cryptocurrency symbols to logo paths
+const symbolLogos = new Map<string, React.JSX.Element>([
+  ["BTC", <BitcoinIcon />],
+  ["ZEC", <ZcashIcon />],
+]);
 
 export const Route = createFileRoute("/swap")({
   component: SwapRoute,
 });
 
+function TokenIcon({ token }: { token: Token }) {
+  return (
+    <div className="relative inline-flex">
+      {/* Main cryptocurrency logo */}
+      {symbolLogos.get(token.symbol) ?? UNKNOWN_SYMBOL_LOGO}
+      {/* Blockchain logo overlaid on bottom right */}
+      <div className="absolute -bottom-1 -right-1 flex items-center justify-center w-1/2 h-1/2 bg-white rounded-full border border-gray-100 shadow-sm overflow-hidden">
+        {blockchainLogos.get(token.blockchain) ?? UNKNOWN_BLOCKCHAIN_LOGO}
+      </div>
+    </div>
+  );
+}
+
+function LabelledTokenIcon({ token }: { token: Token }) {
+  return (
+    <div className="flex items-center gap-3">
+      <TokenIcon token={token} />
+      <div className="flex flex-col items-start">
+        <span className="font-bold">{token.symbol}</span>
+        <span className="text-xs text-neutral-500">{token.blockchain}</span>
+      </div>
+    </div>
+  );
+}
+
 function SwapRoute() {
-  const UNKNOWN_SYMBOL_LOGO = "/logos/unknown_symbol.svg";
-  const UNKNOWN_BLOCKCHAIN_LOGO = "/logos/unknown_blockchain.svg";
-  // Map blockchains to logo paths
-  const blockchainLogos = new Map<string, string>();
-  // Map cryptocurrency symbols to logo paths
-  const symbolLogos = new Map<string, string>();
   const wallet = useWallet();
   const shielded = useFreshAddress();
   const [fromToken, setFromToken] = useState({
@@ -214,9 +249,9 @@ function SwapRoute() {
     return (
       <FormPage title="Swap" onSubmit={onGetQuote}>
         <FormCard heading="From" htmlFor="swap-from-amount">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-row items-start gap-4 w-full">
             <div
-              className="relative w-full"
+              className="relative shrink-0 w-max"
               tabIndex={0}
               onBlur={(e) => {
                 if (!e.currentTarget.contains(e.relatedTarget)) {
@@ -229,31 +264,12 @@ function SwapRoute() {
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="flex w-full items-center justify-between rounded-xl border border-line bg-card p-3 text-sm focus:border-black focus:outline-none"
               >
-                <div className="flex items-center gap-3">
-                  <img
-                    src={
-                      symbolLogos.get(fromToken.symbol) ?? UNKNOWN_SYMBOL_LOGO
-                    }
-                    alt={fromToken.symbol}
-                    className="size-5 rounded-full bg-gray-100"
-                  />
-                  <img
-                    src={
-                      blockchainLogos.get(fromToken.blockchain) ??
-                      UNKNOWN_BLOCKCHAIN_LOGO
-                    }
-                    alt={fromToken.blockchain}
-                    className="size-5 rounded-full bg-gray-100"
-                  />
-                  <span className="font-medium">
-                    {fromToken.symbol} on {fromToken.blockchain}
-                  </span>
-                </div>
+                <LabelledTokenIcon token={fromToken} />
                 <span className="text-gray-400">▼</span>
               </button>
 
               {dropdownOpen && (
-                <div className="absolute z-10 w-full mt-1 bg-card border border-line rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                <div className="absolute z-10 w-full min-w-max mt-1 bg-card border border-line rounded-xl shadow-lg max-h-60 overflow-y-auto">
                   {tokens.map((c: Token) => (
                     <button
                       key={c.assetId}
@@ -267,44 +283,39 @@ function SwapRoute() {
                         fromToken.assetId === c.assetId ? "bg-neutral-50" : "",
                       )}
                     >
-                      <img
-                        src={symbolLogos.get(c.symbol) ?? UNKNOWN_SYMBOL_LOGO}
-                        alt={c.symbol}
-                        className="size-5 rounded-full bg-gray-100"
-                      />
-                      <img
-                        src={
-                          blockchainLogos.get(c.blockchain) ??
-                          UNKNOWN_BLOCKCHAIN_LOGO
-                        }
-                        alt={c.blockchain}
-                        className="size-5 rounded-full bg-gray-100"
-                      />
-                      <span>
-                        {c.symbol} on {c.blockchain}
-                      </span>
+                      <LabelledTokenIcon token={c} />
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <input
+            <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+              <AmountField
                 id="swap-from-amount"
                 ref={amountRef}
-                type="number"
-                min="0"
-                step="any"
-                placeholder="0.00"
                 value={fromAmount}
-                onChange={(e) => {
-                  setFromAmount(e.target.value);
+                describedBy="send-available"
+                unit=""
+                onChange={(value) => {
+                  setFromAmount(value);
                 }}
-                className="w-full rounded-xl border border-line bg-transparent p-3 text-lg font-medium focus:border-black focus:outline-none"
               />
               <p className="px-1 text-xs text-neutral-500">
                 ~ ${fromTotalPrice} USD
+              </p>
+            </div>
+          </div>
+        </FormCard>
+
+        <FormCard heading="To">
+          <div className="flex flex-row items-start gap-4 w-full">
+            <LabelledTokenIcon token={zecToken} />
+
+            <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+              <AmountDisplay value={toAmount.toString()} unit="" />
+              <p className="px-1 text-xs text-neutral-500">
+                ~ ${toTotalPrice} USD
               </p>
             </div>
           </div>
@@ -321,30 +332,6 @@ function SwapRoute() {
               onChange={(e) => setRefundAddress(e.target.value)}
               className="w-full rounded-xl border border-line bg-transparent p-3 text-sm focus:border-black focus:outline-none"
             />
-          </div>
-        </FormCard>
-
-        <FormCard heading="To">
-          <div className="flex flex-col gap-4">
-            <div className="flex w-full items-center gap-3 rounded-xl border border-line bg-neutral-50 p-3 text-sm">
-              <img
-                src="/logos/zec.svg"
-                alt="ZEC"
-                className="size-5 rounded-full bg-black"
-              />
-              <span className="font-medium">
-                {zecToken.symbol} on {zecToken.blockchain}
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <div className="flex w-full items-center rounded-xl border border-line bg-neutral-50 p-3 text-lg font-medium text-neutral-400">
-                {toAmount}
-              </div>
-              <p className="px-1 text-xs text-neutral-500">
-                ~ ${toTotalPrice} USD
-              </p>
-            </div>
           </div>
         </FormCard>
 

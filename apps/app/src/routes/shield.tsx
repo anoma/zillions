@@ -131,7 +131,7 @@ function ShieldRoute() {
       </FormCard>
 
       <FormCard heading="Amount">
-        <AmountDisplay zat={total} />
+        <AmountDisplay value={zatoshiToZec(total)} />
         <div
           role={tooLittle ? "alert" : undefined}
           className={twMerge(
