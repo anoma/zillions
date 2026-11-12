@@ -1,13 +1,19 @@
 name: build-wasm
 
 # Builds packages/zcore/pkg from source and uploads it as
-# `zcore-pkg-<source hash>`. Every workflow that needs the wasm calls this one,
-# so CI and releases build it the same way.
+# `zcore-pkg-<source hash>`, the artifact Netlify and the keychain release ship
+# (scripts/fetch-zcore.mjs). Runs on every push that changes zcore, so each
+# zcore source gets one build; commits that don't change it reuse that build.
+# ci.yml calls it too, for the wasm its jobs test.
 on:
+  push:
+    paths:
+      - "packages/zcore/**"
+      - ".github/workflows/build-wasm.yml"
   workflow_call:
     inputs:
       cache:
-        description: Reuse a cached build of the same zcore source. Off for releases, which ship a fresh build.
+        description: Reuse a cached build of the same zcore source.
         type: boolean
         default: true
     outputs:
@@ -36,13 +42,14 @@ jobs:
       - id: hash
         run: echo "hash=$(node source-hash.mjs)" >> "$GITHUB_OUTPUT"
 
+      # `inputs` is empty on push, so `!= false` means on unless a caller turns it off.
       - id: pkg
-        if: inputs.cache
+        if: inputs.cache != false
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: packages/zcore/pkg
           key: zcore-pkg-${{ steps.hash.outputs.hash }}
-      - if: inputs.cache && steps.pkg.outputs.cache-hit != 'true'
+      - if: inputs.cache != false && steps.pkg.outputs.cache-hit != 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: packages/zcore/.tools
@@ -50,7 +57,7 @@ jobs:
       # Installs the toolchain rust-toolchain.toml pins; rust-cache keys on it.
       - if: steps.pkg.outputs.cache-hit != 'true'
         run: rustup toolchain install
-      - if: inputs.cache && steps.pkg.outputs.cache-hit != 'true'
+      - if: inputs.cache != false && steps.pkg.outputs.cache-hit != 'true'
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: packages/zcore
@@ -61,16 +68,17 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "| | SHA-256 | Bytes |"
-            echo "| --- | --- | --- |"
-            echo "| CI build | \`$(shasum -a 256 pkg/zcore_bg.wasm | cut -d' ' -f1)\` | $(wc -c < pkg/zcore_bg.wasm) |"
-            echo "| Committed | \`$(git show HEAD:packages/zcore/pkg/zcore_bg.wasm | shasum -a 256 | cut -d' ' -f1)\` | $(git show HEAD:packages/zcore/pkg/zcore_bg.wasm | wc -c) |"
+            echo "\`zcore-pkg-${{ steps.hash.outputs.hash }}\`, cached build: ${{ steps.pkg.outputs.cache-hit == 'true' }}"
             echo
-            echo "Source hash \`${{ steps.hash.outputs.hash }}\`, cached build: ${{ steps.pkg.outputs.cache-hit == 'true' }}"
+            echo "\`zcore_bg.wasm\`: SHA-256 \`$(shasum -a 256 pkg/zcore_bg.wasm | cut -d' ' -f1)\`, $(wc -c < pkg/zcore_bg.wasm) bytes"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: zcore-pkg-${{ steps.hash.outputs.hash }}
           path: packages/zcore/pkg
-          retention-days: 90
+          # Keeps pkg/.source-hash, which fetch-zcore.mjs checks.
+          include-hidden-files: true
+          # Shipped builds must outlast the longest stretch without a zcore change;
+          # capped by the repo's retention setting (90 days unless raised).
+          retention-days: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production') && 400 || 14 }}

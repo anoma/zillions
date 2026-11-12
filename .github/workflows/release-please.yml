@@ -31,6 +31,10 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.keychain_release_created }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # scripts/fetch-zcore.mjs reads build-wasm.yml's artifacts.
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -43,6 +47,11 @@ jobs:
       # No dependency runs code at install time (see ci.yml).
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter zillions-keychain exec wxt prepare
+      # The zip the stores get carries CI's build of zcore from main.
+      - run: COMMIT_REF=$(git rev-parse HEAD) node scripts/fetch-zcore.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CONTEXT: production
       - run: pnpm keychain:zip
       - run: gh release upload "$TAG" apps/keychain/.output/*.zip --clobber
         env:

@@ -13,7 +13,8 @@ librustzcash rather than being re-implemented; see
 
 ## Use
 
-The wasm build in `pkg/` is committed, so using the package needs no Rust.
+`pkg/` isn't committed: build it with `./build.sh` (see [Build](#build)) before
+using the package. What ships is CI's build, not yours.
 
 ```ts
 import init, { derive_account, fresh_address } from "@zillions/zcore";
@@ -86,12 +87,14 @@ picks it up.
 ./build.sh
 ```
 
-This rebuilds `pkg/`. Commit it along with the Rust change.
+This builds `pkg/`. Run it once after cloning and again after any zcore change.
 
 Every tool is pinned: Rust in `rust-toolchain.toml`, and in `build.sh` the
 `wasm-bindgen` CLI (to `Cargo.lock`'s version) and binaryen's `wasm-opt` (with
 its SHA-256). `build.sh` installs the last two into `.tools/` on first run.
-CI builds with the same script (`.github/workflows/build-wasm.yml`).
+CI builds with the same script (`.github/workflows/build-wasm.yml`), and
+Netlify and the keychain release ship CI's build
+(`scripts/fetch-zcore.mjs`, [docs/design/wasm-ci-build.md](../../docs/design/wasm-ci-build.md)).
 
 The build first runs `./patch-crates.sh`, which unpacks two patched curve crates
 into `patched/` (see [patches/README.md](patches/README.md)). Cargo needs them,

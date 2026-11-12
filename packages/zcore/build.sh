@@ -17,7 +17,8 @@ esac
 # secp256k1-sys compiles C to wasm32. If the default clang can't target it
 # (e.g. Apple's system clang), fall back to a Homebrew LLVM that can.
 if ! echo 'int f(void){return 0;}' | "${CC:-clang}" --target=wasm32-unknown-unknown -x c -c - -o /dev/null 2>/dev/null; then
-    LLVM_PREFIX=$(brew --prefix llvm 2>/dev/null) || {
+    # `brew --prefix` prints the path even when llvm isn't installed.
+    LLVM_PREFIX=$(brew --prefix llvm 2>/dev/null) && [ -x "$LLVM_PREFIX/bin/clang" ] || {
         echo "error: clang cannot target wasm32 and Homebrew LLVM was not found." >&2
         echo "install it with: brew install llvm" >&2
         exit 1
@@ -42,9 +43,13 @@ if [ ! -x "$wasm_opt" ]; then
 fi
 
 ./patch-crates.sh
-# Without the remaps, the builder's home directory ends up in panic messages.
-RUSTFLAGS="--remap-path-prefix=$HOME=~ --remap-path-prefix=$PWD=." \
+# Keeps machine paths (home, rust-src) out of panic messages. The last
+# matching remap wins, so the most specific goes last.
+sysroot=$(rustc --print sysroot)
+rustc_commit=$(rustc -vV | sed -n 's/^commit-hash: //p')
+RUSTFLAGS="--remap-path-prefix=$HOME=~ --remap-path-prefix=$PWD=. --remap-path-prefix=$sysroot/lib/rustlib/src/rust=/rustc/$rustc_commit" \
     cargo build --lib --release --locked --target wasm32-unknown-unknown
 rm -rf pkg
 "$tools/bin/wasm-bindgen" target/wasm32-unknown-unknown/release/zcore.wasm --out-dir pkg --target web
 "$wasm_opt" pkg/zcore_bg.wasm -o pkg/zcore_bg.wasm -O4
+node source-hash.mjs > pkg/.source-hash

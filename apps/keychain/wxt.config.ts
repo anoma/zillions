@@ -107,6 +107,7 @@ export default defineConfig({
       "packages/sapling-params/**",
       "packages/zcore/target/**",
       "packages/zcore/patched/**",
+      "packages/zcore/.tools/**",
       "apps/keychain/examples/**",
       "**/graphify-out/**",
     ],
@@ -178,18 +179,18 @@ export default defineConfig({
     },
     ...(browser === "firefox"
       ? {
-        browser_specific_settings: {
-          gecko: {
-            // Firefox keys storage and IndexedDB by this ID; without it every
-            // reinstall gets a fresh ID and an empty vault.
-            id: "keychain@zillions.heliax.dev",
-            // MV3 content scripts need their host permission granted; 127+
-            // grants it at install instead of leaving it opt-in.
-            strict_min_version: "128.0",
-            data_collection_permissions: { required: ["none"] },
+          browser_specific_settings: {
+            gecko: {
+              // Firefox keys storage and IndexedDB by this ID; without it every
+              // reinstall gets a fresh ID and an empty vault.
+              id: "keychain@zillions.heliax.dev",
+              // MV3 content scripts need their host permission granted; 127+
+              // grants it at install instead of leaving it opt-in.
+              strict_min_version: "128.0",
+              data_collection_permissions: { required: ["none"] },
+            },
           },
-        },
-      }
+        }
       : {}),
   }),
 

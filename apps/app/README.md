@@ -8,16 +8,21 @@ The Zillions Zcash wallet web app. What it does: [docs/product.md](../../docs/pr
 - Tailwind
 - TanStack Router and Query
 - Dexie (IndexedDB)
-- [`@zillions/zcore`](../../packages/zcore) (Rust/wasm; prebuilt and committed, no Rust needed)
+- [`@zillions/zcore`](../../packages/zcore) (Rust/wasm, built locally: see Setup)
 
 ## Setup
 
-You'll need `node` (18.18+) and `pnpm`. From the repo root:
+You'll need `node` (18.18+), `pnpm`, and what zcore's build needs:
+[rustup](https://rustup.rs) and a clang that targets wasm32 (on macOS,
+`brew install llvm`). From the repo root:
 
 ```bash
 pnpm install
+pnpm zcore:build
 cp apps/app/.env.example apps/app/.env
 ```
+
+Run `pnpm zcore:build` again after pulling zcore changes.
 
 `.env.example` targets mainnet. For testnet, set `VITE_ZCASH_NETWORK=test`
 and point `VITE_GRPC_URL` and `VITE_INDEXER_URL` at testnet servers.
