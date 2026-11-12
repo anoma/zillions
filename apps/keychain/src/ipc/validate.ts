@@ -11,6 +11,7 @@ import type {
   AccountStore,
   ApprovalLogEntry,
   ActiveAccount,
+  ConnectedSite,
   DerivedAccount,
   DeviceSignTx,
   IpcKind,
@@ -51,6 +52,15 @@ const isMnemonicValidation = (v: unknown): v is MnemonicValidation =>
 
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === "string");
+
+const isConnectedSiteArray = (v: unknown): v is ConnectedSite[] =>
+  Array.isArray(v) &&
+  v.every(
+    (x) =>
+      isRecord(x) &&
+      typeof x.origin === "string" &&
+      typeof x.accountId === "string"
+  );
 
 const isStoredAccount = (v: unknown): v is StoredAccount =>
   isRecord(v) &&
@@ -169,6 +179,7 @@ export const validateResponse = <K extends IpcKind>(
 
     case "vault/unlock":
     case "vault/checkPassword":
+    case "vault/lost":
     case "vault/requiresAuth":
     case "dapp/isConnected":
     case "approvals/isConnectionApproved":
@@ -211,8 +222,8 @@ export const validateResponse = <K extends IpcKind>(
       return value as IpcResponse<K>;
 
     case "approvals/connectedSites":
-      if (!isStringArray(value))
-        throw new ResponseShapeError(kind, "expected string[]");
+      if (!isConnectedSiteArray(value))
+        throw new ResponseShapeError(kind, "expected ConnectedSite[]");
       return value as IpcResponse<K>;
 
     case "vault/resetPassword":

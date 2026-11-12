@@ -40,7 +40,7 @@ export const ViewingKey = () => {
         Anyone with this key can see this account&apos;s balances, transactions
         and messages. It can&apos;t spend.
       </Notice>
-      <p className="m-0 mt-3.5 rounded-xl bg-card p-3.5 font-mono text-[11px] leading-relaxed break-all select-all">
+      <p className="m-0 mt-3.5 rounded-xl bg-card p-3.5 font-mono text-[11px] leading-relaxed break-all">
         {viewingKey}
       </p>
       <div className="mt-auto pt-4 pb-5">

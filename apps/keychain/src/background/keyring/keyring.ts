@@ -8,6 +8,7 @@ import type {
   AccountType,
   Bip44Path,
   DerivedAccount,
+  DeviceCredential,
   DeviceKind,
   MnemonicValidation,
   Zip32Path,
@@ -137,9 +138,9 @@ export class Keyring {
    * account. A derived shielded child carries no secret of its own — the
    * mnemonic lives on its parent — so the secret is revealed from the parent
    * record while the hd index comes from the resolved account's path. A
-   * hardware-wallet account signed on its device in the approval tab; its
-   * opaque `deviceData` is verified and folded into the PCZT here by the
-   * device's engine.
+   * hardware-wallet account signs in the approval tab; its opaque
+   * `deviceData` is verified and folded into the PCZT here by the device's
+   * engine — for the passkey, with the seed re-derived from its PRF output.
    */
   public async sign(
     pczt: string,
@@ -157,7 +158,11 @@ export class Keyring {
           `A ${engines[device.device].name} account signs on its device`
         );
       }
-      return engines[device.device].assembleSignedPczt(pczt, deviceData);
+      return engines[device.device].assembleSignedPczt(pczt, deviceData, {
+        credential: device.credential,
+        hdIndex: device.hdIndex,
+        seedFingerprint: record.seedFingerprint,
+      });
     }
     const { seed, hdIndex } = await this.resolveSeed(record);
     return signPczt(pczt, seed, hdIndex);
@@ -206,25 +211,44 @@ export class Keyring {
   }
 
   /**
-   * The `signer` address's device identity if its keys live on one: the kind
-   * and the ZIP-32 index the device signed under.
+   * The `signer` address's device identity if its keys live on one: the kind,
+   * the ZIP-32 index the device signed under, and for a passkey the
+   * credential id the ceremony must assert with.
    */
-  public async signingDevice(
-    signer?: string
-  ): Promise<{ device: DeviceKind; hdIndex: number } | undefined> {
+  public async signingDevice(signer?: string): Promise<
+    | {
+        device: DeviceKind;
+        hdIndex: number;
+        credentialId?: string;
+      }
+    | undefined
+  > {
     const record = await this.signingAccount(signer);
     const device = await this.deviceAccount(record);
-    return device && { device: device.device, hdIndex: device.hdIndex };
+    return (
+      device && {
+        device: device.device,
+        hdIndex: device.hdIndex,
+        credentialId: device.credential?.id,
+      }
+    );
   }
 
   /**
    * A device account's kind, stored UFVK and ZIP-32 index, all on its
-   * shielded child, whichever of the pair `record` is; undefined for
-   * mnemonic-rooted accounts.
+   * shielded child, whichever of the pair `record` is; and the at-rest
+   * credential the parent carries (a passkey's, to verify its assertion
+   * against). Undefined for mnemonic-rooted accounts.
    */
-  private async deviceAccount(
-    record: KeyStoreType
-  ): Promise<{ device: DeviceKind; ufvk: string; hdIndex: number } | undefined> {
+  private async deviceAccount(record: KeyStoreType): Promise<
+    | {
+        device: DeviceKind;
+        ufvk: string;
+        hdIndex: number;
+        credential?: DeviceCredential;
+      }
+    | undefined
+  > {
     const parent = record.parentId
       ? await this.accounts.findById(record.parentId)
       : record;
@@ -236,7 +260,12 @@ export class Keyring {
     if (!child) {
       throw new Error(`Shielded account of ${record.address} not found`);
     }
-    return { device, ufvk: child.owner, hdIndex: child.path.account };
+    return {
+      device,
+      ufvk: child.owner,
+      hdIndex: child.path.account,
+      credential: parent.credential,
+    };
   }
 
   /** The `signer` address's account, else the active one. */
@@ -275,6 +304,15 @@ export class Keyring {
       throw new Error("Spending key is only available for shielded accounts");
     }
 
+    // Device accounts never reveal key material; resolveSeed would refuse
+    // too, but with a message about the vault rather than the reveal.
+    const holder = record.parentId
+      ? await this.accounts.findById(record.parentId)
+      : record;
+    if (holder && deviceOf(holder)) {
+      throw new Error("A device account's spending keys can't be revealed");
+    }
+
     const { seed, hdIndex } = await this.resolveSeed(record);
     return spendingKeys(seed, hdIndex);
   }
@@ -283,8 +321,9 @@ export class Keyring {
    * Resolve the BIP-39 seed + ZIP-32 account index backing an account record,
    * walking a derived shielded child to its mnemonic parent (children hold no
    * secret of their own). The hd index is the resolved record's own
-   * `path.account`. Only mnemonic-rooted accounts are supported — raw
-   * private-key / spending-key imports are not implemented in setup yet.
+   * `path.account`. Mnemonic-rooted accounts resolve here. Every device
+   * account — hardware wallets and the deriving passkey alike — holds no
+   * secret at all and refuses. Revealed per call, never cached.
    *
    * Shared by `sign` and `revealSpendingKey`: both need the same offline key
    * material, differing only in what they do with it.
@@ -299,7 +338,7 @@ export class Keyring {
       throw new Error(`Parent account not found: ${record.parentId}`);
     }
     if (deviceOf(secretHolder)) {
-      throw new Error("A hardware wallet's keys never leave the device");
+      throw new Error("A device account's keys never live in the vault");
     }
     if ((secretHolder.type as string) !== "mnemonic") {
       throw new Error(
@@ -437,10 +476,10 @@ export class Keyring {
   }
 
   /**
-   * Store a hardware-wallet account and make it active. The keys never leave
-   * the device, so like a derived child the record's `sensitive` is an
-   * encrypted empty payload. A device that's already imported is
-   * re-activated instead.
+   * Store a hardware-wallet account and make it active. The keys never
+   * leave the device (hardware) or derive per ceremony (passkey PRF) —
+   * every device record's `sensitive` is an encrypted empty payload. A
+   * device that's already imported is re-activated instead.
    */
   public async storeDeviceAccount(input: {
     device: DeviceKind;
@@ -452,6 +491,8 @@ export class Keyring {
     viewingKey: string;
     seedFingerprint: string;
     birthday: number;
+    /** A passkey's WebAuthn credential; other devices carry none. */
+    credential?: DeviceCredential;
   }): Promise<{
     parentAccount: AccountStore;
     shieldedAccount?: DerivedAccount;
@@ -514,8 +555,14 @@ export class Keyring {
       timestamp: 0,
       seedFingerprint: input.seedFingerprint,
       birthday: input.birthday,
+      // A passkey's at-rest credential (its id, RP and COSE public key —
+      // no secret); other devices carry none.
+      ...(input.credential && { credential: input.credential }),
     };
     const sensitive = await this.vaultService.encryptSensitiveData({
+      // A device account carries no secret: its keys stay on the device
+      // (hardware) or derive per ceremony (passkey PRF). The vault's
+      // sensitive payload is still the record's shape, so it stores empty.
       text: "",
       passphrase: "",
     });

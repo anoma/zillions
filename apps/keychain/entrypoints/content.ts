@@ -4,13 +4,13 @@ import { createBackgroundClient } from "../src/ipc/client";
 import { isDappEventMessage } from "../src/background/broadcaster";
 import { startProxy } from "../src/provider/proxy";
 
-// `defineContentScript` / `injectScript` are auto-imported by WXT (`#imports`).
+// `defineContentScript` is auto-imported by WXT (`#imports`).
 export default defineContentScript({
   matches: ["<all_urls>"],
   runAt: "document_start",
   allFrames: false,
   world: "ISOLATED",
-  async main() {
+  main() {
     // Relay page provider calls to the background over the typed dapp channels.
     startProxy(createBackgroundClient());
 
@@ -23,9 +23,5 @@ export default defineContentScript({
         window.dispatchEvent(new CustomEvent(message.event));
       }
     });
-
-    // Inject the MAIN-world script (`injected.js`, an unlisted entrypoint
-    // listed in web_accessible_resources) so it sets `window.zc`.
-    await injectScript("/injected.js", { keepInDom: true });
   },
 });

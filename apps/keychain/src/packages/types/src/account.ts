@@ -65,8 +65,9 @@ export type Account = Pick<
 
 /**
  * A dapp-facing account. `viewingKey`, `hdIndex`, `seedFingerprint`,
- * `birthday`, `source` and `timestamp` are only set on the active account and
- * its derived children; every other account carries just its identity.
+ * `birthday`, `source` and `timestamp` are only set on the account the site
+ * is connected with and its derived children; every other account carries
+ * just its identity.
  */
 export type ZCashKeychainAccount = Account & {
   id: string;

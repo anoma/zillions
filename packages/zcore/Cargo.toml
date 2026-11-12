@@ -28,6 +28,8 @@ serde-wasm-bindgen = "0.6"
 hex = "0.4"
 # Reads the spending key bytes zcash_keys hands over wrapped.
 secrecy = "0.8"
+# The wasm boundary's seed copies die zero-filled, not at GC's whim.
+zeroize = "1"
 # Fingerprints the notes of a chunk already tried, so a re-read skips them.
 blake2b_simd = "1"
 # Decodes the new server's binary chunk header; records are sliced by hand.

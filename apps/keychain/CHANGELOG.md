@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.13.1](https://github.com/anoma/zillions-interface/compare/zillions-keychain-v0.13.0...zillions-keychain-v0.13.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* security review fixes (part 2) ([#223](https://github.com/anoma/zillions-interface/issues/223)) ([ac1a239](https://github.com/anoma/zillions-interface/commit/ac1a23930dc3854474f4ac4691312e7be3eaddbe))
+
+## [0.13.0](https://github.com/anoma/zillions-interface/compare/zillions-keychain-v0.12.0...zillions-keychain-v0.13.0) (2026-11-10)
+
+
+### Features
+
+* passkey support ([#177](https://github.com/anoma/zillions-interface/issues/177)) ([9297c26](https://github.com/anoma/zillions-interface/commit/9297c26e543eed3449d4ff722293edbd6921ee12))
+
+
+### Bug Fixes
+
+* **keychain:** harden approval windows against hijacked input and navigation ([#220](https://github.com/anoma/zillions-interface/issues/220)) ([854a94e](https://github.com/anoma/zillions-interface/commit/854a94ed3669618d118699311f61a99d6fbca357))
+
 ## [0.12.0](https://github.com/heliaxdev/zillions-interface/compare/zillions-keychain-v0.11.1...zillions-keychain-v0.12.0) (2026-11-03)
 
 

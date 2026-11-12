@@ -4,7 +4,8 @@
  * All transient wizard state lives in one typed object, mutated only via typed
  * events through the reducer. The rendered step is derived from `state.step`.
  *
- * Scope: create, import and hardware-wallet flows.
+ * Scope: create, import, hardware-wallet and passkey flows; the passkey
+ * reuses the device branch's steps.
  */
 import type {
   AccountStore,
@@ -17,7 +18,7 @@ import type { DeviceKeys } from "../../hardware";
 import type { MnemonicLength, SecretKind } from "./secrets";
 
 /** Which onboarding branch the user is in. */
-export type Flow = "none" | "create" | "import" | "device";
+export type Flow = "none" | "create" | "import" | "device" | "passkey";
 
 /** The discrete steps. `start` is the landing choice. */
 export type Step =
@@ -70,7 +71,8 @@ export type WizardState = {
   parentAccount?: AccountStore;
   shieldedAccount?: DerivedAccount;
 
-  // --- hardware wallet ---
+  // --- device: a hardware wallet picked from the picker, or the passkey
+  // --- chosen directly from Start (the passkey flow sets it up front).
   deviceKind?: DeviceKind;
   deviceKeys?: DeviceKeys;
 };
@@ -124,6 +126,7 @@ const FIRST_STEP: Record<Exclude<Flow, "none">, Step> = {
   create: "create.warning",
   import: "import.secret",
   device: "device.choose",
+  passkey: "device.connect",
 };
 
 export const wizardReducer = (
@@ -136,12 +139,17 @@ export const wizardReducer = (
 
     // Each branch starts clean: whatever a previous branch held (a typed key,
     // a picked secret kind) must not leak into the one chosen now.
-    case "chooseFlow":
-      return {
+    case "chooseFlow": {
+      const fresh = {
         ...initialWizardState(state.passwordRequired),
         flow: event.flow,
         step: FIRST_STEP[event.flow],
       };
+      // The passkey flow knows its device up front — it's chosen directly
+      // from the landing screen, never from the hardware picker.
+      if (event.flow !== "passkey") return fresh;
+      return { ...fresh, deviceKind: "passkey-prf" };
+    }
 
     case "chooseDevice":
       return {

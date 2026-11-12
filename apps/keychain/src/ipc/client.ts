@@ -13,6 +13,7 @@ import {
   type AccountType,
   type ApprovalLogEntry,
   type ActiveAccount,
+  type ConnectedSite,
   type DerivedAccount,
   type DeviceSignTx,
   type IpcKind,
@@ -48,6 +49,11 @@ export class BackgroundClient {
 
   isPasswordInitialized(): Promise<boolean> {
     return this.send("vault/isPasswordInitialized", {});
+  }
+
+  /** Whether the browser deleted a vault this install had created. */
+  vaultLost(): Promise<boolean> {
+    return this.send("vault/lost", {});
   }
 
   createPassword(password: string): Promise<void> {
@@ -164,8 +170,12 @@ export class BackgroundClient {
   }
 
   /** Resolve the pending connection request owned by this popup's tab. */
-  resolveConnection(origin: string, allow: boolean): Promise<void> {
-    return this.send("approvals/resolveConnection", { origin, allow });
+  resolveConnection(
+    origin: string,
+    allow: boolean,
+    accountId?: string
+  ): Promise<void> {
+    return this.send("approvals/resolveConnection", { origin, allow, accountId });
   }
 
   /** Resolve the pending disconnection request owned by this popup's tab. */
@@ -173,8 +183,8 @@ export class BackgroundClient {
     return this.send("approvals/resolveDisconnection", { origin, revoke });
   }
 
-  /** All currently approved origins. */
-  connectedSites(): Promise<string[]> {
+  /** Connected origins and the wallet each sees. */
+  connectedSites(): Promise<ConnectedSite[]> {
     return this.send("approvals/connectedSites", {});
   }
 
@@ -208,8 +218,8 @@ export class BackgroundClient {
   }
 
   /** Confirm the pending "show a payment link again" request `msgId`. */
-  submitOpenLinkKey(msgId: string): Promise<void> {
-    return this.send("approvals/submitOpenLinkKey", { msgId });
+  submitOpenLinkKey(msgId: string, password: string): Promise<void> {
+    return this.send("approvals/submitOpenLinkKey", { msgId, password });
   }
 
   /** Approval decisions, newest first. */

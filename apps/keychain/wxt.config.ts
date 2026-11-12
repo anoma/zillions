@@ -6,6 +6,8 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 import svgr from "vite-plugin-svgr";
 import { defineConfig } from "wxt";
 
+import { RP_ID, rpHostPermissions } from "./src/hardware/passkey-constants";
+
 const r = (p: string): string => resolve(__dirname, p);
 
 const pkg = JSON.parse(readFileSync(r("package.json"), "utf-8")) as {
@@ -144,8 +146,28 @@ export default defineConfig({
     version: pkg.version,
     // `tabs` lets the background find/focus an already-open Setup tab by URL
     // (browser.tabs.query({ url })) instead of opening duplicates. `idle`
-    // drives auto-lock and shows no install warning.
-    permissions: ["storage", "tabs", "idle"],
+    // drives auto-lock and shows no install warning. On Chrome,
+    // `unlimitedStorage` keeps the vault's IndexedDB out of quota eviction,
+    // which would otherwise delete the wallet under disk pressure; it has no
+    // install warning there. Firefox never evicts extension data, and would
+    // ask for it at install.
+    permissions: [
+      "storage",
+      "tabs",
+      "idle",
+      ...(browser === "firefox" ? [] : ["unlimitedStorage"]),
+    ],
+    // The passkey RP claim: ceremonies in extension pages may pass
+    // `rpId: keychain.zillions.money` because this permission covers it.
+    // Derived from the same constant the ceremonies use (see
+    // `passkey-constants.ts`), so the manifest cannot drift from the code.
+    // Kept to the single RP host: nothing is ever served from it and no
+    // content script matches it, so it grants no site access.
+    host_permissions: rpHostPermissions(RP_ID),
+    // The RP-claiming feature itself: Chrome 122+ (and forks tracking it)
+    // allow an extension page to use an RP ID its host permissions cover.
+    // It also covers the provider's `world: "MAIN"` content script (111+).
+    minimum_chrome_version: "122",
     // Toolbar action opens the popup (`entrypoints/popup`). WXT fills in
     // `default_popup` from that entrypoint; we only set the title here. The
     // popup itself redirects to the Setup tab when no wallet exists yet.
@@ -160,16 +182,9 @@ export default defineConfig({
       extension_pages:
         "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';",
     },
-    // `injected.js` is the MAIN-world provider script the content script
-    // injects into pages (sets `window.zc`). Keep this list minimal: every
-    // entry is fetchable by any site and lets it detect the wallet. The wasm
-    // binaries only load in extension contexts, which don't need an entry.
-    web_accessible_resources: [
-      {
-        resources: ["injected.js"],
-        matches: ["<all_urls>"],
-      },
-    ],
+    // No web_accessible_resources: any entry is fetchable by every site,
+    // which detects the wallet by it (and, on Firefox, its URL holds the
+    // per-install UUID). The wasm binaries only load in extension contexts.
     icons: {
       16: "icons/favicon-16x16.png",
       32: "icons/favicon-32x32.png",
@@ -179,18 +194,19 @@ export default defineConfig({
     },
     ...(browser === "firefox"
       ? {
-          browser_specific_settings: {
-            gecko: {
-              // Firefox keys storage and IndexedDB by this ID; without it every
-              // reinstall gets a fresh ID and an empty vault.
-              id: "keychain@zillions.heliax.dev",
-              // MV3 content scripts need their host permission granted; 127+
-              // grants it at install instead of leaving it opt-in.
-              strict_min_version: "128.0",
-              data_collection_permissions: { required: ["none"] },
-            },
+        browser_specific_settings: {
+          gecko: {
+            // Firefox keys storage and IndexedDB by this ID; without it every
+            // reinstall gets a fresh ID and an empty vault.
+            id: "keychain@zillions.heliax.dev",
+            // MV3 content scripts need their host permission granted; 127+
+            // grants it at install instead of leaving it opt-in. Passkeys
+            // need 150+; older versions get an error at the ceremony.
+            strict_min_version: "128.0",
+            data_collection_permissions: { required: ["none"] },
           },
-        }
+        },
+      }
       : {}),
   }),
 

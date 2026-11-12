@@ -7,6 +7,8 @@ import { matchMapFn } from "@zillions/utils";
 import { CgSpinner } from "react-icons/cg";
 import { GoEye, GoEyeClosed } from "react-icons/go";
 
+import { secretInputProps } from "./secretInput";
+
 const inputClassList = tv({
   slots: {
     field: clsx(
@@ -105,6 +107,10 @@ export const Input = ({
   const [passwordShown, setPasswordShown] = useState(false);
   let icon: React.ReactNode | null = null;
   const inputElement: InputProps = { type: "text", ...props };
+  const secret = (shown: boolean): InputProps => {
+    const { style, ...rest } = secretInputProps(!shown);
+    return { ...rest, style: { ...props.style, ...style } };
+  };
 
   const iconMap: Partial<Record<InputVariants, () => void>> = {
     Password: () => {
@@ -141,7 +147,7 @@ export const Input = ({
 
   const inputElementMap: Partial<Record<InputVariants, () => void>> = {
     Password: () => {
-      inputElement["type"] = passwordShown ? "text" : "password";
+      Object.assign(inputElement, secret(passwordShown));
     },
     ReadOnlyCopy: () => {
       inputElement["readOnly"] = true;
@@ -151,7 +157,7 @@ export const Input = ({
       inputElement["rows"] = rows;
     },
     PasswordOnBlur: () => {
-      inputElement["type"] = passwordShown ? "text" : "password";
+      Object.assign(inputElement, secret(passwordShown));
       inputElement["onBlur"] = () => setPasswordShown(false);
       inputElement["onFocus"] = () => setPasswordShown(true);
     },

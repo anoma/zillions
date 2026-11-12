@@ -15,11 +15,28 @@ import {
   ProxyRequestTypes,
 } from "./types";
 
+/** The calls that open a Keychain window. */
+const OPENS_WINDOW: ReadonlySet<ProxyMethod> = new Set([
+  "connect",
+  "disconnect",
+  "updateDefaultAccount",
+  "sign",
+  "openLinkKey",
+]);
+
 const relayMethod = async (
   client: BackgroundClient,
   method: ProxyMethod,
   args: unknown
 ): Promise<unknown> => {
+  // A page the user has never clicked or typed in (a pop-under, a tab opened
+  // behind) can't open windows. Sticky, not a fresh gesture: a site signs
+  // after building the transaction, which can outlast one.
+  if (OPENS_WINDOW.has(method) && !navigator.userActivation?.hasBeenActive) {
+    throw new Error(
+      `zc.${method} needs the user to interact with the page first`
+    );
+  }
   switch (method) {
     case "connect":
       return client.send("dapp/connect", {});

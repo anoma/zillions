@@ -16,7 +16,8 @@ export const SeedPhraseInstructions = () => {
         </strong>
         <span className="block text-[13px] font-medium leading-snug text-ink-2">
           You will never be able to restore your account without your seed
-          phrase.
+          phrase. Write it on paper; don&apos;t copy, screenshot or photograph
+          it, as other apps and synced backups can read those.
         </span>
       </p>
     </div>

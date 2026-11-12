@@ -9,6 +9,7 @@ import initZcore, {
   derive_account,
   derive_account_from_ufvk,
   fresh_address,
+  gap_limits,
   link_info,
   open_link_key,
   pczt_keystone_fw_version,
@@ -40,6 +41,16 @@ export const initZillionsSdk = (): Promise<unknown> => {
 export const getNetwork = (): "main" | "test" => {
   const chainId = process.env.Z_INTERFACE_ZCASH_CHAIN_ID ?? "";
   return chainId.toLowerCase().includes("test") ? "test" : "main";
+};
+
+/**
+ * Addresses in a row past the last one used that wallets restoring a phrase
+ * check, per transparent scope (0 external, 1 internal, 2 ephemeral): upstream
+ * zcash_keys' defaults, which zcore exports for the first two.
+ */
+export const transparentGapLimits = (): Record<number, number> => {
+  const { external, internal } = gap_limits() as { external: number; internal: number };
+  return { 0: external, 1: internal, 2: 10 };
 };
 
 /** An account's public side: what the app is given to watch it. */

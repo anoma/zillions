@@ -1193,7 +1193,12 @@ pub(crate) mod tests {
             summary["transparentOutputs"],
             serde_json::json!([
                 { "address": derive("external", 9), "value": "50000", "mine": false },
-                { "address": change, "value": "140000", "mine": true },
+                {
+                    "address": change,
+                    "value": "140000",
+                    "mine": true,
+                    "path": { "scope": 1, "index": 3 },
+                },
             ])
         );
 

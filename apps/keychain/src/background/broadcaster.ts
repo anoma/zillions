@@ -3,8 +3,9 @@
  * a `DappEventMessage` to each relevant tab's content script, which re-emits it
  * as a DOM `CustomEvent` (`@zillions/types` `Events`) the page listens for.
  *
- * Account / lock / unlock events go to every connected (approved) origin;
- * a connection-revoked event targets the specific (now-unapproved) origin.
+ * Lock / unlock events go to every connected origin; an account change only
+ * to the origins it concerns; a connection-revoked event targets the specific
+ * (now-unapproved) origin.
  */
 import { Events } from "@zillions/types";
 import browser from "webextension-polyfill";
@@ -23,9 +24,11 @@ export const isDappEventMessage = (m: unknown): m is DappEventMessage =>
 export class Broadcaster {
   constructor(private readonly localStorage: LocalStorage) {}
 
-  /** The active account changed. */
-  accountChanged(): Promise<void> {
-    return this.broadcastToConnected(Events.AccountChanged);
+  /** The account `origins` see changed; every connected origin when omitted. */
+  accountChanged(origins?: string[]): Promise<void> {
+    return origins
+      ? this.sendToOrigins(Events.AccountChanged, new Set(origins))
+      : this.broadcastToConnected(Events.AccountChanged);
   }
 
   /** The vault was locked. */
@@ -48,7 +51,7 @@ export class Broadcaster {
 
   private async broadcastToConnected(event: Events): Promise<void> {
     const approved = new Set(
-      (await this.localStorage.getApprovedOrigins()) ?? []
+      Object.keys(await this.localStorage.getConnections())
     );
     if (approved.size > 0) {
       await this.sendToOrigins(event, approved);
