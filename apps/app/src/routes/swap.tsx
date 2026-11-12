@@ -20,12 +20,13 @@ const Stage = {
   DepositAmount: "DEPOSIT_AMOUNT",
 };
 
+const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
+
 export const Route = createFileRoute("/swap")({
   component: SwapRoute,
 });
 
 function SwapRoute() {
-  const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
   const UNKNOWN_SYMBOL_LOGO = "/logos/unknown_symbol.svg";
   const UNKNOWN_BLOCKCHAIN_LOGO = "/logos/unknown_blockchain.svg";
   // Map blockchains to logo paths
