@@ -10,7 +10,7 @@ use orchard::note::Rho;
 use orchard::note_encryption::{
     DomainVersion, IronwoodVersion, NoteEncryptionDomain, OrchardVersion,
 };
-use pczt::roles::verifier::OrchardError;
+use pczt::roles::verifier::{OrchardError, SaplingError};
 use pczt::roles::{
     combiner::Combiner, prover::Prover, signer::Signer, spend_finalizer::SpendFinalizer,
     tx_extractor::TransactionExtractor, updater::Updater, verifier::Verifier,
@@ -104,7 +104,7 @@ pub(crate) fn sign(
                             .is_ok()
                     })
                     .ok_or_else(|| {
-                        pczt::roles::verifier::SaplingError::Custom(
+                        SaplingError::Custom(
                             "a Sapling spend names this account but isn't its note".to_string(),
                         )
                     })?;
@@ -303,29 +303,36 @@ where
 const UNDELIVERABLE: &str =
     "an output's ciphertext doesn't hold its note, so its receiver could never find it";
 
-/// One Orchard or Ironwood bundle's outputs; `V` is the pool's note version.
-fn action_outputs<V: DomainVersion>(
+/// Extract an Orchard (or Ironwood) bundle's outputs.
+///
+/// The parameter `V` is the pool's note version.
+fn extract_orchard_outputs_from_pczt_bundle<V: DomainVersion>(
     network: &Network,
     ufvk: &UnifiedFullViewingKey,
     bundle: &orchard::pczt::Bundle,
-) -> Result<Vec<Output>, String> {
+) -> Result<Vec<Output>, OrchardError<String>> {
     let mut outputs = Vec::new();
+
     for action in bundle.actions() {
         let output = action.output();
+
         // Checked before anything is skipped: the value a PCZT claims is the
         // site's word until its commitment proves it.
-        output
-            .verify_note_commitment(action.spend())
-            .map_err(|e| format!("an output doesn't match its note: {e:?}"))?;
+        output.verify_note_commitment(action.spend()).map_err(|e| {
+            OrchardError::Custom(format!("an output doesn't match its note: {e:?}"))
+        })?;
+
         let (Some(recipient), Some(value), Some(rseed)) =
             (*output.recipient(), *output.value(), *output.rseed())
         else {
             unreachable!("a verified note has its receiver, value and seed");
         };
+
         // Padding carries no value and names no one.
         if value.inner() == 0 && output.user_address().is_none() {
             continue;
         }
+
         // A zero-valued output may carry a deliberately random ciphertext
         // (ZIP 326); it delivers nothing to lose.
         if value.inner() > 0 {
@@ -355,22 +362,76 @@ fn action_outputs<V: DomainVersion>(
                 output.ock(),
                 &encrypted.out_ciphertext,
             ) {
-                return Err(UNDELIVERABLE.into());
+                return Err(OrchardError::Custom(UNDELIVERABLE.into()));
             }
         }
+
         let mine = ufvk
             .orchard()
             .is_some_and(|fvk| fvk.scope_for_address(&recipient).is_some());
-        let address = match mine {
-            true => None,
-            false => Some(payee(
-                network,
-                output.user_address(),
-                Receiver::Orchard(recipient),
-            )?),
-        };
+
+        let address = (!mine)
+            .then(|| {
+                payee(network, output.user_address(), Receiver::Orchard(recipient))
+                    .map_err(OrchardError::Custom)
+            })
+            .transpose()?;
+
         outputs.push((address, value.inner(), mine));
     }
+
+    Ok(outputs)
+}
+
+/// Extract a Sapling bundle's outputs.
+fn extract_sapling_outputs_from_pczt_bundle(
+    network: &Network,
+    ufvk: &UnifiedFullViewingKey,
+    bundle: &sapling::pczt::Bundle,
+) -> Result<Vec<Output>, SaplingError<String>> {
+    let mut outputs = Vec::new();
+
+    for output in bundle.outputs() {
+        output.verify_note_commitment()?;
+
+        let (Some(recipient), Some(value), Some(rseed)) =
+            (*output.recipient(), *output.value(), *output.rseed())
+        else {
+            unreachable!("a verified note has its receiver, value and seed");
+        };
+
+        if value.inner() == 0 && output.user_address().is_none() {
+            continue;
+        }
+
+        if value.inner() > 0 {
+            let note =
+                sapling::Note::from_parts(recipient, value, sapling::Rseed::AfterZip212(rseed));
+            let sent = FullOutput {
+                eph_key: output.ephemeral_key().clone(),
+                cm: *output.cmu(),
+                enc: NoteBytesData(*output.enc_ciphertext()),
+            };
+            let domain = SaplingDomain::new(Zip212Enforcement::On);
+            if !delivers(&domain, &note, &sent, output.ock(), output.out_ciphertext()) {
+                return Err(SaplingError::Custom(UNDELIVERABLE.into()));
+            }
+        }
+
+        let mine = ufvk
+            .sapling()
+            .is_some_and(|dfvk| dfvk.decrypt_diversifier(&recipient).is_some());
+
+        let address = (!mine)
+            .then(|| {
+                payee(network, output.user_address(), Receiver::Sapling(recipient))
+                    .map_err(SaplingError::Custom)
+            })
+            .transpose()?;
+
+        outputs.push((address, value.inner(), mine));
+    }
+
     Ok(outputs)
 }
 
@@ -385,63 +446,26 @@ fn shielded_outputs(
     let mut sapling_outputs = Vec::new();
     let mut orchard_outputs = Vec::new();
     let mut ironwood_outputs = Vec::new();
+
     Verifier::new(pczt.clone())
         .with_sapling::<String, _>(|bundle| {
-            for output in bundle.outputs() {
-                output.verify_note_commitment()?;
-                let (Some(recipient), Some(value), Some(rseed)) =
-                    (*output.recipient(), *output.value(), *output.rseed())
-                else {
-                    unreachable!("a verified note has its receiver, value and seed");
-                };
-                if value.inner() == 0 && output.user_address().is_none() {
-                    continue;
-                }
-                if value.inner() > 0 {
-                    let note = sapling::Note::from_parts(
-                        recipient,
-                        value,
-                        sapling::Rseed::AfterZip212(rseed),
-                    );
-                    let sent = FullOutput {
-                        eph_key: output.ephemeral_key().clone(),
-                        cm: *output.cmu(),
-                        enc: NoteBytesData(*output.enc_ciphertext()),
-                    };
-                    let domain = SaplingDomain::new(Zip212Enforcement::On);
-                    if !delivers(&domain, &note, &sent, output.ock(), output.out_ciphertext()) {
-                        return Err(pczt::roles::verifier::SaplingError::Custom(
-                            UNDELIVERABLE.into(),
-                        ));
-                    }
-                }
-                let mine = ufvk
-                    .sapling()
-                    .is_some_and(|dfvk| dfvk.decrypt_diversifier(&recipient).is_some());
-                let address = match mine {
-                    true => None,
-                    false => Some(
-                        payee(network, output.user_address(), Receiver::Sapling(recipient))
-                            .map_err(pczt::roles::verifier::SaplingError::Custom)?,
-                    ),
-                };
-                sapling_outputs.push((address, value.inner(), mine));
-            }
+            sapling_outputs = extract_sapling_outputs_from_pczt_bundle(network, ufvk, bundle)?;
             Ok(())
         })
         .map_err(to_pczt_error)?
         .with_orchard::<String, _>(|bundle| {
-            orchard_outputs = action_outputs::<OrchardVersion>(network, ufvk, bundle)
-                .map_err(OrchardError::Custom)?;
+            orchard_outputs =
+                extract_orchard_outputs_from_pczt_bundle::<OrchardVersion>(network, ufvk, bundle)?;
             Ok(())
         })
         .map_err(to_pczt_error)?
         .with_ironwood::<String, _>(|bundle| {
-            ironwood_outputs = action_outputs::<IronwoodVersion>(network, ufvk, bundle)
-                .map_err(OrchardError::Custom)?;
+            ironwood_outputs =
+                extract_orchard_outputs_from_pczt_bundle::<IronwoodVersion>(network, ufvk, bundle)?;
             Ok(())
         })
         .map_err(to_pczt_error)?;
+
     Ok([sapling_outputs, orchard_outputs, ironwood_outputs])
 }
 
