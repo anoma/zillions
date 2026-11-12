@@ -21,6 +21,7 @@ const gridClassName =
   "grid gap-x-4 grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_minmax(8rem,1fr)_minmax(0,2fr)_auto]";
 const rowClassName = "col-span-full grid grid-cols-subgrid items-center";
 const routeClassName = "max-lg:hidden";
+const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
 
 const SWAP_STATUS_DESCRIPTIONS = {
   PENDING_DEPOSIT: "Awaiting your token deposit",
@@ -62,11 +63,30 @@ export function TransactionHistory({
     return <PageError>{String(transactionHistory.error)}</PageError>;
   }
 
-  // Grab limit entries if limit is defined. Prioritize swaps over ordinary transactions.
   const allSwaps = transactionHistory.data.swaps;
-  const shownSwaps = limit ? allSwaps.slice(0, limit) : allSwaps;
-  const all = transactionHistory.data.activities;
-  const shown = limit ? all.slice(0, limit - shownSwaps.length) : all;
+  const allTxs = transactionHistory.data.activities;
+
+  // Combine both arrays into a single array with a 'type' identifier
+  // and normalize the timestamp for sorting.
+  const all = [
+    ...allSwaps.map((swap) => ({
+      type: "swap" as const,
+      data: swap,
+      timestamp: new Date(swap.quoteResponse.timestamp).getTime(),
+    })),
+    ...allTxs.map((tx) => ({
+      type: "tx" as const,
+      data: tx,
+      timestamp: new Date(
+        tx.timestamp ?? 0xffffffff + tx.block_height,
+      ).getTime(),
+    })),
+  ];
+
+  // Sort the combined array from newest to oldest
+  all.sort((a, b) => b.timestamp - a.timestamp);
+  // Grab limit entries if limit is defined.
+  const shown = limit ? all.slice(0, limit) : all;
 
   return (
     <section
@@ -111,12 +131,19 @@ export function TransactionHistory({
             No transactions yet
           </p>
         )}
-        {shownSwaps.map((swap) => (
-          <SwapRow key={swap.correlationId} swap={swap} tokens={tokens} />
-        ))}
-        {shown.map((tx) => (
-          <Row key={tx.txid} tx={tx} />
-        ))}
+        {shown.map((item) => {
+          if (item.type === "swap") {
+            return (
+              <SwapRow
+                key={item.data.correlationId}
+                swap={item.data}
+                tokens={tokens}
+              />
+            );
+          } else {
+            return <Row key={item.data.txid} tx={item.data} />;
+          }
+        })}
       </div>
     </section>
   );
@@ -147,6 +174,16 @@ function SwapRow({
       (t) => t.assetId === swap.quoteResponse.quoteRequest.destinationAsset,
     )?.symbol || swap.quoteResponse.quoteRequest.destinationAsset;
 
+  // The same dots as the balance card's pool legend.
+  const dot = (gold: boolean) => (
+    <span
+      aria-hidden="true"
+      className={twMerge(
+        "size-2 shrink-0 rounded-full",
+        gold ? "bg-gold" : "bg-black/10 dark:bg-black/25",
+      )}
+    />
+  );
   return (
     <a
       href={`https://explorer.near-intents.org/transactions/${txHash}`}
@@ -195,10 +232,17 @@ function SwapRow({
           routeClassName,
         )}
       >
+        {dot(
+          swap.quoteResponse.quoteRequest.originAsset === ZEC_TOKEN_ASSET_ID,
+        )}
         <span className="text-sm font-medium">{originSymbol}</span>
         <span aria-hidden="true" className="text-black/30">
           →
         </span>
+        {dot(
+          swap.quoteResponse.quoteRequest.destinationAsset ===
+            ZEC_TOKEN_ASSET_ID,
+        )}
         <span className="text-sm font-medium">{destinationSymbol}</span>
       </div>
 
