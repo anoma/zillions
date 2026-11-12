@@ -1,170 +1,130 @@
 # zcore wasm built in GitHub Actions
 
-Status: plan, 2026-11-10. Nothing built yet.
+Status: plan, updated 2026-11-12. Step 1 is PR #229.
 
 ## Problem
 
-`packages/zcore/pkg/zcore_bg.wasm` (6 MB) ships in both the app and the
-keychain. It is built on a developer's laptop with `build.sh` and committed.
-Nobody can review a binary diff, so whoever commits `pkg/` decides what runs,
-whatever the Rust source says. A compromised laptop, a stale local patch, or a
-tool `wasm-pack` fetched at build time goes straight to production. Netlify
-then builds `production` on its own servers from whatever wasm is committed.
+`packages/zcore/pkg/zcore_bg.wasm` (6 MB) ships in the app and the keychain.
+It is built on a developer's laptop and committed. Nobody can review a binary
+diff, so whoever commits `pkg/` decides what runs, whatever the Rust source
+says. It also drifts: #228 changed `roles.rs` without rebuilding `pkg/`, and
+the committed wasm carried its builder's home directory in 235 panic strings.
 
 The keychain's other wasm, `crypto_bg.wasm`, has no source in the repo at all.
-It is out of scope here: [#226](https://github.com/anoma/zillions-interface/issues/226).
-
-## Reference: anoma-app-sdk
-
-`anoma/anoma-app-sdk` (arm-bindings) is the model:
-
-- **Nothing built is committed.** `generated/`, `pkg`, `target` are gitignored;
-  CI builds everything from source.
-- **One reusable build workflow** (`build-arm-bindings.yml`, `workflow_call`)
-  is called by both PR CI and the release, "so the two cannot drift". A green
-  PR means a publishable build.
-- **The release ships the exact artefact CI checked:** the build job packs and
-  uploads; the publish job downloads that tarball and publishes it verbatim.
-- **Toolchain pinned in the repo** (`rust-toolchain.toml`), installed by a
-  composite action that fails early.
-- **Provenance** (npm `provenance: true`), with `id-token: write` granted only
-  to the publish job.
-- A smoke test loads the built output as a consumer would.
+It is out of scope here: [#226](https://github.com/anoma/zillions-frontend/issues/226).
 
 ## Decided
 
-- **`pkg/` is no longer committed.** CI is the only producer of shipped wasm.
-  This reverses the monorepo's "wasm committed" policy.
-- **zcore only.** `crypto_bg.wasm` stays committed until #226.
-- **Nobody needs Rust to work on the app.** Non-Rust developers download CI's
-  build; Rust developers keep building locally.
+- **`pkg/` is not committed.** Every developer builds zcore with `build.sh`
+  (rustup + a clang that targets wasm32), as Rust developers do today.
+- **Only CI's build ships.** Netlify and the keychain release download the
+  artifact CI built for the exact zcore source; nothing ships a local build.
+- **Netlify keeps building the site** (deploy previews, branch deploys,
+  production from `production`); it only fetches the wasm instead of building it.
+- **zcore only.** `crypto_bg.wasm` waits for #226.
+- **`/zillions-keychain.zip` is dropped.** Nothing links to it; the keychain
+  ships only from GitHub releases.
+
+## How a commit finds its wasm
+
+`source-hash.mjs` hashes everything `build.sh` turns into `pkg/`. CI names its
+build `zcore-pkg-<hash>`. Any commit with the same zcore source has the same
+hash, so a JS-only commit reuses the artifact of the last commit that changed
+zcore, with no run of its own.
 
 ## Plan
 
-### 1. Pinned zcore build
+### 1. Pinned build (PR #229)
 
-- `packages/zcore/rust-toolchain.toml`: exact channel (`1.97.1`, not
-  `stable`), `wasm32-unknown-unknown` target, `rustfmt`.
-- `build.sh` drops `wasm-pack` for the three steps it wraps, each pinned:
-  1. `cargo build --release --locked --target wasm32-unknown-unknown`
-  2. `wasm-bindgen --target web --out-dir pkg`, CLI at `Cargo.lock`'s
-     `wasm-bindgen` version (today 0.2.130), `cargo install`ed into `.tools/`
-  3. `wasm-opt -O4` from binaryen `version_111` (what wasm-pack 0.12.1 used),
-     downloaded into `.tools/` and checked against a SHA-256 in `build.sh`
+`rust-toolchain.toml` pins Rust; `build.sh` pins the `wasm-bindgen` CLI and
+binaryen, installs them into `.tools/`, and remaps machine paths out of the
+wasm. `build-wasm.yml` builds, runs `smoke.mjs`, and uploads `pkg/`.
 
-  `wasm-pack` downloads `wasm-bindgen` and `wasm-opt` itself when they're
-  missing; explicit steps put every tool version in review. `build.sh` owns the
-  tools, so a local build and CI's use the same ones with no setup beyond
-  rustup and clang. Upgrading binaryen is a separate change.
+Still to add: remap the Rust standard library's source path (a Mac with
+`rust-src` installed otherwise embeds it), and have `build.sh` write
+`pkg/.source-hash`.
 
-- `--remap-path-prefix` for `$HOME` and the checkout. Today's committed
-  `zcore_bg.wasm` carries the builder's home directory in 235 panic strings.
-- `patch-crates.sh` is unchanged: it already checks crate SHA-256s.
-- `source-hash.mjs` prints the hash of every build input; `build.sh` will write
-  it to `pkg/.source-hash` (see 3).
+### 2. When CI builds
 
-### 2. One reusable build workflow
+`build-wasm.yml` runs on:
 
-`.github/workflows/build-wasm.yml` (`workflow_call`, input `cache`), modelled
-on `build-arm-bindings.yml`:
+- **push to any branch, only when zcore changes** (`paths:` on
+  `packages/zcore/**` and the workflow). A JS-only push runs nothing.
+- **a weekly schedule on `main`**, which re-uploads `main`'s artifact (from the
+  cache, ~15 s) so it never reaches its 90-day expiry and the cache isn't evicted
+  after 7 idle days.
+- **`workflow_call`** from `ci.yml`, whose check and e2e jobs need `pkg/` on
+  every PR. With the cache keyed on the source hash, a JS-only PR restores
+  `main`'s build in ~15 s instead of compiling. Those uploads use a short
+  retention, since only the run itself reads them.
 
-- `runs-on: ubuntu-24.04` (pinned image; its clang compiles `secp256k1-sys`).
-- `rustup toolchain install` (reads `rust-toolchain.toml`), then `./build.sh`,
-  then `smoke.mjs`: Node loads `pkg/` and derives an account from a test seed.
-- Uploads `pkg/` as artifact `zcore-pkg-<source hash>` (retention 90 days) and
-  writes the wasm's SHA-256 and size, next to the committed one's, to the job
-  summary.
-- With `cache: true`, `pkg/` is restored from `actions/cache` keyed on the
-  source hash and the build is skipped. GitHub scopes caches per branch, so a PR
-  can't poison `main`'s. Releases pass `cache: false`.
+### 3. Netlify fetches the wasm
 
-### 3. Local dev: download CI's build
+Netlify's build command runs `scripts/build.sh`, which on Netlify (`NETLIFY=true`)
+first runs a fetch script (Node, no dependencies, ~40 lines):
 
-`pnpm zcore:fetch` (`packages/zcore/fetch.mjs`, Node, no new dependency), also
-run by the app's and keychain's `predev`:
+1. Hash zcore's source in the checkout.
+2. Look up the newest unexpired artifact `zcore-pkg-<hash>` in this repo.
+   - **Production** (`CONTEXT=production`): only from push or scheduled runs on
+     `main` or `production`. A branch can run any workflow code, so without
+     this a branch could upload a tampered build under `main`'s hash and
+     production would pick it up unreviewed.
+   - **Previews and branch deploys**: from any run in this repo.
+3. None yet: find the CI run for `COMMIT_REF` (it may take a few seconds to
+   appear) and poll every 20 s until it finishes, then look again. Fail with a
+   clear message if the run fails or none appears.
+4. Download, check the zip against the artifact's SHA-256 digest, unpack into
+   `packages/zcore/pkg`.
 
-1. Hash zcore's build inputs from the working tree (`src/`, `Cargo.*`,
-   `patches/`, `build.sh`, `patch-crates.sh`, `rust-toolchain.toml`). The same
-   script computes the hash in CI, so the two can't disagree.
-2. `pkg/.source-hash` matches → done (instant; this is the usual case, and the
-   case after a Rust developer's own build).
-3. Otherwise ask the GitHub API, through `gh`, for the newest unexpired
-   artifact named `zcore-pkg-<hash>`, **from a run on `main` or on the branch
-   checked out**. Other branches are ignored: any PR's workflow could upload a
-   tampered artifact under `main`'s hash.
-4. Download, check the zip against the artifact's SHA-256 digest from the API,
-   unpack into `pkg/`.
-5. No artifact → stop with: push and wait for CI, or build it with Rust
-   (`pnpm --filter @zillions/zcore build`).
+A read-only fine-grained GitHub token (this repo, Actions: read) lives in
+Netlify's env vars. Netlify withholds secrets from fork PR previews, so those
+fail until approved.
 
-Needs the `gh` CLI, logged in: the repo is private, and artifact downloads
-always need auth. That is the only setup an app developer needs.
+Timing: when zcore didn't change, a few seconds for the download. When it did,
+Netlify waits for CI (~3 min with warm Rust caches, ~5½ cold), which counts
+against Netlify build minutes. `production` is a commit already on `main`, so
+its artifact always exists and it never waits.
 
-Other options considered:
+`scripts/build.sh` drops the keychain build and zip, leaving the fetch and the
+app build.
 
-| Option                                                  | Why not                                                                                                     |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Fetch "latest `main`" instead of by hash                | Wrong wasm as soon as a branch changes zcore, and stale after pulling; the hash catches both                |
-| Rolling GitHub release asset (`zcore-latest`)           | Covers `main` only; still needs auth (private repo); one more thing to keep updated                         |
-| Publish `@zillions/zcore` to GitHub Packages per commit | Apps would depend on a version, not `workspace:*`, which breaks PRs that change Rust and app together; auth |
-| pkg.pr.new (what anoma-app-sdk uses for previews)       | Third-party service holding our wasm; private-repo support unclear                                          |
-| Devcontainer / Codespaces with Rust                     | Still a full Rust build per change; slow                                                                    |
+### 4. Keychain release
 
-### 4. CI consumers take the artefact
+`release-please.yml`'s `keychain-zip` job downloads the same artifact (from
+`main`'s runs) before `pnpm keychain:zip`, so the zip on the GitHub release,
+the one the stores get, carries CI's wasm. It records the wasm's and zip's
+SHA-256 in the release notes.
 
-- `ci.yml`: a `wasm` job (`uses: ./.github/workflows/build-wasm.yml`, `cache:
-true`); `check`, `keychain` and `e2e` add `needs: wasm` and download the
-  artifact into `packages/zcore/pkg` before `pnpm install`. Typecheck needs
-  `zcore.d.ts`, so `check` needs it too.
-- `zcore.yml` keeps `cargo test` + audit; its paths filter adds
-  `rust-toolchain.toml` and the new workflow/action.
+### 5. Stop committing `pkg/`
 
-**PRs that change Rust and app code together** work better than today: the PR's
-`wasm` job builds the PR's zcore, and the app's lint, tests and e2e run against
-that build. Today they run against whatever `pkg/` the author remembered to
-rebuild. A reviewer without Rust checks out the branch and `predev` fetches
-that PR's build once CI has run. The cost: when zcore changes, app jobs wait
-for the Rust build (time unmeasured); app-only PRs hit the cache.
-
-### 5. Releases ship a fresh CI build
-
-- `release-please.yml`: `keychain-zip` runs `build-wasm` at the release tag
-  with `cache: false`, zips, uploads to the release, and puts the zip's and
-  `zcore_bg.wasm`'s SHA-256 in the release notes.
-- Provenance attestations (`actions/attest-build-provenance`) need GitHub
-  Enterprise Cloud for private repos; the org is on Team. Add them if the repo
-  goes public or the plan changes.
-- Netlify: see below.
-
-### 6. Netlify
-
-Netlify can't build the app any more without wasm. Options:
-
-| Option                                                                                          | Good                                                           | Bad                                                                                                                          |
-| ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **A. Build in Actions, `netlify deploy --prod`** (`netlify-cli` pinned devDependency)           | Ships exactly the fresh tag build; one place builds everything | `NETLIFY_AUTH_TOKEN` secret in GitHub; turn off Netlify's git builds; PR previews (if used) move to `netlify deploy --alias` |
-| **B. Netlify keeps building, its build runs `zcore:fetch`** (read-only GitHub token in Netlify) | Smallest change; Netlify previews and settings stay            | Ships a `main` artifact looked up by hash, not a build at the tag; previews of zcore-changing PRs fail until CI finishes     |
-| C. Netlify builds Rust itself                                                                   | No tokens                                                      | Not built in Actions, which is the point; slow; Netlify build minutes                                                        |
-| D. Leave Netlify for GitHub Pages (`actions/deploy-pages`, OIDC, no token)                      | No third-party token at all                                    | No `_redirects` (SPA fallback via `404.html`), no previews, domain move; a hosting decision                                  |
-
-Recommendation: **A**. B is acceptable if keeping Netlify-native previews
-matters more than shipping the exact tag build.
+`git rm -r --cached packages/zcore/pkg`, gitignore it, and say in the README
+that the app needs `packages/zcore/build.sh` run once (and after zcore
+changes).
 
 ## Order of work
 
-Each line is one PR; each leaves `main` releasable.
+1. PR #229: pinned build, `build-wasm.yml`, trial. Then: std-path remap,
+   `.source-hash`, triggers (push + paths, weekly, `workflow_call`).
+2. Fetch script + `scripts/build.sh` on Netlify; drop the keychain zip;
+   Netlify token. Tested on a deploy preview while `pkg/` is still committed.
+3. `ci.yml` and the keychain release take the artifact; `pkg/` removed from git;
+   README.
 
-1. Pinned toolchain, `build.sh` without wasm-pack, `build-wasm.yml` with smoke
-   test and source hash. Runs alongside the committed `pkg/`; no consumer
-   changes. A temporary `wasm-trial.yml` runs the whole flow (wasm → check,
-   e2e, site build) on CI's wasm, deploying nowhere, to measure it.
-2. `zcore:fetch` + `predev`; CI jobs take the artifact; `pkg/` removed from git
-   and gitignored; README: install `gh`, `gh auth login`.
-3. Netlify (A or B) and the keychain zip from a fresh tag build. Needs a
-   Netlify token and someone with Netlify admin.
+## Measured
+
+|                                    | Time                                           |
+| ---------------------------------- | ---------------------------------------------- |
+| CI wasm build, cold                | 5m30s                                          |
+| CI wasm build, warm Rust caches    | 2m55s                                          |
+| CI wasm job, cached build          | 15s                                            |
+| Draft deploy to Netlify via API    | 22s                                            |
+| Mac vs CI build of the same source | not byte-identical (clang 23 vs 18, std paths) |
+| Two clean Mac builds               | byte-identical                                 |
 
 ## Not covered
 
 - `crypto_bg.wasm`: #226.
-- Bit-identical builds across macOS and Linux: not a goal; CI's build is the
-  one that ships.
+- Byte-identical builds across machines: not needed, since only CI's build ships.
+  Would need Docker or a pinned clang.
+- Signed provenance: GitHub attestations need Enterprise Cloud for private
+  repos; the org is on Team.
