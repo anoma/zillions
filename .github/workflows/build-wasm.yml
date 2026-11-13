@@ -7,8 +7,11 @@ name: build-wasm
 # ci.yml calls it too, for the wasm its jobs test.
 on:
   push:
+    # The same inputs packages/zcore/source-hash.mjs hashes.
     paths:
       - "packages/zcore/**"
+      - "packages/.cargo/**"
+      - ".cargo/**"
       - ".github/workflows/build-wasm.yml"
   workflow_call:
     inputs:
