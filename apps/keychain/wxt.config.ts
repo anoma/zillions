@@ -109,6 +109,7 @@ export default defineConfig({
       "packages/sapling-params/**",
       "packages/zcore/target/**",
       "packages/zcore/patched/**",
+      "packages/zcore/.tools/**",
       "apps/keychain/examples/**",
       "**/graphify-out/**",
     ],

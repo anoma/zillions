@@ -53,8 +53,9 @@ environment variables are needed.
 
 The WebAssembly modules ship prebuilt:
 
-- `packages/zcore/pkg` is built from `packages/zcore` by `build.sh` (Rust,
-  `wasm-pack`).
+- `packages/zcore/pkg` is CI's build of `packages/zcore`
+  (`.github/workflows/build-wasm.yml`); `packages/zcore/build.sh` rebuilds it
+  with the same pinned tools.
 - `src/packages/crypto/src/crypto` is built from `packages/crypto/lib` of
   [namada-interface](https://github.com/anoma/namada-interface), which pins its
   Rust toolchain. With no other `wasm-opt` on `PATH` (wasm-pack would prefer

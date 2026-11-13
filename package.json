@@ -16,6 +16,7 @@
     "keychain:zip": "pnpm --filter zillions-keychain zip",
     "keychain:test": "pnpm --filter zillions-keychain test",
     "build": "bash scripts/build.sh",
+    "zcore:build": "packages/zcore/build.sh",
     "typecheck": "pnpm --filter zillions-app typecheck && pnpm --filter zillions-keychain compile",
     "lint": "pnpm --filter zillions-app lint && pnpm --filter zillions-keychain lint"
   },

@@ -1,0 +1,84 @@
+name: build-wasm
+
+# Builds packages/zcore/pkg from source and uploads it as
+# `zcore-pkg-<source hash>`, the artifact Netlify and the keychain release ship
+# (scripts/fetch-zcore.mjs). Runs on every push that changes zcore, so each
+# zcore source gets one build; commits that don't change it reuse that build.
+# ci.yml calls it too, for the wasm its jobs test.
+on:
+  push:
+    paths:
+      - "packages/zcore/**"
+      - ".github/workflows/build-wasm.yml"
+  workflow_call:
+    inputs:
+      cache:
+        description: Reuse a cached build of the same zcore source.
+        type: boolean
+        default: true
+    outputs:
+      artifact:
+        description: Name of the uploaded pkg/ artifact.
+        value: ${{ jobs.build.outputs.artifact }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Pinned image: its clang compiles secp256k1-sys's C.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      artifact: zcore-pkg-${{ steps.hash.outputs.hash }}
+    defaults:
+      run:
+        working-directory: packages/zcore
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - id: hash
+        run: echo "hash=$(node source-hash.mjs)" >> "$GITHUB_OUTPUT"
+
+      # `inputs` is empty on push, so `!= false` means on unless a caller turns it off.
+      - id: pkg
+        if: inputs.cache != false
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/zcore/pkg
+          key: zcore-pkg-${{ steps.hash.outputs.hash }}
+      - if: inputs.cache != false && steps.pkg.outputs.cache-hit != 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/zcore/.tools
+          key: zcore-tools-${{ runner.os }}-${{ hashFiles('packages/zcore/build.sh', 'packages/zcore/Cargo.lock', 'packages/zcore/rust-toolchain.toml') }}
+      # Installs the toolchain rust-toolchain.toml pins; rust-cache keys on it.
+      - if: steps.pkg.outputs.cache-hit != 'true'
+        run: rustup toolchain install
+      - if: inputs.cache != false && steps.pkg.outputs.cache-hit != 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: packages/zcore
+      - if: steps.pkg.outputs.cache-hit != 'true'
+        run: ./build.sh
+
+      - run: node smoke.mjs
+      - name: Summary
+        run: |
+          {
+            echo "\`zcore-pkg-${{ steps.hash.outputs.hash }}\`, cached build: ${{ steps.pkg.outputs.cache-hit == 'true' }}"
+            echo
+            echo "\`zcore_bg.wasm\`: SHA-256 \`$(shasum -a 256 pkg/zcore_bg.wasm | cut -d' ' -f1)\`, $(wc -c < pkg/zcore_bg.wasm) bytes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zcore-pkg-${{ steps.hash.outputs.hash }}
+          path: packages/zcore/pkg
+          # Keeps pkg/.source-hash, which fetch-zcore.mjs checks.
+          include-hidden-files: true
+          # What ships comes from main or production. ci.yml re-uploads main's
+          # build on every push to main, so it only expires after 90 quiet days.
+          retention-days: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production') && 90 || 14 }}
