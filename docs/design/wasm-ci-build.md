@@ -53,11 +53,11 @@ writes `pkg/.source-hash`. `smoke.mjs` loads the result and derives an account.
   CI's build. With the cache keyed on the source hash, a JS-only PR restores
   `main`'s build in ~15 s instead of compiling.
 
-Artifacts from `main` and `production` are kept 400 days, everything else 14.
-GitHub can't extend an artifact's expiry after upload, so a long retention is
-what keeps `main`'s build available while zcore doesn't change. It is capped by
-the repository's artifact retention setting (90 days by default; raise it to
-400 in Settings → Actions → General).
+Artifacts from `main` and `production` are kept 90 days, everything else 14.
+GitHub can't extend an artifact's expiry, but `ci.yml` re-uploads `main`'s
+build (a cache hit, ~15 s) on every push to `main`, so it only expires after 90
+days without a push to `main`. Then deploys fail until someone pushes to `main`
+or reruns its CI.
 
 Ponytail: a zcore change on a PR branch builds twice, once for the push (the
 commit Netlify previews) and once in `ci.yml` (the PR merged into `main`).
@@ -104,21 +104,17 @@ release, the one the stores get, carries `main`'s CI build.
 `pkg/` is gitignored. Developers run `pnpm zcore:build` once and after zcore
 changes (rustup + a clang that targets wasm32).
 
-## Before merging
-
-- Netlify: add `ZCORE_GITHUB_TOKEN`.
-- GitHub: raise artifact retention to 400 days.
-
 ## Measured
 
-|                                    | Time                                           |
-| ---------------------------------- | ---------------------------------------------- |
-| CI wasm build, cold                | 5m30s                                          |
-| CI wasm build, warm Rust caches    | 2m55s                                          |
-| CI wasm job, cached build          | 15s                                            |
-| Draft deploy to Netlify via API    | 22s                                            |
-| Mac vs CI build of the same source | not byte-identical (clang 23 vs 18, std paths) |
-| Two clean Mac builds               | byte-identical                                 |
+|                                              | Time                                           |
+| -------------------------------------------- | ---------------------------------------------- |
+| CI wasm build, cold                          | 5m30s                                          |
+| CI wasm build, warm Rust caches              | 2m55s                                          |
+| CI wasm job, cached build                    | 15s                                            |
+| Draft deploy to Netlify via API              | 22s                                            |
+| Mac vs CI build of the same source           | not byte-identical (clang 23 vs 18, std paths) |
+| Two independent CI builds of the same source | byte-identical                                 |
+| Two clean Mac builds                         | byte-identical                                 |
 
 ## Not covered
 

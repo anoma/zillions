@@ -79,6 +79,6 @@ jobs:
           path: packages/zcore/pkg
           # Keeps pkg/.source-hash, which fetch-zcore.mjs checks.
           include-hidden-files: true
-          # Shipped builds must outlast the longest stretch without a zcore change;
-          # capped by the repo's retention setting (90 days unless raised).
-          retention-days: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production') && 400 || 14 }}
+          # What ships comes from main or production. ci.yml re-uploads main's
+          # build on every push to main, so it only expires after 90 quiet days.
+          retention-days: ${{ (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/production') && 90 || 14 }}
