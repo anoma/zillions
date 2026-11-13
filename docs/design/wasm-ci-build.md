@@ -51,23 +51,20 @@ writes `pkg/.source-hash`. `smoke.mjs` loads the result and derives an account.
 
 ### 2. When CI builds
 
-`build-wasm.yml` runs on:
+`build-wasm.yml` only runs when `ci.yml` calls it: on every PR and every push to
+`main`. Its cache is keyed on the source hash, so a source that didn't change
+restores its build in ~15 s instead of compiling. `production` only ever gets
+commits already on `main`, whose builds exist.
 
-- **push to any branch, only when zcore changes** (`paths:` on
-  `packages/zcore/**` and the workflow). A JS-only push runs nothing.
-- **`workflow_call`** from `ci.yml`, whose check, keychain and e2e jobs test
-  CI's build. With the cache keyed on the source hash, a JS-only PR restores
-  `main`'s build in ~15 s instead of compiling.
+PR runs build the PR merged into `main`, while Netlify previews build the PR's
+own commit. Their hashes match unless `main` changed zcore after the branch was
+cut; then the preview finds no build and fails, asking to merge `main`.
 
 Artifacts from `main` and `production` are kept 90 days, everything else 14.
 GitHub can't extend an artifact's expiry, but `ci.yml` re-uploads `main`'s
 build (a cache hit, ~15 s) on every push to `main`, so it only expires after 90
 days without a push to `main`. Then deploys fail until someone pushes to `main`
 or reruns its CI.
-
-Ponytail: a zcore change on a PR branch builds twice, once for the push (the
-commit Netlify previews) and once in `ci.yml` (the PR merged into `main`).
-Fine while zcore changes are occasional.
 
 ### 3. Netlify fetches the wasm
 
@@ -86,7 +83,7 @@ keychain build and `/zillions-keychain.zip` are gone.
      unreviewed. `main`'s deploy therefore waits for `main`'s own CI after a
      merge (~15 s when zcore didn't change).
    - **Previews and other branch deploys**: from any run in this repo.
-3. If there is none yet, polls every 20 s while `build-wasm.yml` runs for
+3. If there is none yet, polls every 20 s while `ci.yml` runs for
    `COMMIT_REF`; fails with a clear message if no run shows up within two
    minutes or the build takes over 20.
 4. Downloads it, checks the zip against the artifact's SHA-256 digest and

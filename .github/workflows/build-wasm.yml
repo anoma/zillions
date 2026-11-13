@@ -2,17 +2,9 @@ name: build-wasm
 
 # Builds packages/zcore/pkg from source and uploads it as
 # `zcore-pkg-<source hash>`, the artifact Netlify and the keychain release ship
-# (scripts/fetch-zcore.mjs). Runs on every push that changes zcore, so each
-# zcore source gets one build; commits that don't change it reuse that build.
-# ci.yml calls it too, for the wasm its jobs test.
+# (scripts/fetch-zcore.mjs). Only ci.yml calls it, on every PR and every push
+# to main; a zcore source that didn't change reuses its cached build.
 on:
-  push:
-    # The same inputs packages/zcore/source-hash.mjs hashes.
-    paths:
-      - "packages/zcore/**"
-      - "packages/.cargo/**"
-      - ".cargo/**"
-      - ".github/workflows/build-wasm.yml"
   workflow_call:
     inputs:
       cache:
