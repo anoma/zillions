@@ -63,12 +63,19 @@ function TokenIcon({ token }: { token: Token }) {
   );
 }
 
+function abbreviateString(str: string, maxLength: number) {
+  return str.length > maxLength ? `${str.slice(0, maxLength)}...` : str;
+}
+
 function LabelledTokenIcon({ token }: { token: Token }) {
   return (
-    <div className="flex items-center gap-3">
+    <div
+      className="flex items-center gap-3"
+      title={`${token.symbol} on ${token.blockchain}`}
+    >
       <TokenIcon token={token} />
       <div className="flex flex-col items-start">
-        <span className="font-bold">{token.symbol}</span>
+        <span className="font-bold">{abbreviateString(token.symbol, 5)}</span>
         <span className="text-xs text-neutral-500">{token.blockchain}</span>
       </div>
     </div>
@@ -271,7 +278,7 @@ function SwapRoute() {
         <FormCard heading="From" htmlFor="swap-from-amount">
           <div className="flex flex-row items-start gap-4 w-full">
             <div
-              className="relative shrink-0 w-max"
+              className="relative shrink-0 w-50"
               tabIndex={0}
               onBlur={(e) => {
                 if (!e.currentTarget.contains(e.relatedTarget)) {
@@ -310,7 +317,7 @@ function SwapRoute() {
               )}
             </div>
 
-            <div className="flex flex-1 flex-col gap-1.5 min-w-0">
+            <div className="flex flex-1 flex-col gap-1.5 min-w-0 text-right w-full">
               <AmountField
                 id="swap-from-amount"
                 ref={amountRef}
@@ -328,13 +335,40 @@ function SwapRoute() {
           </div>
         </FormCard>
 
+        {/* Horizontal Lines with Centered, Overlapping, Transparent Down Arrow */}
+        <div className="flex items-center justify-center text-neutral-400 relative z-10">
+          <div className="flex-1 h-px bg-line"></div>
+
+          {/* Negative margin (-my-6) makes the arrow extend into the top/bottom divs */}
+          <div className="px-4 -my-6">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="48"
+              viewBox="0 0 24 48"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              {/* Path stretched to 48px to accommodate the overlap */}
+              <path d="M12 0v48M19 41l-7 7-7-7" />
+            </svg>
+          </div>
+
+          <div className="flex-1 h-px bg-line"></div>
+        </div>
+
         <FormCard heading="To">
           <div className="flex flex-row items-start gap-4 w-full">
-            <LabelledTokenIcon token={zecToken} />
+            <div className="shrink-0 w-50 p-3">
+              <LabelledTokenIcon token={zecToken} />
+            </div>
 
             <div className="flex flex-1 flex-col gap-1.5 min-w-0">
               <AmountDisplay value={toAmount.toString()} unit="" />
-              <p className="px-1 text-xs text-neutral-500">
+              <p className="px-1 text-xs text-neutral-500 text-right w-full">
                 ~ ${toTotalPrice} USD
               </p>
             </div>
@@ -418,8 +452,32 @@ function SwapRoute() {
                 </span>
               </div>
             </div>
+            {/* Horizontal Lines with Centered, Overlapping, Transparent Down Arrow */}
+            <div className="flex items-center justify-center text-neutral-400 relative z-10">
+              <div className="flex-1 h-px bg-line"></div>
+
+              {/* Negative margin (-my-6) makes the arrow extend into the top/bottom divs */}
+              <div className="px-4 -my-6">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="48"
+                  viewBox="0 0 24 48"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  {/* Path stretched to 48px to accommodate the overlap */}
+                  <path d="M12 0v48M19 41l-7 7-7-7" />
+                </svg>
+              </div>
+
+              <div className="flex-1 h-px bg-line"></div>
+            </div>
             <div className="flex items-center justify-between">
-              <LabelledTokenIcon token={zecToken} />
+              <TokenIcon token={zecToken} />
               <div className="flex flex-col items-end">
                 <span className="text-lg font-medium">
                   {amountOut} {zecToken.symbol}
