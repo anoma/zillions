@@ -8,7 +8,7 @@ import { FormPage } from "../components/FormPage";
 import { PageError } from "../components/PageError";
 import { AmountField, FormCard, SubmitBlock } from "../components/TransferForm";
 import { ActionButton } from "../components/ui/ActionButton";
-import { qrClassName } from "../components/ui/utils";
+import { inputClassName, qrClassName } from "../components/ui/utils";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useWallet } from "../hooks/useWallet";
 import { BitcoinIcon } from "../icons/BitcoinIcon";
@@ -24,6 +24,12 @@ const Stage = {
   ReviewQuote: "REVIEW_QUOTE",
   DepositAmount: "DEPOSIT_AMOUNT",
 };
+
+// Touch screens only: on desktops, reading the clipboard asks for a
+// permission, and pasting into the field is already one shortcut away.
+const canPaste =
+  Boolean(navigator.clipboard?.readText) &&
+  matchMedia("(pointer: coarse)").matches;
 
 const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
 const UNKNOWN_SYMBOL_LOGO: React.JSX.Element = <UnknownIcon />;
@@ -233,11 +239,15 @@ function SwapRoute() {
         setAmountInUsd(Number(data.quote.amountInUsd).toFixed(2));
         setAmountOutUsd(Number(data.quote.amountOutUsd).toFixed(2));
 
+        const fromFormatter = new Intl.NumberFormat("en-US", {
+          useGrouping: false,
+          maximumFractionDigits: fromToken.decimals,
+        });
         setWithdrawFee(
-          (
+          fromFormatter.format(
             (data.quote.amountInUsd - data.quote.amountOutUsd) /
-            fromToken.price
-          ).toString(),
+              fromToken.price,
+          ),
         );
         setIsLoading(false);
       })
@@ -340,7 +350,15 @@ function SwapRoute() {
               placeholder="Address to refund if swap fails"
               value={refundAddress}
               onChange={(e) => setRefundAddress(e.target.value)}
-              className="w-full rounded-xl border border-line bg-transparent p-3 text-sm focus:border-black focus:outline-none"
+              autoComplete="off"
+              spellCheck={false}
+              className={twMerge(
+                inputClassName,
+                // 16px on phones: iOS zooms into any smaller field on focus.
+                "h-11 text-base sm:text-sm text-ellipsis",
+                !refundAddress && canPaste && "pr-20",
+                "border-black hover:border-black focus:border-black",
+              )}
             />
           </div>
         </FormCard>
@@ -390,9 +408,7 @@ function SwapRoute() {
         <FormCard heading="Swap Summary">
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-neutral-500">
-                You are swapping
-              </span>
+              <TokenIcon token={fromToken} />
               <div className="flex flex-col items-end">
                 <span className="text-lg font-medium">
                   {amountIn} {fromToken.symbol}
@@ -403,9 +419,7 @@ function SwapRoute() {
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-neutral-500">
-                To receive
-              </span>
+              <LabelledTokenIcon token={zecToken} />
               <div className="flex flex-col items-end">
                 <span className="text-lg font-medium">
                   {amountOut} {zecToken.symbol}
