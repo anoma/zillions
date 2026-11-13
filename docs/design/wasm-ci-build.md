@@ -73,11 +73,13 @@ keychain build and `/zillions-keychain.zip` are gone.
 
 1. Hashes zcore's source in the checkout.
 2. Looks up the newest unexpired artifact `zcore-pkg-<hash>` in this repo.
-   - **Production** (`CONTEXT=production`): only from push runs on `main` or
-     `production`. A branch can run any workflow code, so without this a
-     branch could upload a tampered build under `main`'s hash and production
-     would pick it up unreviewed.
-   - **Previews and branch deploys**: from any run in this repo.
+   - **Production and `main`'s branch deploy** (`CONTEXT=production` or
+     `BRANCH=main`): only from push runs on `main` or `production`. A branch
+     can run any workflow code, so without this a branch could upload a
+     tampered build under `main`'s hash and a public deploy would pick it up
+     unreviewed. `main`'s deploy therefore waits for `main`'s own CI after a
+     merge (~15 s when zcore didn't change).
+   - **Previews and other branch deploys**: from any run in this repo.
 3. If there is none yet, polls every 20 s while `build-wasm.yml` runs for
    `COMMIT_REF`; fails with a clear message if no run shows up within two
    minutes or the build takes over 20.
