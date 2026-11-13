@@ -27,9 +27,9 @@ Run `pnpm zcore:build` again after pulling zcore changes.
 `.env.example` targets mainnet. For testnet, set `VITE_ZCASH_NETWORK=test`
 and point `VITE_GRPC_URL` and `VITE_INDEXER_URL` at testnet servers.
 
-The app signs through the Zillions Keychain extension. Download it from
-https://zillions-app.netlify.app/zillions-keychain.zip, unzip it into a
-folder, and load that folder in `chrome://extensions` (Developer mode → Load unpacked).
+The app signs through the Zillions Keychain extension. Download the Chrome zip
+from the latest `zillions-keychain` [release](https://github.com/anoma/zillions-frontend/releases),
+unzip it into a folder, and load that folder in `chrome://extensions` (Developer mode → Load unpacked).
 Or build it from source: see the [Keychain README](../keychain/README.md).
 
 ## Develop
@@ -51,6 +51,19 @@ pnpm app:test
 ```bash
 pnpm app:build
 ```
+
+## Deploy
+
+Netlify builds `production` (app.zillions.money), `main` and PR previews with
+`pnpm run build`. On Netlify, `scripts/build.sh` downloads CI's build of zcore
+instead of compiling Rust ([how](../../docs/design/wasm-ci-build.md)). Netlify's
+env vars:
+
+- `VITE_GRPC_URL`, `VITE_INDEXER_URL`, `VITE_ZCASH_NETWORK`: as in `.env.example`.
+- `ZCORE_GITHUB_TOKEN`: a fine-grained GitHub token for `anoma/zillions-frontend`
+  with only Actions: read, approved by the `anoma` org. When it expires, every
+  deploy fails in `fetch-zcore.mjs` with a 401 or 404: create a new one and
+  replace the value.
 
 ## Sync
 

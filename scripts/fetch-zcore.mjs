@@ -78,18 +78,14 @@ for (const start = Date.now(); !found; found = await find()) {
   const { workflow_runs } = await (
     await gh(`/actions/runs?head_sha=${commit}&per_page=100`)
   ).json();
-  // ci.yml builds too (through build-wasm.yml), on pushes that skip build-wasm's own trigger.
   const building = workflow_runs.some(
-    (r) =>
-      [".github/workflows/build-wasm.yml", ".github/workflows/ci.yml"].includes(
-        r.path,
-      ) && r.status !== "completed",
+    (r) => r.path === ".github/workflows/ci.yml" && r.status !== "completed",
   );
   const waited = Date.now() - start;
   // A fresh push's run can take a minute to show up.
   if (!building && waited > 2 * 60_000) {
     throw new Error(
-      `no CI build of ${name} for ${commit}: did build-wasm.yml fail or not run?`,
+      `no CI build of ${name} for ${commit}. CI builds a PR merged into main, so if main changed zcore since this branch, merge main into it; otherwise check ci.yml's run.`,
     );
   }
   if (waited > 20 * 60_000)
