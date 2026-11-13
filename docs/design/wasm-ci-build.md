@@ -27,7 +27,13 @@ It is out of scope here: [#226](https://github.com/anoma/zillions-frontend/issue
 
 ## How a commit finds its wasm
 
-`source-hash.mjs` hashes everything `build.sh` turns into `pkg/`. CI names its
+`source-hash.mjs` hashes everything `build.sh` turns into `pkg/`: every file git
+tracks under `packages/zcore` except ones that can't affect the build (docs,
+`examples/`, `patches/bench/`, helper scripts), plus Cargo configs in parent
+directories (`packages/.cargo/`, `.cargo/`) and `build-wasm.yml`. New files count
+by default, so an input added later (a Cargo build script, a `.cargo/config.toml`,
+an `include_bytes!` target) can't change the build without changing the hash,
+which would otherwise let CI's cache keep serving the old build. CI names its
 build `zcore-pkg-<hash>`. Any commit with the same zcore source has the same
 hash, so a JS-only commit reuses the artifact of the last commit that changed
 zcore, with no run of its own.
