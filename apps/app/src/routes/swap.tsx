@@ -14,6 +14,7 @@ import { useWallet } from "../hooks/useWallet";
 import { BitcoinIcon } from "../icons/BitcoinIcon";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { UnknownIcon } from "../icons/UnknownIcon";
+import { USDCoinIcon } from "../icons/USDCoinIcon";
 import { ZcashIcon } from "../icons/ZcashIcon";
 import { shortenAddress } from "../lib/utils";
 import type { Token } from "../lib/wallet/types";
@@ -36,6 +37,7 @@ const blockchainLogos = new Map<string, React.JSX.Element>([
 const symbolLogos = new Map<string, React.JSX.Element>([
   ["BTC", <BitcoinIcon />],
   ["ZEC", <ZcashIcon />],
+  ["USDC", <USDCoinIcon width={64} height={64} />],
 ]);
 
 export const Route = createFileRoute("/swap")({
@@ -147,8 +149,16 @@ function SwapRoute() {
       setFromTotalPrice(totalPrice.toFixed(2));
       setToTotalPrice(totalPrice.toFixed(2));
       const toAmount = totalPrice / zecToken.price;
-      setToAmount(toAmount.toFixed(zecToken.decimals));
-      setZecPriceInFrom((zecToken.price / fromToken.price).toString());
+      const zecFormatter = new Intl.NumberFormat("en-US", {
+        useGrouping: false,
+        maximumFractionDigits: zecToken.decimals,
+      });
+      setToAmount(zecFormatter.format(toAmount));
+      const fromFormatter = new Intl.NumberFormat("en-US", {
+        useGrouping: false,
+        maximumFractionDigits: fromToken.decimals,
+      });
+      setZecPriceInFrom(fromFormatter.format(zecToken.price / fromToken.price));
     })();
   }, [fromAmount, fromToken, toAmount, zecToken]);
 
