@@ -7,8 +7,21 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
-const notInputs =
-  /^packages\/zcore\/(.*\.md|\.gitignore|package\.json|smoke\.mjs|upstream-check\.mjs|test-ziziphus\.sh|examples\/.*|patches\/bench\/.*)$/;
+// Exact files, and folders ending in "/". Anything not listed counts.
+const notInputs = [
+  "README.md",
+  "UPGRADING.md",
+  "patches/README.md",
+  ".gitignore",
+  "package.json",
+  "smoke.mjs",
+  "upstream-check.mjs",
+  "test-ziziphus.sh",
+  "examples/",
+  "patches/bench/",
+].map((p) => `packages/zcore/${p}`);
+const isInput = (f) =>
+  !notInputs.some((p) => (p.endsWith("/") ? f.startsWith(p) : f === p));
 
 const git = (...args) =>
   execFileSync("git", args, { cwd: import.meta.dirname, encoding: "utf8" });
@@ -25,7 +38,7 @@ const files = git(
   ".github/workflows/build-wasm.yml",
 )
   .split("\0")
-  .filter((f) => f && !notInputs.test(f))
+  .filter((f) => f && isInput(f))
   .sort();
 
 const hash = createHash("sha256");
