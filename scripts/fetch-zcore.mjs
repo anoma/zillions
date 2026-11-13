@@ -4,7 +4,8 @@
 //
 // Env: ZCORE_GITHUB_TOKEN or GITHUB_TOKEN (read access to Actions); the repo as
 // GITHUB_REPOSITORY or Netlify's REPOSITORY_URL; the commit as COMMIT_REF or
-// GITHUB_SHA; and CONTEXT=production to accept only main's and production's builds.
+// GITHUB_SHA. Production (CONTEXT=production) and main's branch deploy
+// (BRANCH=main) accept only main's and production's own builds.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -23,7 +24,8 @@ const repo =
     /github\.com[:/](.+?\/.+?)(\.git)?\/?$/,
   )?.[1];
 const commit = process.env.COMMIT_REF ?? process.env.GITHUB_SHA;
-const production = process.env.CONTEXT === "production";
+const strict =
+  process.env.CONTEXT === "production" || process.env.BRANCH === "main";
 if (!token || !repo || !commit) {
   throw new Error(
     "fetch-zcore needs a GitHub token, the repository and the commit",
@@ -52,10 +54,10 @@ async function gh(path) {
 }
 
 // Any branch can run its own workflow code and upload under main's hash, so
-// production takes only builds from pushes to main or production.
+// production and main's deploy take only builds from pushes to main or production.
 const trusted = (run) =>
   run.head_repository.full_name === repo &&
-  (!production ||
+  (!strict ||
     (run.event === "push" && ["main", "production"].includes(run.head_branch)));
 
 async function find() {
@@ -76,9 +78,12 @@ for (const start = Date.now(); !found; found = await find()) {
   const { workflow_runs } = await (
     await gh(`/actions/runs?head_sha=${commit}&per_page=100`)
   ).json();
+  // ci.yml builds too (through build-wasm.yml), on pushes that skip build-wasm's own trigger.
   const building = workflow_runs.some(
     (r) =>
-      r.path === ".github/workflows/build-wasm.yml" && r.status !== "completed",
+      [".github/workflows/build-wasm.yml", ".github/workflows/ci.yml"].includes(
+        r.path,
+      ) && r.status !== "completed",
   );
   const waited = Date.now() - start;
   // A fresh push's run can take a minute to show up.
