@@ -160,8 +160,8 @@ export default defineConfig({
     // `rpId: keychain.zillions.money` because this permission covers it.
     // Derived from the same constant the ceremonies use (see
     // `passkey-constants.ts`), so the manifest cannot drift from the code.
-    // Kept to the single RP host: nothing is ever served from it and no
-    // content script matches it, so it grants no site access.
+    // Kept to the single RP host, from which nothing is ever served, so it
+    // grants no access to any page in use.
     host_permissions: rpHostPermissions(RP_ID),
     // The RP-claiming feature itself: Chrome 122+ (and forks tracking it)
     // allow an extension page to use an RP ID its host permissions cover.

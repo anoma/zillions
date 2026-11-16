@@ -6,7 +6,6 @@
  */
 import { AccountType, ZCashKeychainAccount } from "@zillions/types";
 
-import { deviceOf } from "../keyring/types";
 import type { KeyStoreType } from "../../storage";
 
 export const toPublicAccount = (
@@ -14,9 +13,8 @@ export const toPublicAccount = (
   withKeys: boolean
 ): ZCashKeychainAccount => {
   const { id, alias, address, parentId, owner } = record;
-  const type = record.type as AccountType;
 
-  const account: ZCashKeychainAccount = { id, alias, address, parentId, type };
+  const account: ZCashKeychainAccount = { id, alias, address, parentId };
   if (!withKeys) {
     return account;
   }
@@ -24,12 +22,9 @@ export const toPublicAccount = (
   account.hdIndex = record.path.account;
   account.seedFingerprint = record.seedFingerprint;
   account.birthday = record.birthday;
-  account.device = deviceOf(record);
 
-  if (type === AccountType.ShieldedKeys) {
+  if (record.type === AccountType.ShieldedKeys) {
     account.viewingKey = owner;
-    account.source = record.source as ZCashKeychainAccount["source"];
-    account.timestamp = record.timestamp;
   }
 
   return account;

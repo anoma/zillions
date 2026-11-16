@@ -215,7 +215,8 @@ const PasskeySign = makePasskeySign({
   blurb: (
     <>
       The passkey dialog appears next: verify yourself, and the passkey
-      signs this exact transaction. The seed is never stored anywhere.
+      signs the transaction above. Only this Keychain window ever asks for
+      your Zillions passkey: if a web page asks, it can take your account.
     </>
   ),
 });

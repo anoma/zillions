@@ -13,11 +13,15 @@
  */
 
 /** The RP every passkey ceremony runs under: a dedicated subdomain of the
- * product site. Nothing is ever served from it — no DNS record, no
- * catch-all — so no web page can claim it: an RP ID must be a registrable
- * domain suffix of the caller's origin, and a child of `zillions.money` is
- * never a suffix of it. The extension claims it from its pages via the
- * manifest's host permissions (Chrome 122+, Firefox 150+). */
+ * product site. The app (`app.zillions.money`) and the apex can't claim it:
+ * an RP ID must equal the caller's host or be a registrable suffix of it.
+ * Pages served from this host or any name under it can, and so can origins
+ * its `/.well-known/webauthn` lists, and the PRF output alone is the seed.
+ * So passkey accounts are only as safe as control of the `zillions.money`
+ * zone: nothing may ever be served at or under this name, and that is an
+ * operational rule (docs/design/hardware-wallets.md), not one code enforces.
+ * The extension claims it from its pages via the manifest's host
+ * permissions (Chrome 122+, Firefox 150+). */
 export const RP_ID = "keychain.zillions.money";
 
 export const RP_NAME = "Zillions";
