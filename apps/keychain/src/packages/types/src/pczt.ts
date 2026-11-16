@@ -22,7 +22,7 @@ export type PcztTransparentIo = {
   value?: string | number;
   /**
    * Outputs only: true when the signing account's viewing key proves the
-   * output comes back to it (change); false for a payment.
+   * output comes back to it (change, or an unshield); false for a payment.
    */
   mine?: boolean;
   /** Outputs of ours only: the address's scope (0 external, 1 internal, 2 ephemeral) and index. */
