@@ -82,6 +82,62 @@ function LabelledTokenIcon({ token }: { token: Token }) {
   );
 }
 
+function CurrencySelector({
+  tokens,
+  token,
+  setToken,
+  readOnly = false,
+}: {
+  tokens: Token[];
+  token: Token;
+  setToken: (value: string) => void;
+  readOnly?: boolean;
+}) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  return (
+    <div
+      className="relative shrink-0 w-50"
+      tabIndex={0}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setDropdownOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        disabled={readOnly}
+        onClick={() => setDropdownOpen(!dropdownOpen)}
+        className="flex w-full items-center justify-between rounded-xl border border-line bg-card p-3 text-sm focus:border-black focus:outline-none"
+      >
+        <LabelledTokenIcon token={token} />
+        {!readOnly && <span className="text-gray-400">▼</span>}
+      </button>
+
+      {dropdownOpen && (
+        <div className="absolute z-10 w-full min-w-max mt-1 bg-card border border-line rounded-xl shadow-lg max-h-60 overflow-y-auto">
+          {tokens.map((c: Token) => (
+            <button
+              key={c.assetId}
+              type="button"
+              onClick={() => {
+                setToken(c);
+                setDropdownOpen(false);
+              }}
+              className={twMerge(
+                "flex w-full items-center gap-3 p-3 text-sm transition-colors hover:bg-neutral-100",
+                token.assetId === c.assetId ? "bg-neutral-50" : "",
+              )}
+            >
+              <LabelledTokenIcon token={c} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SwapRoute() {
   const wallet = useWallet();
   const shielded = useFreshAddress();
@@ -95,14 +151,14 @@ function SwapRoute() {
     decimals: 8,
   });
   const [error, setError] = useState("");
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [fromAmount, setFromAmount] = useState("");
   const [refundAddress, setRefundAddress] = useState("");
+  const [recipientAddress, setRecipientAddress] = useState("");
   const [slippage, setSlippage] = useState("0.5");
   const [isLoading, setIsLoading] = useState(true);
   const [tokens, setTokens] = useState([]);
   const [toAmount, setToAmount] = useState("--");
-  const [zecToken, setZecToken] = useState({
+  const [toToken, setToToken] = useState({
     assetId: ZEC_TOKEN_ASSET_ID,
     decimals: 8,
     blockchain: "zec",
@@ -113,6 +169,7 @@ function SwapRoute() {
   });
 
   const [isPending, setIsPending] = useState(false);
+  const [outbound, setOutbound] = useState(false);
   const [stage, setStage] = useState(Stage.Swap);
   const [amountIn, setAmountIn] = useState("0");
   const [amountOut, setAmountOut] = useState("0");
@@ -125,6 +182,7 @@ function SwapRoute() {
 
   const amountRef = useRef<HTMLInputElement>(null);
   const refundRef = useRef<HTMLInputElement>(null);
+  const recipientRef = useRef<HTMLInputElement>(null);
   const slippageRef = useRef<HTMLInputElement>(null);
 
   // Placeholders for future computed values
@@ -156,24 +214,44 @@ function SwapRoute() {
     wallet.pushSwap(depositAddress);
   };
 
+  const reverseExchange = () => {
+    const tmpToken = fromToken;
+    const tmpAmount = toAmount;
+    setFromToken(toToken);
+    setToToken(tmpToken);
+    setFromAmount(tmpAmount);
+    if (!outbound) {
+      setRecipientAddress("");
+      setRefundAddress(shielded);
+    } else {
+      setRecipientAddress(shielded);
+      setRefundAddress("");
+    }
+    setOutbound(!outbound);
+  };
+
+  useEffect(() => {
+    (async () => setRecipientAddress(shielded))();
+  }, [shielded]);
+
   useEffect(() => {
     (async () => {
       const totalPrice = Number(fromAmount) * fromToken.price;
       setFromTotalPrice(totalPrice.toFixed(2));
       setToTotalPrice(totalPrice.toFixed(2));
-      const toAmount = totalPrice / zecToken.price;
+      const toAmount = totalPrice / toToken.price;
       const zecFormatter = new Intl.NumberFormat("en-US", {
         useGrouping: false,
-        maximumFractionDigits: zecToken.decimals,
+        maximumFractionDigits: toToken.decimals,
       });
       setToAmount(zecFormatter.format(toAmount));
       const fromFormatter = new Intl.NumberFormat("en-US", {
         useGrouping: false,
         maximumFractionDigits: fromToken.decimals,
       });
-      setZecPriceInFrom(fromFormatter.format(zecToken.price / fromToken.price));
+      setZecPriceInFrom(fromFormatter.format(toToken.price / fromToken.price));
     })();
-  }, [fromAmount, fromToken, toAmount, zecToken]);
+  }, [fromAmount, fromToken, toAmount, toToken]);
 
   useEffect(() => {
     if (stage !== Stage.Swap) {
@@ -189,7 +267,7 @@ function SwapRoute() {
       .then((data) => {
         setTokens(data);
         setFromToken(data[0]);
-        setZecToken(
+        setToToken(
           data.find((token: Token) => token.assetId == ZEC_TOKEN_ASSET_ID),
         );
         setIsLoading(false);
@@ -205,15 +283,16 @@ function SwapRoute() {
       return;
     }
     const deadline = new Date(Date.now() + 60 * 60 * 1000);
+    console.log(recipientAddress);
     const body = {
       dry: false,
       swapType: "EXACT_INPUT",
       slippageTolerance: Number(slippage) * 100,
       originAsset: fromToken.assetId,
       depositType: "ORIGIN_CHAIN",
-      destinationAsset: ZEC_TOKEN_ASSET_ID,
+      destinationAsset: toToken.assetId,
       amount: (Number(fromAmount) * 10 ** fromToken.decimals).toString(),
-      recipient: shielded,
+      recipient: recipientAddress,
       recipientType: "DESTINATION_CHAIN",
       refundTo: refundAddress,
       refundType: "ORIGIN_CHAIN",
@@ -277,45 +356,12 @@ function SwapRoute() {
       <FormPage title="Swap" onSubmit={onGetQuote}>
         <FormCard heading="From" htmlFor="swap-from-amount">
           <div className="flex flex-row items-start gap-4 w-full">
-            <div
-              className="relative shrink-0 w-50"
-              tabIndex={0}
-              onBlur={(e) => {
-                if (!e.currentTarget.contains(e.relatedTarget)) {
-                  setDropdownOpen(false);
-                }
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex w-full items-center justify-between rounded-xl border border-line bg-card p-3 text-sm focus:border-black focus:outline-none"
-              >
-                <LabelledTokenIcon token={fromToken} />
-                <span className="text-gray-400">▼</span>
-              </button>
-
-              {dropdownOpen && (
-                <div className="absolute z-10 w-full min-w-max mt-1 bg-card border border-line rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                  {tokens.map((c: Token) => (
-                    <button
-                      key={c.assetId}
-                      type="button"
-                      onClick={() => {
-                        setFromToken(c);
-                        setDropdownOpen(false);
-                      }}
-                      className={twMerge(
-                        "flex w-full items-center gap-3 p-3 text-sm transition-colors hover:bg-neutral-100",
-                        fromToken.assetId === c.assetId ? "bg-neutral-50" : "",
-                      )}
-                    >
-                      <LabelledTokenIcon token={c} />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <CurrencySelector
+              tokens={tokens}
+              token={fromToken}
+              setToken={setFromToken}
+              readOnly={outbound}
+            />
 
             <div className="flex flex-1 flex-col gap-1.5 min-w-0 text-right w-full">
               <AmountField
@@ -324,9 +370,7 @@ function SwapRoute() {
                 value={fromAmount}
                 describedBy="send-available"
                 unit=""
-                onChange={(value) => {
-                  setFromAmount(value);
-                }}
+                onChange={setFromAmount}
               />
               <p className="px-1 text-xs text-neutral-500">
                 ~ ${fromTotalPrice} USD
@@ -336,16 +380,21 @@ function SwapRoute() {
         </FormCard>
 
         {/* Horizontal Lines with Centered, Overlapping, Transparent Down Arrow */}
-        <div className="flex items-center justify-center text-neutral-400 relative z-10">
+        <div className="flex items-center justify-center text-black relative z-10">
           <div className="flex-1 h-px bg-line"></div>
 
           {/* Negative margin (-my-6) makes the arrow extend into the top/bottom divs */}
-          <div className="px-4 -my-6">
+          <button
+            type="button"
+            aria-label="Exchange"
+            className="px-4 -my-6 cursor-pointer hover:bg-neutral-400 transition-colors focus:outline-none rounded-lg"
+            onClick={reverseExchange}
+          >
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              width="16"
+              width="22"
               height="48"
-              viewBox="0 0 24 48"
+              viewBox="0 0 39 48"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -354,17 +403,22 @@ function SwapRoute() {
             >
               {/* Path stretched to 48px to accommodate the overlap */}
               <path d="M12 0v48M19 41l-7 7-7-7" />
+              {/* Up arrow (on the right) */}
+              <path d="M27 48V0M20 7l7-7 7 7" />
             </svg>
-          </div>
+          </button>
 
           <div className="flex-1 h-px bg-line"></div>
         </div>
 
         <FormCard heading="To">
           <div className="flex flex-row items-start gap-4 w-full">
-            <div className="shrink-0 w-50 p-3">
-              <LabelledTokenIcon token={zecToken} />
-            </div>
+            <CurrencySelector
+              tokens={tokens}
+              token={toToken}
+              setToken={setToToken}
+              readOnly={!outbound}
+            />
 
             <div className="flex flex-1 flex-col gap-1.5 min-w-0">
               <AmountDisplay value={toAmount.toString()} unit="" />
@@ -375,27 +429,56 @@ function SwapRoute() {
           </div>
         </FormCard>
 
-        <FormCard heading="Refund Address" htmlFor="swap-refund-address">
-          <div className="flex flex-col gap-1.5">
-            <input
-              id="swap-refund-address"
-              ref={refundRef}
-              type="text"
-              placeholder="Address to refund if swap fails"
-              value={refundAddress}
-              onChange={(e) => setRefundAddress(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-              className={twMerge(
-                inputClassName,
-                // 16px on phones: iOS zooms into any smaller field on focus.
-                "h-11 text-base sm:text-sm text-ellipsis",
-                !refundAddress && canPaste && "pr-20",
-                "border-black hover:border-black focus:border-black",
-              )}
-            />
-          </div>
-        </FormCard>
+        {!outbound && (
+          <FormCard heading="Refund Address" htmlFor="swap-refund-address">
+            <div className="flex flex-col gap-1.5">
+              <input
+                id="swap-refund-address"
+                ref={refundRef}
+                type="text"
+                placeholder="Address to refund if swap fails"
+                value={refundAddress}
+                onChange={(e) => setRefundAddress(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                className={twMerge(
+                  inputClassName,
+                  // 16px on phones: iOS zooms into any smaller field on focus.
+                  "h-11 text-base sm:text-sm text-ellipsis",
+                  !refundAddress && canPaste && "pr-20",
+                  "border-black hover:border-black focus:border-black",
+                )}
+              />
+            </div>
+          </FormCard>
+        )}
+
+        {outbound && (
+          <FormCard
+            heading="Recipient Address"
+            htmlFor="swap-recipient-address"
+          >
+            <div className="flex flex-col gap-1.5">
+              <input
+                id="swap-recipient-address"
+                ref={recipientRef}
+                type="text"
+                placeholder="Address to receive swapped tokens"
+                value={recipientAddress}
+                onChange={(e) => setRecipientAddress(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                className={twMerge(
+                  inputClassName,
+                  // 16px on phones: iOS zooms into any smaller field on focus.
+                  "h-11 text-base sm:text-sm text-ellipsis",
+                  !refundAddress && canPaste && "pr-20",
+                  "border-black hover:border-black focus:border-black",
+                )}
+              />
+            </div>
+          </FormCard>
+        )}
 
         <FormCard heading="Swap Settings">
           <div className="flex flex-col gap-4">
@@ -421,7 +504,7 @@ function SwapRoute() {
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium text-neutral-700">Rate</span>
               <span className="font-medium">
-                1 {zecToken.symbol} = {zecPriceInFrom} {fromToken.symbol}
+                1 {toToken.symbol} = {zecPriceInFrom} {fromToken.symbol}
               </span>
             </div>
           </div>
@@ -477,10 +560,10 @@ function SwapRoute() {
               <div className="flex-1 h-px bg-line"></div>
             </div>
             <div className="flex items-center justify-between">
-              <TokenIcon token={zecToken} />
+              <TokenIcon token={toToken} />
               <div className="flex flex-col items-end">
                 <span className="text-lg font-medium">
-                  {amountOut} {zecToken.symbol}
+                  {amountOut} {toToken.symbol}
                 </span>
                 <span className="text-xs text-neutral-500">
                   ~ ${amountOutUsd} USD
@@ -492,6 +575,26 @@ function SwapRoute() {
 
         <FormCard heading="Transaction Details">
           <div className="flex flex-col gap-4 text-sm">
+            {outbound && (
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-neutral-500">
+                  Recipient address
+                </span>
+                <span className="font-medium">{recipientAddress}</span>
+              </div>
+            )}
+
+            {!outbound && (
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-neutral-500">
+                  Refund address
+                </span>
+                <span className="font-medium">{refundAddress}</span>
+              </div>
+            )}
+
+            <div className="h-px w-full bg-line" />
+
             <div className="flex items-center justify-between">
               <span className="font-medium text-neutral-500">Total fees</span>
               <span className="font-medium">
