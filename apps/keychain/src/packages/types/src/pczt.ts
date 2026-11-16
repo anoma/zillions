@@ -25,7 +25,7 @@ export type PcztTransparentIo = {
    * output comes back to it (change); false for a payment.
    */
   mine?: boolean;
-  /** Outputs of ours only: the address's scope (0 external, 1 internal, 2 ephemeral) and index. */
+  /** Outputs of ours only: the address's scope (0 external, 1 internal) and index. */
   path?: TransparentPath;
   // Anything else present in the JSON is kept for the raw view.
   [key: string]: unknown;

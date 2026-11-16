@@ -45,12 +45,12 @@ export const getNetwork = (): "main" | "test" => {
 
 /**
  * Addresses in a row past the last one used that wallets restoring a phrase
- * check, per transparent scope (0 external, 1 internal, 2 ephemeral): upstream
- * zcash_keys' defaults, which zcore exports for the first two.
+ * check, per transparent scope (0 external, 1 internal): upstream
+ * zcash_keys' defaults. zcore never counts another scope as the account's.
  */
 export const transparentGapLimits = (): Record<number, number> => {
   const { external, internal } = gap_limits() as { external: number; internal: number };
-  return { 0: external, 1: internal, 2: 10 };
+  return { 0: external, 1: internal };
 };
 
 /** An account's public side: what the app is given to watch it. */

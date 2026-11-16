@@ -34,7 +34,7 @@ const summaries = vi.hoisted(() => ({ next: undefined as unknown }));
 vi.mock("../crypto/zillions", () => ({
   buildPcztSummary: vi.fn(async () => summaries.next),
   linkAddress: vi.fn(),
-  transparentGapLimits: () => ({ 0: 10, 1: 5, 2: 10 }),
+  transparentGapLimits: () => ({ 0: 10, 1: 5 }),
 }));
 vi.mock("../keyring", () => ({ Keyring: class {} }));
 vi.mock("../vault", () => ({ VaultService: class {} }));
