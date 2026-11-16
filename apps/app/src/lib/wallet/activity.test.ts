@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { buildActivity, publicActivity, sendingTxs } from "./activity";
+import { authoredTxs, buildActivity, publicActivity } from "./activity";
 import type { Block } from "./chain/lightwalletd";
 import type { ParsedTx, TransparentTx } from "./transparent";
 import type { Note } from "./types";
@@ -160,7 +160,7 @@ test("our sending transactions are those that spent a note or a coin of ours", (
   const blocks = new Map([
     [3_160, block({ txids: new Map([[5, "tshield"]]) })],
   ]);
-  const txs = sendingTxs(
+  const txs = authoredTxs(
     [{ ...note(1, 150_000), spend: { status: "spent", at } }, note(3, 30_000)],
     [
       {
@@ -216,29 +216,38 @@ test("a send's payment is what it paid to someone else's transparent address", (
   });
 });
 
-test("a fetched send's fee is exact, even with a note it spent not found yet", () => {
+test("an output our OVK opens doesn't make a transaction ours: only a spend does", () => {
+  // A viewing-key holder pays us 30,000 and seals its own 100,000 output with
+  // our OVK. Nothing of ours is spent, so it's Received.
   const at = { height: 3_150, tx_index: 3 };
   const blocks = new Map([
     [at.height, block({ txids: new Map([[3, "tx3"]]) })],
   ]);
-  const sent = {
+  const planted = {
     id: "a_orchard_9",
     pool: "orchard" as const,
     value: 100_000,
-    recipient: "u1theirs",
+    recipient: "u1attacker",
+    memo: "Rent - November",
     position: 9,
     ...at,
   };
-  const entry = (txs?: Map<string, ParsedTx>) =>
-    buildActivity([{ ...note(2, 30_000), ...at }], [sent], [], blocks, txs)[0];
-
-  expect(entry()).toMatchObject({ value: -100_000n, fee: 0n });
-  // Shielded to shielded: all that leaves the pools is the fee.
   const tx3 = full("tx3", { value_balance: 15_000 });
-  expect(entry(new Map([["tx3", tx3]]))).toMatchObject({
-    value: -100_000n,
-    fee: 15_000n,
+  const [entry] = buildActivity(
+    [{ ...note(2, 30_000), ...at }],
+    [planted],
+    [],
+    blocks,
+    new Map([["tx3", tx3]]),
+  );
+
+  expect(entry).toMatchObject({
+    tx_type: "Received",
+    value: 30_000n,
+    fee: 0n,
+    to: { pool: "shielded" },
   });
+  expect(entry.memo).toBeUndefined();
 });
 
 test("a send from transparent coins to a shielded address counts its payment once", () => {

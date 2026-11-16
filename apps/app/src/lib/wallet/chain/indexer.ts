@@ -16,7 +16,8 @@ export type TreeSizes = Record<Pool, number>;
 /**
  * One chunk of a pool's notes, raw; only wasm reads it. `ciphertexts` is the
  * compact part trial decryption rejects a note with; `memos` and `outgoing`
- * hold the rest, ~5× the bytes, so fetch them for hit chunks only.
+ * hold the rest, ~5× the bytes: memos for hit chunks only, outgoing for an
+ * authored transaction's outputs only.
  */
 export async function fetchChunk(
   kind: "ciphertexts" | "memos" | "outgoing",

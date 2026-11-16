@@ -23,7 +23,7 @@ db.version(1).stores({ accounts: "id" });
 // The store before encryption, readable by anyone at this browser.
 void Dexie.delete("zcrawler").catch(() => {});
 
-const VERSION: WalletState["version"] = 4;
+const VERSION: WalletState["version"] = 5;
 
 const encoder = new TextEncoder();
 

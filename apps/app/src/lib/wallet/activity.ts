@@ -44,9 +44,12 @@ type Entry = {
   tx?: ParsedTx;
 };
 
-/** Whether it spent funds of ours, so we paid its fee: an output recovered with our viewing key is one we made. */
-const funded = ({ shielded, transparent }: Entry) =>
-  !!shielded?.spent.length || !!shielded?.sent.length || !!transparent?.spent;
+/**
+ * Whether we authored it: it spent a note or coin of ours. An output our OVK
+ * opens doesn't count: anyone holding our viewing key can seal one with it.
+ */
+const authored = ({ shielded, transparent }: Entry) =>
+  !!shielded?.spent.length || !!transparent?.spent;
 
 /**
  * What a transaction we paid for paid in fees, exactly: what left the
@@ -55,7 +58,7 @@ const funded = ({ shielded, transparent }: Entry) =>
  */
 function exactFee(entry: Entry, ours: Set<string>) {
   const { tx, transparent } = entry;
-  if (!tx || !funded(entry)) return undefined;
+  if (!tx || !authored(entry)) return undefined;
   if (!tx.inputs.every((i) => i.address && ours.has(i.address))) return;
   const fee =
     (transparent?.spent ?? 0n) + BigInt(tx.value_balance) - sum(tx.outputs);
@@ -185,7 +188,7 @@ function receipt(
   const activity = derived(txid, entry, ours, time);
   const fee = exactFee(entry, ours);
   // Transparent coins not ours name their sender, whatever else paid.
-  const from = !funded(entry) && senders(entry.tx, ours);
+  const from = !authored(entry) && senders(entry.tx, ours);
   return {
     ...activity,
     ...(fee !== undefined && { fee }),
@@ -362,7 +365,9 @@ export function buildActivity(
   }
   for (const [txid, entry] of entries) {
     entry.tx = txs.get(txid);
-    if (!entry.tx || !funded(entry)) continue;
+    // Sync reads payments only of transactions we authored; never trust one elsewhere.
+    if (entry.shielded && !authored(entry)) entry.shielded.sent = [];
+    if (!entry.tx || !authored(entry)) continue;
     const paid = entry.tx.outputs.flatMap(({ value, address }) =>
       address && ours.has(address) ? [] : [{ value, recipient: address }],
     );
@@ -410,7 +415,6 @@ export function activityHeights(
  */
 export function txidsToRead(
   notes: Note[],
-  sent: Sent[],
   transparent: TransparentTx[],
   blocks: Map<number, Block>,
 ) {
@@ -420,15 +424,14 @@ export function txidsToRead(
     !!blocks.get(height)?.transparentInputs.includes(tx_index);
   const ids = [
     ...notes.flatMap((n) => (n.spend.status === "spent" ? [n.spend.at] : [])),
-    ...sent,
     ...notes.filter(coinsIn),
   ].map(txid);
   for (const t of transparent) if (t.spent || !t.shielded) ids.push(t.txid);
   return new Set(ids.filter((id) => id !== undefined));
 }
 
-/** Our transactions that spent notes or coins of ours, by `height:tx_index`. */
-export function sendingTxs(
+/** The transactions we authored, which spent notes or coins of ours, by `height:tx_index`. */
+export function authoredTxs(
   notes: Note[],
   transparent: TransparentTx[],
   blocks: Map<number, Block>,
