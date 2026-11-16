@@ -690,7 +690,8 @@ export class Wallet {
     keep?: (note: Note) => boolean,
   ) => {
     const coins = send.from === "transparent";
-    const internal = coins ? await this.internalAddress() : null;
+    // Shielded sends need it too: zcore names it as ours when an unshield pays it.
+    const internal = await this.internalAddress();
     const built = await sendPczt(
       this.#walletData(coins, keep),
       send,
