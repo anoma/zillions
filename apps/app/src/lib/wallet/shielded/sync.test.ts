@@ -56,7 +56,14 @@ test("a sends read reads only authored transactions' outputs, across chunks and 
     "sapling:0": { hits: [], sent: [output("sapling", 7, "zs1them")] },
   };
   const lookup = vi.fn(
-    async ({ pool, chunk }: { pool: Pool; chunk: number }) => ({
+    async ({
+      pool,
+      chunk,
+    }: {
+      pool: Pool;
+      chunk: number;
+      sends?: number[];
+    }) => ({
       chunk,
       ...reads[`${pool}:${chunk}` as keyof typeof reads],
     }),
