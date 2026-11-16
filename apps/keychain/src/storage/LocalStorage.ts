@@ -7,6 +7,7 @@ import { KVStore } from "@zillions/storage";
 import * as E from "fp-ts/Either";
 import * as t from "io-ts";
 
+import { isSiteOrigin } from "../utils/origin";
 import { ExtStorage } from "./Storage";
 
 const Connection = t.type({
@@ -50,6 +51,11 @@ export class LocalStorage extends ExtStorage {
     super(provider);
   }
 
+  /**
+   * Grants to origins that can no longer be sites (plaintext, off this
+   * machine) are left out, so one made before they were refused grants
+   * nothing; the next write drops it.
+   */
   async getConnections(): Promise<ConnectionsType> {
     const decoded = t
       .union([Connections, t.undefined])
@@ -57,7 +63,9 @@ export class LocalStorage extends ExtStorage {
     if (E.isLeft(decoded)) {
       throw new Error("Connections are not valid");
     }
-    return decoded.right ?? {};
+    return Object.fromEntries(
+      Object.entries(decoded.right ?? {}).filter(([origin]) => isSiteOrigin(origin))
+    );
   }
 
   async setConnection(origin: string, connection: Connection): Promise<void> {
