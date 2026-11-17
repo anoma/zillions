@@ -18,6 +18,7 @@ const OPTIONS: Record<
 > = {
   keystone: { icon: <PiQrCode />, subtitle: "Connect by scanning QR codes" },
   ledger: { icon: <PiUsb />, subtitle: "Connect over USB" },
+  trezor: { icon: <PiUsb />, subtitle: "Connect over USB" },
 };
 
 export const DeviceChoose = () => {

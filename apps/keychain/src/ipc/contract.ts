@@ -55,7 +55,7 @@ export type AccountSecret =
   | { t: "ShieldedKeys"; spendingKey: string };
 
 /** Which hardware wallet an account's keys live on. */
-export type DeviceKind = "ledger" | "keystone" | "passkey-prf";
+export type DeviceKind = "ledger" | "keystone" | "trezor" | "passkey-prf";
 
 /** A passkey credential at rest: its id (base64url) and the RP it was made
  * under, plus its COSE public key (base64) when the credential was created
