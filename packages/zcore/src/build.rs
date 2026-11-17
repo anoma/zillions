@@ -26,6 +26,7 @@ use zcash_keys::address::Address;
 use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_primitives::merkle_tree::{read_commitment_tree, HashSer};
 use zcash_primitives::transaction::builder::{BuildConfig, Builder, BundlePadding};
+use zcash_primitives::transaction::TxVersion;
 use zcash_protocol::consensus::{
     BlockHeight, Network, NetworkConstants, NetworkUpgrade, Parameters,
 };
@@ -310,6 +311,14 @@ pub(crate) fn pczt<N>(
             ironwood_padding: step.ironwood_bundle_padding(),
         },
     );
+    // A Trezor signs only V5: pin it for a transparent-only plan of an
+    // account with no shielded keys (a Trezor's), so its SignTx carries
+    // everything the firmware reads. Everyone else keeps V6.
+    if touched_pools(step).is_empty() && ufvk.orchard().is_none() && ufvk.sapling().is_none() {
+        builder
+            .propose_version::<Infallible>(TxVersion::V5)
+            .map_err(|e| format!("{e:?}"))?;
+    }
     // A canonical ZIP 318 crossing takes the rolling expiry every migration
     // in its period shares (upstream refuses to override it).
     if bucketed {

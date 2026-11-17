@@ -2,6 +2,7 @@ import { useState } from "react";
 import QRCode from "react-qr-code";
 import { useAccount } from "../../hooks/useAccount";
 import { useFreshAddress } from "../../hooks/useAddresses";
+import { useTransparentOnly } from "../../hooks/useWallet";
 import { SpinnerIcon } from "../../icons/SpinnerIcon";
 import { shortenAddress } from "../../lib/utils";
 import { CopyToClipboardControl } from "../CopyToClipboardControl";
@@ -10,7 +11,10 @@ import { qrClassName } from "../ui/utils";
 
 export function AddressCard() {
   const account = useAccount();
-  const [isTransparent, setIsTransparent] = useState(false);
+  const transparentOnly = useTransparentOnly();
+  const [preferTransparent, setPreferTransparent] = useState(false);
+  // A transparent-only account (a Trezor's) receives transparently only.
+  const isTransparent = transparentOnly || preferTransparent;
   // Mounted per drawer open, so each open shows a fresh shielded address.
   const shielded = useFreshAddress();
   const address = isTransparent ? account.transparent.address : shielded;
@@ -20,11 +24,13 @@ export function AddressCard() {
       <h3 className="mb-2 text-center text-xs text-neutral-500">
         Your address
       </h3>
-      <ShieldedTransparentToggle
-        label="Address type"
-        isTransparent={isTransparent}
-        setIsTransparent={setIsTransparent}
-      />
+      {!transparentOnly && (
+        <ShieldedTransparentToggle
+          label="Address type"
+          isTransparent={preferTransparent}
+          setIsTransparent={setPreferTransparent}
+        />
+      )}
       <div className="mx-auto w-fit flex flex-col items-center gap-3 rounded-xl border border-line bg-card p-4 pb-3">
         {address ? (
           <QRCode

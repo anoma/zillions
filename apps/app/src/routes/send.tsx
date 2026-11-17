@@ -29,6 +29,7 @@ import {
   useSend,
   useSendPlan,
 } from "../hooks/useSend";
+import { useTransparentOnly } from "../hooks/useWallet";
 import { isOverBalance, planRecipient } from "../lib/amount";
 import { memoProblem } from "../lib/memo";
 import { CLAIM_FEE, DESCRIPTION_BYTES } from "../lib/paymentLink";
@@ -43,7 +44,10 @@ type Planned = ReturnType<typeof useSendPlan>;
 
 function SendRoute() {
   const balance = useGetBalance();
-  const [transparentFrom, setTransparentFrom] = useState(false);
+  const transparentOnly = useTransparentOnly();
+  const [preferTransparentFrom, setTransparentFrom] = useState(false);
+  // A transparent-only account (a Trezor's) pays from transparent only.
+  const transparentFrom = transparentOnly || preferTransparentFrom;
   const amountField = useAmountField();
   const [isPaymentLink, setIsPaymentLink] = useState(false);
   const [to, setTo] = useState("");
@@ -173,17 +177,19 @@ function SendRoute() {
 
   return (
     <FormPage title="Send" onSubmit={onSubmit}>
-      <FormCard heading="Pay from" htmlFor="send-from">
-        <ShieldedTransparentToggle
-          id="send-from"
-          label="Pay from"
-          isTransparent={transparentFrom}
-          setIsTransparent={(value) => {
-            setTransparentFrom(value);
-            clear();
-          }}
-        />
-      </FormCard>
+      {!transparentOnly && (
+        <FormCard heading="Pay from" htmlFor="send-from">
+          <ShieldedTransparentToggle
+            id="send-from"
+            label="Pay from"
+            isTransparent={transparentFrom}
+            setIsTransparent={(value) => {
+              setTransparentFrom(value);
+              clear();
+            }}
+          />
+        </FormCard>
+      )}
 
       <FormCard
         heading="Amount"

@@ -15,10 +15,13 @@ import initZcore, {
   pczt_keystone_fw_version,
   pczt_ledger_transaction,
   pczt_summary,
+  pczt_trezor_transaction,
   seal_link_key,
   seed_fingerprint,
   sign_pczt,
   spending_keys,
+  ufvk_from_transparent_xpub,
+  ufvk_pools,
 } from "@zillions/zcore";
 import type { PcztTransaction } from "@ledgerhq/device-signer-kit-zcash";
 import type { PcztSummary } from "@zillions/types";
@@ -78,6 +81,28 @@ export const deriveAccountFromUfvk = async (
 ): Promise<DerivedKeys> => {
   await initZillionsSdk();
   return derive_account_from_ufvk(getNetwork(), ufvk);
+};
+
+/**
+ * The transparent-only viewing key a Trezor's account xpub names: the
+ * extended public key at `m/44'/coin'/account'`, as the device's key export
+ * hands it over, encoded as a Revision 2 UFVK with only a P2PKH item
+ * (`uvf1…`). The xpub's version bytes name a network but aren't read: the
+ * account key is their whole payload, and this call's network decides the
+ * encoding.
+ */
+export const ufvkFromTransparentXpub = async (
+  xpub: string
+): Promise<string> => {
+  await initZillionsSdk();
+  return ufvk_from_transparent_xpub(getNetwork(), xpub);
+};
+
+/** The shielded pools `ufvk` has a key for — empty for a transparent-only
+ * key, which then has no shielded address to show or derive. */
+export const ufvkPools = async (ufvk: string): Promise<string[]> => {
+  await initZillionsSdk();
+  return ufvk_pools(getNetwork(), ufvk);
 };
 
 /**
@@ -200,12 +225,81 @@ export const ledgerTransaction = (
     hdIndex
   ) as PcztTransaction;
 
+/** A transparent input or output's BIP-32 path, hardened as the device takes
+ * it, in connect's proto spelling (`address_n`). */
+export type TrezorPath = number[];
+
+/** The device's own BIP-44 path names each coin it signs; change names one
+ * of its own addresses, the rest pay an outside address. Amounts are plain
+ * numbers — zatoshi totals sit far below the safe range. */
+export type TrezorSignTransaction = {
+  coin: "zec" | "taz";
+  version: number;
+  versionGroupId: number;
+  branchId: number;
+  locktime?: number;
+  expiry: number;
+  inputs: {
+    address_n: TrezorPath;
+    prev_hash: string;
+    prev_index: number;
+    amount: number;
+    sequence?: number;
+    script_type: "SPENDADDRESS";
+  }[];
+  outputs: {
+    address?: string;
+    address_n?: TrezorPath;
+    amount: number;
+    script_type: "PAYTOADDRESS";
+  }[];
+};
+
+/**
+ * `pczt` (base64) as `@trezor/connect-core`'s `signTransaction` takes it, for
+ * a transparent-only Trezor account. Throws on shielded pools, which a
+ * Trezor can't sign, before the device hears about any of it.
+ */
+export const trezorTransaction = async (
+  pczt: string
+): Promise<TrezorSignTransaction> => {
+  await initZillionsSdk();
+  const tx = pczt_trezor_transaction(getNetwork(), base64ToBytes(pczt)) as
+    | {
+        inputs: ({ amount: bigint } & Record<string, unknown>)[];
+        outputs: ({ amount: bigint } & Record<string, unknown>)[];
+      }
+    | undefined;
+  if (!tx) throw new Error("Unrecognized Trezor transaction");
+  // The mapper hands amounts over as BigInts; zatoshi totals sit far below
+  // Number's safe range, and connect's validator takes plain numbers.
+  const amount = (value: bigint): number => {
+    if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error("Transaction amount too large");
+    }
+    return Number(value);
+  };
+  return {
+    ...tx,
+    inputs: tx.inputs.map(({ amount: value, ...rest }) => ({
+      ...rest,
+      amount: amount(value),
+    })),
+    outputs: tx.outputs.map(({ amount: value, ...rest }) => ({
+      ...rest,
+      amount: amount(value),
+    })),
+  } as TrezorSignTransaction;
+};
+
 /**
  * A device's signatures over a PCZT, hex, in the order the Ledger signer kit
  * returns them: one per Orchard and per Ironwood spend the PCZT leaves
  * unsigned, one per transparent input (DER, then the sighash type byte).
  * Only the device module and this façade know the shape — over the IPC
- * boundary the signing output travels as an opaque `deviceData` string.
+ * boundary the signing output travels as an opaque `deviceData` string. A
+ * Trezor's `signTransaction` fills the same `transparent` list, so its
+ * signatures apply through here too, the shielded ones empty.
  */
 export type LedgerSignatures = {
   orchard: string[];

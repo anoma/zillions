@@ -23,6 +23,7 @@ mod notes;
 mod roles;
 mod send;
 mod transparent_tx;
+mod trezor;
 mod wallet;
 mod witness;
 

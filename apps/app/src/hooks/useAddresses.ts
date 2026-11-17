@@ -1,5 +1,9 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import initZcore, { address_kind, fresh_address } from "@zillions/zcore";
+import initZcore, {
+  address_kind,
+  fresh_address,
+  ufvk_pools,
+} from "@zillions/zcore";
 import { useEffect, useState } from "react";
 import { NETWORK } from "../lib/wallet/config";
 import type { Wallet } from "../lib/wallet/wallet";
@@ -16,7 +20,11 @@ export function useFreshAddress(round = 0) {
     if (!ufvk) return;
     let live = true;
     initZcore().then(() => {
-      if (live) setFresh({ ufvk, address: fresh_address(NETWORK, ufvk) });
+      // A transparent-only viewing key (a Trezor's) names no shielded
+      // address to ask for.
+      if (live && ufvk_pools(NETWORK, ufvk).length > 0) {
+        setFresh({ ufvk, address: fresh_address(NETWORK, ufvk) });
+      }
     });
     return () => {
       live = false;
@@ -35,9 +43,7 @@ function addressKind(address: string | undefined) {
     queryFn: async () => {
       await initZcore();
       return (address_kind(NETWORK, address!) ?? null) as
-        | "shielded"
-        | "transparent"
-        | null;
+        "shielded" | "transparent" | null;
     },
   });
 }

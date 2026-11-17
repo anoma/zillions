@@ -646,9 +646,14 @@ pub(crate) mod tests {
 
     /// Plans `amount` from the shielded balance to `to`.
     pub(crate) fn plan(wallet: &Wallet, to: &str, amount: u64) -> WalletProposal {
+        plan_from(wallet, to, amount, "shielded")
+    }
+
+    /// Plans `amount` from the balance `from` names to `to`.
+    pub(crate) fn plan_from(wallet: &Wallet, to: &str, amount: u64, from: &str) -> WalletProposal {
         propose(
             wallet,
-            &send(to, amount),
+            &send_from(to, amount, from),
             Zatoshis::from_u64(amount).unwrap(),
         )
         .unwrap()
@@ -707,13 +712,17 @@ pub(crate) mod tests {
     }
 
     fn send(to: &str, amount: u64) -> SendRequest {
+        send_from(to, amount, "shielded")
+    }
+
+    fn send_from(to: &str, amount: u64, from: &str) -> SendRequest {
         SendRequest {
             bucket: None,
             to: to.into(),
             amount,
             memo: None,
             memo_hex: None,
-            from: "shielded".into(),
+            from: from.into(),
         }
     }
 

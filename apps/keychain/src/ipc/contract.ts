@@ -55,7 +55,7 @@ export type AccountSecret =
   | { t: "ShieldedKeys"; spendingKey: string };
 
 /** Which hardware wallet an account's keys live on. */
-export type DeviceKind = "ledger" | "keystone" | "passkey-prf";
+export type DeviceKind = "ledger" | "keystone" | "trezor" | "passkey-prf";
 
 /** A passkey credential at rest: its id (base64url) and the RP it was made
  * under, plus its COSE public key (base64) when the credential was created
@@ -305,8 +305,10 @@ export type IpcContract = {
       bip44Path: Bip44Path;
       zip32Path: Zip32Path;
       /**
-       * The device's addresses. Optional for devices that don't hand them
-       * over (derived from the viewing key instead); today's all do.
+       * The device's addresses. Optional: the keyring derives what the
+       * device didn't hand over from the viewing key (a Keystone exports
+       * keys only; a Trezor's transparent-only key names no shielded
+       * address).
        */
       transparentAddress?: string;
       shieldedAddress?: string;

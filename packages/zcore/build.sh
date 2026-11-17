@@ -27,6 +27,19 @@ if ! echo 'int f(void){return 0;}' | "${CC:-clang}" --target=wasm32-unknown-unkn
     export AR="$LLVM_PREFIX/bin/llvm-ar"
 fi
 
+# Apple's `ar` archives wasm objects only to break them: ranlib mangles the
+# members, and every C symbol secp256k1 needs comes up undefined at link.
+# Give the cc crate an llvm-ar (Homebrew's, as above) on a Mac.
+if [ "$(uname -s)" = Darwin ] && [ -z "${AR:-}" ]; then
+    # `brew --prefix` prints the path even when llvm isn't installed.
+    LLVM_PREFIX=$(brew --prefix llvm 2>/dev/null) && [ -x "$LLVM_PREFIX/bin/llvm-ar" ] || {
+        echo "error: macOS needs an llvm-ar to archive wasm objects (Apple's ar can't)." >&2
+        echo "install it with: brew install llvm" >&2
+        exit 1
+    }
+    export AR="$LLVM_PREFIX/bin/llvm-ar"
+fi
+
 tools=$PWD/.tools
 if [ "$("$tools/bin/wasm-bindgen" --version 2>/dev/null | cut -d' ' -f2)" != "$WASM_BINDGEN" ]; then
     cargo install wasm-bindgen-cli --version "$WASM_BINDGEN" --locked --root "$tools"

@@ -17,7 +17,7 @@ use zcash_protocol::consensus::{Network, NetworkConstants, Parameters};
 use crate::parse_network;
 use crate::roles::to_pczt_error;
 
-const HARDENED: u32 = 0x8000_0000;
+pub(crate) const HARDENED: u32 = 0x8000_0000;
 
 /// Ironwood holds V3 note plaintexts, and the device wants that said.
 const IRONWOOD_NOTE_VERSION: u8 = 3;
@@ -38,14 +38,14 @@ pub(crate) struct Transaction {
 /// the crate keeps three of these fields to itself.
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Global {
-    tx_version: u32,
-    version_group_id: u32,
-    consensus_branch_id: u32,
-    fallback_lock_time: Option<u32>,
-    expiry_height: u32,
-    coin_type: u32,
-    tx_modifiable: u8,
+pub(crate) struct Global {
+    pub(crate) tx_version: u32,
+    pub(crate) version_group_id: u32,
+    pub(crate) consensus_branch_id: u32,
+    pub(crate) fallback_lock_time: Option<u32>,
+    pub(crate) expiry_height: u32,
+    pub(crate) coin_type: u32,
+    pub(crate) tx_modifiable: u8,
 }
 
 #[derive(Serialize)]
@@ -114,11 +114,11 @@ struct Bundle {
 #[derive(Deserialize)]
 pub(crate) struct Signatures {
     /// One per Orchard spend the PCZT leaves unsigned, in action order.
-    orchard: Vec<String>,
+    pub(crate) orchard: Vec<String>,
     /// Likewise for Ironwood.
-    ironwood: Vec<String>,
+    pub(crate) ironwood: Vec<String>,
     /// One per transparent input: DER, then the sighash type byte.
-    transparent: Vec<String>,
+    pub(crate) transparent: Vec<String>,
 }
 
 fn bytes(b: impl AsRef<[u8]>) -> ByteBuf {
@@ -455,7 +455,7 @@ pub fn apply_ledger_signatures(pczt: &[u8], signatures: JsValue) -> Result<Vec<u
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use zcash_keys::keys::UnifiedFullViewingKey;
 
     use super::*;
@@ -476,7 +476,7 @@ mod tests {
     }
 
     /// 50,000 from a 200,000 Ironwood note to a transparent address.
-    fn ironwood_send() -> Pczt {
+    pub(crate) fn ironwood_send() -> Pczt {
         let (wallet, trees, _) = crate::build::tests::wallet_and_trees("ironwood", 200_000);
         let to = crate::transparent_tx::derive(&MAIN, &wallet_ufvk(), "external", 5, 1)
             .unwrap()

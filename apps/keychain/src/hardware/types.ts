@@ -1,7 +1,8 @@
 /**
- * The hardware-wallet abstraction. Every device (Ledger and Keystone today)
- * plugs in as one engine (background-safe logic) plus one set of views (the
- * interactive halves the setup wizard and the approval popup render).
+ * The hardware-wallet abstraction. Every device (Ledger, Keystone, and
+ * Trezor today) plugs in as one engine (background-safe logic) plus one set
+ * of views (the interactive halves the setup wizard and the approval popup
+ * render).
  *
  * The device's signing output crosses the IPC boundary only as an opaque
  * `deviceData` string; the device's own engine is what interprets it
@@ -15,7 +16,7 @@ import type { DeviceCredential } from "../ipc/contract";
  * differs from the hardware devices in custody only: its seed derives
  * from the credential's PRF at every ceremony — no secret at rest
  * anywhere. */
-export type DeviceKind = "ledger" | "keystone" | "passkey-prf";
+export type DeviceKind = "ledger" | "keystone" | "trezor" | "passkey-prf";
 
 /** One step of a device interaction, as displayed. */
 export type DeviceProgressStep = {
@@ -34,7 +35,7 @@ export type DeviceKeys = {
   device: DeviceKind;
   /** Default account name: the device model, or what the device reports. */
   alias: string;
-  /** Encoded UFVK (`uview1…`). */
+  /** Encoded UFVK (`uview1…`; a Trezor's transparent-only one is `uvf1…`). */
   viewingKey: string;
   /** ZIP-32 seed fingerprint (hex) the PCZT's zip32_derivation must carry. */
   seedFingerprint: string;

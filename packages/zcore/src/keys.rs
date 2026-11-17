@@ -1,13 +1,17 @@
 //! An account's keys from its BIP-39 seed, for the keychain: the viewing key
 //! and default addresses it hands the app, the fingerprint that names the
-//! seed, and the spending keys its reveal screen shows. Plus fresh shielded
-//! addresses from the viewing key, for both, and what kind an address is.
-//! Offline key math.
+//! seed, and the spending-key reveal, plus what a hardware device's account
+//! xpub stands for. Plus fresh shielded addresses from the viewing key, for
+//! both, and what kind an address is. Offline key math.
 
+use base58::{FromBase58, ToBase58};
 use rand_core::Rng;
 use secrecy::ExposeSecret;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
+use transparent::keys::AccountPubKey;
 use wasm_bindgen::prelude::*;
+use zcash_address::unified::{Encoding, Fvk, Revision, Ufvk, Uitem};
 use zcash_keys::address::Address;
 use zcash_keys::encoding::{encode_extended_spending_key, AddressCodec};
 use zcash_keys::keys::{
@@ -45,8 +49,14 @@ fn account_from_ufvk(network: &Network, ufvk: &UnifiedFullViewingKey) -> Result<
     let (all, _) = ufvk
         .default_address(UnifiedAddressRequest::AllAvailableKeys)
         .map_err(|e| e.to_string())?;
+    // A key with no shielded item (a Trezor's) has no shielded address to
+    // ask for: its default is the transparent-only unified one.
     let (shielded, _) = ufvk
-        .default_address(UnifiedAddressRequest::SHIELDED)
+        .default_address(if ufvk.orchard().is_some() || ufvk.sapling().is_some() {
+            UnifiedAddressRequest::SHIELDED
+        } else {
+            UnifiedAddressRequest::TRANSPARENT_ONLY
+        })
         .map_err(|e| e.to_string())?;
     Ok(Account {
         ufvk: ufvk.encode(network).map_err(|e| e.to_string())?,
@@ -79,6 +89,53 @@ pub fn derive_account(network: &str, seed: Vec<u8>, hd_index: u32) -> Result<JsV
     let account =
         account(&network, &Zeroizing::new(seed), hd_index).map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&account).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// The transparent-only viewing key an account xpub names: the extended
+/// public key at `m/44'/133'/account'`, as a device's key export hands it
+/// over, encoded as a Revision 2 UFVK with only a P2PKH item (`uvf1…`).
+/// The xpub's version bytes name the network it was made for, but they are
+/// not read: the account key is their whole payload, and the call's network
+/// decides the encoding.
+#[wasm_bindgen]
+pub fn ufvk_from_transparent_xpub(network: &str, xpub: &str) -> Result<String, JsError> {
+    let network = parse_network(network).map_err(|e| JsError::new(&e))?;
+    ufvk_from_transparent_xpub_inner(&network, xpub).map_err(|e| JsError::new(&e))
+}
+
+fn ufvk_from_transparent_xpub_inner(network: &Network, xpub: &str) -> Result<String, String> {
+    let decoded = base58check(xpub)?;
+    if decoded.len() != 78 {
+        return Err("not an extended public key".into());
+    }
+    // An extended key's payload is its 32-byte chain code, then its
+    // compressed public key: what an account key serializes as.
+    let key =
+        AccountPubKey::deserialize(decoded[13..78].try_into().map_err(|_| "bad key payload")?)
+            .map_err(|e| e.to_string())?;
+    let item = Fvk::P2pkh(key.serialize().try_into().map_err(|_| "bad key payload")?);
+    Ok(Ufvk::try_from_items(Revision::R2, vec![Uitem::Data(item)])
+        .map_err(|e| format!("{e:?}"))?
+        .encode(&network.network_type()))
+}
+
+/// The Bitcoin alphabet's base58, checksummed: an extended key's encoding.
+fn base58check(encoded: &str) -> Result<Vec<u8>, String> {
+    let bytes = encoded
+        .from_base58()
+        .map_err(|_| "not a base58 string".to_string())?;
+    if bytes.len() < 4 {
+        return Err("not an extended public key".into());
+    }
+    let (payload, checksum) = bytes.split_at(bytes.len() - 4);
+    if sha256d(payload)[..4] != *checksum {
+        return Err("bad base58 checksum".into());
+    }
+    Ok(payload.to_vec())
+}
+
+fn sha256d(data: &[u8]) -> [u8; 32] {
+    Sha256::digest(Sha256::digest(data)).into()
 }
 
 /// The seed's ZIP-32 fingerprint, hex. Names the seed without revealing it.
@@ -331,5 +388,79 @@ mod tests {
             .unwrap()
             .scope_for_address(ua.orchard().unwrap())
             .is_some());
+    }
+
+    /// The account xpub a device exports at `m/44'/133'/0'`, built from the
+    /// account key the same way a device serializes it.
+    fn xpub() -> String {
+        let payload = spending_key(&Network::MainNetwork, &[7u8; 32], 0)
+            .unwrap()
+            .to_unified_full_viewing_key()
+            .p2pkh()
+            .unwrap()
+            .serialize();
+        // Version bytes for a mainnet extended public key, depth 3, a
+        // fingerprint and child number no one reads, the key, and the
+        // checksum.
+        let mut encoded = vec![0x04, 0x88, 0xB2, 0x1E, 3, 0, 0, 0, 0, 0, 0, 0, 0];
+        encoded.extend_from_slice(&payload);
+        encoded.extend_from_slice(&sha256d(&encoded)[..4]);
+        encoded.to_base58()
+    }
+
+    #[test]
+    fn a_devices_xpub_names_the_account_it_signs_for() {
+        let network = Network::MainNetwork;
+
+        // The xpub's payload is the account key's chain code and key, so the
+        // round trip lands on the same account, whatever its version bytes.
+        let ufvk = ufvk_from_transparent_xpub_inner(&network, &xpub()).unwrap();
+        assert!(ufvk.starts_with("uvf1"));
+        let account_key = spending_key(&network, &[7u8; 32], 0)
+            .unwrap()
+            .to_unified_full_viewing_key()
+            .p2pkh()
+            .unwrap()
+            .serialize();
+        let decoded = UnifiedFullViewingKey::decode(&network, &ufvk).unwrap();
+        assert_eq!(decoded.p2pkh().unwrap().serialize(), account_key);
+        // Transparent addresses the account derives are the same chain the
+        // device signs at.
+        let from_key = account_from_ufvk(&network, &decoded).unwrap();
+        assert!(from_key.transparent.as_ref().unwrap().starts_with("t1"));
+        assert!(from_key.unified.starts_with("tu1"));
+        let first = crate::transparent_tx::derive(&network, &ufvk, "external", 0, 20).unwrap();
+        assert!(first.contains(from_key.transparent.as_ref().unwrap()));
+
+        // And the checksum, length and alphabet all have a say.
+        let mut corrupt = xpub();
+        corrupt.replace_range(4..5, "i");
+        assert!(ufvk_from_transparent_xpub_inner(&network, &corrupt).is_err());
+        assert!(ufvk_from_transparent_xpub_inner(&network, "").is_err());
+        assert!(ufvk_from_transparent_xpub_inner(&network, "0OIl").is_err());
+    }
+
+    #[test]
+    fn a_transparent_only_viewing_key_has_no_shielded_address() {
+        let network = Network::MainNetwork;
+        let ufvk = ufvk_from_transparent_xpub_inner(&network, &xpub()).unwrap();
+        let account = account_from_ufvk(
+            &network,
+            &UnifiedFullViewingKey::decode(&network, &ufvk).unwrap(),
+        )
+        .unwrap();
+
+        // The transparent receiver is the unified address's own receiver.
+        let Address::Unified(ua) = Address::decode(&network, &account.unified).unwrap() else {
+            panic!("not a unified address")
+        };
+        assert_eq!(
+            ua.transparent().unwrap().encode(&network),
+            account.transparent.unwrap()
+        );
+
+        // Fresh shielded addresses don't exist for it.
+        assert!(fresh(&network, &ufvk).is_err());
+        assert!(pools(&network, &ufvk).unwrap().is_empty());
     }
 }

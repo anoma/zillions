@@ -25,6 +25,7 @@ import {
 import {
   computeSeedFingerprint,
   deriveAccount,
+  deriveAccountFromUfvk,
   initZillionsSdk,
   openLinkKey,
   sealLinkKey,
@@ -500,14 +501,20 @@ export class Keyring {
   }> {
     await this.vaultService.assertIsUnlocked();
 
-    // Every device account names a shielded side; its keys may have no
-    // transparent receiver, and the unified address identifies the
-    // account then.
-    const shieldedAddress = input.shieldedAddress;
-    if (!shieldedAddress) {
+    // The account's addresses: what the device handed over, with any gap
+    // filled from its viewing key. A Keystone exports keys only; a
+    // Trezor's transparent-only key names no shielded address at all —
+    // its unified one is transparent-only (`tu1…`).
+    let { transparentAddress, shieldedAddress } = input;
+    if (!transparentAddress || !shieldedAddress) {
+      const derived = await deriveAccountFromUfvk(input.viewingKey);
+      transparentAddress ??= derived.transparent;
+      shieldedAddress ??= derived.unified;
+    }
+    const address = transparentAddress ?? shieldedAddress;
+    if (!address) {
       throw new Error("Device did not provide its addresses");
     }
-    const address = input.transparentAddress ?? shieldedAddress;
 
     const existing = await this.accounts.findByAddress(address);
     if (existing) {

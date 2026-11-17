@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { AmountDisplay } from "../components/AmountInput";
+import { FinalStatePage } from "../components/FinalStatePage";
 import { FormPage } from "../components/FormPage";
 import { HeldFunds } from "../components/HeldFunds";
 import { FeeRow } from "../components/PlannedFee";
@@ -17,7 +18,7 @@ import { useAccount } from "../hooks/useAccount";
 import { useConfirming } from "../hooks/useConfirming";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { useSubmitStage } from "../hooks/useSubmitStage";
-import { useWallet } from "../hooks/useWallet";
+import { useTransparentOnly, useWallet } from "../hooks/useWallet";
 import { keychain } from "../lib/keychain/keychain";
 import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
@@ -34,6 +35,7 @@ function ShieldRoute() {
   const account = useAccount();
   const wallet = useWallet();
   const balance = useGetBalance();
+  const transparentOnly = useTransparentOnly();
   const {
     balance: total = 0n,
     available = 0n,
@@ -52,7 +54,7 @@ function ShieldRoute() {
         available.toString(),
       ],
       queryFn: () => wallet.proposeShield({ seedFingerprint, hdIndex }),
-      enabled: available >= SHIELDING_THRESHOLD,
+      enabled: !transparentOnly && available >= SHIELDING_THRESHOLD,
       retry: false,
     }),
   );
@@ -94,6 +96,17 @@ function ShieldRoute() {
 
   if (shield.data) {
     return <TransactionReceipt tx={{ ...shield.data, status: "Pending" }} />;
+  }
+
+  // A transparent-only account (a Trezor's) has no shielded side to move
+  // funds into.
+  if (transparentOnly) {
+    return (
+      <FinalStatePage title="Nothing to shield">
+        This account's keys are transparent-only: it can't hold shielded funds,
+        so there is nothing to move them into.
+      </FinalStatePage>
+    );
   }
 
   const onSubmit = () => {
