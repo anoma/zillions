@@ -40,17 +40,23 @@ export function fitFontSize(chars: number, max: string) {
 }
 
 /** Convert zatoshi (bigint) → ZEC decimal string. */
-export function zatoshiToZec(zatoshi: bigint): string {
-  const negative = zatoshi < 0n;
-  const abs = negative ? -zatoshi : zatoshi;
+export function atomicToWhole(amount: bigint, decimals: number): string {
+  const negative = amount < 0n;
+  const abs = negative ? -amount : amount;
 
-  const whole = abs / ZATOSHI_PER_ZEC;
-  const frac = abs % ZATOSHI_PER_ZEC;
+  const atomicsPerWhole = 10n ** BigInt(decimals);
+  const whole = abs / atomicsPerWhole;
+  const frac = abs % atomicsPerWhole;
 
-  const fracStr = frac.toString().padStart(DECIMALS, "0").replace(/0+$/, "");
+  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
   const result = fracStr ? `${whole}.${fracStr}` : `${whole}`;
 
   return negative ? `-${result}` : result;
+}
+
+/** Convert zatoshi (bigint) → ZEC decimal string. */
+export function zatoshiToZec(zatoshi: bigint): string {
+  return atomicToWhole(zatoshi, DECIMALS);
 }
 
 /** Convert ZEC (string or number) → zatoshi (bigint). */
