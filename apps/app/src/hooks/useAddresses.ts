@@ -35,9 +35,7 @@ function addressKind(address: string | undefined) {
     queryFn: async () => {
       await initZcore();
       return (address_kind(NETWORK, address!) ?? null) as
-        | "shielded"
-        | "transparent"
-        | null;
+        "shielded" | "transparent" | null;
     },
   });
 }
