@@ -27,6 +27,7 @@ import {
   deriveAccount,
   initZillionsSdk,
   openLinkKey,
+  randomFingerprint,
   sealLinkKey,
   signPczt,
   spendingKeys,
@@ -418,14 +419,14 @@ export class Keyring {
     // Compute the seed fingerprint for mnemonic accounts so the app can call
     // create_account_ufvk (needs fingerprint + hdIndex to embed zip32_derivation
     // in the PCZT, enabling the extension to sign). Non-mnemonic accounts have
-    // no seed, so the fingerprint is stored as an empty string.
+    // no seed: a random stand-in, so sites can't tell them apart.
     let seedFingerprint: string;
     if (accountType === "mnemonic") {
       await initZillionsSdk();
       const seed = await mnemonicToSeed(text, passphrase);
       seedFingerprint = computeSeedFingerprint(seed);
     } else {
-      seedFingerprint = "";
+      seedFingerprint = randomFingerprint();
     }
 
     // Random, so nothing secret (the phrase or key in `text`) feeds an id that

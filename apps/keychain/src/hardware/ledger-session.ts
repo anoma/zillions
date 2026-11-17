@@ -29,6 +29,7 @@ import {
 import type { Bip44Path, Zip32Path } from "../ipc/contract";
 import {
   getNetwork,
+  randomFingerprint,
   type LedgerSignatures,
 } from "../background/crypto/zillions";
 import type { DeviceKeys } from "./types";
@@ -239,10 +240,10 @@ export const connectLedger = (
         transparentAddress,
         shieldedAddress,
         viewingKey: fvk.fullViewingKey,
-        // The device never reveals its seed's fingerprint. The app's PCZT
-        // needs 32 bytes and the device doesn't check them: zeros, the
-        // signer kit's default.
-        seedFingerprint: "00".repeat(32),
+        // The device never reveals its seed's fingerprint, and the app's
+        // PCZT needs 32 bytes; the device is sent zeros whatever these are
+        // (see `ledgerTransaction`).
+        seedFingerprint: randomFingerprint(),
         hdIndex: LEDGER_ZIP32_PATH.account,
       };
     },

@@ -36,7 +36,8 @@ export type DeviceKeys = {
   alias: string;
   /** Encoded UFVK (`uview1…`). */
   viewingKey: string;
-  /** ZIP-32 seed fingerprint (hex) the PCZT's zip32_derivation must carry. */
+  /** ZIP-32 seed fingerprint (hex) the PCZT's zip32_derivation must carry;
+   * random for a Ledger, which can't report its own. */
   seedFingerprint: string;
   /** ZIP-32 account index. */
   hdIndex: number;

@@ -65,7 +65,7 @@ export type ZCashKeychainAccount = {
   viewingKey?: string;
   /** ZIP-32 account index used to derive this account's keys. */
   hdIndex?: number;
-  /** ZIP-32 seed fingerprint (hex). Empty string for accounts with no seed. */
+  /** ZIP-32 seed fingerprint (hex). Random for accounts with no seed in the Keychain. */
   seedFingerprint?: string;
   /** Block height at which this account was created/imported. Used to skip scanning earlier blocks. */
   birthday?: number;

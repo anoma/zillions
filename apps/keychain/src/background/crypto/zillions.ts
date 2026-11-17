@@ -96,6 +96,20 @@ export const freshAddress = async (ufvk: string): Promise<string> => {
 export const computeSeedFingerprint = (seed: Uint8Array): string =>
   seed_fingerprint(seed);
 
+/**
+ * The fingerprint an account with no seed here (a Ledger's, an imported
+ * key's) is stored and shown to sites with. The app needs 32 bytes to build
+ * a PCZT, and a fixed placeholder would tell sites how the keys are held.
+ */
+export const randomFingerprint = (): string =>
+  Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
+
+/** What `randomFingerprint` replaced: zeros for a Ledger, "" for a key import. */
+export const isPlaceholderFingerprint = (fingerprint: string): boolean =>
+  /^(00){32}$|^$/.test(fingerprint);
+
 /** Both encodings of an account's spending secret (see `spendingKeys`). */
 export type SpendingKeys = {
   /**
@@ -189,16 +203,33 @@ export const buildPcztSummary = async (
 /**
  * `pczt` (base64) as a Ledger's Zcash app reads it, for the account at
  * ZIP-32 index `hdIndex`. Throws on Sapling, which a Ledger can't sign.
+ *
+ * Every seed fingerprint goes to the device as zeros, whatever the PCZT
+ * names: a Ledger can't report its own, and zeros are what every Ledger
+ * account was set up with and signed under before they got a random one.
  */
 export const ledgerTransaction = (
   pczt: string,
   hdIndex: number
-): PcztTransaction =>
-  pczt_ledger_transaction(
+): PcztTransaction => {
+  const tx = pczt_ledger_transaction(
     getNetwork(),
     base64ToBytes(pczt),
     hdIndex
   ) as PcztTransaction;
+  const zeros = () => new Uint8Array(32);
+  for (const input of tx.transparentInputs) input.derivation.seedFingerprint = zeros();
+  for (const output of tx.transparentOutputs) {
+    if (output.derivation) output.derivation.seedFingerprint = zeros();
+  }
+  for (const action of [
+    ...(tx.orchardBundle?.actions ?? []),
+    ...(tx.ironwoodBundle?.actions ?? []),
+  ]) {
+    action.seedFingerprint = zeros();
+  }
+  return tx;
+};
 
 /**
  * A device's signatures over a PCZT, hex, in the order the Ledger signer kit

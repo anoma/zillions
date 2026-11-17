@@ -74,7 +74,9 @@ export const KeyStore = t.exact(
       timestamp: t.number,
     }),
     t.type({
-      /** ZIP-32 seed fingerprint (hex). Empty string for accounts with no seed (private-key/spending-key imports). */
+      /** ZIP-32 seed fingerprint (hex). Random for accounts with no seed here
+       * (Ledger, private-key/spending-key imports); older ones held zeros or
+       * "" until `replacePlaceholderFingerprints`. */
       seedFingerprint: t.string,
       /** Block height this account was created/imported at. Used by the app
        * wallet to skip scanning earlier blocks. */
