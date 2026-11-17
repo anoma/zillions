@@ -113,6 +113,7 @@ beforeEach(() => {
     } as never,
     {
       viewingKey: async () => "uview",
+      sign: async () => "signed",
       openLinkKey: async (sealed: string) => {
         opened.push(sealed);
         return "the-key";
@@ -231,30 +232,70 @@ describe("payment links", () => {
 });
 
 describe("transparent change", () => {
-  const change = (scope: number, index: number) => ({
-    transparentOutputs: [{ address: "t1x", value: "9000", mine: true, path: { scope, index } }],
+  const output = (scope: number, index: number, value = "9000") => ({
+    address: "t1x",
+    value,
+    mine: true,
+    path: { scope, index },
+  });
+  const summary = (...outputs: ReturnType<typeof output>[]) => ({
+    transparentOutputs: outputs,
     saplingOutputs: [],
     orchardOutputs: [],
     ironwoodOutputs: [],
   });
+  const query = async (msgId: string, ...outputs: ReturnType<typeof output>[]) => {
+    summaries.next = summary(...outputs);
+    svc.park(msgId, wallet.address);
+    return svc.queryPcztSummary(msgId);
+  };
+  /** The site's request, summarised and approved in its window. */
+  const approve = async (msgId: string, ...outputs: ReturnType<typeof output>[]) => {
+    await query(msgId, ...outputs);
+    void new Promise((resolve, reject) => {
+      (svc as unknown as { resolverMap: Record<number, unknown> }).resolverMap[50] = {
+        meta: { origin: A, kind: "sign-tx" },
+        resolve,
+        reject,
+      };
+    });
+    await svc.submitSignTx(50, msgId, wallet.address);
+    await flush();
+  };
+
+  beforeEach(async () => {
+    await storage.setConnection(A, { accounts: [wallet.id], current: wallet.id });
+  });
 
   it("is flagged past the addresses approved so far plus the gap wallets scan", async () => {
-    summaries.next = change(1, 4);
-    svc.park("a", wallet.address);
-    expect((await svc.queryPcztSummary("a")).unusualChange).toBeUndefined();
-
-    summaries.next = change(1, 5);
-    svc.park("b", wallet.address);
-    expect((await svc.queryPcztSummary("b")).unusualChange).toEqual({
-      scope: 1,
-      index: 5,
-      value: "9000",
-    });
+    expect((await query("a", output(1, 4))).unusualChange).toBeUndefined();
+    expect((await query("b", output(1, 5))).unusualChange).toEqual([
+      { scope: 1, index: 5, value: "9000" },
+    ]);
 
     // Once address 38 has been approved, the next few are expected.
     await storage.raiseChangeIndex(wallet.id, 1, 38);
-    summaries.next = change(1, 43);
-    svc.park("c", wallet.address);
-    expect((await svc.queryPcztSummary("c")).unusualChange).toBeUndefined();
+    expect((await query("c", output(1, 43))).unusualChange).toBeUndefined();
+  });
+
+  it("names every stray output, so dust can't stand in for the rest", async () => {
+    const { unusualChange } = await query("d", output(1, 6, "10000"), output(1, 87, "989980000"));
+    expect(unusualChange).toEqual([
+      { scope: 1, index: 6, value: "10000" },
+      { scope: 1, index: 87, value: "989980000" },
+    ]);
+  });
+
+  it("moves the mark at most one gap, whatever index the user accepted", async () => {
+    await approve("e", output(1, 6, "10000"), output(1, 87));
+    expect(await storage.changeIndexes(wallet.id)).toEqual({ 1: 4 });
+    expect((await query("f", output(1, 87))).unusualChange).toMatchObject([{ index: 87 }]);
+  });
+
+  it("shows an output of ours past the ceiling as a payment", async () => {
+    const { transparentOutputs, unusualChange } = await query("g", output(1, 100));
+    expect(transparentOutputs[0]).toMatchObject({ mine: false, path: undefined });
+    expect(unusualChange).toBeUndefined();
+    expect((await query("h", output(1, 99))).transparentOutputs[0]).toMatchObject({ mine: true });
   });
 });

@@ -110,6 +110,15 @@ export class LocalStorage extends ExtStorage {
     return (E.isRight(decoded) && decoded.right?.[walletId]) || {};
   }
 
+  /** Forgets `walletId`'s approved indexes, once the wallet is removed. */
+  async clearChangeIndexes(walletId: string): Promise<void> {
+    const decoded = t
+      .union([ChangeIndexes, t.undefined])
+      .decode(await this.getRaw(CHANGE_INDEXES_KEY));
+    const { [walletId]: _removed, ...rest } = (E.isRight(decoded) && decoded.right) || {};
+    await this.setRaw(CHANGE_INDEXES_KEY, rest);
+  }
+
   /** Raises the highest approved index of `scope` for `walletId` to `index`. */
   async raiseChangeIndex(walletId: string, scope: number, index: number): Promise<void> {
     const decoded = t

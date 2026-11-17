@@ -34,3 +34,14 @@ describe("connections", () => {
     );
   });
 });
+
+describe("change indexes", () => {
+  it("forget only the removed wallet's", async () => {
+    const { storage: s } = storage();
+    await s.raiseChangeIndex("gone", 1, 7);
+    await s.raiseChangeIndex("kept", 1, 3);
+    await s.clearChangeIndexes("gone");
+    expect(await s.changeIndexes("gone")).toEqual({});
+    expect(await s.changeIndexes("kept")).toEqual({ 1: 3 });
+  });
+});

@@ -49,6 +49,11 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const { accounts } = useWallets();
   const wallet = walletFor(accounts, signer);
   const highFee = details ? isHighFee(details.summary) : false;
+  const unusual = details?.summary.unusualChange;
+  const stray = unusual && {
+    value: unusual.reduce((sum, o) => sum + BigInt(o.value), 0n),
+    indexes: unusual.map((o) => o.index),
+  };
 
   useEffect(() => {
     const fetchDetails = async (): Promise<void> => {
@@ -136,11 +141,12 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
           </label>
         </Notice>
       )}
-      {details?.summary.unusualChange && (
+      {stray && (
         <Notice tone="danger" title="Change to an address wallets may not find" className="mt-4">
-          {formatZec(details.summary.unusualChange.value)} goes to transparent
-          address {details.summary.unusualChange.index} of your wallet, far past
-          the ones it has used. A wallet restoring your recovery phrase checks
+          {formatZec(stray.value)} goes to transparent{" "}
+          {stray.indexes.length === 1 ? "address" : "addresses"}{" "}
+          {stray.indexes.join(", ")} of your wallet, far past the ones it has
+          used. A wallet restoring your recovery phrase checks
           addresses in order and stops a few past the last used, so it may
           never find this money.
           <label className="flex items-center gap-2 mt-2 font-bold cursor-pointer">
@@ -170,7 +176,7 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
         approveDisabled={
           !details ||
           (highFee && !highFeeAccepted) ||
-          (!!details.summary.unusualChange && !changeAccepted) ||
+          (!!stray && !changeAccepted) ||
           !!signError
         }
         onApprove={handleApprove}
