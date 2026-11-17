@@ -57,12 +57,20 @@ export const keptByPool = (summary: PcztSummary) =>
     .map(({ pool, outputs }) => ({ pool, value: total(outputs) }))
     .filter(({ value }) => value > 0n);
 
-/** The amount paid out, or, when nothing is, the amount moved within the wallet. */
+/** What an unshield makes transparent, or 0 when the transaction isn't one. */
+export const unshielded = (summary: PcztSummary): bigint =>
+  payments(summary).length === 0 && summary.transparentInputs.length === 0 ?
+    total(summary.transparentOutputs)
+  : 0n;
+
+/** The amount paid out, else what an unshield makes transparent, else the amount moved within the wallet. */
 export const transferAmount = (summary: PcztSummary): bigint => {
   const paid = payments(summary);
-  return paid.length > 0 ?
-      total(paid)
-    : total(outputPools(summary).flatMap(({ outputs }) => outputs));
+  if (paid.length > 0) return total(paid);
+  return (
+    unshielded(summary) ||
+    total(outputPools(summary).flatMap(({ outputs }) => outputs))
+  );
 };
 
 /** Funded with a payment link, so its claimer receives exactly the link's amount. */

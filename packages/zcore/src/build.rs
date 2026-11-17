@@ -241,8 +241,8 @@ fn zip32_path(network: &Network, hd_index: u32) -> Vec<u32> {
 
 /// The PCZT for a single-step plan. `fingerprint` and `hd_index` name the
 /// seed account, so the keychain can find its keys. `change_index` is the
-/// unused internal address transparent change goes to; a plan with such
-/// change fails without it.
+/// unused internal address transparent change goes to, or an unshield pays;
+/// a plan with transparent change fails without it.
 pub(crate) fn pczt<N>(
     wallet: &Wallet,
     ufvk: &UnifiedFullViewingKey,
@@ -403,8 +403,20 @@ pub(crate) fn pczt<N>(
     let mut sapling_outputs = Vec::new();
     let mut orchard_outputs = Vec::new();
     let mut ironwood_outputs = Vec::new();
-    let mut transparent_outputs = 0;
-    let mut transparent_change = None;
+    let mut transparent_outputs = Vec::new();
+    let internal = match (
+        change_index.and_then(transparent::keys::NonHardenedChildIndex::from_index),
+        account,
+    ) {
+        (Some(index), Some(account)) => {
+            let pubkey = account
+                .derive_address_pubkey(transparent::keys::TransparentKeyScope::INTERNAL, index)
+                .map_err(|e| e.to_string())?;
+            let address = transparent::address::TransparentAddress::from_pubkey(&pubkey);
+            Some((index, pubkey, address))
+        }
+        _ => None,
+    };
     for (index, pool) in step.payment_pools() {
         let payment = step
             .transaction_request()
@@ -445,7 +457,7 @@ pub(crate) fn pczt<N>(
                 builder
                     .add_transparent_output(&to, amount)
                     .map_err(|e| format!("{e:?}"))?;
-                transparent_outputs += 1;
+                transparent_outputs.push(to);
             }
             (Address::Sapling(to), _) => {
                 builder
@@ -457,7 +469,7 @@ pub(crate) fn pczt<N>(
                 builder
                     .add_transparent_output(&to, amount)
                     .map_err(|e| format!("{e:?}"))?;
-                transparent_outputs += 1;
+                transparent_outputs.push(to);
             }
             (Address::Tex(_), _) => return Err("TEX addresses need a multi-step send".into()),
         }
@@ -508,21 +520,12 @@ pub(crate) fn pczt<N>(
                 ironwood_outputs.push(String::new());
             }
             PoolType::Transparent => {
-                let index = change_index
-                    .and_then(transparent::keys::NonHardenedChildIndex::from_index)
-                    .ok_or("transparent change needs an unused internal address")?;
-                let pubkey = account
-                    .ok_or("viewing key has no transparent part")?
-                    .derive_address_pubkey(transparent::keys::TransparentKeyScope::INTERNAL, index)
-                    .map_err(|e| e.to_string())?;
+                let (_, _, to) =
+                    internal.ok_or("transparent change needs an unused internal address")?;
                 builder
-                    .add_transparent_output(
-                        &transparent::address::TransparentAddress::from_pubkey(&pubkey),
-                        value,
-                    )
+                    .add_transparent_output(&to, value)
                     .map_err(|e| format!("{e:?}"))?;
-                transparent_change = Some((transparent_outputs, index, pubkey));
-                transparent_outputs += 1;
+                transparent_outputs.push(to);
             }
         }
     }
@@ -631,22 +634,29 @@ pub(crate) fn pczt<N>(
                     Ok(())
                 })?;
             }
-            // Change names its key, so the keychain can tell it's ours.
-            if let Some((i, index, pubkey)) = transparent_change {
-                let derivation = Bip32Derivation::parse(
-                    fingerprint,
-                    vec![
-                        44 | HARDENED,
-                        coin_type | HARDENED,
-                        hd_index | HARDENED,
-                        bip32::ChildNumber::from(transparent::keys::TransparentKeyScope::INTERNAL)
-                            .into(),
-                        index.index(),
-                    ],
-                )
-                .expect("a BIP-44 path parses");
+            for (i, to) in transparent_outputs.iter().enumerate() {
+                let ours = internal.filter(|(_, _, address)| address == to);
                 updater.update_output_with(i, |mut output| {
-                    output.set_bip32_derivation(pubkey.serialize(), derivation);
+                    // Keystone refuses a transparent output that doesn't name it.
+                    output.set_user_address(Address::Transparent(*to).encode(&network));
+                    // Ours names its key, so the keychain can tell it's ours.
+                    if let Some((index, pubkey, _)) = ours {
+                        let derivation = Bip32Derivation::parse(
+                            fingerprint,
+                            vec![
+                                44 | HARDENED,
+                                coin_type | HARDENED,
+                                hd_index | HARDENED,
+                                bip32::ChildNumber::from(
+                                    transparent::keys::TransparentKeyScope::INTERNAL,
+                                )
+                                .into(),
+                                index.index(),
+                            ],
+                        )
+                        .expect("a BIP-44 path parses");
+                        output.set_bip32_derivation(pubkey.serialize(), derivation);
+                    }
                     Ok(())
                 })?;
             }
@@ -1202,6 +1212,8 @@ pub(crate) mod tests {
             ])
         );
 
+        assert_names_transparent_outputs(&network, &unsigned);
+
         let signed = crate::roles::sign(&network, unsigned, &SEED, 0).unwrap();
         let (_, raw) = crate::roles::prove(signed, None).unwrap();
         let tx = zcash_primitives::transaction::Transaction::read(
@@ -1313,7 +1325,7 @@ pub(crate) mod tests {
         assert_eq!(pczt.ironwood().anchor(), &Some(anchor.to_bytes()));
         let outputs = pczt.transparent().outputs();
         assert_eq!((outputs.len(), *outputs[0].value()), (1, 50_000));
-        assert_eq!(outputs[0].user_address().as_deref(), None);
+        assert_eq!(outputs[0].user_address().as_deref(), Some(to.as_str()));
     }
 
     /// A migration: every Orchard note into our own Ironwood, the fee apart,
@@ -1408,6 +1420,58 @@ pub(crate) mod tests {
             pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &wrong, None)
                 .unwrap_err()
                 .contains("differs from the chain's")
+        );
+    }
+
+    /// Keystone refuses a transparent output whose `user_address` isn't the
+    /// address its script pays.
+    fn assert_names_transparent_outputs(network: &Network, pczt: &Pczt) {
+        for output in pczt.transparent().outputs() {
+            let pays = crate::transparent_tx::script_address(network, output.script_pubkey());
+            assert_eq!(output.user_address().as_ref(), pays.as_ref());
+        }
+    }
+
+    /// An unshield to the internal address it's given names its key, so the
+    /// keychain shows it as ours; the same index can't vouch for another address.
+    #[test]
+    fn unshield_names_its_own_address() {
+        let network = Network::MainNetwork;
+        let (wallet, trees, _) = wallet_and_trees("ironwood", 200_000);
+        let ufvk = UnifiedFullViewingKey::decode(&network, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+        let derive = |scope, index| {
+            crate::transparent_tx::derive(&network, &wallet_ufvk(), scope, index, 1)
+                .unwrap()
+                .remove(0)
+        };
+        let unshield = |to: &str| {
+            let proposal = crate::send::tests::plan(&wallet, to, 50_000);
+            let unsigned =
+                pczt(&wallet, &ufvk, fingerprint, 0, &proposal, &trees, Some(7)).unwrap();
+            assert_names_transparent_outputs(&network, &unsigned);
+            let summary =
+                serde_json::to_value(crate::roles::summarize(&network, &unsigned, &ufvk).unwrap())
+                    .unwrap();
+            summary["transparentOutputs"].clone()
+        };
+
+        let ours = derive("internal", 7);
+        assert_eq!(
+            unshield(&ours),
+            serde_json::json!([{
+                "address": ours,
+                "value": "50000",
+                "mine": true,
+                "path": { "scope": 1, "index": 7 },
+            }])
+        );
+        let elsewhere = derive("internal", 8);
+        assert_eq!(
+            unshield(&elsewhere),
+            serde_json::json!([{ "address": elsewhere, "value": "50000", "mine": false }])
         );
     }
 
