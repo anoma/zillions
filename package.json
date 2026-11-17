@@ -18,7 +18,8 @@
     "build": "bash scripts/build.sh",
     "zcore:build": "packages/zcore/build.sh",
     "typecheck": "pnpm --filter zillions-app typecheck && pnpm --filter zillions-keychain compile",
-    "lint": "pnpm --filter zillions-app lint && pnpm --filter zillions-keychain lint"
+    "lint": "pnpm --filter zillions-app lint && pnpm --filter zillions-keychain lint",
+    "format:check": "pnpm --filter zillions-app format:check"
   },
   "devDependencies": {
     "husky": "9.1.7",

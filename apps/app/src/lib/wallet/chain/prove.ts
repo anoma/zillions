@@ -8,8 +8,7 @@ import initZcore, { prove_pczt, warm_prover } from "@zillions/zcore";
 import type { ProveStage, Proved, SaplingParams } from "./submit";
 
 export type ProveRequest =
-  | { warm: true }
-  | { pczt: Uint8Array; sapling?: SaplingParams };
+  { warm: true } | { pczt: Uint8Array; sapling?: SaplingParams };
 
 export type ProveResponse =
   | { warmed: number }
