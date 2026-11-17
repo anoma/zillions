@@ -894,7 +894,7 @@ const label = (party: Party) =>
  * transaction asked for by its txid.
  */
 function source(c: Case) {
-  const txids = txidsToRead(c.notes ?? [], c.sent ?? [], txsOf(c), blocksOf(c));
+  const txids = txidsToRead(c.notes ?? [], txsOf(c), blocksOf(c));
   const rpc = c.transparent
     ? "RPC by address"
     : txids.has("tx")

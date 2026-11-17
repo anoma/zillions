@@ -45,8 +45,6 @@ export type ShieldedRun = {
   workers: (phase: SyncPhase) => number;
   /** Note and sent-output ids already held, so a re-read chunk can't double them. */
   applied: Set<string>;
-  /** Chunks read in full this run, as `pool:chunk`: their sends are in. */
-  readChunks: Set<string>;
   lookups: ReturnType<typeof workerChannel>;
   signal: AbortSignal;
   /** New notes, sends or spends: their blocks are worth fetching now. */
@@ -291,12 +289,10 @@ export async function crawlHistory(
 function applyChunk(
   run: ShieldedRun,
   pool: Pool,
-  { chunk, hits, sent, tried }: ChunkWorkerSuccess,
+  { hits, sent, tried }: ChunkWorkerSuccess,
 ) {
   const p = run.state.scan.scanned[pool]!;
   if (tried && tried.chunk >= (p.tried?.chunk ?? -1)) p.tried = tried;
-  // A worker reads a chunk in full exactly when it holds a note of ours.
-  if (hits.length) run.readChunks.add(`${pool}:${chunk}`);
   const known = run.applied.size;
   applySent(run, pool, sent);
   const found: Note[] = [];
@@ -317,9 +313,9 @@ function applyChunk(
 }
 
 /**
- * Reads what `txs`, our own transactions, sent, in every pool they pay into:
- * the crawl only reads chunks holding a note or spend of ours, but a payment
- * can sit in another pool's chunk. Its block says exactly where.
+ * Reads the outputs of `txs`, which we authored, in every pool: those paying us
+ * become notes, the rest payments. A transaction is marked read once all its
+ * chunks are; a failed chunk retries only its transactions next sync.
  */
 export async function recoverSends(
   run: ShieldedRun,
@@ -328,33 +324,58 @@ export async function recoverSends(
 ) {
   const { scan, blocks } = run.state;
   const done = new Set(scan.sendsRead);
-  try {
-    for (const [txId, { height, tx_index }] of txs) {
-      const block = blocks.get(height);
-      if (done.has(txId) || !block) continue;
-      const places = outputPositions(block, tx_index).filter(
-        (p) => p.count && run.pools.includes(p.pool),
-      );
-      // Not indexed yet: try again next sync.
-      if (places.some((p) => p.first + p.count > sizes[p.pool])) continue;
-      for (const { pool, first, count } of places) {
-        const from = Math.floor(first / CHUNK_SIZE);
-        const to = Math.floor((first + count - 1) / CHUNK_SIZE);
-        for (let chunk = from; chunk <= to; chunk++) {
-          if (run.readChunks.has(`${pool}:${chunk}`)) continue;
-          const { sent } = await run.lookups.run({
-            ufvk: run.ufvk,
-            chunk,
-            pool,
-            sends: true,
-          });
-          applySent(run, pool, sent);
-          run.readChunks.add(`${pool}:${chunk}`);
-        }
+  // One read per chunk: the tip chunk isn't cached, so a read per transaction downloads it again.
+  const reads = new Map<
+    string,
+    { pool: Pool; chunk: number; sends: number[] }
+  >();
+  const needs = new Map<string, Set<string>>();
+  for (const [txId, { height, tx_index }] of txs) {
+    const block = blocks.get(height);
+    if (done.has(txId) || !block) continue;
+    const places = outputPositions(block, tx_index).filter(
+      (p) => p.count && run.pools.includes(p.pool),
+    );
+    // Not indexed yet: try again next sync.
+    if (places.some((p) => p.first + p.count > sizes[p.pool])) continue;
+    const keys = new Set<string>();
+    for (const { pool, first, count } of places) {
+      for (let at = first; at < first + count; at++) {
+        const chunk = Math.floor(at / CHUNK_SIZE);
+        const key = `${pool}:${chunk}`;
+        const read = reads.get(key) ?? { pool, chunk, sends: [] };
+        read.sends.push(at % CHUNK_SIZE);
+        reads.set(key, read);
+        keys.add(key);
       }
-      done.add(txId);
     }
-  } finally {
-    scan.sendsRead = [...done];
+    needs.set(txId, keys);
+  }
+  const found: Note[] = [];
+  const ok = new Set<string>();
+  for (const [key, { pool, chunk, sends }] of reads) {
+    if (run.signal.aborted) break;
+    try {
+      const read = await run.lookups.run({
+        ufvk: run.ufvk,
+        chunk,
+        pool,
+        sends,
+      });
+      found.push(...applyChunk(run, pool, read));
+      ok.add(key);
+    } catch (err) {
+      if (!run.signal.aborted)
+        console.error(`[sync] sends read of ${key} failed`, err);
+    }
+  }
+  const read = [...needs].filter(([, keys]) =>
+    [...keys].every((k) => ok.has(k)),
+  );
+  scan.sendsRead = [...done, ...read.map(([txId]) => txId)];
+  // The crawl skips these notes once it reaches their chunk, so its spend check would too.
+  if (found.length) {
+    await checkSpends(found, run.signal);
+    run.onFound();
   }
 }

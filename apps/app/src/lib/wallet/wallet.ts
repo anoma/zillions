@@ -4,12 +4,12 @@ import { invariant } from "../invariant";
 import { dedupe, singleton } from "../utils";
 import {
   activityHeights,
+  authoredTxs,
   buildActivity,
-  sendingTxs,
   txidsToRead,
 } from "./activity";
 import { balances, spendable, walletData } from "./balance";
-import { CHUNK_SIZE, fetchTreeSizes, type TreeSizes } from "./chain/indexer";
+import { fetchTreeSizes, type TreeSizes } from "./chain/indexer";
 import {
   fetchBlock,
   fetchLatestHeight,
@@ -213,7 +213,6 @@ export class Wallet {
     tip,
     workers: this.#workers,
     applied: this.#applied,
-    readChunks: new Set(),
     lookups: workerChannel(),
     signal,
     onFound: () => {
@@ -330,7 +329,7 @@ export class Wallet {
     await this.#placing;
     await this.#fetchBlocks();
     if (run && sizes) {
-      await recoverSends(run, sizes, this.#sendingTxs()).catch((err) =>
+      await recoverSends(run, sizes, this.#authoredTxs()).catch((err) =>
         console.error("[sync] sends lookup failed", err),
       );
     }
@@ -432,8 +431,8 @@ export class Wallet {
       })
       .catch((err) => console.error("[sync] transparent failed", err));
 
-  #sendingTxs = () =>
-    sendingTxs(
+  #authoredTxs = () =>
+    authoredTxs(
       this.#state.notes,
       this.#transparent?.txs ?? [],
       this.#state.blocks,
@@ -490,14 +489,9 @@ export class Wallet {
    * next sync.
    */
   #fetchTxs = async () => {
-    const { notes, sent, blocks } = this.#state;
+    const { notes, blocks } = this.#state;
     const known = this.#fullTxs();
-    const txids = txidsToRead(
-      notes,
-      sent,
-      this.#transparent?.txs ?? [],
-      blocks,
-    );
+    const txids = txidsToRead(notes, this.#transparent?.txs ?? [], blocks);
     const missing = [...txids].filter((txid) => !known.has(txid));
     if (!missing.length) return;
     await initZcore();
@@ -586,35 +580,15 @@ export class Wallet {
     );
   };
 
-  /**
-   * The payment link transaction `txid` funded, if it funded one: its output
-   * read again from the indexer, as sends synced before links carry no link.
-   */
+  /** The payment link transaction `txid` funded, if it funded one. */
   linkOf = async (txid: string): Promise<SentOutput | undefined> => {
     const { sent, blocks } = this.#state;
-    const funding = sent.filter(
+    return sent.find(
       (s) =>
+        s.link &&
         s.pool === "ironwood" &&
         blocks.get(s.height)?.txids.get(s.tx_index) === txid,
     );
-    const synced = funding.find((s) => s.link);
-    if (synced || !funding.length) return synced;
-    const lookups = workerChannel();
-    try {
-      for (const output of funding) {
-        const { sent } = await lookups.run({
-          ufvk: this.#ufvk,
-          chunk: Math.floor(output.position / CHUNK_SIZE),
-          pool: "ironwood",
-          sends: true,
-        });
-        const found = sent.find((s) => s.position === output.position);
-        if (found?.link) return found;
-      }
-      return undefined;
-    } finally {
-      lookups.terminate();
-    }
   };
 
   planSend = (send: SendRequest, keep?: (note: Note) => boolean) =>

@@ -53,8 +53,8 @@ export interface ChunkRequest {
   ufvk: string;
   chunk: number;
   pool: Pool;
-  /** Reads only what the chunk shows we sent, even with no note of ours in it. */
-  sends?: true;
+  /** Indexes in this chunk of a transaction we authored: read for its notes and payments, and nothing else. */
+  sends?: number[];
   /** The notes an earlier read tried, skipped when it was this chunk and they're unchanged. */
   tried?: Tried;
   /** Trial-decrypts on the GPU when there is one, else on the CPU. */
@@ -158,14 +158,14 @@ export interface ShieldedScan {
   setupDone: boolean;
   /** Whether the user started the spam era's sync; kept until they pause it. */
   spamSync?: boolean;
-  /** Our sending transactions (`height:tx_index`) whose sends have all been read. */
+  /** Our authored transactions (`height:tx_index`) whose sends have all been read. */
   sendsRead: string[];
 }
 
 /** Everything the wallet keeps for one account, stored as a whole. */
 export interface WalletState {
   /** Bumped when the shape changes: an older state is dropped and synced again. */
-  version: 4;
+  version: 5;
   id: string;
   notes: Note[];
   sent: Sent[];

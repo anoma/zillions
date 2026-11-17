@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { buildActivity, publicActivity, sendingTxs } from "./activity";
+import { authoredTxs, buildActivity, publicActivity } from "./activity";
 import type { Block } from "./chain/lightwalletd";
 import type { ParsedTx, TransparentTx } from "./transparent";
 import type { Note } from "./types";
@@ -22,8 +22,13 @@ const note = (position: number, value: number, memo?: string): Note => ({
 });
 
 test("a transaction's memo is the one its notes carry, wherever it sits", () => {
+  const spent: Note = {
+    ...note(0, 400_000),
+    height: 3_500_000,
+    spend: { status: "spent", at: { height: 3_503_689, tx_index: 7 } },
+  };
   const memoOf = (notes: Note[]) =>
-    buildActivity(notes, [], [], new Map())[0].memo;
+    buildActivity([spent, ...notes], [], [], new Map())[0].memo;
   // An unshield's padding note, then its change.
   expect(memoOf([note(1, 0), note(2, 350_000)])).toBeUndefined();
   expect(memoOf([note(1, 0), note(2, 350_000, "thanks")])).toBe("thanks");
@@ -160,7 +165,7 @@ test("our sending transactions are those that spent a note or a coin of ours", (
   const blocks = new Map([
     [3_160, block({ txids: new Map([[5, "tshield"]]) })],
   ]);
-  const txs = sendingTxs(
+  const txs = authoredTxs(
     [{ ...note(1, 150_000), spend: { status: "spent", at } }, note(3, 30_000)],
     [
       {
@@ -216,28 +221,61 @@ test("a send's payment is what it paid to someone else's transparent address", (
   });
 });
 
-test("a fetched send's fee is exact, even with a note it spent not found yet", () => {
+test("an output our OVK opens doesn't make a transaction ours: only a spend does", () => {
+  // A viewing-key holder pays us 30,000 and seals its own 100,000 output with
+  // our OVK. Nothing of ours is spent, so it's Received.
   const at = { height: 3_150, tx_index: 3 };
   const blocks = new Map([
     [at.height, block({ txids: new Map([[3, "tx3"]]) })],
   ]);
-  const sent = {
+  const planted = {
     id: "a_orchard_9",
     pool: "orchard" as const,
     value: 100_000,
-    recipient: "u1theirs",
+    recipient: "u1attacker",
+    memo: "Rent - November",
     position: 9,
     ...at,
   };
-  const entry = (txs?: Map<string, ParsedTx>) =>
-    buildActivity([{ ...note(2, 30_000), ...at }], [sent], [], blocks, txs)[0];
-
-  expect(entry()).toMatchObject({ value: -100_000n, fee: 0n });
-  // Shielded to shielded: all that leaves the pools is the fee.
   const tx3 = full("tx3", { value_balance: 15_000 });
-  expect(entry(new Map([["tx3", tx3]]))).toMatchObject({
-    value: -100_000n,
-    fee: 15_000n,
+  const history = (scope: Note["scope"]) =>
+    buildActivity(
+      [{ ...note(2, 30_000), scope, ...at }],
+      [planted],
+      [],
+      blocks,
+      new Map([["tx3", tx3]]),
+    )[0];
+
+  const entry = history("external");
+  expect(entry).toMatchObject({
+    tx_type: "Received",
+    value: 30_000n,
+    fee: 0n,
+    to: { pool: "shielded" },
+  });
+  expect(entry.memo).toBeUndefined();
+  // Paid to our change address instead, it would pass for our send: hidden.
+  expect(history("internal")).toBeUndefined();
+});
+
+test("a send known only by its change is hidden until the note it spent is found", () => {
+  const at = { height: 3_503_939, tx_index: 2 };
+  const change = { ...note(2, 80_000, "change"), ...at };
+  const spent = (spend: Note["spend"]) => ({
+    ...note(1, 100_000),
+    scope: "external" as const,
+    spend,
+  });
+  const send = (notes: Note[]) =>
+    buildActivity(notes, [], [], new Map()).find(
+      (tx) => tx.block_height === at.height,
+    );
+
+  expect(send([spent({ status: "unchecked" }), change])).toBeUndefined();
+  expect(send([spent({ status: "spent", at }), change])).toMatchObject({
+    tx_type: "Sent",
+    value: -20_000n,
   });
 });
 

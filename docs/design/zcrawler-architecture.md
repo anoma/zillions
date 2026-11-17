@@ -29,9 +29,8 @@ lightwalletd; nothing from a local crawler.
   before and during the spam era) with a newest-first cursor each; a later
   sync first reads the chunks minted since, down to the newest one read again
   (it may have been the filling tip).
-- **Notes.** `/ciphertexts` for every chunk; `/memos` and `/outgoing` only for a
-  chunk holding a hit or a spend of ours. Outgoing recovery covers the whole
-  chunk, so it also finds what our spending transactions paid out.
+- **Notes.** `/ciphertexts` for every chunk; `/memos` only for a chunk holding
+  a hit of ours. The crawl never opens outgoing ciphertexts.
 - **Spends.** Newest-first reads the chunk spending a note before it finds
   the note, so each note found, and each one still unspent at a sync's
   start, is looked up by nullifier: `POST /{pool}/spent`, up to 1,000 per
@@ -39,12 +38,15 @@ lightwalletd; nothing from a local crawler.
   that it isn't yet, as of the indexer's committed tip. Exact for all three
   pools, Sapling included. **Temporary:** it tells the indexer which
   nullifiers are ours (see Threat model).
-- **Sends across pools.** A payment can sit in a pool where we hold nothing,
-  so the crawl never reads its chunk. After each sync, every transaction of
-  ours that spent something is placed exactly: its compact block's tree sizes
-  (ChainMetadata 1–3) minus the notes it and later transactions add (CompactTx
-  fields 5, 6, 9) give its notes' positions in each pool, and those chunks'
-  `/outgoing` are read once.
+- **Sends.** Only a transaction we authored (it spent a note or coin of ours)
+  has payments: anyone holding the viewing key can seal an output with our
+  OVK, so opening one proves nothing. After each sync, each authored
+  transaction is placed exactly: its compact block's tree sizes (ChainMetadata
+  1–3) minus the notes it and later transactions add (CompactTx fields 5, 6, 9)
+  give its outputs' positions in each pool. Those outputs alone are read, once:
+  trial-decrypted first (change and payments to ourselves are notes), the rest
+  opened with every OVK the account has, since the pool that funded it picks
+  which. History rules: [history-categories.md](history-categories.md).
 - **Sends to transparent addresses.** `/outgoing` only recovers shielded
   outputs. A sending transaction's transparent outputs come from the same
   compact block (CompactTx field 8: value and script); those not paying one of
@@ -396,7 +398,8 @@ Sync as built). They are the private way back once that lookup goes.
   learns when each is spent. Accepted for newest-first sync until the indexer
   offers a private lookup.
 - **Memos and outgoing: bounded leak.** Fetched only for chunks holding a note
-  or spend of ours: "this wallet has something in chunk N", k = 16,384.
+  of ours or an output of a transaction we authored: "this wallet has
+  something in chunk N", k = 16,384.
 - **Birthday: bounded leak.** The start-chunk search hints at the account's age.
 
 ## Asks for zcrawler / ziziphus

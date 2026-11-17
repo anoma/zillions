@@ -215,18 +215,19 @@ test("places a note's spend from the indexer, and reads what it paid into anothe
     status: "spent",
     at: { height: 3_100, tx_index: 2 },
   });
-  // Neither chunk holds a note of ours: only the block points at them.
+  // Neither chunk holds a note of ours: only the block points at them, and
+  // at its outputs, the last of each pool's tree.
   expect(lookup).toHaveBeenCalledWith(
-    expect.objectContaining({ pool: "orchard", chunk: 3, sends: true }),
+    expect.objectContaining({ pool: "orchard", chunk: 3, sends: [8, 9] }),
   );
   expect(lookup).toHaveBeenCalledWith(
-    expect.objectContaining({ pool: "sapling", chunk: 0, sends: true }),
+    expect.objectContaining({ pool: "sapling", chunk: 0, sends: [99] }),
   );
   expect(saved.sent).toEqual([expect.objectContaining(payment)]);
   expect((await wallet.getBalance()).shielded.balance).toBe(0n);
 });
 
-test("finds the payment link a send funded by reading its output again", async () => {
+test("finds the payment link a send funded", async () => {
   chain.sizes = { sapling: 0, orchard: 3 * 16_384 + 10, ironwood: 16_384 + 10 };
   chain.hits.set("orchard:1", [note("orchard", 16_387, nf("aa"))]);
   chain.spentAt.set(nf("aa"), { height: 3_100, tx_index: 2 });
@@ -244,23 +245,15 @@ test("finds the payment link a send funded by reading its output again", async (
     memo: "Lunch",
     height: 3_100,
     tx_index: 2,
-    position: 16_390,
+    position: 16_393,
+    link: { nk: "ab".repeat(32), sealed: "cd".repeat(32) },
   };
-  // Synced before sends carried their link.
   chain.sent.set("ironwood:1", [funding as Sent]);
   const wallet = new Wallet({ id: "a", ufvk: "uview" });
   await wallet.sync();
-  expect(await wallet.linkOf("tx1")).toBeUndefined();
 
-  const link = { nk: "ab".repeat(32), sealed: "cd".repeat(32) };
-  chain.sent.set("ironwood:1", [{ ...funding, link } as Sent]);
-  lookup.mockClear();
-  expect(await wallet.linkOf("tx2")).toEqual(
-    expect.objectContaining({ ...funding, link }),
-  );
-  expect(lookup).toHaveBeenCalledWith(
-    expect.objectContaining({ pool: "ironwood", chunk: 1, sends: true }),
-  );
+  expect(await wallet.linkOf("tx1")).toBeUndefined();
+  expect(await wallet.linkOf("tx2")).toEqual(expect.objectContaining(funding));
 });
 
 test("never reads a pool the viewing key has no key for, and still finishes", async () => {

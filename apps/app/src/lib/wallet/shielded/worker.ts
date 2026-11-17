@@ -120,10 +120,10 @@ worker.onmessage = async (e) => {
       return;
     }
 
-    // A hit makes the memos and outgoing ciphertexts (our sends) worth fetching.
+    // A hit makes the memos worth fetching; only a sends read opens outgoing ones.
     const [memos, outgoing] = await Promise.all([
       fetchChunk("memos", chunk, pool),
-      fetchChunk("outgoing", chunk, pool),
+      sends ? fetchChunk("outgoing", chunk, pool) : new Uint8Array(),
     ]);
     const full = try_decrypt_full(
       NETWORK,
@@ -134,6 +134,7 @@ worker.onmessage = async (e) => {
       memos,
       outgoing,
       Uint32Array.from(hits, (hit) => hit.index),
+      Uint32Array.from(sends ?? []),
     );
     worker.postMessage({ chunk, ...full, ...read });
   } catch (err) {

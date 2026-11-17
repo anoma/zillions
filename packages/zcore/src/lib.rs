@@ -339,7 +339,8 @@ pub(crate) fn chunk_body(body: &[u8], record_len: usize) -> Result<ChunkBody<'_>
 
 /// A chunk's notes whole: each `/ciphertexts` record joined with the `/memos`
 /// and `/outgoing` records at its index. Those two may come from a later, longer
-/// tip chunk, so only their first records are read.
+/// tip chunk, so only their first records are read. An empty `outgoing` leaves
+/// every note's outgoing part zero: only a sends read opens it.
 fn full_notes(
     pool: &str,
     chunk: u32,
@@ -353,7 +354,11 @@ fn full_notes(
         ORCHARD_RECORD_LEN
     };
     let notes = chunk_body(ciphertexts, record_len)?.records;
-    let mut outgoing = chunk_body(outgoing, OUTGOING_RECORD_LEN)?.records;
+    let mut outgoing = if outgoing.is_empty() {
+        None
+    } else {
+        Some(chunk_body(outgoing, OUTGOING_RECORD_LEN)?.records)
+    };
     // Memo records are `varint(height) ‖ varint(tx_index) ‖ tail`: not fixed-width.
     let (_, mut memos) =
         postcard::take_from_bytes::<(u32, u32, u32, usize)>(memos).map_err(|e| e.to_string())?;
@@ -367,9 +372,12 @@ fn full_notes(
         }
         let (tail, rest) = rest.split_at(MEMO_TAIL_LEN);
         memos = rest;
-        let og = outgoing
-            .next()
-            .ok_or(format!("outgoing ends before note {i}"))?;
+        let og: &[u8] = match &mut outgoing {
+            Some(records) => records
+                .next()
+                .ok_or(format!("outgoing ends before note {i}"))?,
+            None => &[0; OUTGOING_RECORD_LEN],
+        };
 
         let (eph_key, r) = r.split_at(32);
         let (head, r) = r.split_at(COMPACT_NOTE_SIZE);
@@ -591,10 +599,11 @@ fn output_indices(notes: &[FullNote]) -> Vec<u16> {
 fn decrypt_full_orchard<V: DomainVersion>(
     network: &Network,
     fvk: &orchard::keys::FullViewingKey,
-    transparent_ovk: Option<OutgoingViewingKey>,
+    ovks: &[OutgoingViewingKey],
     pool: &'static str,
     notes: &[FullNote],
     wanted: &[usize],
+    sends: &[usize],
 ) -> Result<FullChunk, String>
 where
     NoteEncryptionDomain<V>: BatchDomain<
@@ -639,7 +648,6 @@ where
             },
         ))
     };
-    let outputs = notes.iter().map(&output).collect::<Result<Vec<_>, _>>()?;
     // Full decryption costs as much as the compact pass, so only its hits get it.
     let candidates = wanted
         .iter()
@@ -668,15 +676,12 @@ where
         }
     }
 
-    let ovks: Vec<orchard::keys::OutgoingViewingKey> = SCOPES
-        .iter()
-        .map(|(_, s)| fvk.to_ovk(*s))
-        .chain(transparent_ovk.map(Into::into))
-        .collect();
-    for (i, (domain, output)) in outputs.iter().enumerate() {
+    let ovks: Vec<orchard::keys::OutgoingViewingKey> = ovks.iter().map(|&k| k.into()).collect();
+    for &i in sends {
         if mine[i] {
             continue;
         }
+        let (domain, output) = output(&notes[i])?;
         let out = &notes[i].out_ciphertext;
         let Some(cv) = Option::from(orchard::value::ValueCommitment::from_bytes(&notes[i].cv))
         else {
@@ -684,7 +689,7 @@ where
         };
         for ovk in &ovks {
             if let Some((note, addr, memo)) =
-                try_output_recovery_with_ovk(domain, ovk, output, &cv, out)
+                try_output_recovery_with_ovk(&domain, ovk, &output, &cv, out)
             {
                 sent.push(SentOutput {
                     pool,
@@ -704,41 +709,44 @@ where
     Ok(FullChunk { hits, sent })
 }
 
+/// Every OVK a ZIP 316 sender funded from this account may have used (upstream's
+/// `candidate_ovks`): the funding pool picks it, whatever pool the output is in.
+fn candidate_ovks(ufvk: &UnifiedFullViewingKey) -> Vec<OutgoingViewingKey> {
+    use zcash_protocol::PoolType;
+    [PoolType::ORCHARD, PoolType::SAPLING, PoolType::Transparent]
+        .into_iter()
+        .flat_map(|from| SCOPES.map(|(_, s)| ufvk.select_ovk(s, &nonempty::NonEmpty::new(from))))
+        .flatten()
+        .collect()
+}
+
+/// `wanted` are trial decryption's hits; `sends` an authored transaction's outputs,
+/// each not ours opened as a payment. Never others': any viewing-key holder can use our OVK.
 fn decrypt_full(
     network: &str,
     ufvk: &str,
     pool: &str,
     notes: &[FullNote],
     wanted: &[usize],
+    sends: &[usize],
 ) -> Result<FullChunk, String> {
+    // Each send is tried as ours first: our change opens with our OVK too.
+    let mut wanted = [wanted, sends].concat();
+    wanted.sort_unstable();
+    wanted.dedup();
+    let wanted = &wanted[..];
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| e.to_string())?;
-    // A send spending only transparent coins encrypts its outputs to the
-    // transparent account's OVK (upstream's `select_ovk`); upstream recovers
-    // those from its own records, which a fresh sync doesn't have.
-    let transparent_ovk = ufvk.select_ovk(
-        Scope::External,
-        &nonempty::NonEmpty::new(zcash_protocol::PoolType::Transparent),
-    );
+    let ovks = candidate_ovks(&ufvk);
     match (pool, ufvk.orchard()) {
         ("orchard", Some(fvk)) => {
             return decrypt_full_orchard::<OrchardVersion>(
-                &network,
-                fvk,
-                transparent_ovk,
-                "orchard",
-                notes,
-                wanted,
+                &network, fvk, &ovks, "orchard", notes, wanted, sends,
             )
         }
         ("ironwood", Some(fvk)) => {
             return decrypt_full_orchard::<IronwoodVersion>(
-                &network,
-                fvk,
-                transparent_ovk,
-                "ironwood",
-                notes,
-                wanted,
+                &network, fvk, &ovks, "ironwood", notes, wanted, sends,
             )
         }
         _ => {}
@@ -767,7 +775,6 @@ fn decrypt_full(
                 },
             ))
         };
-        let outputs = notes.iter().map(&output).collect::<Result<Vec<_>, _>>()?;
         // Full decryption costs as much as the compact pass, so only its hits get it.
         let candidates = wanted
             .iter()
@@ -796,18 +803,12 @@ fn decrypt_full(
             }
         }
 
-        // Outputs we created: the ock binds to our ovk, so only our own
-        // transactions can be recovered. Both scopes, since a shielding tx
-        // pays the internal one.
-        let ovks: Vec<sapling::keys::OutgoingViewingKey> = SCOPES
-            .iter()
-            .map(|(_, s)| dfvk.to_ovk(*s))
-            .chain(transparent_ovk.map(Into::into))
-            .collect();
-        for (i, (domain, output)) in outputs.iter().enumerate() {
+        let ovks: Vec<sapling::keys::OutgoingViewingKey> = ovks.iter().map(|&k| k.into()).collect();
+        for &i in sends {
             if mine[i] {
                 continue;
             }
+            let (domain, output) = output(&notes[i])?;
             let out = &notes[i].out_ciphertext;
             // A cv we can't parse costs this output's outgoing details; it must
             // never cost the chunk the notes we received in it.
@@ -818,7 +819,7 @@ fn decrypt_full(
             };
             for ovk in &ovks {
                 if let Some((note, addr, memo)) =
-                    try_output_recovery_with_ovk(domain, ovk, output, &cv, out)
+                    try_output_recovery_with_ovk(&domain, ovk, &output, &cv, out)
                 {
                     sent.push(SentOutput {
                         pool: "sapling",
@@ -945,7 +946,9 @@ pub fn try_decrypt_gpu(
 
 /// Trial-decrypt one pool's chunk in full against `ufvk`: the raw
 /// `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
-/// and the `index` of each hit [`try_decrypt`] found in it. Returns
+/// and the `index` of each hit [`try_decrypt`] found in it. `sends` indexes the
+/// outputs of a transaction we authored, each a note when it's ours, else opened
+/// as our payment; with none, `outgoing` may be empty. Returns
 /// `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
 ///    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
 #[wasm_bindgen]
@@ -959,17 +962,25 @@ pub fn try_decrypt_full(
     memos: &[u8],
     outgoing: &[u8],
     hits: &[u32],
+    sends: &[u32],
 ) -> Result<JsValue, JsError> {
     if !["sapling", "orchard", "ironwood"].contains(&pool) {
         return Err(JsError::new("unknown pool"));
     }
+    if !sends.is_empty() && outgoing.is_empty() {
+        return Err(JsError::new("sends need the outgoing chunk"));
+    }
     let notes =
         full_notes(pool, chunk, ciphertexts, memos, outgoing).map_err(|e| JsError::new(&e))?;
-    let hits: Vec<usize> = hits.iter().map(|&i| i as usize).collect();
-    if hits.iter().any(|&i| i >= notes.len()) {
-        return Err(JsError::new("index past the chunk's notes"));
-    }
-    let full = decrypt_full(network, ufvk, pool, &notes, &hits).map_err(|e| JsError::new(&e))?;
+    let index = |of: &[u32]| -> Result<Vec<usize>, JsError> {
+        let of: Vec<usize> = of.iter().map(|&i| i as usize).collect();
+        if of.iter().any(|&i| i >= notes.len()) {
+            return Err(JsError::new("index past the chunk's notes"));
+        }
+        Ok(of)
+    };
+    let full = decrypt_full(network, ufvk, pool, &notes, &index(hits)?, &index(sends)?)
+        .map_err(|e| JsError::new(&e))?;
     serde_wasm_bindgen::to_value(&full).map_err(|e| JsError::new(&e.to_string()))
 }
 
@@ -1233,8 +1244,15 @@ mod tests {
             cv: [0; 32],
             out_ciphertext: [0; OUT_CIPHERTEXT_SIZE],
         };
-        let chunk = decrypt_full("main", &ufvk, "ironwood", std::slice::from_ref(&full), &[0])
-            .expect("runs");
+        let chunk = decrypt_full(
+            "main",
+            &ufvk,
+            "ironwood",
+            std::slice::from_ref(&full),
+            &[0],
+            &[],
+        )
+        .expect("runs");
         assert_eq!(chunk.hits.len(), 1);
         assert_eq!(
             (
@@ -1251,7 +1269,7 @@ mod tests {
             ExtractedNoteCommitment::from(spendable.commitment()),
             ExtractedNoteCommitment::from(note.commitment())
         );
-        assert!(decrypt_full("main", &ufvk, "orchard", &[full], &[0])
+        assert!(decrypt_full("main", &ufvk, "orchard", &[full], &[0], &[])
             .expect("runs")
             .hits
             .is_empty());
@@ -1507,8 +1525,10 @@ mod tests {
         let orchard = [fixture(ORCHARD_FULL)];
 
         assert_eq!(orchard[0].position, 50216960);
-        let sapling = decrypt_full("main", &ufvk, "sapling", &sapling, &[0]).expect("sapling runs");
-        let orchard = decrypt_full("main", &ufvk, "orchard", &orchard, &[0]).expect("orchard runs");
+        let sapling =
+            decrypt_full("main", &ufvk, "sapling", &sapling, &[0], &[0]).expect("sapling runs");
+        let orchard =
+            decrypt_full("main", &ufvk, "orchard", &orchard, &[0], &[0]).expect("orchard runs");
         assert_eq!(sapling.hits.len(), 0);
         assert_eq!(orchard.hits.len(), 0);
         // They carry real `cv` and `out_ciphertext`, so outgoing recovery runs
@@ -1517,12 +1537,9 @@ mod tests {
         assert_eq!(orchard.sent.len(), 0);
     }
 
-    /// Encrypt a sapling output to a stranger under our own OVK, exactly as a
-    /// send does, and check `decrypt_full` recovers value, recipient and memo
-    /// from `out_ciphertext` — the only way our own payments are visible.
-    /// The UFVK of the seed `[7; 32]` account, the transparent OVK upstream
-    /// seals a transparent-funded send with, and the UFVK encoded.
-    fn sender() -> (UnifiedFullViewingKey, OutgoingViewingKey, String) {
+    /// The UFVK of the seed `[7; 32]` account, every OVK a send from it may
+    /// seal its outputs with, and the UFVK encoded.
+    fn sender() -> (UnifiedFullViewingKey, Vec<OutgoingViewingKey>, String) {
         let ufvk = UnifiedSpendingKey::from_seed(
             &Network::MainNetwork,
             &[7u8; 32],
@@ -1530,18 +1547,15 @@ mod tests {
         )
         .expect("usk")
         .to_unified_full_viewing_key();
-        let transparent = ufvk
-            .select_ovk(
-                Scope::External,
-                &nonempty::NonEmpty::new(zcash_protocol::PoolType::Transparent),
-            )
-            .expect("transparent ovk");
+        let ovks = candidate_ovks(&ufvk);
+        assert_eq!(ovks.len(), 6);
         let encoded = ufvk.encode(&Network::MainNetwork).unwrap();
-        (ufvk, transparent, encoded)
+        (ufvk, ovks, encoded)
     }
 
-    // Sealed with our Sapling OVK (a shielded send) or our transparent one (a
-    // send spending only transparent coins), it's recovered either way.
+    // A Sapling payment to a stranger, sealed with each OVK the account has
+    // (whichever pool funded it): a sends read recovers it, a crawl read never.
+    // Also: our own change is a note in a sends read, never a payment.
     #[test]
     fn recovers_our_own_sapling_output() {
         use sapling::note_encryption::sapling_note_encryption;
@@ -1549,8 +1563,8 @@ mod tests {
         use sapling::{Note, Rseed};
         use zcash_note_encryption::Domain;
 
-        let (ufvk, transparent, encoded) = sender();
-        let ours = ufvk.sapling().expect("sapling fvk").clone();
+        let (ufvk, ovks, encoded) = sender();
+        let (_, me) = ufvk.sapling().expect("sapling dfvk").change_address();
         let (_, theirs) = UnifiedSpendingKey::from_seed(
             &Network::MainNetwork,
             &[9u8; 32],
@@ -1561,9 +1575,10 @@ mod tests {
         .to_diversifiable_full_viewing_key()
         .default_address();
 
-        for ovk in [ours.to_ovk(Scope::External), transparent.into()] {
+        for (to, ovk) in ovks.iter().map(|&k| (theirs, k)).chain([(me, ovks[0])]) {
+            let ovk: sapling::keys::OutgoingViewingKey = ovk.into();
             let value = NoteValue::from_raw(123_456);
-            let note = Note::from_parts(theirs, value, Rseed::AfterZip212([0u8; 32]));
+            let note = Note::from_parts(to, value, Rseed::AfterZip212([0u8; 32]));
             let mut memo = [0u8; 512];
             memo[..4].copy_from_slice(b"paid");
 
@@ -1582,8 +1597,15 @@ mod tests {
                 out_ciphertext: encryptor.encrypt_outgoing_plaintext(&cv, &cmu, &mut crate::rng()),
                 cv: cv.to_bytes(),
             }];
-            let chunk = decrypt_full("main", &encoded, "sapling", &full, &[]).expect("runs");
+            let crawl = decrypt_full("main", &encoded, "sapling", &full, &[], &[]).expect("runs");
+            assert!(crawl.sent.is_empty());
+            let chunk = decrypt_full("main", &encoded, "sapling", &full, &[], &[0]).expect("runs");
 
+            if to == me {
+                assert_eq!((chunk.hits.len(), chunk.sent.len()), (1, 0));
+                assert_eq!(chunk.hits[0].scope, "internal");
+                continue;
+            }
             // Not ours to receive — only to have sent.
             assert_eq!(chunk.hits.len(), 0);
             assert_eq!(chunk.sent.len(), 1);
@@ -1599,6 +1621,8 @@ mod tests {
     }
 
     // As for Sapling; Ironwood stands in for Orchard, which shares the code.
+    // Also: an output paying our own address is a note in a sends read, never
+    // a payment, though our OVK opens it too.
     #[test]
     fn recovers_our_own_ironwood_output() {
         use orchard::note::{ExtractedNoteCommitment, RandomSeed, Rho};
@@ -1607,7 +1631,7 @@ mod tests {
         use orchard::NoteVersion;
         use zcash_note_encryption::Domain;
 
-        let (ufvk, transparent, encoded) = sender();
+        let (ufvk, ovks, encoded) = sender();
         let theirs = UnifiedSpendingKey::from_seed(
             &Network::MainNetwork,
             &[9u8; 32],
@@ -1618,16 +1642,19 @@ mod tests {
         .orchard()
         .expect("orchard fvk")
         .address_at(0u32, Scope::External);
-        let ours = ufvk.orchard().expect("orchard fvk").to_ovk(Scope::External);
+        let me = ufvk
+            .orchard()
+            .expect("orchard fvk")
+            .address_at(0u32, Scope::Internal);
 
         let rho_bytes: [u8; 32] =
             hex_n("08df55c7d84fb6419d06023ae4686cc7e44f7b6309b6b573647ac02b7f5e7a39").unwrap();
         let rho = Rho::from_bytes(&rho_bytes).unwrap();
-        for ovk in [ours, transparent.into()] {
+        for (to, ovk) in ovks.iter().map(|k| (theirs, k)).chain([(me, &ovks[0])]) {
+            let ovk: orchard::keys::OutgoingViewingKey = (*ovk).into();
             let value = NoteValue::from_raw(123_456);
             let rseed = RandomSeed::from_bytes([3u8; 32], &rho).unwrap();
-            let note =
-                orchard::Note::from_parts(theirs, value, rho, rseed, NoteVersion::V3).unwrap();
+            let note = orchard::Note::from_parts(to, value, rho, rseed, NoteVersion::V3).unwrap();
             let mut memo = [0u8; 512];
             memo[..4].copy_from_slice(b"paid");
             let encryption = IronwoodNoteEncryption::new(Some(ovk), note, memo);
@@ -1647,8 +1674,15 @@ mod tests {
                 out_ciphertext: encryption.encrypt_outgoing_plaintext(&cv, &cmx, &mut crate::rng()),
                 cv: cv.to_bytes(),
             }];
-            let chunk = decrypt_full("main", &encoded, "ironwood", &full, &[]).expect("runs");
+            let crawl = decrypt_full("main", &encoded, "ironwood", &full, &[], &[]).expect("runs");
+            assert!(crawl.sent.is_empty());
+            let chunk = decrypt_full("main", &encoded, "ironwood", &full, &[], &[0]).expect("runs");
 
+            if to == me {
+                assert_eq!((chunk.hits.len(), chunk.sent.len()), (1, 0));
+                assert_eq!(chunk.hits[0].scope, "internal");
+                continue;
+            }
             assert_eq!(chunk.hits.len(), 0);
             assert_eq!(chunk.sent.len(), 1);
             assert_eq!(chunk.sent[0].value, 123_456);
