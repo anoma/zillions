@@ -90,9 +90,13 @@ export const TrezorConnectView = ({
   const [step, setStep] = useState<TrezorStep>("connect");
   const [error, setError] = useState<string>();
   const abort = useRef<AbortController>(undefined);
+  // One connect attempt at a time; a failed start re-arms for a retry.
+  const running = useRef(false);
   const ui = useTrezorUi();
 
   const connect = async (): Promise<void> => {
+    if (running.current) return;
+    running.current = true;
     setError(undefined);
     abort.current = new AbortController();
     const { signal } = abort.current;
@@ -100,6 +104,7 @@ export const TrezorConnectView = ({
     try {
       keys = await connectTrezor(setStep, signal);
     } catch (e) {
+      running.current = false;
       if (!signal.aborted) setError(engines.trezor.describeError(e));
       return;
     }
