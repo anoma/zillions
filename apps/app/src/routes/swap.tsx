@@ -17,7 +17,12 @@ import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { UnknownIcon } from "../icons/UnknownIcon";
 import { USDCoinIcon } from "../icons/USDCoinIcon";
 import { ZcashIcon } from "../icons/ZcashIcon";
-import { atomicToWhole, shortenAddress, zatoshiToZec } from "../lib/utils";
+import {
+  atomicToWhole,
+  shortenAddress,
+  wholeToAtomic,
+  zatoshiToZec,
+} from "../lib/utils";
 import type { Token } from "../lib/wallet/types";
 
 const Stage = {
@@ -152,13 +157,13 @@ function SwapRoute() {
     decimals: 8,
   });
   const [error, setError] = useState("");
-  const [fromAmount, setFromAmount] = useState("");
+  const [fromAmount, setFromAmount] = useState("0");
   const [refundAddress, setRefundAddress] = useState("");
   const [recipientAddress, setRecipientAddress] = useState("");
   const [slippage, setSlippage] = useState("0.5");
   const [isLoading, setIsLoading] = useState(true);
   const [tokens, setTokens] = useState([]);
-  const [toAmount, setToAmount] = useState("--");
+  const [toAmount, setToAmount] = useState(0n);
   const [toToken, setToToken] = useState({
     assetId: ZEC_TOKEN_ASSET_ID,
     decimals: 8,
@@ -188,8 +193,8 @@ function SwapRoute() {
   const slippageRef = useRef<HTMLInputElement>(null);
 
   // Placeholders for future computed values
-  const [fromTotalPrice, setFromTotalPrice] = useState("0.00");
-  const [toTotalPrice, setToTotalPrice] = useState("0.00");
+  const [fromTotalPrice, setFromTotalPrice] = useState(0n);
+  const [toTotalPrice, setToTotalPrice] = useState(0n);
   const [zecPriceInFrom, setZecPriceInFrom] = useState(1n);
 
   const sendPlan = useSendPlan(
@@ -229,7 +234,7 @@ function SwapRoute() {
 
   const reverseExchange = () => {
     const tmpToken = fromToken;
-    const tmpAmount = toAmount;
+    const tmpAmount = atomicToWhole(toAmount, toToken.decimals);
     setFromToken(toToken);
     setToToken(tmpToken);
     setFromAmount(tmpAmount);
@@ -249,19 +254,19 @@ function SwapRoute() {
 
   useEffect(() => {
     (async () => {
-      const totalPrice = Number(fromAmount) * fromToken.price;
-      setFromTotalPrice(totalPrice.toFixed(2));
-      setToTotalPrice(totalPrice.toFixed(2));
-      const toAmount = totalPrice / toToken.price;
-      const zecFormatter = new Intl.NumberFormat("en-US", {
-        useGrouping: false,
-        maximumFractionDigits: toToken.decimals,
-      });
-      setToAmount(zecFormatter.format(toAmount));
+      const totalPriceAux =
+        wholeToAtomic(fromAmount, fromToken.decimals) *
+        wholeToAtomic(fromToken.price, 2);
+      const totalPrice = totalPriceAux / 10n ** BigInt(fromToken.decimals);
+      setFromTotalPrice(totalPrice);
+      setToTotalPrice(totalPrice);
+      const toAmount =
+        (totalPriceAux * 10n ** BigInt(toToken.decimals)) /
+        (10n ** BigInt(fromToken.decimals) * wholeToAtomic(toToken.price, 2));
+      setToAmount(toAmount);
       setZecPriceInFrom(
-        (BigInt(Math.ceil(toToken.price * 100)) *
-          10n ** BigInt(fromToken.decimals)) /
-          BigInt(Math.ceil(fromToken.price * 100)),
+        (wholeToAtomic(toToken.price, 2) * 10n ** BigInt(fromToken.decimals)) /
+          wholeToAtomic(fromToken.price, 2),
       );
     })();
   }, [fromAmount, fromToken, toAmount, toToken]);
@@ -384,7 +389,7 @@ function SwapRoute() {
                 onChange={setFromAmount}
               />
               <p className="px-1 text-xs text-neutral-500">
-                ~ ${fromTotalPrice} USD
+                ~ ${atomicToWhole(fromTotalPrice, 2)} USD
               </p>
             </div>
           </div>
@@ -432,9 +437,12 @@ function SwapRoute() {
             />
 
             <div className="flex flex-1 flex-col gap-1.5 min-w-0">
-              <AmountDisplay value={toAmount.toString()} unit="" />
+              <AmountDisplay
+                value={atomicToWhole(toAmount, toToken.decimals)}
+                unit=""
+              />
               <p className="px-1 text-xs text-neutral-500 text-right w-full">
-                ~ ${toTotalPrice} USD
+                ~ ${atomicToWhole(toTotalPrice, 2)} USD
               </p>
             </div>
           </div>
