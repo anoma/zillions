@@ -104,6 +104,75 @@ test("a sends read reads only authored transactions' outputs, across chunks and 
   expect(checkSpends).toHaveBeenCalledTimes(1);
 });
 
+test("a failed sends read holds back only the transactions in its chunk", async () => {
+  vi.mocked(checkSpends).mockClear();
+  // Ours at 3_000 #1 pays us at Ironwood 0 (chunk 0); at 4_000 #1 pays someone at 16_384 (chunk 1).
+  const block = (ironwood: number) => ({
+    treeSizes: { ironwood, orchard: 0, sapling: 0 },
+    outputs: new Map([[1, { ironwood: 1, orchard: 0, sapling: 0 }]]),
+  });
+  const state = {
+    id: "a",
+    notes: [],
+    sent: [],
+    blocks: new Map([
+      [3_000, block(1)],
+      [4_000, block(16_385)],
+    ]),
+    scan: { scanned: { ironwood: {} }, sendsRead: [] },
+  } as unknown as WalletState;
+  const ours = {
+    height: 3_000,
+    tx_index: 1,
+    pool: "ironwood" as const,
+    position: 0,
+    recipient: "u1me",
+    value: 1_000,
+    scope: "external" as const,
+    nf_mine: "aa",
+    output_index: 0,
+    note: "",
+  };
+  const theirs = {
+    ...ours,
+    height: 4_000,
+    position: 16_384,
+    recipient: "u1them",
+  };
+  let chunk1Fails = true;
+  const lookup = vi.fn(async ({ chunk }: { chunk: number }) => {
+    if (chunk === 0) return { chunk, hits: [ours], sent: [] };
+    if (chunk1Fails) throw new Error("offline");
+    return { chunk, hits: [], sent: [theirs] };
+  });
+  const signal = new AbortController().signal;
+  const run = {
+    ufvk: "uview1",
+    pools: ["ironwood"],
+    state,
+    applied: new Set<string>(),
+    lookups: { run: lookup },
+    onFound: () => {},
+    signal,
+  } as never;
+  const sizes = { ironwood: 16_385, orchard: 0, sapling: 0 };
+  const txs = new Map([
+    ["3000:1", { height: 3_000, tx_index: 1 }],
+    ["4000:1", { height: 4_000, tx_index: 1 }],
+  ]);
+  vi.spyOn(console, "error").mockImplementation(() => {});
+
+  await recoverSends(run, sizes, txs);
+  expect(state.scan.sendsRead).toEqual(["3000:1"]);
+  expect(checkSpends).toHaveBeenCalledWith(state.notes, signal);
+
+  chunk1Fails = false;
+  await recoverSends(run, sizes, txs);
+  expect(lookup.mock.calls.slice(2).map(([r]) => r.chunk)).toEqual([1]);
+  expect(state.sent.map((s) => s.recipient)).toEqual(["u1them"]);
+  expect(state.scan.sendsRead).toEqual(["3000:1", "4000:1"]);
+});
+
 test("history reads what setup left, then before the spam era, and the spam era is a run of its own, each in pool order", async () => {
   const last = { ironwood: 43, orchard: 3_080, sapling: 4_515 };
   const setup = { ironwood: 0, orchard: 3_006, sapling: 4_505 };
