@@ -10,13 +10,14 @@ import { AmountField, FormCard, SubmitBlock } from "../components/TransferForm";
 import { ActionButton } from "../components/ui/ActionButton";
 import { inputClassName, qrClassName } from "../components/ui/utils";
 import { useFreshAddress } from "../hooks/useAddresses";
+import { useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
 import { BitcoinIcon } from "../icons/BitcoinIcon";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { UnknownIcon } from "../icons/UnknownIcon";
 import { USDCoinIcon } from "../icons/USDCoinIcon";
 import { ZcashIcon } from "../icons/ZcashIcon";
-import { shortenAddress } from "../lib/utils";
+import { atomicToWhole, shortenAddress, zatoshiToZec } from "../lib/utils";
 import type { Token } from "../lib/wallet/types";
 
 const Stage = {
@@ -172,13 +173,14 @@ function SwapRoute() {
   const [outbound, setOutbound] = useState(false);
   const [stage, setStage] = useState(Stage.Swap);
   const [amountIn, setAmountIn] = useState("0");
+  const [amountInBigInt, setAmountInBigInt] = useState(0n);
   const [amountOut, setAmountOut] = useState("0");
   const [depositAddress, setDepositAddress] = useState("");
 
   // New state variables for USD values
-  const [amountInUsd, setAmountInUsd] = useState("0.00");
-  const [amountOutUsd, setAmountOutUsd] = useState("0.00");
-  const [withdrawFee, setWithdrawFee] = useState("0");
+  const [amountInUsd, setAmountInUsd] = useState(0.0);
+  const [amountOutUsd, setAmountOutUsd] = useState(0.0);
+  const [conversionFee, setConversionFee] = useState(0);
 
   const amountRef = useRef<HTMLInputElement>(null);
   const refundRef = useRef<HTMLInputElement>(null);
@@ -188,7 +190,18 @@ function SwapRoute() {
   // Placeholders for future computed values
   const [fromTotalPrice, setFromTotalPrice] = useState("0.00");
   const [toTotalPrice, setToTotalPrice] = useState("0.00");
-  const [zecPriceInFrom, setZecPriceInFrom] = useState("1");
+  const [zecPriceInFrom, setZecPriceInFrom] = useState(1n);
+
+  const sendPlan = useSendPlan(
+    {
+      from: "shielded",
+      to: depositAddress,
+      amount: amountInBigInt,
+      memo: "",
+    },
+    false,
+    0n,
+  );
 
   const onGetQuote = () => {
     setIsPending(true);
@@ -245,11 +258,11 @@ function SwapRoute() {
         maximumFractionDigits: toToken.decimals,
       });
       setToAmount(zecFormatter.format(toAmount));
-      const fromFormatter = new Intl.NumberFormat("en-US", {
-        useGrouping: false,
-        maximumFractionDigits: fromToken.decimals,
-      });
-      setZecPriceInFrom(fromFormatter.format(toToken.price / fromToken.price));
+      setZecPriceInFrom(
+        (BigInt(Math.ceil(toToken.price * 100)) *
+          10n ** BigInt(fromToken.decimals)) /
+          BigInt(Math.ceil(fromToken.price * 100)),
+      );
     })();
   }, [fromAmount, fromToken, toAmount, toToken]);
 
@@ -315,6 +328,7 @@ function SwapRoute() {
       })
       .then((data) => {
         console.log("Review Quote post response body", data);
+        setAmountInBigInt(BigInt(data.quote.amountIn));
         setAmountIn(data.quote.amountInFormatted);
         setAmountOut(data.quote.amountOutFormatted);
 
@@ -322,18 +336,15 @@ function SwapRoute() {
         setDepositAddress(data.quote.depositAddress);
 
         // Populate USD equivalents
-        setAmountInUsd(Number(data.quote.amountInUsd).toFixed(2));
-        setAmountOutUsd(Number(data.quote.amountOutUsd).toFixed(2));
+        setAmountInUsd(Number(data.quote.amountInUsd));
+        setAmountOutUsd(Number(data.quote.amountOutUsd));
 
-        const fromFormatter = new Intl.NumberFormat("en-US", {
-          useGrouping: false,
-          maximumFractionDigits: fromToken.decimals,
-        });
-        setWithdrawFee(
-          fromFormatter.format(
-            (data.quote.amountInUsd - data.quote.amountOutUsd) /
-              fromToken.price,
-          ),
+        setConversionFee(
+          (BigInt(
+            Math.ceil((data.quote.amountInUsd - data.quote.amountOutUsd) * 100),
+          ) *
+            10n ** BigInt(fromToken.decimals)) /
+            BigInt(Math.ceil(fromToken.price * 100)),
         );
         setIsLoading(false);
       })
@@ -504,7 +515,9 @@ function SwapRoute() {
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium text-neutral-700">Rate</span>
               <span className="font-medium">
-                1 {toToken.symbol} = {zecPriceInFrom} {fromToken.symbol}
+                1 {toToken.symbol} ={" "}
+                {atomicToWhole(zecPriceInFrom, fromToken.decimals)}{" "}
+                {fromToken.symbol}
               </span>
             </div>
           </div>
@@ -531,7 +544,7 @@ function SwapRoute() {
                   {amountIn} {fromToken.symbol}
                 </span>
                 <span className="text-xs text-neutral-500">
-                  ~ ${amountInUsd} USD
+                  ~ ${amountInUsd.toFixed(2)} USD
                 </span>
               </div>
             </div>
@@ -566,7 +579,7 @@ function SwapRoute() {
                   {amountOut} {toToken.symbol}
                 </span>
                 <span className="text-xs text-neutral-500">
-                  ~ ${amountOutUsd} USD
+                  ~ ${amountOutUsd.toFixed(2)} USD
                 </span>
               </div>
             </div>
@@ -595,28 +608,111 @@ function SwapRoute() {
 
             <div className="h-px w-full bg-line" />
 
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-neutral-500">Total fees</span>
-              <span className="font-medium">
-                {withdrawFee} {fromToken.symbol}
-              </span>
-            </div>
+            {outbound && sendPlan.plan.data?.fee && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-neutral-500">
+                    Transfer fee
+                  </span>
+                  <span className="font-medium">
+                    {zatoshiToZec(BigInt(sendPlan.plan.data?.fee))}{" "}
+                    {fromToken.symbol}
+                  </span>
+                </div>
 
-            <div className="h-px w-full bg-line" />
+                <div className="h-px w-full bg-line" />
 
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-neutral-700">
-                Total amount taken
-              </span>
-              <div className="flex flex-col items-end">
-                <span className="text-lg font-bold text-black">
-                  {amountIn} {fromToken.symbol}
-                </span>
-                <span className="text-xs text-neutral-500">
-                  ~ ${amountInUsd} USD
-                </span>
-              </div>
-            </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-neutral-500">
+                    Conversion fee
+                  </span>
+                  <span className="font-medium">
+                    {zatoshiToZec(BigInt(conversionFee))} {fromToken.symbol}
+                  </span>
+                </div>
+
+                <div className="h-px w-full bg-line" />
+
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-neutral-500">
+                    Total fee
+                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-lg font-bold text-black">
+                      {zatoshiToZec(
+                        conversionFee + BigInt(sendPlan.plan.data?.fee),
+                      )}{" "}
+                      {fromToken.symbol}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      ~ $
+                      {atomicToWhole(
+                        ((conversionFee + BigInt(sendPlan.plan.data?.fee)) *
+                          BigInt(Math.ceil(fromToken.price * 100))) /
+                          10n ** BigInt(fromToken.decimals),
+                        2,
+                      )}{" "}
+                      USD
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-px w-full bg-line" />
+
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-neutral-700">
+                    Total amount taken
+                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-lg font-bold text-black">
+                      {zatoshiToZec(
+                        amountInBigInt + BigInt(sendPlan.plan.data?.fee),
+                      )}{" "}
+                      {fromToken.symbol}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      ~ $
+                      {(
+                        amountInUsd +
+                        (sendPlan.plan.data?.fee * fromToken.price) /
+                          10 ** fromToken.decimals
+                      ).toFixed(2)}{" "}
+                      USD
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {!outbound && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-neutral-500">
+                    Total fee
+                  </span>
+                  <span className="font-medium">
+                    {atomicToWhole(BigInt(conversionFee), fromToken.decimals)}{" "}
+                    {fromToken.symbol}
+                  </span>
+                </div>
+
+                <div className="h-px w-full bg-line" />
+
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-neutral-700">
+                    Total amount taken
+                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-lg font-bold text-black">
+                      {amountIn} {fromToken.symbol}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      ~ ${amountInUsd.toFixed(2)} USD
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </FormCard>
 
