@@ -8,7 +8,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { shortenAddress } from "@zillions/utils";
 
-import { freshAddress } from "../../background/crypto/zillions";
+import { freshAddress, ufvkPools } from "../../background/crypto/zillions";
 import { useAccounts } from "../context/AccountContext";
 import routes from "../routes";
 import { Avatar } from "../ui/Avatar";
@@ -67,12 +67,26 @@ export const ViewAccount = () => {
   const ufvk = isShieldedParent ? parent.owner : shieldedChild?.owner;
 
   const [fresh, setFresh] = useState<{ ufvk: string; address: string }>();
+  // Whether the key has a shielded part at all: a transparent-only key's
+  // (a Trezor's) has no shielded address to show.
+  const [shielded, setShielded] = useState(false);
   useEffect(() => {
     if (!ufvk) return;
     let live = true;
-    void freshAddress(ufvk).then(
-      (address) => live && setFresh({ ufvk, address }),
-    );
+    setShielded(false);
+    // A failed lookup leaves the row away like an empty one: nothing to
+    // show for it.
+    void ufvkPools(ufvk)
+      .then((pools) => {
+        if (!live || pools.length === 0) return;
+        setShielded(true);
+        return freshAddress(ufvk).then((address) => {
+          if (live) setFresh({ ufvk, address });
+        });
+      })
+      .catch(() => {
+        if (live) setShielded(false);
+      });
     return () => {
       live = false;
     };
@@ -135,7 +149,7 @@ export const ViewAccount = () => {
       </section>
 
       <Section title="Addresses" className="mt-1">
-        {ufvk && (
+        {shielded && (
           <AddressRow
             label="Shielded"
             address={shieldedAddress}

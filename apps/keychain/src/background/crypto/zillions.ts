@@ -21,6 +21,7 @@ import initZcore, {
   sign_pczt,
   spending_keys,
   ufvk_from_transparent_xpub,
+  ufvk_pools,
 } from "@zillions/zcore";
 import type { PcztTransaction } from "@ledgerhq/device-signer-kit-zcash";
 import type { PcztSummary } from "@zillions/types";
@@ -95,6 +96,13 @@ export const ufvkFromTransparentXpub = async (
 ): Promise<string> => {
   await initZillionsSdk();
   return ufvk_from_transparent_xpub(getNetwork(), xpub);
+};
+
+/** The shielded pools `ufvk` has a key for — empty for a transparent-only
+ * key, which then has no shielded address to show or derive. */
+export const ufvkPools = async (ufvk: string): Promise<string[]> => {
+  await initZillionsSdk();
+  return ufvk_pools(getNetwork(), ufvk);
 };
 
 /**
