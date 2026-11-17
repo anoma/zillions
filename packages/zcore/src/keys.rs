@@ -7,6 +7,7 @@
 use rand_core::Rng;
 use secrecy::ExposeSecret;
 use serde::Serialize;
+use transparent::keys::NonHardenedChildIndex;
 use wasm_bindgen::prelude::*;
 use zcash_keys::address::Address;
 use zcash_keys::encoding::{encode_extended_spending_key, AddressCodec};
@@ -34,15 +35,16 @@ struct Account {
     ufvk: String,
     /// The default address's transparent receiver, the one wallets show.
     transparent: Option<String>,
+    /// Where `transparent` sits on the external chain: past the indices Sapling
+    /// can't use, so it can be beyond the first gap limit.
+    transparent_index: Option<u32>,
     /// The default shielded address: Orchard and Sapling, no transparent
     /// receiver, as standard wallets display it.
     unified: String,
 }
 
 fn account_from_ufvk(network: &Network, ufvk: &UnifiedFullViewingKey) -> Result<Account, String> {
-    // Requiring every receiver skips the indices Sapling can't use, so this
-    // lands on the same index as the shielded default below.
-    let (all, _) = ufvk
+    let (all, index) = ufvk
         .default_address(UnifiedAddressRequest::AllAvailableKeys)
         .map_err(|e| e.to_string())?;
     let (shielded, _) = ufvk
@@ -51,6 +53,10 @@ fn account_from_ufvk(network: &Network, ufvk: &UnifiedFullViewingKey) -> Result<
     Ok(Account {
         ufvk: ufvk.encode(network).map_err(|e| e.to_string())?,
         transparent: all.transparent().map(|addr| addr.encode(network)),
+        transparent_index: all
+            .transparent()
+            .and(NonHardenedChildIndex::try_from(index).ok())
+            .map(|i| i.index()),
         unified: shielded.encode(network),
     })
 }
@@ -61,7 +67,7 @@ fn account(network: &Network, seed: &[u8], hd_index: u32) -> Result<Account, Str
 }
 
 /// The account at unified full viewing key `ufvk` (a device's export):
-/// `{ ufvk, transparent, unified }`.
+/// `{ ufvk, transparent, transparent_index, unified }`.
 #[wasm_bindgen]
 pub fn derive_account_from_ufvk(network: &str, ufvk: &str) -> Result<JsValue, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
@@ -71,7 +77,7 @@ pub fn derive_account_from_ufvk(network: &str, ufvk: &str) -> Result<JsValue, Js
     serde_wasm_bindgen::to_value(&account).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, unified }`.
+/// The account at ZIP-32 index `hd_index`: `{ ufvk, transparent, transparent_index, unified }`.
 #[wasm_bindgen]
 pub fn derive_account(network: &str, seed: Vec<u8>, hd_index: u32) -> Result<JsValue, JsError> {
     let network = parse_network(network).map_err(|e| JsError::new(&e))?;
@@ -256,6 +262,29 @@ mod tests {
     }
 
     #[test]
+    fn transparent_index_is_where_the_shown_address_sits() {
+        // A phrase whose first Sapling-valid index is 10: past the first gap limit.
+        // "name vanish acid faint bird hen desert glow barrel coffee gold village"
+        let seed = hex::decode(
+            "a774c2d67362256aadcbbeb6bfc54c8696c599a35a9c592cd83241a4195f7afc\
+             c834a1397a57bc0963d4ce135bf65eec0692d08ddaca8fde95c2f43810f59746",
+        )
+        .unwrap();
+        let network = Network::MainNetwork;
+        let account = account(&network, &seed, 0).unwrap();
+        assert_eq!(
+            account.transparent.as_deref(),
+            Some("t1PML3nnCtM9YtafbzPsSZ6gyxmtQ3UM3T1")
+        );
+        assert_eq!(account.transparent_index, Some(10));
+        let [at_index] = crate::transparent_tx::derive(&network, &account.ufvk, "external", 10, 1)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(account.transparent, Some(at_index));
+    }
+
+    #[test]
     fn derives_the_same_account_from_a_devices_viewing_key() {
         let network = Network::MainNetwork;
         let account = account(&network, &[7u8; 32], 0).unwrap();
@@ -266,6 +295,7 @@ mod tests {
         .unwrap();
         assert_eq!(from_key.ufvk, account.ufvk);
         assert_eq!(from_key.transparent, account.transparent);
+        assert_eq!(from_key.transparent_index, account.transparent_index);
         assert_eq!(from_key.unified, account.unified);
     }
 

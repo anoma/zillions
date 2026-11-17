@@ -5,6 +5,7 @@
  */
 
 import initZcore, {
+  derive_account_from_ufvk,
   derive_transparent,
   gap_limits,
   parse_transaction,
@@ -88,8 +89,9 @@ export interface TransparentTx {
 }
 
 /**
- * One chain's activity up to `tip`, until its gap limit of addresses in a row
- * show none; addresses already checked are asked only about blocks above `final`.
+ * One chain's activity up to `tip`, at least through address `reach`, until
+ * its gap limit of addresses in a row show none; addresses already checked
+ * are asked only about blocks above `final`.
  */
 async function discover(
   ufvk: string,
@@ -97,12 +99,13 @@ async function discover(
   tip: number,
   final: number,
   known: TransparentCache["chains"][Scope],
+  reach: number,
 ) {
   const txs: RawTransaction[] = [];
   let { lastUsed } = known;
   const gap = gapLimits()[scope];
   let from = 0;
-  for (; from <= lastUsed + gap; from += gap) {
+  for (; from <= Math.max(lastUsed + gap, reach); from += gap) {
     const window = derive_transparent(NETWORK, ufvk, scope, from, gap);
     const activity = await Promise.all(
       window.map((address, i) =>
@@ -147,9 +150,25 @@ export async function syncTransparent(
   const parsed = new Map(kept.map((tx) => [tx.txid, tx]));
   let { chains, utxos } = cache;
   if (moved) {
+    // The address wallets show can sit past the first gap limit.
+    const account = derive_account_from_ufvk(NETWORK, ufvk);
+    // Defaulting would quietly scan only the first gap limit again.
+    if (account.transparent && account.transparent_index === undefined) {
+      throw new Error(
+        "zcore gave no transparent_index: rebuild packages/zcore",
+      );
+    }
+    const shown: number = account.transparent_index ?? 0;
     const found = await Promise.all(
       SCOPES.map((scope) =>
-        discover(ufvk, scope, tip, cache.final, cache.chains[scope]),
+        discover(
+          ufvk,
+          scope,
+          tip,
+          cache.final,
+          cache.chains[scope],
+          scope === "external" ? shown : 0,
+        ),
       ),
     );
     for (const raw of found.flatMap(({ txs }) => txs)) {
