@@ -18,6 +18,31 @@ product.md 2.6; every concrete shape is in [activity-cases.md](activity-cases.md
    (OVK); a transparent one is public. The OVK is only tried on authored
    transactions.
 
+```mermaid
+flowchart TD
+  crawl["Crawl every chunk<br/>IVK only, no /outgoing"] --> notes["Notes<br/>IVK hits make the balance"]
+  notes --> spent["Spend check<br/>nullifiers via /spent"]
+  spent --> authored["Authored transactions<br/>spent our note or coin"]
+  coins["Transparent sync<br/>our coins spent"] --> authored
+  authored --> place["Place its outputs<br/>compact block tree sizes → chunks"]
+  place --> read["Sends read, once per chunk<br/>only those outputs, with /outgoing"]
+  read -->|IVK opens it| change["Note<br/>change, sends to self; spend-checked"]
+  read -->|else one of 6 OVKs| payment["Payment<br/>payee, value, memo"]
+  change --> history["History"]
+  payment --> history
+
+  classDef ivk fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+  classDef spend fill:#E1F5EE,stroke:#0F6E56,color:#085041
+  classDef ovk fill:#FAECE7,stroke:#993C1D,color:#712B13
+  class notes,change ivk
+  class spent,authored,coins spend
+  class payment ovk
+```
+
+Everything from "Place its outputs" on runs at the end of each sync run. A
+transaction is marked read once all its chunks are; one whose chunk failed or
+isn't indexed yet is read again next run.
+
 ## Authored or not
 
 |                  | Not authored                 | Authored                                                                   |
