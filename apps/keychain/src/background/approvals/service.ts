@@ -24,6 +24,7 @@ import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
+import { APPROVAL_WINDOW } from "../../approvals/windowSize";
 import { payments, transferAmount } from "../../approvals/utils/pczt";
 import type {
   ApprovalKind,
@@ -772,8 +773,7 @@ export class ApprovalsService {
   private createPopup = (url: string): Promise<Windows.Window> => {
     return browser.windows.create({
       url,
-      width: 396,
-      height: 640,
+      ...APPROVAL_WINDOW,
       type: "popup",
     });
   };

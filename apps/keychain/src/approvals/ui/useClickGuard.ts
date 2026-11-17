@@ -1,12 +1,15 @@
 /**
  * Enables an approval window's decision buttons only once the window has been
- * focused, visible, still and left alone for `READY_DELAY_MS`. Any website can
- * summon this window, and it takes focus where the site can predict, so without
- * the delay a click or keystroke the user aimed at the site lands on a decision
- * instead. Clicks count as well as keys: a site can keep the user clicking
- * through the delay, and the button doesn't see clicks while it's disabled.
+ * focused, visible, full-size, on screen, still and left alone for
+ * `READY_DELAY_MS`. Any website can summon this window, and it takes focus
+ * where the site can predict, so without the delay a click or keystroke the
+ * user aimed at the site lands on a decision instead. Clicks count as well as
+ * keys: a site can keep the user clicking through the delay, and the button
+ * doesn't see clicks while it's disabled.
  */
 import { useEffect, useRef, useState } from "react";
+
+import { windowFits } from "../windowSize";
 
 export const READY_DELAY_MS = 1_000;
 const TICK_MS = 100;
@@ -16,6 +19,17 @@ const isTextEntry = (target: EventTarget | null): boolean =>
   (target instanceof HTMLElement && target.isContentEditable) ||
   (target instanceof HTMLInputElement &&
     !["checkbox", "radio", "button", "submit", "reset"].includes(target.type));
+
+/** `availLeft`/`availTop` are missing from TypeScript's DOM types. */
+const available = () => {
+  const s = window.screen as Screen & { availLeft?: number; availTop?: number };
+  return {
+    availLeft: s.availLeft ?? 0,
+    availTop: s.availTop ?? 0,
+    availWidth: s.availWidth,
+    availHeight: s.availHeight,
+  };
+};
 
 /**
  * `ready` for rendering; `readyRef` for event handlers that must read it now.
@@ -54,6 +68,7 @@ export const useClickGuard = (held = false) => {
         heldRef.current ||
         !document.hasFocus() ||
         document.visibilityState !== "visible" ||
+        !windowFits(window, available()) ||
         now !== position
       ) {
         position = now;
