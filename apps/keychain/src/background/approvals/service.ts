@@ -20,10 +20,11 @@
 import { v4 as uuid } from "uuid";
 import browser, { Windows } from "webextension-polyfill";
 
-import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
+import type { PcztSummary, PcztTransparentIo, ZCashKeychainAccount } from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
+import { APPROVAL_WINDOW } from "../../approvals/windowSize";
 import { payments, transferAmount } from "../../approvals/utils/pczt";
 import type {
   ApprovalKind,
@@ -63,6 +64,18 @@ const reportedUrl = (url?: string): string | undefined =>
   url && url !== "about:blank" ? url : undefined;
 
 const MAX_PENDING_APPROVALS = 3;
+
+/**
+ * Transparent outputs of ours at or past this index show as payments to their
+ * address: no Zillions flow gets near it, and no wallet scans that deep.
+ */
+const MAX_OWN_TRANSPARENT_INDEX = 100;
+
+/** Without `mine`, an output past the ceiling neither warns nor moves the mark. */
+const pastCeiling = (output: PcztTransparentIo): PcztTransparentIo =>
+  output.mine && output.path && output.path.index >= MAX_OWN_TRANSPARENT_INDEX
+    ? { ...output, mine: false, path: undefined }
+    : output;
 
 /**
  * How long a site waits after its Nth dismissed window in a row (closed or
@@ -414,7 +427,11 @@ export class ApprovalsService {
       throw new Error(`Transaction data not found for ${msgId}`);
     }
     const ufvk = await this.keyring.viewingKey(pending.signer);
-    const built = await buildPcztSummary(pending.pczt, ufvk);
+    const fromPczt = await buildPcztSummary(pending.pczt, ufvk);
+    const built = {
+      ...fromPczt,
+      transparentOutputs: fromPczt.transparentOutputs.map(pastCeiling),
+    };
     const summary = {
       ...built,
       unusualChange: await this.unusualChange(pending.signer, built),
@@ -682,9 +699,10 @@ export class ApprovalsService {
   }
 
   /**
-   * The first transparent output of ours past the last address this Keychain
+   * The transparent outputs of ours past the last address this Keychain
    * approved plus the gap wallets scan: a wallet restoring the phrase walks
-   * the addresses in order and stops at that gap, so it may never reach it.
+   * the addresses in order and stops at that gap, so it may never reach them.
+   * All of them, so a small one can't stand in for a large one.
    */
   private async unusualChange(
     signer: string | undefined,
@@ -694,27 +712,31 @@ export class ApprovalsService {
     if (!walletId) return undefined;
     const approved = await this.localStorage.changeIndexes(walletId);
     const gaps = transparentGapLimits();
-    for (const output of summary.transparentOutputs) {
-      const { path } = output;
-      if (!output.mine || !path) continue;
-      const highest = approved[path.scope] ?? -1;
-      if (path.index > highest + (gaps[path.scope] ?? 0)) {
-        return { ...path, value: String(output.value ?? "0") };
-      }
-    }
-    return undefined;
+    const stray = summary.transparentOutputs.flatMap(({ mine, path, value }) =>
+      mine && path && path.index > (approved[path.scope] ?? -1) + (gaps[path.scope] ?? 0)
+        ? [{ ...path, value: String(value ?? "0") }]
+        : []
+    );
+    return stray.length > 0 ? stray : undefined;
   }
 
-  /** A signed transaction's own transparent outputs move the approved mark. */
+  /**
+   * A signed transaction's own transparent outputs move the approved mark,
+   * by at most one gap: an index the user accepted past it is a risk taken
+   * once, not where later change may silently go.
+   */
   private async rememberChange(pending: PendingSignTx): Promise<void> {
     const walletId = await this.walletIdOf(pending.signer);
     if (!walletId || !pending.summary) return;
-    for (const output of pending.summary.transparentOutputs) {
-      if (output.mine && output.path) {
+    const approved = await this.localStorage.changeIndexes(walletId);
+    const gaps = transparentGapLimits();
+    for (const { mine, path } of pending.summary.transparentOutputs) {
+      if (mine && path) {
+        const limit = (approved[path.scope] ?? -1) + (gaps[path.scope] ?? 0);
         await this.localStorage.raiseChangeIndex(
           walletId,
-          output.path.scope,
-          output.path.index
+          path.scope,
+          Math.min(path.index, limit)
         );
       }
     }
@@ -772,8 +794,7 @@ export class ApprovalsService {
   private createPopup = (url: string): Promise<Windows.Window> => {
     return browser.windows.create({
       url,
-      width: 396,
-      height: 640,
+      ...APPROVAL_WINDOW,
       type: "popup",
     });
   };

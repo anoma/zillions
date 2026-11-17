@@ -29,8 +29,10 @@ import {
 import type { Bip44Path, Zip32Path } from "../ipc/contract";
 import {
   getNetwork,
+  randomFingerprint,
   type LedgerSignatures,
 } from "../background/crypto/zillions";
+import { DEFAULT_ALIAS } from "../setup/model/alias";
 import type { DeviceKeys } from "./types";
 
 /** One step of a device interaction, as displayed. */
@@ -213,7 +215,7 @@ export const connectLedger = (
 ): Promise<DeviceKeys> =>
   withLedger(
     onStep,
-    async (signer, device) => {
+    async (signer) => {
       const coin = coinType();
       const { account, change, index } = LEDGER_BIP44_PATH;
       const bip44 = `44'/${coin}'/${account}'/${change}/${index}`;
@@ -235,14 +237,14 @@ export const connectLedger = (
 
       return {
         device: "ledger",
-        alias: device.deviceModel.name,
+        alias: DEFAULT_ALIAS,
         transparentAddress,
         shieldedAddress,
         viewingKey: fvk.fullViewingKey,
-        // The device never reveals its seed's fingerprint. The app's PCZT
-        // needs 32 bytes and the device doesn't check them: zeros, the
-        // signer kit's default.
-        seedFingerprint: "00".repeat(32),
+        // The device never reveals its seed's fingerprint, and the app's
+        // PCZT needs 32 bytes; the device is sent zeros whatever these are
+        // (see `ledgerTransaction`).
+        seedFingerprint: randomFingerprint(),
         hdIndex: LEDGER_ZIP32_PATH.account,
       };
     },

@@ -91,8 +91,7 @@ const isPublicAccount = (v: unknown): v is ZCashKeychainAccount =>
   isRecord(v) &&
   typeof v.id === "string" &&
   typeof v.alias === "string" &&
-  typeof v.address === "string" &&
-  typeof v.type === "string";
+  typeof v.address === "string";
 
 const isPublicAccountArray = (v: unknown): v is ZCashKeychainAccount[] =>
   Array.isArray(v) && v.every(isPublicAccount);

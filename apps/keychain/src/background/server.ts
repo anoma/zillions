@@ -12,6 +12,7 @@
 import browser, { type Runtime } from "webextension-polyfill";
 
 import type { IpcKind, IpcMessage, IpcResult } from "../ipc/contract";
+import { isSiteOrigin } from "../utils/origin";
 import { handlers, TRUSTED_SENDER, type IpcSenderContext } from "./handlers";
 
 /** Dispatch a single envelope. Exported for in-process use (mock/tests). */
@@ -42,7 +43,7 @@ const isDappKind = (kind: IpcKind): boolean => kind.startsWith("dapp/");
  * `browser.runtime.getURL("")`, e.g. `chrome-extension://<our-id>/` — a sender
  * URL under it can only be one of our own pages.
  */
-const classifySender = (
+export const classifySender = (
   sender: Runtime.MessageSender,
   extensionBaseUrl: string
 ): IpcSenderContext | undefined => {
@@ -53,7 +54,7 @@ const classifySender = (
   }
 
   // Content-script sender: lives in a real tab on a web origin.
-  if (sender.tab?.id !== undefined && /^https?:\/\//.test(url)) {
+  if (sender.tab?.id !== undefined && isSiteOrigin(url)) {
     return {
       trusted: false,
       origin: new URL(url).origin,

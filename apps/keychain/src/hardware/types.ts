@@ -32,11 +32,12 @@ export type DeviceProgressStep = {
  */
 export type DeviceKeys = {
   device: DeviceKind;
-  /** Default account name: the device model, or what the device reports. */
+  /** Default account name: `DEFAULT_ALIAS`, or the name the account has on the device. */
   alias: string;
   /** Encoded UFVK (`uview1…`). */
   viewingKey: string;
-  /** ZIP-32 seed fingerprint (hex) the PCZT's zip32_derivation must carry. */
+  /** ZIP-32 seed fingerprint (hex) the PCZT's zip32_derivation must carry;
+   * random for a Ledger, which can't report its own. */
   seedFingerprint: string;
   /** ZIP-32 account index. */
   hdIndex: number;

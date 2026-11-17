@@ -15,6 +15,7 @@ import {
   SensitiveType,
   VaultStorage,
 } from "../../storage";
+import { isPlaceholderFingerprint, randomFingerprint } from "../crypto/zillions";
 import type { ActiveAccountStore, UtilityStore } from "./types";
 
 /** Utility-store key holding the active (parent) account pointer. */
@@ -49,6 +50,24 @@ export class AccountRepository {
   public async findAll(): Promise<KeyStoreType[]> {
     const entries = await this.vaultStorage.findAll(KeyStore);
     return entries.map((entry) => entry.public);
+  }
+
+  /**
+   * Gives accounts stored with a placeholder fingerprint a random one, the
+   * same across a wallet and its child; idempotent. Public records only, so
+   * it runs locked.
+   */
+  public async replacePlaceholderFingerprints(): Promise<void> {
+    const fresh = new Map<string, string>();
+    for (const record of await this.findAll()) {
+      if (!isPlaceholderFingerprint(record.seedFingerprint)) continue;
+      const walletId = record.parentId ?? record.id;
+      const fingerprint = fresh.get(walletId) ?? randomFingerprint();
+      fresh.set(walletId, fingerprint);
+      await this.vaultStorage.update(KeyStore, "id", record.id, {
+        seedFingerprint: fingerprint,
+      });
+    }
   }
 
   /** The encrypted blob stored alongside an account's public record. */

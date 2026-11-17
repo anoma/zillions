@@ -29,7 +29,7 @@ import {
   deriveAccount,
 } from "../background/crypto/zillions";
 import type { DeviceCredential } from "../ipc/contract";
-import { freeAlias } from "../setup/model/alias";
+import { DEFAULT_ALIAS, freeAlias } from "../setup/model/alias";
 import { OptionCard } from "../setup/ui/OptionCard";
 import { engines } from "./engines";
 import {
@@ -61,11 +61,18 @@ const passkeyMissingPrfCopy =
 const importDismissedCopy =
   "No existing passkey was used. Create a new one, or try again.";
 
+/** A failed create: WebAuthn reports a dismissed dialog and a key that
+ * can't store a discoverable passkey alike, so the copy covers both. */
+const createDismissedCopy =
+  "No passkey was created. If your security key was refused, it may be " +
+  "full or unable to keep passkeys: use a synced passkey, or a key with " +
+  "room for one more.";
+
 /** The connect's error copy, per path. */
 const errorCopy = (e: unknown, path: "create" | "import"): string => {
   if (isPrfMissing(e)) return passkeyMissingPrfCopy;
-  if (path === "import" && e instanceof Error && e.name === "NotAllowedError") {
-    return importDismissedCopy;
+  if (e instanceof Error && e.name === "NotAllowedError") {
+    return path === "import" ? importDismissedCopy : createDismissedCopy;
   }
   return engines["passkey-prf"].describeError(e);
 };
@@ -116,7 +123,7 @@ export const PasskeyConnect = ({
   const createAndConnect = async () => {
     // The password manager lists the passkey under this name, so passkeys
     // stay told apart when importing.
-    const alias = freeAlias("Passkey", takenAliases);
+    const alias = freeAlias(DEFAULT_ALIAS, takenAliases);
     setError(undefined);
     setBusy(true);
     try {
@@ -152,7 +159,7 @@ export const PasskeyConnect = ({
       await connectKeys(
         { id: assertion.id, rpId: RP_ID },
         prfOutput,
-        "Passkey"
+        DEFAULT_ALIAS
       );
     } catch (e) {
       setError(errorCopy(e, "import"));
@@ -215,7 +222,8 @@ const PasskeySign = makePasskeySign({
   blurb: (
     <>
       The passkey dialog appears next: verify yourself, and the passkey
-      signs this exact transaction. The seed is never stored anywhere.
+      signs the transaction above. Only this Keychain window ever asks for
+      your Zillions passkey: if a web page asks, it can take your account.
     </>
   ),
 });

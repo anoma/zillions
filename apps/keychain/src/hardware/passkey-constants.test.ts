@@ -27,11 +27,10 @@ describe("passkey consensus constants", () => {
     expect(RP_NAME).toBe("Zillions");
   });
 
-  it("keeps the RP on a dedicated subdomain of the product site", () => {
-    // The web app (`zillions.money`) must never be able to claim the RP:
-    // an RP ID is a registrable-domain suffix of the caller's origin, and
-    // a child domain is never a suffix of its parent — but only as long
-    // as the RP ID isn't the parent itself.
+  it("keeps the RP off the hosts the product serves", () => {
+    // The app and the apex must never be able to claim the RP: a caller
+    // claims its own host and its parents, never a child. This doesn't
+    // cover pages at or under the RP host itself; see `RP_ID`.
     expect(RP_ID.endsWith(".zillions.money")).toBe(true);
     expect(RP_ID).not.toBe("zillions.money");
   });

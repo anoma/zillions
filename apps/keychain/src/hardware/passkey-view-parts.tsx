@@ -24,6 +24,7 @@ import {
   prfBytes,
   verifyAssertion,
   zeroBytes,
+  NotDiscoverableError,
   PrfMissingError,
 } from "./passkey-core";
 import type { DeviceSignTx } from "./types";
@@ -110,16 +111,15 @@ export const createCredential = async (
       },
       pubKeyCredParams,
       authenticatorSelection: {
-        // Not "required": discoverability buys nothing here — every
-        // later ceremony addresses the credential via allowCredentials —
-        // and CTAP2.0-era keys can't store resident credentials, so a
-        // requirement would bounce them from the dialog entirely
-        // ("your device can't be used with this site"). Capable
-        // providers still create discoverable passkeys on their own.
-        residentKey: "preferred",
+        // Import after a lost vault finds the passkey by discovery only:
+        // a non-discoverable one would leave the account with no way back.
+        // Keys that can't store one are refused by the browser's dialog.
+        residentKey: "required",
+        requireResidentKey: true,
         userVerification: "required",
       },
       extensions: {
+        credProps: true,
         prf: {
           // Evaluate the salt at create: the output (when the provider
           // returns one) makes this the connect's only ceremony.
@@ -129,6 +129,10 @@ export const createCredential = async (
       attestation: "none",
     },
   });
+  // Browsers may still downgrade; `rk` absent means it wasn't reported.
+  if (reg.clientExtensionResults?.credProps?.rk === false) {
+    throw new NotDiscoverableError();
+  }
   const prfView = prfFromRegistration(reg);
   try {
     // Attestation "none" carries nothing more to prove; the response is

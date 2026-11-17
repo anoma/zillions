@@ -25,7 +25,7 @@ export type PcztTransparentIo = {
    * output comes back to it (change, or an unshield); false for a payment.
    */
   mine?: boolean;
-  /** Outputs of ours only: the address's scope (0 external, 1 internal, 2 ephemeral) and index. */
+  /** Outputs of ours only: the address's scope (0 external, 1 internal) and index. */
   path?: TransparentPath;
   // Anything else present in the JSON is kept for the raw view.
   [key: string]: unknown;
@@ -72,10 +72,10 @@ export type PcztSummary = {
    */
   paymentLink?: boolean;
   /**
-   * A transparent output of ours past the addresses wallets scan: one
-   * restoring the recovery phrase may never find the money it holds.
+   * Every transparent output of ours past the addresses wallets scan: one
+   * restoring the recovery phrase may never find the money they hold.
    */
-  unusualChange?: TransparentPath & { value: string };
+  unusualChange?: (TransparentPath & { value: string })[];
   /** The full `to_json()` structure for the raw expandable view. */
   raw: unknown;
 };

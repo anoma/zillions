@@ -211,8 +211,10 @@ export const handlers: HandlerMap = {
   },
 
   "keyring/deleteAccount": async ({ accountId }) => {
-    const { accounts, approvals, broadcaster } = await getServices();
+    const { accounts, approvals, broadcaster, localStorage } = await getServices();
     await accounts.remove(accountId);
+    // Marks are kept per wallet; a child's id has none.
+    await localStorage.clearChangeIndexes(accountId);
     await approvals.followActiveAccount();
     // Any site may have lost its current wallet to the removal and moved on
     // to another it was given.

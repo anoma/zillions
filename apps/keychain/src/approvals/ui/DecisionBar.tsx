@@ -20,7 +20,7 @@ type GuardedButtonProps = Omit<
  * steer keystrokes into this window more easily than a pointer.
  */
 export const GuardedButton = ({ onPress, disabled, ...props }: GuardedButtonProps) => {
-  const { ready, readyRef } = useClickGuard();
+  const { ready, readyRef } = useClickGuard(!!disabled);
   const pressedWhileReady = useRef(false);
 
   return (

@@ -58,6 +58,9 @@ export const getServices = (): Promise<Services> => {
       await vaultService.initialize();
 
       const accounts = new AccountRepository(vaultStorage, utilityStore);
+      // Before any site can read an account. A failure only leaves the old
+      // placeholders, which must not take the Keychain down with it.
+      await accounts.replacePlaceholderFingerprints().catch(console.error);
       const keyring = new Keyring(vaultService, accounts);
 
       const area = browser.storage.local;

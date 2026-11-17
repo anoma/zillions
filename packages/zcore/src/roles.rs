@@ -217,8 +217,8 @@ struct Flow {
     path: Option<ChangePath>,
 }
 
-/// A transparent address's place in the account: scope 0 external, 1
-/// internal, 2 ephemeral (ZIP 320), and its index.
+/// A transparent address's place in the account: scope 0 external or 1
+/// internal, and its index.
 #[derive(Clone, Copy, Serialize)]
 pub(crate) struct ChangePath {
     scope: u32,
@@ -472,8 +472,10 @@ fn shielded_outputs(
 /// Transparent outputs, with the path of each that is ours. One is ours when
 /// it names a BIP 44 path, `m/44'/coin'/account'/scope/index`, whose key,
 /// derived from the viewing key, is the one its script pays, at a scope
-/// wallets scan. Any other path, a custom scope or a hardened step, would put
-/// the money where no wallet restoring the phrase looks: shown as a payment.
+/// Zillions scans: external or internal. Any other path, a custom scope or a
+/// hardened step, would put the money where Zillions never looks: shown as a
+/// payment. That includes ZIP 320's ephemeral scope (2): Zillions makes no TEX
+/// sends, and wallets that do leave such outputs out of the balance.
 fn transparent_outputs(
     network: &Network,
     pczt: &Pczt,
@@ -507,7 +509,7 @@ fn transparent_outputs(
                 && coin_type == bip32::ChildNumber(coin | HARDENED)
                 && account_index.is_hardened()
                 && !scope.is_hardened()
-                && scope.index() <= 2
+                && scope.index() <= 1
                 && !index.is_hardened();
             if !standard {
                 return None;
@@ -1080,8 +1082,8 @@ mod tests {
             .collect()
     }
 
-    /// Change counts as ours only where a wallet restoring the phrase looks:
-    /// the account's own BIP 44 path, at a scope wallets scan.
+    /// Change counts as ours only where Zillions looks: the account's own
+    /// BIP 44 path, at the external or internal scope.
     #[test]
     fn calls_transparent_change_ours_only_on_a_standard_path() {
         let h = |n: u32| n | HARDENED;
@@ -1091,9 +1093,19 @@ mod tests {
             vec![(true, Some((0, 5)))]
         );
 
+        let internal = send_to_own(1, 3, vec![h(44), h(133), h(0), 1, 3]);
+        assert_eq!(
+            own_transparent_outputs(&internal),
+            vec![(true, Some((1, 3)))]
+        );
+
         // A custom scope no wallet scans, though the key is truly the account's.
         let custom = send_to_own(1_234_567, 9, vec![h(44), h(133), h(0), 1_234_567, 9]);
         assert_eq!(own_transparent_outputs(&custom), vec![(false, None)]);
+
+        // ZIP 320's ephemeral scope: Zillions never scans it.
+        let ephemeral = send_to_own(2, 0, vec![h(44), h(133), h(0), 2, 0]);
+        assert_eq!(own_transparent_outputs(&ephemeral), vec![(false, None)]);
 
         // A path whose prefix isn't BIP 44, or shorter, names no standard place.
         let odd = send_to_own(0, 5, vec![h(45), h(133), h(0), 0, 5]);

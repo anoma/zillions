@@ -204,6 +204,21 @@ export class PrfMissingError extends Error {
   }
 }
 
+/** A credential the browser made non-discoverable (a security key with no
+ * room or no support for resident credentials). Only discovery can find a
+ * passkey again on a fresh install, so its account would be lost with this
+ * Keychain's data: it is refused before any account exists. */
+export class NotDiscoverableError extends Error {
+  constructor() {
+    super(
+      "This passkey can't be found again from another install, so an " +
+        "account made with it would be lost with this Keychain's data. Use " +
+        "a synced passkey, or a security key with room for one more passkey."
+    );
+    this.name = "NotDiscoverableError";
+  }
+}
+
 /** Whether an error means "no PRF support here" however it surfaced: the
  * probe answered without an output, or the ceremony refused the extension
  * outright. Both fail the connect explicitly — a user cancellation

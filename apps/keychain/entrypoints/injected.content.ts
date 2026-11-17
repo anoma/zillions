@@ -11,6 +11,7 @@ export default defineContentScript({
   allFrames: false,
   world: "MAIN",
   main() {
-    startInjected();
+    // No `window.zc` on a page the network could have written.
+    if (window.isSecureContext) startInjected();
   },
 });

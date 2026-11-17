@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 import { ActionButton, Alert, Stack } from "@zillions/components";
 
 import { deriveAccountFromUfvk } from "../background/crypto/zillions";
+import { DEFAULT_ALIAS } from "../setup/model/alias";
 import { engines } from "./engines";
 import type { DeviceKeys, DeviceSignTx, DeviceViews } from "./types";
 
@@ -53,7 +54,7 @@ export const KeystoneConnect = ({
       const addresses = await deriveAccountFromUfvk(viewingKey);
       await onKeys({
         device: "keystone",
-        alias: account.getName() || "Keystone",
+        alias: account.getName() || DEFAULT_ALIAS,
         viewingKey,
         seedFingerprint: accounts.getSeedFingerprint().toHex(),
         hdIndex: account.getIndex(),

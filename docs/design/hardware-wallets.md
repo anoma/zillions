@@ -154,12 +154,35 @@ same account anywhere).
   RP ID `keychain.zillions.money` and the PRF salt are a zero-import
   module the build (`wxt.config.ts`) and the ceremonies
   (`passkey-core.ts`) both import, so the manifest cannot drift from
-  what the ceremonies claim. Nothing is ever served from the
-  RP host — no DNS record, no catch-all — so no web page can claim it:
-  an RP ID must be a registrable-domain suffix of the caller's origin,
-  and a child of `zillions.money` is never a suffix of it. The salt is
-  fixed and domain-separated; either constant is a migration, not a fix
-  (the pin tests in `passkey-constants.test.ts` fail on a silent edit).
+  what the ceremonies claim. The salt is fixed and domain-separated;
+  either constant is a migration, not a fix (the pin tests in
+  `passkey-constants.test.ts` fail on a silent edit).
+- **Passkey accounts are as safe as the `zillions.money` zone.** The
+  PRF output alone is the seed, and the PRF answers any caller that may
+  claim the RP. The app (`app.zillions.money`) and the apex can't: a
+  caller claims its own host and its parents, never a child. But a page
+  at `keychain.zillions.money`, at any name under it, or at an origin
+  listed in its `/.well-known/webauthn` can, and whoever controls the
+  zone can create one and get a certificate for it. So the rule that
+  nothing is ever served at or under the RP host is load-bearing, and
+  nothing in code enforces it. The zone is kept so that it holds:
+  - registry lock on `zillions.money`, and hardware-key 2FA on the
+    registrar and DNS-provider accounts, held by as few people as
+    possible;
+  - no record and no wildcard at or under `keychain.zillions.money`
+    (CAA doesn't help here: the zone's owner can change it too);
+  - Certificate Transparency monitoring that alerts on any certificate
+    naming `keychain.zillions.money` or `*.keychain.zillions.money`.
+
+  Sites aren't told how an account's keys are held: `toPublicAccount`
+  sends neither its type, its device nor whether it was generated or
+  imported, and device accounts default to the neutral "Account N"
+  rather than "Passkey" or the Ledger's model. The fingerprint of an
+  account with no seed here (a Ledger's, an imported key's) is random,
+  not zeros or empty. That doesn't close the route; it only stops the
+  Keychain handing a hijacked app its targets. The sign
+  screen tells the user only the Keychain's own window ever asks for
+  the passkey.
 - **Connect asks for the PRF at create, probes on fallthrough.** The
   create ceremony requests the PRF extension with the salt evaluated
   inline — one ceremony, one dialog, on synced providers that evaluate
@@ -196,12 +219,19 @@ same account anywhere).
   chooser's copy reads true for both. This is what makes "the passkey is
   the backup" exercisable: a fresh install recovers the account from the
   synced passkey alone.
-- **The credential request stays browser-generous.** `residentKey` is
-  `"preferred"` (discoverability is never used — every ceremony names
-  its credential in `allowCredentials`), and `pubKeyCredParams` offers
-  ES256 and RS256, with Ed25519 added only when the browser's WebCrypto
-  can verify it (`canVerifyEd25519`, cached feature detect) — so
-  CTAP2.0-era security keys and Ed25519-only ones can register.
+- **The credential must be discoverable.** `residentKey` is
+  `"required"`, and a create whose `credProps.rk` comes back `false` is
+  refused before any account exists (`NotDiscoverableError`). The
+  credential id lives only in the vault, and the import after a lost
+  vault finds the passkey by discovery alone, so a non-discoverable
+  credential would leave its account with no way back. Security keys
+  with no room or no support for resident credentials can't make a
+  passkey account; synced providers always create discoverable ones.
+- **The credential request is otherwise browser-generous.**
+  `pubKeyCredParams` offers ES256 and RS256, with Ed25519 added only
+  when the browser's WebCrypto can verify it (`canVerifyEd25519`,
+  cached feature detect) — so older security keys with resident storage
+  and Ed25519-only ones can register.
 - **Nothing reveals the seed, ever.** Both reveal paths refuse device
   accounts: `revealMnemonic` by its type check, `revealSpendingKey` by
   walking to the secret holder and refusing every device kind.

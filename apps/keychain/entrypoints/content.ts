@@ -11,6 +11,7 @@ export default defineContentScript({
   allFrames: false,
   world: "ISOLATED",
   main() {
+    if (!window.isSecureContext) return;
     // Relay page provider calls to the background over the typed dapp channels.
     startProxy(createBackgroundClient());
 

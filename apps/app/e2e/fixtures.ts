@@ -20,14 +20,12 @@ const transparent: ZCashKeychainAccount = {
   id: "e2e",
   alias: "E2E",
   address: derived.transparent,
-  type: "mnemonic",
 };
 const shielded: ZCashKeychainAccount = {
   id: "e2e-shielded",
   parentId: "e2e",
   alias: "E2E",
   address: "",
-  type: "shielded-keys",
   viewingKey: derived.ufvk,
   seedFingerprint: seed_fingerprint(seed),
   hdIndex: 0,

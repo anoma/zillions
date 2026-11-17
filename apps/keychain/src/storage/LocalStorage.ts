@@ -7,6 +7,7 @@ import { KVStore } from "@zillions/storage";
 import * as E from "fp-ts/Either";
 import * as t from "io-ts";
 
+import { isSiteOrigin } from "../utils/origin";
 import { ExtStorage } from "./Storage";
 
 const Connection = t.type({
@@ -50,6 +51,11 @@ export class LocalStorage extends ExtStorage {
     super(provider);
   }
 
+  /**
+   * Grants to origins that can no longer be sites (plaintext, off this
+   * machine) are left out, so one made before they were refused grants
+   * nothing; the next write drops it.
+   */
   async getConnections(): Promise<ConnectionsType> {
     const decoded = t
       .union([Connections, t.undefined])
@@ -57,7 +63,9 @@ export class LocalStorage extends ExtStorage {
     if (E.isLeft(decoded)) {
       throw new Error("Connections are not valid");
     }
-    return decoded.right ?? {};
+    return Object.fromEntries(
+      Object.entries(decoded.right ?? {}).filter(([origin]) => isSiteOrigin(origin))
+    );
   }
 
   async setConnection(origin: string, connection: Connection): Promise<void> {
@@ -100,6 +108,15 @@ export class LocalStorage extends ExtStorage {
       .union([ChangeIndexes, t.undefined])
       .decode(await this.getRaw(CHANGE_INDEXES_KEY));
     return (E.isRight(decoded) && decoded.right?.[walletId]) || {};
+  }
+
+  /** Forgets `walletId`'s approved indexes, once the wallet is removed. */
+  async clearChangeIndexes(walletId: string): Promise<void> {
+    const decoded = t
+      .union([ChangeIndexes, t.undefined])
+      .decode(await this.getRaw(CHANGE_INDEXES_KEY));
+    const { [walletId]: _removed, ...rest } = (E.isRight(decoded) && decoded.right) || {};
+    await this.setRaw(CHANGE_INDEXES_KEY, rest);
   }
 
   /** Raises the highest approved index of `scope` for `walletId` to `index`. */

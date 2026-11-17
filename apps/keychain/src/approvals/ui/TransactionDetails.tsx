@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { GoArrowDown, GoArrowUp } from "react-icons/go";
 
-import type { PcztSummary } from "@zillions/types";
+import type { PcztSummary, PcztTransparentIo } from "@zillions/types";
 import { zatoshiToZec } from "@zillions/utils";
 
 import { Row } from "../../popup/ui/Row";
 import { formatAddress } from "../utils/format";
 import { flowCount, isEmpty, poolFlows, summaryAsText, type PcztIo } from "../utils/pczt";
+
+/** Own transparent outputs name their address, so one far off stands out. */
+const ownLabel = (pool: string, io: PcztIo): string => {
+  const path = pool === "Transparent" ? (io as PcztTransparentIo).path : undefined;
+  return path ? `Your wallet · address ${path.index}` : "Your wallet";
+};
 
 const FlowRow = ({ pool, io, input }: { pool: string; io: PcztIo; input: boolean }) => (
   <Row
@@ -17,7 +23,7 @@ const FlowRow = ({ pool, io, input }: { pool: string; io: PcztIo; input: boolean
       </span>
     }
     title={`${pool} ${input ? "input" : "output"}`}
-    subtitle={io.mine ? "Your wallet" : formatAddress(io.address)}
+    subtitle={io.mine ? ownLabel(pool, io) : formatAddress(io.address)}
     trail={
       io.value !== undefined && (
         <span className="text-[12.5px] font-semibold tabular-nums">

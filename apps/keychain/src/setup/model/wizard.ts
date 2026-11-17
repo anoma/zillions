@@ -167,7 +167,7 @@ export const wizardReducer = (
         ...state,
         deviceKind: event.device,
         deviceKeys: event.keys,
-        // The device reports its name: the default account alias.
+        // The connect step's name: the default account alias.
         alias: event.keys.alias,
         step: state.passwordRequired ? "device.name" : "device.complete",
       };

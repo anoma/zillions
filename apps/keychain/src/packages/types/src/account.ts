@@ -49,37 +49,26 @@ export type DerivedAccount = {
   diversifierIndex?: number;
 };
 
-export type Account = Pick<
-  DerivedAccount,
-  | "address"
-  | "alias"
-  | "type"
-  | "owner"
-  | "pseudoExtendedKey"
-  | "source"
-  | "timestamp"
-  | "diversifierIndex"
-> & {
-  viewingKey?: string;
-};
-
 /**
- * A dapp-facing account. `viewingKey`, `hdIndex`, `seedFingerprint`,
- * `birthday`, `source` and `timestamp` are only set on the account the site
- * is connected with and its derived children; every other account carries
- * just its identity.
+ * A dapp-facing account. `viewingKey`, `hdIndex`, `seedFingerprint` and
+ * `birthday` are only set on the account the site is connected with and
+ * its derived children; every other account carries just its identity.
+ * It never says how the keys are held or came to be (phrase, Ledger,
+ * passkey; generated or imported): a hijacked site would use that to
+ * pick its targets.
  */
-export type ZCashKeychainAccount = Account & {
+export type ZCashKeychainAccount = {
   id: string;
+  alias: string;
+  address: string;
   parentId?: string;
+  viewingKey?: string;
   /** ZIP-32 account index used to derive this account's keys. */
   hdIndex?: number;
-  /** ZIP-32 seed fingerprint (hex). Empty string for accounts with no seed. */
+  /** ZIP-32 seed fingerprint (hex). Random for accounts with no seed in the Keychain. */
   seedFingerprint?: string;
   /** Block height at which this account was created/imported. Used to skip scanning earlier blocks. */
   birthday?: number;
-  /** The hardware wallet the keys live on, if any (e.g. "ledger"). */
-  device?: string;
 };
 
 /**
