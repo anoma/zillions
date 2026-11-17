@@ -61,11 +61,18 @@ const passkeyMissingPrfCopy =
 const importDismissedCopy =
   "No existing passkey was used. Create a new one, or try again.";
 
+/** A failed create: WebAuthn reports a dismissed dialog and a key that
+ * can't store a discoverable passkey alike, so the copy covers both. */
+const createDismissedCopy =
+  "No passkey was created. If your security key was refused, it may be " +
+  "full or unable to keep passkeys: use a synced passkey, or a key with " +
+  "room for one more.";
+
 /** The connect's error copy, per path. */
 const errorCopy = (e: unknown, path: "create" | "import"): string => {
   if (isPrfMissing(e)) return passkeyMissingPrfCopy;
-  if (path === "import" && e instanceof Error && e.name === "NotAllowedError") {
-    return importDismissedCopy;
+  if (e instanceof Error && e.name === "NotAllowedError") {
+    return path === "import" ? importDismissedCopy : createDismissedCopy;
   }
   return engines["passkey-prf"].describeError(e);
 };

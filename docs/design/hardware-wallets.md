@@ -217,12 +217,19 @@ same account anywhere).
   chooser's copy reads true for both. This is what makes "the passkey is
   the backup" exercisable: a fresh install recovers the account from the
   synced passkey alone.
-- **The credential request stays browser-generous.** `residentKey` is
-  `"preferred"` (discoverability is never used — every ceremony names
-  its credential in `allowCredentials`), and `pubKeyCredParams` offers
-  ES256 and RS256, with Ed25519 added only when the browser's WebCrypto
-  can verify it (`canVerifyEd25519`, cached feature detect) — so
-  CTAP2.0-era security keys and Ed25519-only ones can register.
+- **The credential must be discoverable.** `residentKey` is
+  `"required"`, and a create whose `credProps.rk` comes back `false` is
+  refused before any account exists (`NotDiscoverableError`). The
+  credential id lives only in the vault, and the import after a lost
+  vault finds the passkey by discovery alone, so a non-discoverable
+  credential would leave its account with no way back. Security keys
+  with no room or no support for resident credentials can't make a
+  passkey account; synced providers always create discoverable ones.
+- **The credential request is otherwise browser-generous.**
+  `pubKeyCredParams` offers ES256 and RS256, with Ed25519 added only
+  when the browser's WebCrypto can verify it (`canVerifyEd25519`,
+  cached feature detect) — so older security keys with resident storage
+  and Ed25519-only ones can register.
 - **Nothing reveals the seed, ever.** Both reveal paths refuse device
   accounts: `revealMnemonic` by its type check, `revealSpendingKey` by
   walking to the secret holder and refusing every device kind.

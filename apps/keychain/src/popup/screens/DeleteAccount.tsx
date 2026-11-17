@@ -59,7 +59,11 @@ export const DeleteAccount = () => {
     <form className="flex flex-col flex-1" onSubmit={(e) => void handleSubmit(e)}>
       <ScreenHeader back title={`Remove ${account.alias}`} />
       <Notice tone="danger" title="Back up first" className="mt-3.5">
-        After removal, only its seed phrase brings this account back.
+        {account.device === "passkey-prf"
+          ? "After removal, only its passkey brings this account back."
+          : account.device
+            ? "After removal, only its device or seed phrase brings this account back."
+            : "After removal, only its seed phrase brings this account back."}
         {account.type === "mnemonic" && (
           <button
             type="button"
