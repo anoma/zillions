@@ -151,8 +151,14 @@ export async function syncTransparent(
   let { chains, utxos } = cache;
   if (moved) {
     // The address wallets show can sit past the first gap limit.
-    const shown: number =
-      derive_account_from_ufvk(NETWORK, ufvk).transparent_index ?? 0;
+    const account = derive_account_from_ufvk(NETWORK, ufvk);
+    // Defaulting would quietly scan only the first gap limit again.
+    if (account.transparent && account.transparent_index === undefined) {
+      throw new Error(
+        "zcore gave no transparent_index: rebuild packages/zcore",
+      );
+    }
+    const shown: number = account.transparent_index ?? 0;
     const found = await Promise.all(
       SCOPES.map((scope) =>
         discover(
