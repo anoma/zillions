@@ -6,11 +6,12 @@ import { AmountDisplay } from "../components/AmountInput";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
 import { FormPage } from "../components/FormPage";
 import { PageError } from "../components/PageError";
+import { TransactionReceipt } from "../components/TransactionReceipt";
 import { AmountField, FormCard, SubmitBlock } from "../components/TransferForm";
 import { ActionButton } from "../components/ui/ActionButton";
 import { inputClassName, qrClassName } from "../components/ui/utils";
 import { useFreshAddress } from "../hooks/useAddresses";
-import { useSendPlan } from "../hooks/useSend";
+import { useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
 import { BitcoinIcon } from "../icons/BitcoinIcon";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
@@ -29,6 +30,7 @@ const Stage = {
   Swap: "SWAP",
   ReviewQuote: "REVIEW_QUOTE",
   DepositAmount: "DEPOSIT_AMOUNT",
+  SendAmount: "SEND_AMOUNT",
 };
 
 // Touch screens only: on desktops, reading the clipboard asks for a
@@ -197,6 +199,7 @@ function SwapRoute() {
   const [toTotalPrice, setToTotalPrice] = useState(0n);
   const [zecPriceInFrom, setZecPriceInFrom] = useState(1n);
 
+  const send = useSend();
   const sendPlan = useSendPlan(
     {
       from: "shielded",
@@ -214,18 +217,27 @@ function SwapRoute() {
     setTimeout(() => setIsPending(false), 1000);
     setStage(Stage.ReviewQuote);
     setIsLoading(true);
-    //e.preventDefault();
   };
 
   const onConfirm = () => {
-    //e.preventDefault();
-    setStage(Stage.DepositAmount);
-    //setIsPending(true);
-    // Placeholder for executing the actual swap transaction
-    /*setTimeout(() => {
-      setIsPending(false);
-      alert("Swap Confirmed!"); // Or route to a success screen
-      }, 2000);*/
+    if (outbound) {
+      const memo = "Swap";
+      send.mutate({
+        from: "shielded",
+        to: depositAddress,
+        amount: wholeToAtomic(fromAmount, fromToken.decimals),
+        memo: undefined,
+        shown: {
+          tx_type: "Sent",
+          value: -wholeToAtomic(fromAmount, fromToken.decimals),
+          from: { pool: "shielded" },
+          to: { address: depositAddress },
+          memo,
+        },
+      });
+    } else {
+      setStage(Stage.DepositAmount);
+    }
   };
 
   const onFundsSend = () => {
@@ -309,7 +321,7 @@ function SwapRoute() {
       originAsset: fromToken.assetId,
       depositType: "ORIGIN_CHAIN",
       destinationAsset: toToken.assetId,
-      amount: (Number(fromAmount) * 10 ** fromToken.decimals).toString(),
+      amount: wholeToAtomic(fromAmount, fromToken.decimals).toString(),
       recipient: recipientAddress,
       recipientType: "DESTINATION_CHAIN",
       refundTo: refundAddress,
@@ -358,6 +370,10 @@ function SwapRoute() {
         setIsLoading(false);
       });
   }, [stage, fromAmount, fromToken, refundAddress, shielded, slippage]);
+
+  if (send.data && stage == Stage.ReviewQuote) {
+    setStage(Stage.SendAmount);
+  }
 
   if (error) {
     return <PageError>{error}</PageError>;
@@ -735,11 +751,12 @@ function SwapRoute() {
           <div className="flex-1">
             <SubmitBlock
               label="Confirm"
-              pending={isPending}
-              pendingLabel="Confirming..."
-              color="black"
-              stages={[]}
-            />
+              pending={send.isPending}
+              pendingLabel={"Confirming..."}
+              color={"gold-button"}
+              stages={send.stages}
+              error={""}
+            ></SubmitBlock>
           </div>
         </div>
       </FormPage>
@@ -808,5 +825,7 @@ function SwapRoute() {
         </section>
       </FormPage>
     );
+  } else if (stage == Stage.SendAmount) {
+    return <TransactionReceipt tx={{ ...send.data, status: "Pending" }} />;
   }
 }
