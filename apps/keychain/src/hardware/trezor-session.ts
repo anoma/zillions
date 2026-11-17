@@ -120,7 +120,9 @@ export const submitTrezorPin = (pin: string): void => {
 
 let init: Promise<void> | undefined;
 
-/** Bring the transport up once; a cancelled ceremony reconnects next time. */
+/** Bring the transport up once per page. A failed start alone is retried:
+ * torn down so the next ceremony may call init again (connect refuses a
+ * second init on a live core), and not left sticky as a rejected promise. */
 const initTrezor = (): Promise<void> => {
   init ??= TrezorConnect.init({
     manifest: {
@@ -139,12 +141,14 @@ const initTrezor = (): Promise<void> => {
         ? NonNullable<T>
         : never,
     ],
+  }).catch((e) => {
+    init = undefined;
+    // dispose() removed the UI listener; re-register with the next init.
+    answering = false;
+    TrezorConnect.dispose();
+    throw e;
   });
   return init;
-};
-
-const resetTrezor = (): void => {
-  init = undefined;
 };
 
 /** Answer every UI request the ceremony meets. Registered once, at init. */
@@ -222,12 +226,11 @@ const withTrezor = async <T>(
       reject(new Error("Trezor request was cancelled"));
     })
   );
-  try {
-    return await Promise.race([initTrezor().then(run), aborted]);
-  } catch (e) {
-    resetTrezor();
-    throw e;
-  }
+  // The race rethrows whichever settles first; a loser's rejection (the
+  // ceremony a cancel interrupted) is expected, not unhandled noise.
+  const running = initTrezor().then(run);
+  running.catch(() => {});
+  return await Promise.race([running, aborted]);
 };
 
 /** The account's keys, as the device exports them: transparent only. */
