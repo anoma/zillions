@@ -51,7 +51,7 @@ export const DeviceConnect = () => {
             );
           }
         }
-        // Devices report a default name ("Ledger", "Passkey"): number repeats.
+        // Devices report the same default name: number repeats.
         const keys = {
           ...connected,
           alias: freeAlias(

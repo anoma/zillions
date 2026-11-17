@@ -29,7 +29,7 @@ import {
   deriveAccount,
 } from "../background/crypto/zillions";
 import type { DeviceCredential } from "../ipc/contract";
-import { freeAlias } from "../setup/model/alias";
+import { DEFAULT_ALIAS, freeAlias } from "../setup/model/alias";
 import { OptionCard } from "../setup/ui/OptionCard";
 import { engines } from "./engines";
 import {
@@ -123,7 +123,7 @@ export const PasskeyConnect = ({
   const createAndConnect = async () => {
     // The password manager lists the passkey under this name, so passkeys
     // stay told apart when importing.
-    const alias = freeAlias("Passkey", takenAliases);
+    const alias = freeAlias(DEFAULT_ALIAS, takenAliases);
     setError(undefined);
     setBusy(true);
     try {
@@ -159,7 +159,7 @@ export const PasskeyConnect = ({
       await connectKeys(
         { id: assertion.id, rpId: RP_ID },
         prfOutput,
-        "Passkey"
+        DEFAULT_ALIAS
       );
     } catch (e) {
       setError(errorCopy(e, "import"));

@@ -32,6 +32,7 @@ import {
   randomFingerprint,
   type LedgerSignatures,
 } from "../background/crypto/zillions";
+import { DEFAULT_ALIAS } from "../setup/model/alias";
 import type { DeviceKeys } from "./types";
 
 /** One step of a device interaction, as displayed. */
@@ -214,7 +215,7 @@ export const connectLedger = (
 ): Promise<DeviceKeys> =>
   withLedger(
     onStep,
-    async (signer, device) => {
+    async (signer) => {
       const coin = coinType();
       const { account, change, index } = LEDGER_BIP44_PATH;
       const bip44 = `44'/${coin}'/${account}'/${change}/${index}`;
@@ -236,7 +237,7 @@ export const connectLedger = (
 
       return {
         device: "ledger",
-        alias: device.deviceModel.name,
+        alias: DEFAULT_ALIAS,
         transparentAddress,
         shieldedAddress,
         viewingKey: fvk.fullViewingKey,

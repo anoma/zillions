@@ -587,8 +587,9 @@ Challenges to check, one by one:
   holds for the Keychain and recovers the account one of them was
   created for — the same passkey re-derives the same account on any
   install, so the passkey is the backup.
-- **Each passkey account takes the next free name**, "Passkey",
-  "Passkey 2"…, as hardware wallets do ("Ledger 2"). A new passkey gets
+- **Each passkey account takes the next free name**, "Account",
+  "Account 2"…, as hardware wallets do. The name never says how the
+  keys are held: sites see every account's name. A new passkey gets
   the same name in the password manager, so the user can tell passkeys
   apart when importing. An imported passkey's name can't be read back,
   so its account gets the next free name too.

@@ -176,9 +176,11 @@ same account anywhere).
 
   Sites aren't told how an account's keys are held: `toPublicAccount`
   sends neither its type, its device nor whether it was generated or
-  imported. That doesn't close the route, and an account's name
-  ("Passkey 2", unless the user renamed it) still gives it away; it
-  only stops the Keychain handing a hijacked app its targets. The sign
+  imported, and device accounts default to the neutral "Account N"
+  rather than "Passkey" or the Ledger's model. The fingerprint of an
+  account with no seed here (a Ledger's, an imported key's) is random,
+  not zeros or empty. That doesn't close the route; it only stops the
+  Keychain handing a hijacked app its targets. The sign
   screen tells the user only the Keychain's own window ever asks for
   the passkey.
 - **Connect asks for the PRF at create, probes on fallthrough.** The

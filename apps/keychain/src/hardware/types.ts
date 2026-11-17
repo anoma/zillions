@@ -32,7 +32,7 @@ export type DeviceProgressStep = {
  */
 export type DeviceKeys = {
   device: DeviceKind;
-  /** Default account name: the device model, or what the device reports. */
+  /** Default account name: `DEFAULT_ALIAS`, or the name the account has on the device. */
   alias: string;
   /** Encoded UFVK (`uview1…`). */
   viewingKey: string;
