@@ -43,10 +43,9 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
-    # Findings are reported as check runs, and as issues on scheduled runs.
+    # Scheduled runs report findings as issues.
     permissions:
       contents: read
-      checks: write
       issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,7 +58,14 @@ jobs:
             grep -A2 "^name = \"$crate\"$" Cargo.lock | grep -q '^source = ' || { echo "no source added for $crate"; exit 1; }
           done
         working-directory: packages/zcore
-      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+      # On other events the action reports warnings by creating a check run
+      # and updating it a second later, and that update can 404 and fail the
+      # job. Plain cargo-audit fails on vulnerabilities only.
+      - if: github.event_name != 'schedule'
+        run: cargo install cargo-audit --locked && cargo audit
+        working-directory: packages/zcore
+      - if: github.event_name == 'schedule'
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: packages/zcore
