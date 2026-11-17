@@ -247,6 +247,56 @@ same account anywhere).
   and older browsers fail loudly at the ceremony with copy in
   `describeError`.
 
+### The Trezor module
+
+The fourth device needs no contract change and no wizard change — a kind,
+an engine, views, and the zcore work a transparent-only device owes the
+PCZT. What's different is where its keys stop: a Trezor holds no shielded
+keys at all, so its account is transparent-only end to end.
+
+- **The transport is connect-core over WebUSB, and the Keychain answers
+  everything.** `@trezor/connect-core` (pinned, like the Ledger kits)
+  drives the device through `@trezor/transport-web`; no Suite, no popup
+  handoff, no trezor.io page. Connect's UI requests are answered in the
+  session: the PIN goes to the Connect/Sign view's pad — digits picked by
+  the positions the device's screen shows, since the pad's layout is
+  scrambled on purpose — a passphrase stays on the device and empty (the
+  account model is the device's plain one), connect's own confirmations
+  pass, and THP pairing takes the first method the device offers while
+  the code check happens on the device's screen. The browser's own
+  `requestDevice` picker (a user gesture) grants the device; WebUSB
+  reaches only granted devices afterwards, so a re-connect re-arms the
+  gesture through the retry button. Chromium-based browsers only.
+- **The account is the device's xpub, encoded by zcore.** Setup reads the
+  account's xpub at `m/44'/coin'/0'` off the device (connect's
+  `getPublicKey`, coin `zec`/`taz` by network, shown for approval), and
+  `ufvk_from_transparent_xpub` encodes it as a Revision 2 UFVK holding
+  only its P2PKH item (`uvf1…`). The keyring derives the addresses from
+  the viewing key — generalized from what the Keystone's Connect view did
+  page-side, and what lets a transparent-only key name no shielded
+  address at all: its unified address is the transparent-only one
+  (`tu1…`). The alias is the model the device reports.
+- **The mapper is Rust, not JavaScript.** `pczt_trezor_transaction`
+  (zcore `src/trezor.rs`) turns a transparent-only PCZT into connect's
+  Bitcoin-style SignTx: prevouts as display txids at the coins' own
+  BIP-44 paths, P2PKH scripts checked against the keys they name, change
+  addressed by path, the rest by address, amounts plain numbers (zatoshi
+  sits far below the safe range). Shielded pools, non-SIGHASH-ALL coins
+  and non-V5 transactions are refused before the device hears about any
+  of it. The plan pins V5 for transparent-only plans of accounts with no
+  shielded keys — V5 needs no referenced transactions streamed back, so
+  the SignTx is all the firmware reads. Its tests round-trip through the
+  Ledger signer kit's apply, which is what folds the signatures back in:
+  connect returns DER ‖ sighash-byte hex indexed by input, the same shape
+  the Ledger engine already carries, with the shielded lists empty.
+- **The device never reveals its seed's fingerprint.** The PCZT's
+  derivation carries one; zeros, as for a Ledger — the device doesn't
+  check it.
+- **Errors stay in connect's words until the engine speaks them.**
+  Connect's TypedErrors (`Device_NotFound`, `Method_Cancel`, …) come
+  through `describeError`, which names the two-granted-devices case the
+  picker can't resolve and reads a cancel as a cancel.
+
 ## Layout
 
 - `src/hardware/types.ts` — the abstraction's types.
@@ -265,6 +315,10 @@ same account anywhere).
   (create, probe and import ceremonies, sign screen).
 - `src/hardware/passkey-prf.ts` — the `passkey-prf` engine.
 - `src/hardware/passkey-prf-views.tsx` — the `passkey-prf` screens.
+- `src/hardware/trezor-session.ts` — connect-core + WebUSB transport:
+  init, UI answers, read the xpub, sign.
+- `src/hardware/trezor.ts` — the Trezor engine.
+- `src/hardware/trezor-views.tsx` — the Trezor screens (PIN pad).
 - `src/hardware/device-progress.tsx` — the shared progress screen.
 - `src/hardware/engines.ts` / `index.ts` — the registries.
 
@@ -272,9 +326,14 @@ same account anywhere).
 
 An entry in `DeviceKind`, an engine, views, a `wallets` entry, and —
 only if the device needs data the request doesn't carry yet — an
-optional field on `saveDeviceAccount`. The keyring's `sign` and the
-wizard don't change. The passkey also gave `assembleSignedPczt` an
-optional third parameter: the keyring passes the device's at-rest state
-(its credential and ZIP-32 index — the engine never trusts it from the
-page) — where Ledger and Keystone verify against the transaction alone
-and need none of it.
+optional field on `saveDeviceAccount`. The wizard doesn't change. The
+keyring takes a change only when the account model moves: the Trezor's
+was the first (addresses derive from the viewing key when a device
+doesn't hand them over). What a device that signs differently owes is
+its own zcore work — the Trezor's PCZT→SignTx mapper and its
+transparent-only UFVK encoding live in Rust, tested there, behind the
+same façade the other devices' bindings use. The passkey also gave
+`assembleSignedPczt` an optional third parameter: the keyring passes
+the device's at-rest state (its credential and ZIP-32 index — the
+engine never trusts it from the page) — where Ledger, Keystone and
+Trezor verify against the transaction alone and need none of it.

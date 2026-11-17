@@ -622,7 +622,37 @@ Challenges to check, one by one:
 - How the device code is laid out is in
   [hardware-wallets.md](design/hardware-wallets.md).
 
-### 3.9 Settings — Built
+### 3.9 Trezor hardware wallet — Built
+
+- **Connect a Trezor from the Keychain's first screen**, like a Ledger. Its
+  keys never leave the device: the Keychain keeps only what lets the wallet
+  see the account — the account's xpub at `m/44'/coin'/0'`, read with the
+  user's approval on the device and kept as a transparent-only viewing key.
+  The ceremony runs on `@trezor/connect-core` over WebUSB entirely in the
+  Keychain: the device picker is the browser's own, and everything the
+  firmware asks of the host (its PIN, by the positions the device's screen
+  shows; a passphrase, which stays on the device; THP pairing) is answered
+  in the Keychain's own pages. No Suite handoff, no page the device's data
+  leaks to. Chromium-based browsers only.
+- **The wallet supports what a Trezor supports, no more.** Its keys are
+  transparent-only (Bitcoin-style P2PKH at BIP-44 paths): a Trezor account
+  holds, sees, receives and spends transparent funds only. It can't hold,
+  see or send shielded funds — the wallet hides those flows for the account
+  (receive shows the transparent address alone, send pays from transparent,
+  shield, unshield and migration are off), and a payment to a shielded
+  address is refused.
+- A send is approved in the Keychain as usual, then reviewed and approved
+  on the device; what the device shows is what gets signed. While waiting,
+  the Keychain shows each step (connect, pair, unlock, approve) with a way
+  to cancel or try again.
+- The recovery phrase and spending keys can't be revealed: they never
+  leave the device. The device also never reveals its seed's fingerprint,
+  which a PCZT's derivation carries: the Keychain stores zeros there, as
+  for a Ledger, and the device doesn't check them.
+- How the device code is laid out is in
+  [hardware-wallets.md](design/hardware-wallets.md).
+
+### 3.10 Settings — Built
 
 - **Auto-lock**: the Keychain locks after the computer has been idle for 5,
   15 (default), 30 or 60 minutes, or never, and when the screen locks.
