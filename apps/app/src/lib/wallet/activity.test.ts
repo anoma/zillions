@@ -255,46 +255,28 @@ test("an output our OVK opens doesn't make a transaction ours: only a spend does
     to: { pool: "shielded" },
   });
   expect(entry.memo).toBeUndefined();
-  // Paid to our change address instead, it looks like our send: Sent, with nothing it chose.
-  expect(history("internal")).toEqual({
-    txid: "tx3",
-    tx_type: "Sent",
-    unproven: true,
-    value: 0n,
-    fee: 0n,
-    block_height: at.height,
-    confirmations: 0,
-    status: "Confirmed",
-    memo: undefined,
-    timestamp: 0,
-    pool: "orchard",
-    from: { pool: "shielded" },
-    to: { pool: "shielded" },
-  });
+  // Paid to our change address instead, it would pass for our send: hidden.
+  expect(history("internal")).toBeUndefined();
 });
 
-test("a send known only by its change is Sent, and in full once the note it spent is found", () => {
+test("a send known only by its change is hidden until the note it spent is found", () => {
   const at = { height: 3_503_939, tx_index: 2 };
   const change = { ...note(2, 80_000, "change"), ...at };
-  const spent = (spend: Note["spend"]) => ({ ...note(1, 100_000), spend });
+  const spent = (spend: Note["spend"]) => ({
+    ...note(1, 100_000),
+    scope: "external" as const,
+    spend,
+  });
+  const send = (notes: Note[]) =>
+    buildActivity(notes, [], [], new Map()).find(
+      (tx) => tx.block_height === at.height,
+    );
 
-  const [before] = buildActivity(
-    [spent({ status: "unchecked" }), change],
-    [],
-    [],
-    new Map(),
-  );
-  expect(before).toMatchObject({ tx_type: "Sent", unproven: true, value: 0n });
-  expect(before.memo).toBeUndefined();
-
-  const [after] = buildActivity(
-    [spent({ status: "spent", at }), change],
-    [],
-    [],
-    new Map(),
-  );
-  expect(after).toMatchObject({ tx_type: "Sent", value: -20_000n });
-  expect(after.unproven).toBeUndefined();
+  expect(send([spent({ status: "unchecked" }), change])).toBeUndefined();
+  expect(send([spent({ status: "spent", at }), change])).toMatchObject({
+    tx_type: "Sent",
+    value: -20_000n,
+  });
 });
 
 test("a send from transparent coins to a shielded address counts its payment once", () => {

@@ -122,15 +122,11 @@ function Row({ tx }: { tx: Activity }) {
           routeClassName,
         )}
       >
-        {!tx.unproven && (
-          <>
-            <AddressBadge party={tx.from} />
-            <span aria-hidden="true" className="text-black/30">
-              →
-            </span>
-            <AddressBadge party={tx.to} />
-          </>
-        )}
+        <AddressBadge party={tx.from} />
+        <span aria-hidden="true" className="text-black/30">
+          →
+        </span>
+        <AddressBadge party={tx.to} />
       </div>
       <div className="text-right text-base font-semibold">
         <TransactionValue tx={tx} />

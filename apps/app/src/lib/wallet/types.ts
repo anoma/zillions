@@ -205,8 +205,6 @@ export type Activity = {
   to: Party;
   /** A payment to the account itself: it shows no sign. */
   self?: true;
-  /** A send known only by its change: amount, fee and parties wait for the note it spent. */
-  unproven?: true;
 };
 
 /** Someone else's address, with what it was paid when it's a recipient. */

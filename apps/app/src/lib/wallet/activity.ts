@@ -180,9 +180,9 @@ function shieldedSide({ received, spent, sent, paid, lost }: TxGroup) {
 }
 
 /**
- * Change paid to us, by a transaction not proven ours yet: likely a send whose
- * spent note sync hasn't reached. A hint only, since anyone holding our viewing
- * key can pay our change address, so it shows nothing an attacker could choose.
+ * Change paid to us by a transaction not proven ours yet: most likely a send
+ * whose spent note sync hasn't reached. Anyone holding our viewing key can pay
+ * our change address too, so it stays hidden until a spend proves it ours.
  */
 const unproven = ({ shielded, transparent }: Entry) =>
   !transparent &&
@@ -195,24 +195,6 @@ function receipt(
   ours: Set<string>,
   time?: number,
 ): Activity {
-  if (unproven(entry)) {
-    const pools = new Set(entry.shielded!.received.map((n) => n.pool));
-    return {
-      txid,
-      tx_type: "Sent",
-      unproven: true,
-      value: 0n,
-      fee: 0n,
-      block_height: entry.height,
-      confirmations: 0,
-      status: "Confirmed",
-      memo: undefined,
-      timestamp: time,
-      pool: pools.size === 1 ? [...pools][0] : "mixed",
-      from: SHIELDED,
-      to: SHIELDED,
-    };
-  }
   const activity = derived(txid, entry, ours, time);
   const fee = exactFee(entry, ours);
   // Transparent coins not ours name their sender, whatever else paid.
@@ -411,6 +393,7 @@ export function buildActivity(
   }
 
   return [...entries]
+    .filter(([, entry]) => !unproven(entry))
     .map(([txid, entry]) =>
       receipt(txid, entry, ours, blocks.get(entry.height)?.time),
     )

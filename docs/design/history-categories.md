@@ -45,13 +45,13 @@ isn't indexed yet is read again next run.
 
 ## Authored or not
 
-|                  | Not authored                 | Authored                                                                   |
-| ---------------- | ---------------------------- | -------------------------------------------------------------------------- |
-| Shows in history | if it pays the account       | always                                                                     |
-| Amount           | + what it paid the account   | what left the account (spent − change), "−" only when it paid someone else |
-| Fee              | not the account's, not shown | the account's                                                              |
-| Payees           | none                         | its payments                                                               |
-| Type             | Received                     | from its outputs, below                                                    |
+|                  | Not authored                                 | Authored                                                                   |
+| ---------------- | -------------------------------------------- | -------------------------------------------------------------------------- |
+| Shows in history | if it pays the account, change aside (below) | always                                                                     |
+| Amount           | + what it paid the account                   | what left the account (spent − change), "−" only when it paid someone else |
+| Fee              | not the account's, not shown                 | the account's                                                              |
+| Payees           | none                                         | its payments                                                               |
+| Type             | Received                                     | from its outputs, below                                                    |
 
 ## An authored transaction's type
 
@@ -71,8 +71,11 @@ not authored: it shows as Received, from "Payment link".
 
 Sync runs tip-first, so it can find a send's change before the note the send
 spent. Change pays the account's internal address, which it never hands out,
-so the transaction is most likely ours: it shows as **Sent**, with a spinner
-for its amount and nothing else. It's only a hint: the internal address comes
-from the viewing key, so anyone holding it can pay there. Nothing an attacker
-chooses shows (no payee, amount, fee or memo), and the row fills in once the
-spent note is found.
+so the transaction is most likely ours, but that's not proof: the internal
+address comes from the viewing key, so anyone holding it can pay there. Until
+a spend proves it ours, the transaction is **hidden** from history. The
+change still counts in the balance. Once the spent note is found, it shows in
+full.
+
+Upstream (`zcash_client_backend`) adds 0 ZEC change to a send that leaves
+none, for privacy, so a zero value doesn't tell a send from a planted note.
