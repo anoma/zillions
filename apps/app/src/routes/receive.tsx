@@ -7,6 +7,7 @@ import { ShieldedTransparentToggle } from "../components/ShieldedTransparentTogg
 import { qrClassName } from "../components/ui/utils";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
+import { useTransparentOnly } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import { shortenAddress } from "../lib/utils";
 
@@ -16,18 +17,23 @@ export const Route = createFileRoute("/receive")({
 
 function ReceiveRoute() {
   const account = useAccount();
-  const [isTransparent, setIsTransparent] = useState(false);
+  const transparentOnly = useTransparentOnly();
+  const [preferTransparent, setPreferTransparent] = useState(false);
+  // A transparent-only account (a Trezor's) receives transparently only.
+  const isTransparent = transparentOnly || preferTransparent;
   const shielded = useFreshAddress();
 
   const address = isTransparent ? account.transparent.address : shielded;
 
   return (
     <FormPage title="Receive">
-      <ShieldedTransparentToggle
-        label="Address type"
-        isTransparent={isTransparent}
-        setIsTransparent={setIsTransparent}
-      />
+      {!transparentOnly && (
+        <ShieldedTransparentToggle
+          label="Address type"
+          isTransparent={preferTransparent}
+          setIsTransparent={setPreferTransparent}
+        />
+      )}
 
       <section aria-label="Your address" className="flex flex-col gap-4">
         <div className="mx-auto w-fit flex flex-col items-center gap-3 rounded-xl border border-line bg-card p-4 pb-3">

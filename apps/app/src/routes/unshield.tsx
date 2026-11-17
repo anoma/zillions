@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { FinalStatePage } from "../components/FinalStatePage";
 import { FormPage } from "../components/FormPage";
 import { FeeRow, PlannedFee } from "../components/PlannedFee";
 import { TransactionReceipt } from "../components/TransactionReceipt";
@@ -18,7 +19,7 @@ import { useAmountField } from "../hooks/useAmountField";
 import { useConfirming } from "../hooks/useConfirming";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
-import { useWallet } from "../hooks/useWallet";
+import { useTransparentOnly, useWallet } from "../hooks/useWallet";
 import { isOverBalance } from "../lib/amount";
 import { zatoshiToZec } from "../lib/utils";
 
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/unshield")({
 function UnshieldRoute() {
   const balance = useGetBalance();
   const amountField = useAmountField();
+  const transparentOnly = useTransparentOnly();
   const [amountProblem, setAmountProblem] = useState("");
   const [formProblem, setFormProblem] = useState("");
   const amountRef = useRef<HTMLInputElement>(null);
@@ -114,6 +116,16 @@ function UnshieldRoute() {
 
   if (send.data) {
     return <TransactionReceipt tx={{ ...send.data, status: "Pending" }} />;
+  }
+
+  // A transparent-only account (a Trezor's) holds no shielded funds to move
+  // out; the balance card never links here, this is for a deep link.
+  if (transparentOnly) {
+    return (
+      <FinalStatePage title="Nothing to unshield">
+        This account's keys are transparent-only: it holds no shielded funds.
+      </FinalStatePage>
+    );
   }
 
   const amountError =

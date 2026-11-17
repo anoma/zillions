@@ -151,6 +151,15 @@ export class Wallet {
     this.#syncProgressListeners.clear();
   };
 
+  /**
+   * The pools the viewing key has a key for; read once zcore is loaded.
+   * Empty for a transparent-only key (a Trezor's): that account sends and
+   * receives transparently only.
+   */
+  get pools(): Pool[] {
+    return (this.#pools ??= ufvk_pools(NETWORK, this.#ufvk) as Pool[]);
+  }
+
   #seed = singleton(async () => {
     this.#key = await storageKey(this.#ufvk);
     const stored = await loadState(this.id, this.#key);
@@ -206,7 +215,7 @@ export class Wallet {
 
   #newRun = (tip: number, signal: AbortSignal): ShieldedRun => ({
     ufvk: this.#ufvk,
-    pools: (this.#pools ??= ufvk_pools(NETWORK, this.#ufvk) as Pool[]),
+    pools: this.pools,
     // An import's 0 means none: the whole history.
     birthday: this.#birthday || undefined,
     state: this.#state,

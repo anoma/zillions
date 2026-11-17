@@ -11,7 +11,7 @@ import { useFreshAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { migrationQuery, useMigration } from "../hooks/useMigration";
 import { planProblem, useSend, useSendPlan } from "../hooks/useSend";
-import { useWallet } from "../hooks/useWallet";
+import { useTransparentOnly, useWallet } from "../hooks/useWallet";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
 import {
   clockAt,
@@ -46,6 +46,7 @@ const NYM_VPN = "https://nym.com/blog/nymvpn-free-for-zcash-ironwood";
 function MigrateRoute() {
   const balance = useGetBalance();
   const status = useMigration();
+  const transparentOnly = useTransparentOnly();
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<Mode>("private");
   const [step, setStep] = useState<Screen>("choose");
@@ -69,7 +70,9 @@ function MigrateRoute() {
         balance.data?.orchardBalance.toString(),
       ],
       queryFn: () => wallet.planMigration(),
-      enabled: step === "choose" || (mode === "private" && step === "review"),
+      enabled:
+        !transparentOnly &&
+        (step === "choose" || (mode === "private" && step === "review")),
       // Each run draws a new order and timing: keep the one on screen.
       staleTime: Infinity,
     }),
@@ -81,6 +84,22 @@ function MigrateRoute() {
   if (balance.isPending || status.isPending) return <PageLoader />;
   if (status.data) return <MigrationSteps status={status.data} />;
   const orchard = balance.data?.orchardBalance ?? 0n;
+
+  // A transparent-only account (a Trezor's) holds no shielded funds to move;
+  // home's migration prompt never links here, this is for a deep link.
+  if (transparentOnly) {
+    return (
+      <Page title="Move to Ironwood">
+        <p>
+          This account's keys are transparent-only: it holds no shielded funds
+          to migrate.
+        </p>
+        <Link to="/" className="mt-6 underline">
+          Back to the wallet
+        </Link>
+      </Page>
+    );
+  }
 
   const steps: Screen[] =
     mode === "private"
