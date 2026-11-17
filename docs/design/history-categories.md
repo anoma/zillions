@@ -77,5 +77,9 @@ a spend proves it ours, the transaction is **hidden** from history. The
 change still counts in the balance. Once the spent note is found, it shows in
 full.
 
+If that note is never found, the transaction stays hidden: a payment that was
+never ours, or a send that spent a note from the spam era (until its sync is
+started) or from before the account's birthday.
+
 Upstream (`zcash_client_backend`) adds 0 ZEC change to a send that leaves
 none, for privacy, so a zero value doesn't tell a send from a planted note.
