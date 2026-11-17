@@ -13,7 +13,6 @@ import TrezorConnect, {
 import { WebUsbTransport } from "@trezor/transport-web";
 
 import {
-  deriveAccountFromUfvk,
   getNetwork,
   initZillionsSdk,
   trezorTransaction,
@@ -81,6 +80,7 @@ const trezorUsb = (): TrezorUsb => {
   return usb;
 };
 
+const coinType = () => (getNetwork() === "main" ? 133 : 1);
 const coin = (): "zec" | "taz" => (getNetwork() === "test" ? "taz" : "zec");
 
 const MODEL_NAMES: Record<string, string> = {
@@ -246,18 +246,17 @@ export const connectTrezor = async (
     onStep("confirm-key");
     const { xpub } = await call<{ xpub: string }>(
       TrezorConnect.getPublicKey({
-        path: "m/44'/133'/0'",
+        path: `m/44'/${coinType()}'/0'`,
         coin: coin(),
         showOnTrezor: true,
       })
     );
     const ufvk = await ufvkFromTransparentXpub(xpub);
-    const keys = await deriveAccountFromUfvk(ufvk);
     return {
       device: "trezor",
       alias: MODEL_NAMES[features.internal_model ?? ""] ?? "Trezor",
-      transparentAddress: keys.transparent,
-      shieldedAddress: keys.unified,
+      // The keyring derives the addresses from the viewing key: a
+      // transparent-only key's unified address is transparent-only.
       viewingKey: ufvk,
       // The device never reveals its seed's fingerprint. The app's PCZT
       // needs 32 bytes and the device doesn't check them: zeros, like the
