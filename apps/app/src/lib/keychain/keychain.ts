@@ -11,7 +11,8 @@ export type Keychain = Zillions;
 
 export const KeychainEvent = Events;
 
-export const MIN_KEYCHAIN_VERSION = "0.2.1";
+// The first that keeps the viewing key: decrypts, builds and proves for the app.
+export const MIN_KEYCHAIN_VERSION = "0.14.0";
 
 export function keychain(): Keychain {
   invariant(window.zc, "Keychain not installed");

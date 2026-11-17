@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import { GoCheck } from "react-icons/go";
 import { twMerge } from "tailwind-merge";
-import { hasViewingKeys, type Account } from "../context/account";
+import { isShared, type Account } from "../context/account";
 import {
   getKeychainAccounts,
   useGetKeychainAccounts,
@@ -80,17 +80,13 @@ function Account({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!hasViewingKeys(shieldedAccount)) {
+  if (!isShared(shieldedAccount)) {
     // After a switch the two queries refetch separately, and an account list
-    // from before the switch carries no keys for the new account.
+    // from before the switch shares nothing of the new account.
     if (accounts.isFetching || defaultAccount.isFetching) {
       return <PageLoader />;
     }
-    return (
-      <PageError>
-        The keychain did not share this account's viewing key
-      </PageError>
-    );
+    return <PageError>The keychain did not share this account</PageError>;
   }
 
   return (

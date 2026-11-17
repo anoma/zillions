@@ -1,6 +1,8 @@
-import initZcore, { parse_transaction, ufvk_pools } from "@zillions/zcore";
+import type { AccountInfo, ProvedTx } from "@zillions/keychain-types";
+import initZcore, { parse_transaction } from "@zillions/zcore";
 
 import { invariant } from "../invariant";
+import { keychain } from "../keychain/keychain";
 import { dedupe, singleton } from "../utils";
 import {
   activityHeights,
@@ -15,7 +17,7 @@ import {
   fetchLatestHeight,
   fetchTransaction,
 } from "./chain/lightwalletd";
-import { type ProveStage, submitTransaction } from "./chain/submit";
+import { broadcastTransaction, type ProveStage } from "./chain/submit";
 import { NETWORK } from "./config";
 import {
   type Migration,
@@ -36,14 +38,14 @@ import {
   planMigration,
   planPreparation,
   planSend,
-  preparationPczt,
-  sendPczt,
+  preparationTx,
   type SendRequest,
-  shieldPczt,
+  sendTx,
+  shieldTx,
   type Source,
   spendableNow,
 } from "./send";
-import { CORES, workerChannel } from "./shielded/crawl";
+import { chunkChannel, CORES } from "./shielded/crawl";
 import {
   backgroundPhase,
   progressOf,
@@ -71,7 +73,6 @@ import type {
   Activity,
   Note,
   PendingActivity,
-  Pool,
   SentOutput,
   WalletState,
 } from "./types";
@@ -89,16 +90,15 @@ const saveData = () =>
   (navigator as { connection?: { saveData?: boolean } }).connection
     ?.saveData === true;
 
-type Account = { seedFingerprint: string; hdIndex: number };
-
 /** One account's wallet: its state, kept in storage and brought up to date by `sync`, and what the app reads and sends with. */
 export class Wallet {
   readonly id: string;
-  readonly #ufvk: string;
+  /** The shielded account's address: the keychain holds its viewing key. */
+  readonly #account: string;
   /** Block height below which nothing is crawled. Absent means full history. */
   readonly #birthday?: number;
-  /** The pools `#ufvk` has a key for; read once zcore is loaded. */
-  #pools?: Pool[];
+  /** What the keychain tells of the account; read when storage is. */
+  #info?: AccountInfo;
 
   #state: WalletState;
   #key?: CryptoKey;
@@ -137,9 +137,9 @@ export class Wallet {
   /** Tip checks since the last sync ended. */
   #checks = 0;
 
-  constructor(options: { id: string; ufvk: string; birthday?: number }) {
+  constructor(options: { id: string; account: string; birthday?: number }) {
     this.id = options.id;
-    this.#ufvk = options.ufvk;
+    this.#account = options.account;
     this.#birthday = options.birthday;
     this.#state = emptyState(this.id);
     this.#seed();
@@ -152,12 +152,13 @@ export class Wallet {
   };
 
   #seed = singleton(async () => {
-    this.#key = await storageKey(this.#ufvk);
+    this.#info = await keychain().accountInfo(this.#account);
+    this.#key = await storageKey(this.#info.storageKey);
     const stored = await loadState(this.id, this.#key);
     if (stored) this.#state = stored;
     const { notes, sent, transparent } = this.#state;
     if (transparent) {
-      this.#transparent = await cachedTransparent(transparent, this.#ufvk);
+      this.#transparent = await cachedTransparent(transparent, this.#account);
     }
     for (const { id } of [...notes, ...sent]) this.#applied.add(id);
   });
@@ -205,15 +206,15 @@ export class Wallet {
   };
 
   #newRun = (tip: number, signal: AbortSignal): ShieldedRun => ({
-    ufvk: this.#ufvk,
-    pools: (this.#pools ??= ufvk_pools(NETWORK, this.#ufvk) as Pool[]),
+    key: { account: this.#account },
+    pools: this.#info?.pools ?? [],
     // An import's 0 means none: the whole history.
     birthday: this.#birthday || undefined,
     state: this.#state,
     tip,
     workers: this.#workers,
     applied: this.#applied,
-    lookups: workerChannel(),
+    lookups: chunkChannel(),
     signal,
     onFound: () => {
       this.#placing = this.#placing.then(() =>
@@ -418,7 +419,12 @@ export class Wallet {
    * may have replaced.
    */
   #syncTransparent = (tip: number) =>
-    syncTransparent(this.#state.transparent, this.#ufvk, tip)
+    syncTransparent(
+      this.#state.transparent,
+      this.#account,
+      tip,
+      this.#info?.transparentIndex ?? 0,
+    )
       .then(({ cache, view }) => {
         // Read on landing: an unshield may have reserved an address meanwhile.
         const reserved = keepReserved(this.#state.transparent?.reserved, cache);
@@ -642,77 +648,66 @@ export class Wallet {
   planPreparation = (parts: number[]) =>
     planPreparation(this.#walletData(false), parts);
 
-  /** The unsigned PCZT of the next preparation, for the keychain account that signs it. */
-  preparationPczt = async (parts: number[], account: Account) => ({
-    ...(await preparationPczt(
-      this.#walletData(false),
-      parts,
-      this.#ufvk,
-      account,
-    )),
-    changeTo: undefined,
-  });
+  /** The next preparation, for the keychain to build. */
+  preparationTx = async (parts: number[]) => {
+    const { tx, plan } = await preparationTx(this.#walletData(false), parts);
+    return { tx: { ...tx, account: this.#account }, plan, changeTo: undefined };
+  };
 
   /**
-   * The unsigned PCZT for `send`, for the keychain account that signs it, and
-   * `changeTo`: the internal address index its transparent change goes to, to
-   * record once it's sent.
+   * `send` for the keychain to build, and `changeTo`: the internal address
+   * index its transparent change goes to, to record once it's sent.
    */
-  sendPczt = async (
-    send: SendRequest,
-    account: Account,
-    keep?: (note: Note) => boolean,
-  ) => {
+  sendTx = async (send: SendRequest, keep?: (note: Note) => boolean) => {
     const coins = send.from === "transparent";
     // Shielded sends need it too: zcore names it as ours when an unshield pays it.
     const internal = await this.internalAddress();
-    const built = await sendPczt(
+    const built = await sendTx(
       this.#walletData(coins, keep),
       send,
-      this.#ufvk,
-      account,
       internal?.index,
     );
     const transparentChange = built.plan.steps.some((step) =>
       step.change.some((c) => c.pool === "transparent"),
     );
     return {
-      ...built,
+      tx: { ...built.tx, account: this.#account },
+      plan: built.plan,
       changeTo: transparentChange ? internal?.index : undefined,
     };
   };
 
   /**
-   * The unsigned PCZT shielding every transparent coin into Ironwood, what it
-   * shields, and its fee.
+   * Shielding every transparent coin into Ironwood, for the keychain to
+   * build, what it shields, and its fee.
    */
-  proposeShield = async (account: Account) => {
-    const { pczt, plan } = await shieldPczt(
-      this.#walletData(true),
-      this.#ufvk,
-      account,
-    );
+  proposeShield = async () => {
+    const { tx, plan } = await shieldTx(this.#walletData(true));
     const shielded = plan.steps
       .flatMap((s) => s.change)
       .reduce((sum, c) => sum + BigInt(c.value), 0n);
-    return { pczt, value: shielded, fee: BigInt(plan.fee) };
+    return {
+      tx: { ...tx, account: this.#account },
+      value: shielded,
+      fee: BigInt(plan.fee),
+    };
   };
 
   /**
-   * Proves and broadcasts a signed PCZT, then holds the notes and coins it
-   * spends out of the balance and of new plans until it's mined or expires.
-   * `change` is what it returns to us, by pool, shown as pending meanwhile, and
-   * `receipt` what history lists for it, timed at the broadcast. `onStage`
-   * follows proving and broadcasting.
+   * Broadcasts a transaction the keychain proved, then holds the notes and
+   * coins it spends out of the balance and of new plans until it's mined or
+   * expires. `change` is what it returns to us, by pool, shown as pending
+   * meanwhile, and `receipt` what history lists for it, timed at the
+   * broadcast.
    */
   submit = async (
-    signed: Uint8Array,
+    proved: ProvedTx,
     change: Record<Source, bigint>,
     receipt: Omit<PendingActivity, "timestamp">,
     onStage?: (stage: ProveStage) => void,
   ) => {
-    const { txid, raw, expiryHeight } = await submitTransaction(
-      signed,
+    const { txid, raw, expiryHeight } = await broadcastTransaction(
+      proved,
       onStage,
     );
     const timestamp = Math.floor(Date.now() / 1000);
@@ -740,7 +735,7 @@ export class Wallet {
   /** The next internal address, shown nowhere; see `nextInternalAddress` for when it's null. */
   internalAddress = async () => {
     await this.#seed();
-    return nextInternalAddress(this.#state.transparent, this.#ufvk);
+    return nextInternalAddress(this.#state.transparent, this.#account);
   };
 
   /** Records a transaction paying `internalAddress()`'s `index`, so the next one goes elsewhere. */

@@ -1,10 +1,10 @@
 /**
  * Trial decryption's key agreement on the GPU (WebGPU): zcore's `gpu_inputs`
- * in, the shared secrets `try_decrypt_gpu` takes out. The page opens one
- * device for every decrypt worker, so their chunks queue on it in turn.
+ * in, the shared secrets `try_decrypt_gpu` takes out. The compute host opens
+ * one device for every decrypt worker, so their chunks queue on it in turn.
  */
 
-import type { Pool } from "../types";
+import type { Pool } from "@zillions/types";
 import { JUBJUB, PALLAS, PALLAS_Q, mod } from "./gpu.wgsl";
 
 /** zcore's per (output, ivk) secret: X, Y, Z in 8 words each, then a flag. */
@@ -92,7 +92,7 @@ function open() {
     )
       return undefined;
     const gpu = await adapter.requestDevice();
-    gpu.lost.then((info) => {
+    void gpu.lost.then((info) => {
       console.warn("GPU lost, trial decryption back on the CPU:", info.message);
       device = Promise.resolve(undefined);
       pipelines.clear();
@@ -108,7 +108,8 @@ function open() {
 /**
  * The shared secrets for `inputs`, zcore's `gpu_inputs` for `pool`; undefined
  * when this browser or machine has no usable GPU. Throws on a GPU error, or
- * without touching the GPU if `signal` aborted while it waited its turn.
+ * without touching the GPU if `signal` (the Keychain locking) aborted while
+ * it waited its turn.
  */
 export function gpuSecrets(
   pool: Pool,

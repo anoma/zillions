@@ -106,7 +106,6 @@ export default defineConfig({
       "apps/app/**",
       "docs/**",
       "scripts/**",
-      "packages/sapling-params/**",
       "packages/zcore/target/**",
       "packages/zcore/patched/**",
       "packages/zcore/.tools/**",
@@ -135,6 +134,16 @@ export default defineConfig({
           absoluteSrc: r("../../packages/zcore/pkg/zcore_bg.wasm"),
           relativeDest: "wasm/zcore_bg.wasm",
         },
+        // Proving with Sapling needs them, and the Keychain fetches nothing
+        // from the network: they ship inside the extension.
+        {
+          absoluteSrc: r("../../packages/sapling-params/sapling-spend.params"),
+          relativeDest: "params/sapling-spend.params",
+        },
+        {
+          absoluteSrc: r("../../packages/sapling-params/sapling-output.params"),
+          relativeDest: "params/sapling-output.params",
+        },
       );
     },
   },
@@ -150,12 +159,14 @@ export default defineConfig({
     // `unlimitedStorage` keeps the vault's IndexedDB out of quota eviction,
     // which would otherwise delete the wallet under disk pressure; it has no
     // install warning there. Firefox never evicts extension data, and would
-    // ask for it at install.
+    // ask for it at install. `offscreen` hosts Chrome's decrypt and proving
+    // workers, which its service worker can't start; Firefox's background
+    // page starts them itself.
     permissions: [
       "storage",
       "tabs",
       "idle",
-      ...(browser === "firefox" ? [] : ["unlimitedStorage"]),
+      ...(browser === "firefox" ? [] : ["unlimitedStorage", "offscreen"]),
     ],
     // The passkey RP claim: ceremonies in extension pages may pass
     // `rpId: keychain.zillions.money` because this permission covers it.

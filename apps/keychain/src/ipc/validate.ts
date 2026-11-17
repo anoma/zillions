@@ -191,6 +191,46 @@ export const validateResponse = <K extends IpcKind>(
         throw new ResponseShapeError(kind, "expected string (base64 PCZT)");
       return value as IpcResponse<K>;
 
+    case "dapp/decryptCompact":
+      if (!isRecord(value) || !Array.isArray(value.hits) || typeof value.digest !== "string")
+        throw new ResponseShapeError(kind, "expected CompactChunk");
+      return value as IpcResponse<K>;
+
+    case "dapp/decryptFull":
+      if (!isRecord(value) || !Array.isArray(value.hits) || !Array.isArray(value.sent))
+        throw new ResponseShapeError(kind, "expected FullChunk");
+      return value as IpcResponse<K>;
+
+    case "dapp/accountInfo":
+      if (
+        !isRecord(value) ||
+        !isStringArray(value.pools) ||
+        typeof value.storageKey !== "string"
+      )
+        throw new ResponseShapeError(kind, "expected AccountInfo");
+      return value as IpcResponse<K>;
+
+    case "dapp/transparentAddresses":
+      if (!isStringArray(value))
+        throw new ResponseShapeError(kind, "expected string[]");
+      return value as IpcResponse<K>;
+
+    case "dapp/sendTransaction":
+    case "dapp/claimLink":
+      if (
+        !isRecord(value) ||
+        typeof value.txid !== "string" ||
+        typeof value.raw !== "string" ||
+        typeof value.expiryHeight !== "number"
+      )
+        throw new ResponseShapeError(kind, "expected ProvedTx");
+      return value as IpcResponse<K>;
+
+    case "dapp/freshAddress":
+      if (typeof value !== "string")
+        throw new ResponseShapeError(kind, "expected string (address)");
+      return value as IpcResponse<K>;
+
     case "dapp/sealLinkKey":
     case "dapp/openLinkKey":
       if (typeof value !== "string")

@@ -5,6 +5,7 @@
  */
 import browser from "webextension-polyfill";
 
+import { stopCompute } from "./compute/host";
 import { getServices } from "./services";
 
 let minutes: number | undefined;
@@ -32,6 +33,7 @@ export const startAutoLock = (): void => {
         const { vaultService, broadcaster } = await getServices();
         if (await vaultService.isLocked()) return;
         await vaultService.lock();
+        void stopCompute();
         await broadcaster.locked();
       })
       .catch((e) => console.warn("Auto-lock failed", e));

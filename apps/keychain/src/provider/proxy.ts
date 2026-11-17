@@ -15,14 +15,19 @@ import {
   ProxyRequestTypes,
 } from "./types";
 
-/** The calls that open a Keychain window. */
-const OPENS_WINDOW: ReadonlySet<ProxyMethod> = new Set([
+/** The calls that open a Keychain window, or start seconds of proving. */
+const NEEDS_USER: ReadonlySet<ProxyMethod> = new Set([
   "connect",
   "disconnect",
   "updateDefaultAccount",
   "sign",
   "openLinkKey",
+  "sendTransaction",
+  "claimLink",
 ]);
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null;
 
 const relayMethod = async (
   client: BackgroundClient,
@@ -32,7 +37,7 @@ const relayMethod = async (
   // A page the user has never clicked or typed in (a pop-under, a tab opened
   // behind) can't open windows. Sticky, not a fresh gesture: a site signs
   // after building the transaction, which can outlast one.
-  if (OPENS_WINDOW.has(method) && !navigator.userActivation?.hasBeenActive) {
+  if (NEEDS_USER.has(method) && !navigator.userActivation?.hasBeenActive) {
     throw new Error(
       `zc.${method} needs the user to interact with the page first`
     );
@@ -79,6 +84,24 @@ const relayMethod = async (
         throw new Error("zc.openLinkKey: invalid arguments");
       }
       return client.send("dapp/openLinkKey", { sealed, nk });
+    }
+    // The background checks these payloads' shapes in full.
+    case "decryptCompact":
+    case "decryptFull":
+    case "transparentAddresses":
+    case "sendTransaction":
+    case "claimLink": {
+      if (!isObject(args)) {
+        throw new Error(`zc.${method}: invalid arguments`);
+      }
+      return client.send(`dapp/${method}`, args as never);
+    }
+    case "accountInfo":
+    case "freshAddress": {
+      if (args !== undefined && typeof args !== "string") {
+        throw new Error(`zc.${method}: invalid arguments`);
+      }
+      return client.send(`dapp/${method}`, { account: args });
     }
     default:
       // Unsupported methods reject in the page provider before reaching here;

@@ -50,9 +50,10 @@ export type DerivedAccount = {
 };
 
 /**
- * A dapp-facing account. `viewingKey`, `hdIndex`, `seedFingerprint` and
- * `birthday` are only set on the account the site is connected with and
- * its derived children; every other account carries just its identity.
+ * A dapp-facing account. `hdIndex`, `seedFingerprint` and `birthday` are
+ * only set on the account the site is connected with and its derived
+ * children; every other account carries just its identity. None carries its
+ * viewing key, which the Keychain uses on the site's behalf.
  * It never says how the keys are held or came to be (phrase, Ledger,
  * passkey; generated or imported): a hijacked site would use that to
  * pick its targets.
@@ -62,7 +63,6 @@ export type ZCashKeychainAccount = {
   alias: string;
   address: string;
   parentId?: string;
-  viewingKey?: string;
   /** ZIP-32 account index used to derive this account's keys. */
   hdIndex?: number;
   /** ZIP-32 seed fingerprint (hex). Random for accounts with no seed in the Keychain. */

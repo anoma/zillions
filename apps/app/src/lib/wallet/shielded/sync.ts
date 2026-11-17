@@ -13,6 +13,7 @@ import {
 import { outputPositions } from "../chain/lightwalletd";
 import { SETUP_CHUNKS } from "../config";
 import type {
+  ChunkKey,
   ChunkWorkerSuccess,
   Note,
   Pool,
@@ -21,7 +22,7 @@ import type {
   TxLocator,
   WalletState,
 } from "../types";
-import { crawlChunks, workerChannel } from "./crawl";
+import { chunkChannel, crawlChunks } from "./crawl";
 import {
   newPoolScan,
   POOLS,
@@ -33,8 +34,8 @@ import { checkSpends } from "./spends";
 
 /** One run of shielded work, over `state`. */
 export type ShieldedRun = {
-  ufvk: string;
-  /** The pools `ufvk` has a key for: no other pool's chunks are read. */
+  key: ChunkKey;
+  /** The pools the key covers: no other pool's chunks are read. */
   pools: readonly Pool[];
   /** Block height below which nothing is crawled. Absent means full history. */
   birthday?: number;
@@ -45,7 +46,7 @@ export type ShieldedRun = {
   workers: (phase: SyncPhase) => number;
   /** Note and sent-output ids already held, so a re-read chunk can't double them. */
   applied: Set<string>;
-  lookups: ReturnType<typeof workerChannel>;
+  lookups: ReturnType<typeof chunkChannel>;
   signal: AbortSignal;
   /** New notes, sends or spends: their blocks are worth fetching now. */
   onFound: () => void;
@@ -134,7 +135,7 @@ function crawlSegment(
   },
 ) {
   return crawlChunks({
-    ufvk: run.ufvk,
+    key: run.key,
     pool,
     from: segment.floor,
     to: segment.from - 1,
@@ -181,7 +182,7 @@ export async function crawlRecent(
     } else {
       // Down to the last sync's newest chunk again: it may have been filling.
       await crawlChunks({
-        ufvk: run.ufvk,
+        key: run.key,
         pool,
         from: top.to,
         to: last[pool],
@@ -357,7 +358,7 @@ export async function recoverSends(
     if (run.signal.aborted) break;
     try {
       const read = await run.lookups.run({
-        ufvk: run.ufvk,
+        key: run.key,
         chunk,
         pool,
         sends,

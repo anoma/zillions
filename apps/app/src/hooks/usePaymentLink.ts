@@ -160,7 +160,7 @@ export const useLinkStatus = (link: ClaimLink) => useQuery(linkStatusOf(link));
 
 /** Claims `link` into the connected account; a failed claim looks the link up again. */
 export function useClaimLink(link: ClaimLink) {
-  const account = useAccount();
+  const account = useAccount().shielded.address;
   const queryClient = useQueryClient();
   const { stages, track } = useSubmitStage();
   const mutation = useMutation({
@@ -169,9 +169,9 @@ export function useClaimLink(link: ClaimLink) {
       if (status?.state !== "claimable") throw new Error("Nothing to claim");
       track("building");
       return claimLink({
+        account,
         key: link.key,
         note: status.note,
-        ufvk: account.shielded.viewingKey,
         onStage: track,
       });
     },

@@ -22,14 +22,13 @@ const shielded: ZCashKeychainAccount = {
   parentId: "t",
   alias: "Main",
   address: "u1test",
-  viewingKey: "uview1test",
   seedFingerprint: "00",
   hdIndex: 0,
 };
 
 function stubKeychain(overrides: Partial<Keychain> = {}) {
   const zc = {
-    version: () => "0.2.1",
+    version: () => "0.14.0",
     isConnected: async () => true,
     connect: vi.fn(async () => {}),
     accounts: async () => [transparent, shielded],
@@ -41,7 +40,7 @@ function stubKeychain(overrides: Partial<Keychain> = {}) {
 }
 
 function Wallet() {
-  return <p>Wallet for {useAccount().shielded.viewingKey}</p>;
+  return <p>Wallet for {useAccount().shielded.address}</p>;
 }
 
 const renderWall = (claiming?: boolean) =>
@@ -88,7 +87,7 @@ test("a keychain not yet connected connects on click", async () => {
   });
   renderWall();
   fireEvent.click(await screen.findByRole("button", { name: "Connect" }));
-  expect(await screen.findByText("Wallet for uview1test")).toBeTruthy();
+  expect(await screen.findByText("Wallet for u1test")).toBeTruthy();
   expect(zc.connect).toHaveBeenCalledOnce();
 });
 
@@ -105,20 +104,18 @@ test("with no default account it asks to select one", async () => {
   expect(await screen.findByText("Select account")).toBeTruthy();
 });
 
-test("an account shared without its viewing key is an error", async () => {
+test("an account the keychain didn't share is an error", async () => {
   stubKeychain({
-    accounts: async () => [transparent, { ...shielded, viewingKey: undefined }],
+    accounts: async () => [transparent, { ...shielded, hdIndex: undefined }],
   });
   renderWall();
   expect(
-    await screen.findByText(
-      "The keychain did not share this account's viewing key",
-    ),
+    await screen.findByText("The keychain did not share this account"),
   ).toBeTruthy();
 });
 
 test("a connected account with its keys reaches the wallet", async () => {
   stubKeychain();
   renderWall();
-  expect(await screen.findByText("Wallet for uview1test")).toBeTruthy();
+  expect(await screen.findByText("Wallet for u1test")).toBeTruthy();
 });

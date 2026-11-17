@@ -1,7 +1,8 @@
 # GPU trial decryption (WebGPU)
 
-Status: built, 2026-10-16. Chrome and Firefox only; Safari and phones are out
-of scope. The CPU path stays, as the fallback everywhere.
+Status: built, 2026-10-16; moved from the app into the Keychain, 2026-11-17,
+so the ivks never reach a site. Chrome and Firefox only; Safari and phones are
+out of scope. The CPU path stays, as the fallback everywhere.
 
 ## Summary
 
@@ -28,7 +29,8 @@ of scope. The CPU path stays, as the fallback everywhere.
    (external, internal), then each ephemeral key decompressed to affine
    coordinates. It starts from the first note `try_decrypt` would try, so the
    tried-notes resume still applies.
-2. **Agree (page, WebGPU).** The worker hands its inputs to the page, which
+2. **Agree (Keychain compute host, WebGPU).** The worker hands its inputs to
+   the host (Chrome's offscreen document, Firefox's background page), which
    owns the one GPU device. Each chunk runs as 2,048-output command buffers,
    one chunk at a time, and returns X, Y, Z and a flag per (output, ivk).
    - **Orchard / Ironwood:** Pallas, using pasta_curves' own algorithm: a GLV
@@ -62,8 +64,7 @@ slower. Products by Pallas's zero limbs are left out.
 | A pair's secret flagged (Pallas P = ±Q) or off the curve | that pair decrypted by upstream on the CPU |
 | Over ~1% of pairs off the curve (a killed or garbled dispatch) | chunk fails; the worker turns its GPU path off and redoes the chunk on the CPU |
 | A spot-checked secret (4 outputs × 2 ivks per chunk) differs from the CPU's | same |
-| Device lost | page stops offering the GPU; workers carry on with the CPU |
-| `VITE_GPU_DISABLED=true` at build time (see `.env.example`) | CPU only, to compare |
+| Device lost | host stops offering the GPU; workers carry on with the CPU |
 
 Under concurrency Firefox's GPU returned zeroed and half-written buffers for
 long command buffers. The off-curve check caught every one of them. Short
@@ -124,8 +125,8 @@ call, the first one most (19 s, then 15 s), so timings need it closed.
 
 ## Open
 
-- No phone, Intel, AMD or NVIDIA measurements yet. The flag is build-time,
-  so a GPU-vs-CPU comparison needs a local build with `VITE_GPU_DISABLED=true`
-  next to the Netlify preview.
+- No phone, Intel, AMD or NVIDIA measurements yet. A GPU-vs-CPU comparison
+  needs a local Keychain build with `gpu: false` in
+  `apps/keychain/src/background/compute/pool.ts`.
 - Kernel headroom is small (about 80% of the M1's IMAD32 peak). Specialised
   squaring might add 10–15%.

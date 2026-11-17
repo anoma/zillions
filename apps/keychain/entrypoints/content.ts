@@ -21,7 +21,9 @@ export default defineContentScript({
     // dispatched here (ISOLATED world) is seen by MAIN-world page listeners.
     browser.runtime.onMessage.addListener((message: unknown) => {
       if (isDappEventMessage(message)) {
-        window.dispatchEvent(new CustomEvent(message.event));
+        window.dispatchEvent(
+          new CustomEvent(message.event, { detail: message.detail })
+        );
       }
     });
   },

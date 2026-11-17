@@ -81,7 +81,12 @@ export function capDecimals(text: string): string {
 
 export function singleton<T>(fn: () => Promise<T>): () => Promise<T> {
   let instance: Promise<T> | undefined;
-  return () => (instance ??= fn());
+  return () =>
+    (instance ??= fn().catch((err: unknown) => {
+      // Failed, so the next call tries again rather than failing for good.
+      instance = undefined;
+      throw err;
+    }));
 }
 
 export function dedupe<T>(fn: () => Promise<T>): () => Promise<T> {

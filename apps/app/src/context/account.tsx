@@ -3,12 +3,10 @@ import type { KeychainAccount } from "../lib/keychain/keychain";
 
 /** The keychain only shares these for the active account and its children. */
 export type ShieldedAccount = KeychainAccount &
-  Required<Pick<KeychainAccount, "viewingKey" | "seedFingerprint" | "hdIndex">>;
+  Required<Pick<KeychainAccount, "seedFingerprint" | "hdIndex">>;
 
-export const hasViewingKeys = (a: KeychainAccount): a is ShieldedAccount =>
-  a.viewingKey !== undefined &&
-  a.seedFingerprint !== undefined &&
-  a.hdIndex !== undefined;
+export const isShared = (a: KeychainAccount): a is ShieldedAccount =>
+  a.seedFingerprint !== undefined && a.hdIndex !== undefined;
 
 export type Account = {
   transparent: KeychainAccount;

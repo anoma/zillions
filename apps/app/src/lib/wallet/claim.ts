@@ -1,9 +1,7 @@
 // Claiming a payment link: docs/design/payment-links.md, "Claim".
-import initZcore, {
-  claim_pczt,
-  fresh_address,
-  link_info,
-} from "@zillions/zcore";
+import initZcore, { link_info } from "@zillions/zcore";
+import { keychain } from "../keychain/keychain";
+import { bytesToBase64 } from "../keychain/utils";
 import { CLAIM_FEE } from "../paymentLink";
 import {
   CHUNK_SIZE,
@@ -12,10 +10,10 @@ import {
   lastChunk,
 } from "./chain/indexer";
 import { fetchLatestHeight } from "./chain/lightwalletd";
-import { type ProveStage, submitTransaction } from "./chain/submit";
+import { broadcastTransaction, type ProveStage } from "./chain/submit";
 import { NETWORK } from "./config";
-import { fetchTrees } from "./send";
-import { workerChannel } from "./shielded/crawl";
+import { fetchTrees, wireTrees } from "./send";
+import { chunkChannel } from "./shielded/crawl";
 import type { DecryptedNote } from "./types";
 
 export type LinkStatus =
@@ -39,11 +37,15 @@ export async function linkStatus(
   await initZcore();
   const { ufvk } = link_info(NETWORK, key) as { ufvk: string };
   const { ironwood } = await fetchTreeSizes();
-  const lookups = workerChannel();
+  const lookups = chunkChannel();
   try {
     const from = Math.floor(treeSize / CHUNK_SIZE);
     for (let chunk = from; chunk <= lastChunk(ironwood); chunk++) {
-      const { hits } = await lookups.run({ ufvk, chunk, pool: "ironwood" });
+      const { hits } = await lookups.run({
+        key: { ufvk },
+        chunk,
+        pool: "ironwood",
+      });
       const [note] = hits;
       if (!note) continue;
       // ponytail: names the link's nullifier to the indexer; read whole
@@ -58,22 +60,21 @@ export async function linkStatus(
 }
 
 /**
- * Claims `note` into a fresh address of the account `ufvk` names: built and
- * signed with the link key, then proven and broadcast. No Keychain approval:
- * the link signs for itself.
+ * Claims `note` into a fresh address of the shielded `account`: the keychain
+ * builds it, signed with the link key, and proves it; this page broadcasts
+ * it. No Keychain approval: the link signs for itself.
  */
 export async function claimLink({
+  account,
   key,
   note,
-  ufvk,
   onStage,
 }: {
+  account: string;
   key: Uint8Array;
   note: DecryptedNote;
-  ufvk: string;
   onStage: (stage: ProveStage) => void;
 }) {
-  await initZcore();
   const fee = Number(CLAIM_FEE);
   const pool = "ironwood" as const;
   const [trees, tip] = await Promise.all([
@@ -91,15 +92,16 @@ export async function claimLink({
     }),
     fetchLatestHeight(),
   ]);
-  const signed = claim_pczt(
-    NETWORK,
-    key,
-    note.note,
-    BigInt(note.position),
-    trees,
-    fresh_address(NETWORK, ufvk),
-    ufvk,
-    tip,
+  const proved = await keychain().claimLink(
+    {
+      account,
+      key: bytesToBase64(key),
+      note: note.note,
+      position: note.position,
+      trees: wireTrees(trees),
+      tip,
+    },
+    onStage,
   );
-  return submitTransaction(signed, onStage);
+  return broadcastTransaction(proved, onStage);
 }

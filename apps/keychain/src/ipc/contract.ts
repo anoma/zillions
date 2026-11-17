@@ -20,7 +20,19 @@
  * sender, never the payload. Every other channel is restricted to trusted
  * extension pages (popup/setup/approvals). See `background/server.ts`.
  */
-import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
+import type {
+  AccountInfo,
+  ClaimLinkProps,
+  CompactChunk,
+  DecryptCompactProps,
+  DecryptFullProps,
+  FullChunk,
+  PcztSummary,
+  ProvedTx,
+  SendTxProps,
+  TransparentAddressesProps,
+  ZCashKeychainAccount,
+} from "@zillions/types";
 
 // ---------------------------------------------------------------------------
 // Domain types (declared locally to avoid importing background/*; the
@@ -415,6 +427,48 @@ export type IpcContract = {
   "dapp/openLinkKey": {
     req: { sealed: string; nk: string };
     res: string;
+  };
+  /**
+   * Trial-decrypt a chunk the site fetched with its shielded account's key,
+   * which never leaves the Keychain. Requires connection and an unlocked vault.
+   */
+  "dapp/decryptCompact": {
+    req: DecryptCompactProps;
+    res: CompactChunk;
+  };
+  /** Read a chunk's hits in full, and what the account sent in it. */
+  "dapp/decryptFull": {
+    req: DecryptFullProps;
+    res: FullChunk;
+  };
+  /** The shielded account's pools, shown transparent index and storage key. */
+  "dapp/accountInfo": {
+    req: { account?: string };
+    res: AccountInfo;
+  };
+  /** A new shielded address of the account. */
+  "dapp/freshAddress": {
+    req: { account?: string };
+    res: string;
+  };
+  /** A range of the account's transparent addresses. */
+  "dapp/transparentAddresses": {
+    req: TransparentAddressesProps;
+    res: string[];
+  };
+  /**
+   * Build a transaction from the site's wallet snapshot, have the user
+   * approve and sign it in the popup, and prove it; resolves with it, ready
+   * to broadcast.
+   */
+  "dapp/sendTransaction": {
+    req: SendTxProps;
+    res: ProvedTx;
+  };
+  /** Build and prove a payment link's claim into the site's account; no popup. */
+  "dapp/claimLink": {
+    req: ClaimLinkProps;
+    res: ProvedTx;
   };
   // --- approvals (trusted UIs only: the approval popup + settings) ---
   /** Whether `origin` is already approved (approval popup auto-approve check). */

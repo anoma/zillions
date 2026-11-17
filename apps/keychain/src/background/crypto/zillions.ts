@@ -5,9 +5,11 @@
  */
 import initZcore, {
   apply_ledger_signatures,
+  claim_pczt,
   combine_pczts,
   derive_account,
   derive_account_from_ufvk,
+  derive_transparent,
   fresh_address,
   gap_limits,
   link_info,
@@ -15,14 +17,26 @@ import initZcore, {
   pczt_keystone_fw_version,
   pczt_ledger_transaction,
   pczt_summary,
+  preparation_pczt,
   seal_link_key,
   seed_fingerprint,
+  send_pczt,
+  shield_pczt,
   sign_pczt,
   spending_keys,
+  ufvk_pools,
 } from "@zillions/zcore";
 import type { PcztTransaction } from "@ledgerhq/device-signer-kit-zcash";
-import type { PcztSummary } from "@zillions/types";
+import type {
+  ClaimLinkProps,
+  PcztSummary,
+  Pool,
+  SendTxProps,
+  TxTrees,
+} from "@zillions/types";
 import browser from "webextension-polyfill";
+
+import { getNetwork } from "./network";
 
 let initialized: Promise<unknown> | undefined;
 
@@ -34,14 +48,7 @@ export const initZillionsSdk = (): Promise<unknown> => {
   }));
 };
 
-/**
- * Resolve the network string ("main" | "test") from the build env
- * (`Z_INTERFACE_ZCASH_CHAIN_ID` like "zcash.testnet"), defaulting to mainnet.
- */
-export const getNetwork = (): "main" | "test" => {
-  const chainId = process.env.Z_INTERFACE_ZCASH_CHAIN_ID ?? "";
-  return chainId.toLowerCase().includes("test") ? "test" : "main";
-};
+export { getNetwork };
 
 /**
  * Addresses in a row past the last one used that wallets restoring a phrase
@@ -278,5 +285,116 @@ export const combinePczts = async (
   await initZillionsSdk();
   return bytesToBase64(
     combine_pczts(base64ToBytes(pczt0), base64ToBytes(pczt1))
+  );
+};
+
+/** The shielded pools `ufvk` covers. */
+export const ufvkPools = async (ufvk: string): Promise<Pool[]> => {
+  await initZillionsSdk();
+  return ufvk_pools(getNetwork(), ufvk) as Pool[];
+};
+
+/** The external index of the transparent address `ufvk`'s account shows, if any. */
+export const shownTransparentIndex = async (
+  ufvk: string
+): Promise<number | undefined> => {
+  await initZillionsSdk();
+  const derived = derive_account_from_ufvk(getNetwork(), ufvk) as {
+    transparent_index?: number;
+  };
+  return derived.transparent_index ?? undefined;
+};
+
+/** `count` transparent addresses of `ufvk`'s account in `scope`, from index `from`. */
+export const transparentAddresses = async (
+  ufvk: string,
+  scope: "external" | "internal",
+  from: number,
+  count: number
+): Promise<string[]> => {
+  await initZillionsSdk();
+  return derive_transparent(getNetwork(), ufvk, scope, from, count);
+};
+
+/** Tree data as zcore reads it, from its base64 crossing. */
+const zcoreTrees = (trees: TxTrees) =>
+  Object.fromEntries(
+    Object.entries(trees).map(([pool, t]) => [
+      pool,
+      {
+        tip: base64ToBytes(t.tip),
+        chunks: new Map(t.chunks.map(([id, body]) => [id, base64ToBytes(body)])),
+        bucket: t.bucket,
+      },
+    ])
+  );
+
+/**
+ * The unsigned PCZT (base64) `props` asks for, from `ufvk`'s account at
+ * `hdIndex` of the seed `seedFingerprint` names.
+ */
+export const buildPczt = async (
+  props: SendTxProps,
+  ufvk: string,
+  seedFingerprint: string,
+  hdIndex: number
+): Promise<string> => {
+  await initZillionsSdk();
+  const network = getNetwork();
+  const trees = zcoreTrees(props.trees);
+  switch (props.kind) {
+    case "send":
+      return bytesToBase64(
+        send_pczt(
+          network,
+          ufvk,
+          seedFingerprint,
+          hdIndex,
+          props.wallet,
+          props.send,
+          trees,
+          props.changeIndex
+        )
+      );
+    case "shield":
+      return bytesToBase64(
+        shield_pczt(network, ufvk, seedFingerprint, hdIndex, props.wallet, trees)
+      );
+    case "preparation":
+      return bytesToBase64(
+        preparation_pczt(
+          network,
+          ufvk,
+          seedFingerprint,
+          hdIndex,
+          props.wallet,
+          BigUint64Array.from(props.parts.map(BigInt)),
+          trees
+        )
+      );
+  }
+};
+
+/**
+ * A payment link's claim into a fresh address of `ufvk`'s account, signed
+ * by the link's key: a PCZT (base64) ready to prove.
+ */
+export const buildClaimPczt = async (
+  props: ClaimLinkProps,
+  ufvk: string
+): Promise<string> => {
+  await initZillionsSdk();
+  const network = getNetwork();
+  return bytesToBase64(
+    claim_pczt(
+      network,
+      base64ToBytes(props.key),
+      props.note,
+      BigInt(props.position),
+      zcoreTrees(props.trees),
+      fresh_address(network, ufvk),
+      ufvk,
+      props.tip
+    )
   );
 };

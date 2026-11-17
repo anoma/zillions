@@ -14,6 +14,7 @@ import type {
 } from "../ipc/contract";
 import type { KeyStoreType } from "../storage";
 import { applyAutoLock } from "./autoLock";
+import { stopCompute } from "./compute/host";
 import { deviceOf } from "./keyring/types";
 import { getServices } from "./services";
 import { ResetPasswordError } from "./vault";
@@ -64,6 +65,46 @@ const requireTabId = (ctx: IpcSenderContext): number => {
 /** Far above any real PCZT; bounds what a page can park in worker memory. */
 const MAX_PCZT_BASE64_LENGTH = 2 * 1024 * 1024;
 
+/**
+ * Above any chunk body: a `/memos` one, the largest, is ~8.7 MB, 11.6 MB as
+ * base64. Bounds what a page can queue.
+ */
+const MAX_CHUNK_BASE64_LENGTH = 16 * 1024 * 1024;
+
+/** Tree tips are ~1 MB each, and a send needs a few chunks besides. */
+const MAX_TX_PROPS_LENGTH = 48 * 1024 * 1024;
+
+const POOLS: readonly unknown[] = ["sapling", "orchard", "ironwood"];
+const SEND_KINDS: readonly unknown[] = ["send", "shield", "preparation"];
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null;
+
+const isIndex = (v: unknown): v is number =>
+  typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+
+const isChunkBody = (v: unknown): v is string =>
+  typeof v === "string" && v.length <= MAX_CHUNK_BASE64_LENGTH;
+
+const isOptionalString = (v: unknown): v is string | undefined =>
+  v === undefined || typeof v === "string";
+
+/** Shapes the background reads itself; zcore checks the rest as it parses. */
+const isTxPayload = (v: Record<string, unknown>): boolean =>
+  isRecord(v.trees) &&
+  Object.entries(v.trees).every(
+    ([pool, t]) =>
+      POOLS.includes(pool) &&
+      isRecord(t) &&
+      typeof t.tip === "string" &&
+      Array.isArray(t.chunks) &&
+      t.chunks.every(
+        (c) => Array.isArray(c) && isIndex(c[0]) && typeof c[1] === "string"
+      ) &&
+      isOptionalString(t.bucket)
+  ) &&
+  JSON.stringify(v).length <= MAX_TX_PROPS_LENGTH;
+
 /** A handler maps a typed request payload to a typed response (sync or async). */
 export type Handler<K extends IpcKind> = (
   payload: IpcRequest<K>,
@@ -110,6 +151,7 @@ export const handlers: HandlerMap = {
   "vault/lock": async () => {
     const { vaultService, broadcaster } = await getServices();
     await vaultService.lock();
+    void stopCompute();
     void broadcaster.locked();
   },
 
@@ -297,6 +339,125 @@ export const handlers: HandlerMap = {
     }
     const { approvals } = await getServices();
     return approvals.approveOpenLinkKey(requireOrigin(ctx), sealed, nk, ctx.tabId);
+  },
+
+  "dapp/decryptCompact": async (payload, ctx) => {
+    // Crosses from an untrusted web page — validate before trusting the shape.
+    const p = payload as Partial<Record<string, unknown>>;
+    const tried = p.tried as Partial<Record<string, unknown>> | undefined;
+    if (
+      !isOptionalString(p.account) ||
+      !POOLS.includes(p.pool) ||
+      !isIndex(p.chunk) ||
+      !isChunkBody(p.ciphertexts) ||
+      (tried !== undefined &&
+        (!isRecord(tried) ||
+          !isIndex(tried.count) ||
+          typeof tried.digest !== "string" ||
+          !/^[0-9a-f]*$/.test(tried.digest)))
+    ) {
+      throw new Error("zc.decryptCompact: invalid arguments");
+    }
+    const { approvals } = await getServices();
+    return approvals.decryptCompact(requireOrigin(ctx), payload);
+  },
+
+  "dapp/decryptFull": async (payload, ctx) => {
+    // Crosses from an untrusted web page — validate before trusting the shape.
+    const p = payload as Partial<Record<string, unknown>>;
+    if (
+      !isOptionalString(p.account) ||
+      !POOLS.includes(p.pool) ||
+      !isIndex(p.chunk) ||
+      !isChunkBody(p.ciphertexts) ||
+      !isChunkBody(p.memos) ||
+      !isChunkBody(p.outgoing) ||
+      !Array.isArray(p.hits) ||
+      !p.hits.every(isIndex) ||
+      (p.sends !== undefined &&
+        (!Array.isArray(p.sends) || !p.sends.every(isIndex)))
+    ) {
+      throw new Error("zc.decryptFull: invalid arguments");
+    }
+    const { approvals } = await getServices();
+    return approvals.decryptFull(requireOrigin(ctx), payload);
+  },
+
+  "dapp/accountInfo": async (payload, ctx) => {
+    const { account } = payload as { account?: unknown };
+    if (!isOptionalString(account)) {
+      throw new Error("zc.accountInfo: invalid arguments");
+    }
+    const { approvals } = await getServices();
+    return approvals.accountInfo(requireOrigin(ctx), account);
+  },
+
+  "dapp/freshAddress": async (payload, ctx) => {
+    const { account } = payload as { account?: unknown };
+    if (!isOptionalString(account)) {
+      throw new Error("zc.freshAddress: invalid arguments");
+    }
+    const { approvals } = await getServices();
+    return approvals.freshAddress(requireOrigin(ctx), account);
+  },
+
+  "dapp/transparentAddresses": async (payload, ctx) => {
+    // Crosses from an untrusted web page — validate before trusting the shape.
+    const p = payload as Partial<Record<string, unknown>>;
+    if (
+      !isOptionalString(p.account) ||
+      (p.scope !== "external" && p.scope !== "internal") ||
+      !isIndex(p.from) ||
+      !isIndex(p.count) ||
+      p.count > 1000
+    ) {
+      throw new Error("zc.transparentAddresses: invalid arguments");
+    }
+    const { approvals } = await getServices();
+    return approvals.transparentAddresses(requireOrigin(ctx), payload);
+  },
+
+  "dapp/sendTransaction": async (payload, ctx) => {
+    // Crosses from an untrusted web page — validate before trusting the shape.
+    const p = payload as Partial<Record<string, unknown>>;
+    if (
+      typeof p.signer !== "string" ||
+      !isOptionalString(p.account) ||
+      !SEND_KINDS.includes(p.kind) ||
+      !isRecord(p.wallet) ||
+      (p.kind === "send" && !isRecord(p.send)) ||
+      (p.kind === "preparation" &&
+        (!Array.isArray(p.parts) || !p.parts.every(isIndex))) ||
+      !isTxPayload(p)
+    ) {
+      throw new Error("zc.sendTransaction: invalid arguments");
+    }
+    const { approvals, broadcaster } = await getServices();
+    return approvals.approveSend(
+      requireOrigin(ctx),
+      payload,
+      (stage) => broadcaster.proveStage(ctx.tabId, stage),
+      ctx.tabId
+    );
+  },
+
+  "dapp/claimLink": async (payload, ctx) => {
+    // Crosses from an untrusted web page — validate before trusting the shape.
+    const p = payload as Partial<Record<string, unknown>>;
+    if (
+      !isOptionalString(p.account) ||
+      typeof p.key !== "string" ||
+      typeof p.note !== "string" ||
+      !isIndex(p.position) ||
+      !isIndex(p.tip) ||
+      !isTxPayload(p)
+    ) {
+      throw new Error("zc.claimLink: invalid arguments");
+    }
+    const { approvals, broadcaster } = await getServices();
+    return approvals.claimLink(requireOrigin(ctx), payload, (stage) =>
+      broadcaster.proveStage(ctx.tabId, stage)
+    );
   },
 
   // --- approvals (trusted UIs) ---

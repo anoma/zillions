@@ -20,7 +20,22 @@
 import { v4 as uuid } from "uuid";
 import browser, { Windows } from "webextension-polyfill";
 
-import type { PcztSummary, PcztTransparentIo, ZCashKeychainAccount } from "@zillions/types";
+import {
+  AccountType,
+  type AccountInfo,
+  type ClaimLinkProps,
+  type CompactChunk,
+  type DecryptCompactProps,
+  type DecryptFullProps,
+  type FullChunk,
+  type PcztSummary,
+  type PcztTransparentIo,
+  type ProveStage,
+  type ProvedTx,
+  type SendTxProps,
+  type TransparentAddressesProps,
+  type ZCashKeychainAccount,
+} from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
 import approvalRoutes from "../../approvals/routes";
@@ -33,7 +48,19 @@ import type {
   DeviceSignTx,
 } from "../../ipc/contract";
 import { LocalStorage, type KeyStoreType } from "../../storage";
-import { buildPcztSummary, linkAddress, transparentGapLimits } from "../crypto/zillions";
+import { compute } from "../compute/host";
+import { storageKeyOf } from "../crypto/storageKey";
+import {
+  buildClaimPczt,
+  buildPczt,
+  buildPcztSummary,
+  freshAddress,
+  linkAddress,
+  shownTransparentIndex,
+  transparentAddresses,
+  transparentGapLimits,
+  ufvkPools,
+} from "../crypto/zillions";
 import { Keyring } from "../keyring";
 import { VaultService } from "../vault";
 import { AccountRepository } from "../vault/accounts";
@@ -321,6 +348,109 @@ export class ApprovalsService {
       // submitSignTx/rejectSignTx.
       this.pendingTxs.delete(msgId);
     }
+  }
+
+  /** Trial-decrypts a chunk the site fetched, with its shielded account's key. */
+  async decryptCompact(
+    origin: string,
+    props: DecryptCompactProps
+  ): Promise<CompactChunk> {
+    const { owner } = await this.siteShielded(origin, props.account);
+    return compute({
+      op: "compact",
+      ufvk: owner,
+      pool: props.pool,
+      chunk: props.chunk,
+      body: props.ciphertexts,
+      from: props.tried?.count ?? 0,
+      tried: props.tried?.digest ?? "",
+    });
+  }
+
+  /** Reads a chunk's hits in full, and what the account sent in it. */
+  async decryptFull(origin: string, props: DecryptFullProps): Promise<FullChunk> {
+    const { owner } = await this.siteShielded(origin, props.account);
+    return compute({
+      op: "full",
+      ufvk: owner,
+      pool: props.pool,
+      chunk: props.chunk,
+      body: props.ciphertexts,
+      memos: props.memos,
+      outgoing: props.outgoing,
+      hits: props.hits,
+      sends: props.sends ?? [],
+    });
+  }
+
+  /** What the site keeps the account's wallet with. */
+  async accountInfo(origin: string, account?: string): Promise<AccountInfo> {
+    const { owner } = await this.siteShielded(origin, account);
+    return {
+      pools: await ufvkPools(owner),
+      transparentIndex: await shownTransparentIndex(owner),
+      storageKey: await storageKeyOf(owner),
+    };
+  }
+
+  async freshAddress(origin: string, account?: string): Promise<string> {
+    const { owner } = await this.siteShielded(origin, account);
+    return freshAddress(owner);
+  }
+
+  async transparentAddresses(
+    origin: string,
+    props: TransparentAddressesProps
+  ): Promise<string[]> {
+    const { owner } = await this.siteShielded(origin, props.account);
+    return transparentAddresses(owner, props.scope, props.from, props.count);
+  }
+
+  /**
+   * Builds the transaction `props` asks for, has the user approve and sign
+   * it as any `sign()` call, then proves it; the site broadcasts it.
+   */
+  async approveSend(
+    origin: string,
+    props: SendTxProps,
+    onStage: (stage: ProveStage) => void,
+    tabId?: number
+  ): Promise<ProvedTx> {
+    const shielded = await this.siteShielded(origin, props.account);
+    const pczt = await buildPczt(
+      props,
+      shielded.owner,
+      shielded.seedFingerprint,
+      shielded.path.account
+    );
+    // Seconds of key building, done while the user reads the approval.
+    void compute({ op: "warm" }).catch(console.warn);
+    const signed = await this.approveSignTx(pczt, origin, props.signer, tabId);
+    return this.prove(signed, onStage);
+  }
+
+  /**
+   * Claims a payment link into the site's account. No popup: the link's
+   * key, which the site holds, signs, and the money only comes in.
+   */
+  async claimLink(
+    origin: string,
+    props: ClaimLinkProps,
+    onStage: (stage: ProveStage) => void
+  ): Promise<ProvedTx> {
+    const { owner } = await this.siteShielded(origin, props.account);
+    return this.prove(await buildClaimPczt(props, owner), onStage);
+  }
+
+  private async prove(
+    pczt: string,
+    onStage: (stage: ProveStage) => void
+  ): Promise<ProvedTx> {
+    const { txid, raw, expiry_height } = await compute(
+      { op: "prove", pczt },
+      onStage
+    );
+    return { txid, raw, expiryHeight: expiry_height };
   }
 
   /**
@@ -777,6 +907,34 @@ export class ApprovalsService {
       throw new Error(`Signer ${signer} is not the active account`);
     }
     return record;
+  }
+
+  /**
+   * The site's shielded account, by `address` or else its wallet's own; its
+   * stored `owner` is the viewing key, which stays here.
+   */
+  private async siteShielded(
+    origin: string,
+    address?: string
+  ): Promise<KeyStoreType & { owner: string }> {
+    const wallet = await this.assertConnected(origin);
+    const record = address
+      ? await this.accounts.findByAddress(address)
+      : wallet.type === AccountType.ShieldedKeys
+        ? wallet
+        : (await this.accounts.findAll()).find(
+            (r) => r.parentId === wallet.id && r.type === AccountType.ShieldedKeys
+          );
+    // One error for unknown and other accounts: a site learns nothing new.
+    if (
+      !record ||
+      !isInWallet(record, wallet.id) ||
+      record.type !== AccountType.ShieldedKeys ||
+      !record.owner
+    ) {
+      throw new Error("No such shielded account for this site");
+    }
+    return record as KeyStoreType & { owner: string };
   }
 
   /** Throws unless unlocked and connected; returns the site's wallet. */

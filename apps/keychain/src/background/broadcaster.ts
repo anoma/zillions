@@ -7,13 +7,18 @@
  * to the origins it concerns; a connection-revoked event targets the specific
  * (now-unapproved) origin.
  */
-import { Events } from "@zillions/types";
+import { Events, type ProveStage } from "@zillions/types";
 import browser from "webextension-polyfill";
 
 import type { LocalStorage } from "../storage";
 
 /** Background → content-script envelope carrying one dapp event. */
-export type DappEventMessage = { type: "zillions/event"; event: Events };
+export type DappEventMessage = {
+  type: "zillions/event";
+  event: Events;
+  /** The event's `detail`, for those that carry one. */
+  detail?: string;
+};
 
 export const isDappEventMessage = (m: unknown): m is DappEventMessage =>
   typeof m === "object" &&
@@ -39,6 +44,19 @@ export class Broadcaster {
   /** The vault was unlocked. */
   unlocked(): Promise<void> {
     return this.broadcastToConnected(Events.ExtensionUnlocked);
+  }
+
+  /** A transaction the tab `tabId` asked for reached proving step `stage`. */
+  async proveStage(tabId: number | undefined, stage: ProveStage): Promise<void> {
+    if (tabId === undefined) return;
+    const message: DappEventMessage = {
+      type: "zillions/event",
+      event: Events.ProveStage,
+      detail: stage,
+    };
+    await browser.tabs.sendMessage(tabId, message).catch(() => {
+      // The tab went away; the result still reaches it, or nobody.
+    });
   }
 
   /**

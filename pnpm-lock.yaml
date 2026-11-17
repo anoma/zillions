@@ -44,9 +44,6 @@ importers:
       '@zillions/keychain-types':
         specifier: workspace:*
         version: link:../keychain/src/packages/types
-      '@zillions/sapling-params':
-        specifier: workspace:*
-        version: link:../../packages/sapling-params
       '@zillions/zcore':
         specifier: workspace:*
         version: link:../../packages/zcore

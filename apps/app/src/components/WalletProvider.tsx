@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { WalletContext } from "../context/wallet";
 import { useAccount } from "../hooks/useAccount";
-import { invariant } from "../lib/invariant";
 import { Wallet } from "../lib/wallet/wallet";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -35,10 +34,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
-        invariant(account.shielded.viewingKey, "viewingKey is not available");
         const instance = new Wallet({
           id: account.shielded.id,
-          ufvk: account.shielded.viewingKey,
+          account: account.shielded.address,
           birthday: account.shielded.birthday,
         });
         if (cancelled) {
