@@ -85,7 +85,7 @@ export const Start = () => {
             more
             icon={<HardwareIcon />}
             title="Hardware wallet"
-            subtitle="Use a Ledger or Keystone (Cypherpunk)"
+            subtitle="Use a Ledger, Keystone, or Trezor device"
             data-testid="setup-hardware-wallet-button"
             onClick={() => dispatch({ type: "chooseFlow", flow: "device" })}
           />
