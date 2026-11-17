@@ -16,11 +16,29 @@ const MESSAGE_OF: Record<string, string> = {
     "The Trezor transport didn't start. Reload this tab and try again.",
   Method_Interrupted: "Trezor request was cancelled",
   Method_Cancel: "Trezor request was cancelled",
+  // The device's own cancel, whose Failure message is the bare "Cancelled".
+  Failure_ActionCancelled:
+    "The Trezor cancelled the request — if its screen still shows an " +
+    "earlier prompt, cancel it there (or unplug and replug the Trezor), " +
+    "then try again.",
 };
 
 /** Describe thrown Errors and connect's TypedErrors (`{ code, message }`). */
 const trezorErrorMessage = (e: unknown): string => {
-  if (e instanceof Error) return e.message;
+  if (e instanceof Error) {
+    // Chrome's raw line when its device picker closes without a pick.
+    if (e.message.includes("No device selected")) {
+      return "No Trezor was chosen — pick your device when the browser " +
+        "asks, or try again.";
+    }
+    // Connect's TypedErrors are Errors too: their code says more than the
+    // message, which can be the device's own words ("Cancelled").
+    const code = (e as { code?: unknown }).code;
+    if (typeof code === "string" && MESSAGE_OF[code]) {
+      return MESSAGE_OF[code];
+    }
+    return e.message;
+  }
   if (e && typeof e === "object") {
     const { code, message, error } = e as {
       code?: string;
