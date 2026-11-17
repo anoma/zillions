@@ -7,6 +7,7 @@ import { CopyToClipboardControl } from "./CopyToClipboardControl";
 import { FormPage } from "./FormPage";
 import { FeeRow } from "./PlannedFee";
 import { TransactionTypeAndStatus } from "./TransactionTypeAndStatus";
+import { Unknown } from "./TransactionValue";
 import { Breakdown, FormCard } from "./TransferForm";
 import { ZecValue } from "./ZecValue";
 
@@ -28,6 +29,7 @@ export type TransactionReceiptCardProps = {
     | "from"
     | "to"
     | "self"
+    | "unproven"
   > &
     Partial<Pick<Activity, "confirmations">> & {
       memo?: string;
@@ -63,7 +65,7 @@ function PartyList({ label, party }: { label: string; party: Party }) {
 function TimeAndParties({
   tx,
 }: {
-  tx: Pick<Activity, "timestamp" | "from" | "to">;
+  tx: Pick<Activity, "timestamp" | "from" | "to" | "unproven">;
 }) {
   return (
     <>
@@ -75,18 +77,23 @@ function TimeAndParties({
           })}
         </time>
       )}
-      {/* An address pill doesn't fit half a phone-wide card: stack them there. */}
-      <div className="@container mt-3 w-full">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 @max-md:grid-cols-1 @max-md:gap-1">
-          <span className="sr-only">From</span>
-          <AddressBadge party={tx.from} copyable pill />
-          <span className="sr-only">to</span>
-          <span aria-hidden="true" className="text-black/50 @max-md:rotate-90">
-            →
-          </span>
-          <AddressBadge party={tx.to} copyable pill />
+      {!tx.unproven && (
+        /* An address pill doesn't fit half a phone-wide card: stack them there. */
+        <div className="@container mt-3 w-full">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 @max-md:grid-cols-1 @max-md:gap-1">
+            <span className="sr-only">From</span>
+            <AddressBadge party={tx.from} copyable pill />
+            <span className="sr-only">to</span>
+            <span
+              aria-hidden="true"
+              className="text-black/50 @max-md:rotate-90"
+            >
+              →
+            </span>
+            <AddressBadge party={tx.to} copyable pill />
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
@@ -171,12 +178,19 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
           className="py-3 leading-none font-medium"
           style={{ fontSize: fitFontSize(valueChars, "3.75rem") }}
         >
-          <ZecValue zat={value} />
+          {tx.unproven ? (
+            <Unknown
+              label="Amount not known yet"
+              className="size-8 text-gray-500"
+            />
+          ) : (
+            <ZecValue zat={value} />
+          )}
         </div>
         <TimeAndParties tx={tx} />
       </section>
 
-      {total && (
+      {total && !tx.unproven && (
         <Breakdown label={total[0]} total={total[1]}>
           {rows.slice(0, -1).map(([label, zat]) => (
             <FeeRow key={label} label={label} fee={zat} pending={false} />

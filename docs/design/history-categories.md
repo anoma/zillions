@@ -66,3 +66,13 @@ isn't indexed yet is read again next run.
 
 A link's claim or cancel spends the link's note, not the account's, so it's
 not authored: it shows as Received, from "Payment link".
+
+## Change before its spend is found
+
+Sync runs tip-first, so it can find a send's change before the note the send
+spent. Change pays the account's internal address, which it never hands out,
+so the transaction is most likely ours: it shows as **Sent**, with a spinner
+for its amount and nothing else. It's only a hint: the internal address comes
+from the viewing key, so anyone holding it can pay there. Nothing an attacker
+chooses shows (no payee, amount, fee or memo), and the row fills in once the
+spent note is found.

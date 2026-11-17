@@ -22,8 +22,13 @@ const note = (position: number, value: number, memo?: string): Note => ({
 });
 
 test("a transaction's memo is the one its notes carry, wherever it sits", () => {
+  const spent: Note = {
+    ...note(0, 400_000),
+    height: 3_500_000,
+    spend: { status: "spent", at: { height: 3_503_689, tx_index: 7 } },
+  };
   const memoOf = (notes: Note[]) =>
-    buildActivity(notes, [], [], new Map())[0].memo;
+    buildActivity([spent, ...notes], [], [], new Map())[0].memo;
   // An unshield's padding note, then its change.
   expect(memoOf([note(1, 0), note(2, 350_000)])).toBeUndefined();
   expect(memoOf([note(1, 0), note(2, 350_000, "thanks")])).toBe("thanks");
@@ -233,14 +238,16 @@ test("an output our OVK opens doesn't make a transaction ours: only a spend does
     ...at,
   };
   const tx3 = full("tx3", { value_balance: 15_000 });
-  const [entry] = buildActivity(
-    [{ ...note(2, 30_000), ...at }],
-    [planted],
-    [],
-    blocks,
-    new Map([["tx3", tx3]]),
-  );
+  const history = (scope: Note["scope"]) =>
+    buildActivity(
+      [{ ...note(2, 30_000), scope, ...at }],
+      [planted],
+      [],
+      blocks,
+      new Map([["tx3", tx3]]),
+    )[0];
 
+  const entry = history("external");
   expect(entry).toMatchObject({
     tx_type: "Received",
     value: 30_000n,
@@ -248,6 +255,46 @@ test("an output our OVK opens doesn't make a transaction ours: only a spend does
     to: { pool: "shielded" },
   });
   expect(entry.memo).toBeUndefined();
+  // Paid to our change address instead, it looks like our send: Sent, with nothing it chose.
+  expect(history("internal")).toEqual({
+    txid: "tx3",
+    tx_type: "Sent",
+    unproven: true,
+    value: 0n,
+    fee: 0n,
+    block_height: at.height,
+    confirmations: 0,
+    status: "Confirmed",
+    memo: undefined,
+    timestamp: 0,
+    pool: "orchard",
+    from: { pool: "shielded" },
+    to: { pool: "shielded" },
+  });
+});
+
+test("a send known only by its change is Sent, and in full once the note it spent is found", () => {
+  const at = { height: 3_503_939, tx_index: 2 };
+  const change = { ...note(2, 80_000, "change"), ...at };
+  const spent = (spend: Note["spend"]) => ({ ...note(1, 100_000), spend });
+
+  const [before] = buildActivity(
+    [spent({ status: "unchecked" }), change],
+    [],
+    [],
+    new Map(),
+  );
+  expect(before).toMatchObject({ tx_type: "Sent", unproven: true, value: 0n });
+  expect(before.memo).toBeUndefined();
+
+  const [after] = buildActivity(
+    [spent({ status: "spent", at }), change],
+    [],
+    [],
+    new Map(),
+  );
+  expect(after).toMatchObject({ tx_type: "Sent", value: -20_000n });
+  expect(after.unproven).toBeUndefined();
 });
 
 test("a send from transparent coins to a shielded address counts its payment once", () => {
