@@ -730,6 +730,11 @@ fn decrypt_full(
     wanted: &[usize],
     sends: &[usize],
 ) -> Result<FullChunk, String> {
+    // Each send is tried as ours first: our change opens with our OVK too.
+    let mut wanted = [wanted, sends].concat();
+    wanted.sort_unstable();
+    wanted.dedup();
+    let wanted = &wanted[..];
     let network: Network = parse_network(network)?;
     let ufvk = UnifiedFullViewingKey::decode(&network, ufvk).map_err(|e| e.to_string())?;
     let ovks = candidate_ovks(&ufvk);
@@ -942,8 +947,8 @@ pub fn try_decrypt_gpu(
 /// Trial-decrypt one pool's chunk in full against `ufvk`: the raw
 /// `/ciphertexts`, `/memos` and `/outgoing` bodies for chunk number `chunk`,
 /// and the `index` of each hit [`try_decrypt`] found in it. `sends` indexes the
-/// outputs of a transaction we authored, opened as our payments when they
-/// aren't ours; with none, `outgoing` may be empty. Returns
+/// outputs of a transaction we authored, each a note when it's ours, else opened
+/// as our payment; with none, `outgoing` may be empty. Returns
 /// `{ hits: [{ pool, scope, value, nf_mine, memo, recipient, height, tx_index, position }],
 ///    sent: [{ pool, value, recipient, memo, height, tx_index, position }] }`.
 #[wasm_bindgen]
@@ -1550,6 +1555,7 @@ mod tests {
 
     // A Sapling payment to a stranger, sealed with each OVK the account has
     // (whichever pool funded it): a sends read recovers it, a crawl read never.
+    // Also: our own change is a note in a sends read, never a payment.
     #[test]
     fn recovers_our_own_sapling_output() {
         use sapling::note_encryption::sapling_note_encryption;
@@ -1557,7 +1563,8 @@ mod tests {
         use sapling::{Note, Rseed};
         use zcash_note_encryption::Domain;
 
-        let (_, ovks, encoded) = sender();
+        let (ufvk, ovks, encoded) = sender();
+        let (_, me) = ufvk.sapling().expect("sapling dfvk").change_address();
         let (_, theirs) = UnifiedSpendingKey::from_seed(
             &Network::MainNetwork,
             &[9u8; 32],
@@ -1568,10 +1575,10 @@ mod tests {
         .to_diversifiable_full_viewing_key()
         .default_address();
 
-        for ovk in ovks {
+        for (to, ovk) in ovks.iter().map(|&k| (theirs, k)).chain([(me, ovks[0])]) {
             let ovk: sapling::keys::OutgoingViewingKey = ovk.into();
             let value = NoteValue::from_raw(123_456);
-            let note = Note::from_parts(theirs, value, Rseed::AfterZip212([0u8; 32]));
+            let note = Note::from_parts(to, value, Rseed::AfterZip212([0u8; 32]));
             let mut memo = [0u8; 512];
             memo[..4].copy_from_slice(b"paid");
 
@@ -1592,8 +1599,13 @@ mod tests {
             }];
             let crawl = decrypt_full("main", &encoded, "sapling", &full, &[], &[]).expect("runs");
             assert!(crawl.sent.is_empty());
-            let chunk = decrypt_full("main", &encoded, "sapling", &full, &[0], &[0]).expect("runs");
+            let chunk = decrypt_full("main", &encoded, "sapling", &full, &[], &[0]).expect("runs");
 
+            if to == me {
+                assert_eq!((chunk.hits.len(), chunk.sent.len()), (1, 0));
+                assert_eq!(chunk.hits[0].scope, "internal");
+                continue;
+            }
             // Not ours to receive — only to have sent.
             assert_eq!(chunk.hits.len(), 0);
             assert_eq!(chunk.sent.len(), 1);
@@ -1664,8 +1676,7 @@ mod tests {
             }];
             let crawl = decrypt_full("main", &encoded, "ironwood", &full, &[], &[]).expect("runs");
             assert!(crawl.sent.is_empty());
-            let chunk =
-                decrypt_full("main", &encoded, "ironwood", &full, &[0], &[0]).expect("runs");
+            let chunk = decrypt_full("main", &encoded, "ironwood", &full, &[], &[0]).expect("runs");
 
             if to == me {
                 assert_eq!((chunk.hits.len(), chunk.sent.len()), (1, 0));

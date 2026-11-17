@@ -87,11 +87,9 @@ worker.onmessage = async (e) => {
     await (ready ??= initZcore());
     const body = await fetchChunk("ciphertexts", chunk, pool);
     const resume = tried?.chunk === chunk ? tried : undefined;
-    // Not redundant with the crawl: an output paying us is a note, never a
-    // payment, and the crawl may not have read this chunk yet.
     const compact = (
       sends
-        ? { hits: sends.map((index) => ({ index })) }
+        ? { hits: [] }
         : await decrypt(
             ufvk,
             pool,
@@ -117,7 +115,7 @@ worker.onmessage = async (e) => {
       skipped: from,
     };
 
-    if (!hits.length) {
+    if (!hits.length && !sends) {
       worker.postMessage({ chunk, hits: [], sent: [], ...read });
       return;
     }
