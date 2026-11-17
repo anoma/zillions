@@ -351,9 +351,15 @@ export async function recoverSends(
     }
     placed.push(txId);
   }
+  const found: Note[] = [];
   for (const { pool, chunk, sends } of reads.values()) {
     const read = await run.lookups.run({ ufvk: run.ufvk, chunk, pool, sends });
-    applyChunk(run, pool, read);
+    found.push(...applyChunk(run, pool, read));
+  }
+  // The crawl skips these notes once it reaches their chunk, so its spend check would too.
+  if (found.length) {
+    await checkSpends(found, run.signal);
+    run.onFound();
   }
   // Only once all are read: a failed read retries them all next sync.
   scan.sendsRead = [...done, ...placed];

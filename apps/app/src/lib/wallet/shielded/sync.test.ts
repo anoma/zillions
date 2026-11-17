@@ -11,10 +11,11 @@ vi.mock("./crawl", () => ({
 }));
 
 const { crawlChunks } = await import("./crawl");
+const { checkSpends } = await import("./spends");
 const { newPoolScan } = await import("./phases");
 const { crawlHistory, recoverSends } = await import("./sync");
 
-test("a sends read reads only authored transactions' outputs, across chunks and pools, each chunk once, and keeps ours as notes", async () => {
+test("a sends read reads only authored transactions' outputs, across chunks and pools, each chunk once, and keeps ours as notes, spend-checked", async () => {
   // Our tx at 3_000 #1: Ironwood outputs at 16_383 and 16_384 (two chunks),
   // and one Sapling output at 7. Our tx #2: Ironwood output 16_385.
   const at = { height: 3_000, tx_index: 1 };
@@ -68,6 +69,7 @@ test("a sends read reads only authored transactions' outputs, across chunks and 
       ...reads[`${pool}:${chunk}` as keyof typeof reads],
     }),
   );
+  const signal = new AbortController().signal;
   const run = {
     ufvk: "uview1",
     pools: ["ironwood", "orchard", "sapling"],
@@ -75,6 +77,7 @@ test("a sends read reads only authored transactions' outputs, across chunks and 
     applied: new Set<string>(),
     lookups: { run: lookup },
     onFound: () => {},
+    signal,
   } as never;
   const sizes = { ironwood: 16_386, orchard: 0, sapling: 8 };
   const txs = new Map([
@@ -92,10 +95,13 @@ test("a sends read reads only authored transactions' outputs, across chunks and 
   expect(state.notes.map((n) => n.id)).toEqual(["a_ironwood_16384"]);
   expect(state.sent.map((s) => s.recipient)).toEqual(["zs1them", "u1them"]);
   expect(state.scan.sendsRead).toEqual(["3000:1", "3000:2"]);
+  // The crawl won't check it: it's already applied when the crawl reaches its chunk.
+  expect(checkSpends).toHaveBeenCalledWith(state.notes, signal);
 
   // Read once: a later sync doesn't read them again.
   await recoverSends(run, sizes, txs);
   expect(lookup).toHaveBeenCalledTimes(3);
+  expect(checkSpends).toHaveBeenCalledTimes(1);
 });
 
 test("history reads what setup left, then before the spam era, and the spam era is a run of its own, each in pool order", async () => {
