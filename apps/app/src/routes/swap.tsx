@@ -5,11 +5,16 @@ import { twMerge } from "tailwind-merge";
 import { AmountDisplay } from "../components/AmountInput";
 import { CopyToClipboardControl } from "../components/CopyToClipboardControl";
 import { FormPage } from "../components/FormPage";
-import { PageError } from "../components/PageError";
 import { TransactionReceipt } from "../components/TransactionReceipt";
-import { AmountField, FormCard, SubmitBlock } from "../components/TransferForm";
+import {
+  AmountField,
+  FormCard,
+  FormError,
+  SubmitBlock,
+} from "../components/TransferForm";
 import { ActionButton } from "../components/ui/ActionButton";
 import { inputClassName, qrClassName } from "../components/ui/utils";
+import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
@@ -40,7 +45,9 @@ const canPaste =
   matchMedia("(pointer: coarse)").matches;
 
 const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
+// The default symbol logo displayed when proper logo is not found
 const UNKNOWN_SYMBOL_LOGO: React.JSX.Element = <UnknownIcon />;
+// The default blockchain logo displayed when proper logo is not found
 const UNKNOWN_BLOCKCHAIN_LOGO: React.JSX.Element = <UnknownIcon />;
 // Map blockchains to logo paths
 const blockchainLogos = new Map<string, React.JSX.Element>([
@@ -58,6 +65,10 @@ export const Route = createFileRoute("/swap")({
   component: SwapRoute,
 });
 
+// Construct an icon for the given token. Visually it contains two images:
+// a small logo representing the blockchain on which the token resides, and
+// a bigger logo representing the cryptocurrency. When a logo cannot be found
+// a default logo is displayed.
 function TokenIcon({ token }: { token: Token }) {
   return (
     <div className="relative inline-flex">
@@ -75,21 +86,32 @@ function abbreviateString(str: string, maxLength: number) {
   return str.length > maxLength ? `${str.slice(0, maxLength)}...` : str;
 }
 
+// Construct a labelled icon for the given token: an icon on the left and
+// the token's symbol above the token's blockchain on the right.
 function LabelledTokenIcon({ token }: { token: Token }) {
   return (
     <div
       className="flex items-center gap-3"
       title={`${token.symbol} on ${token.blockchain}`}
     >
+      {/* The icon on the left. */}
       <TokenIcon token={token} />
+      {/* The label on the right. */}
       <div className="flex flex-col items-start">
+        {/* Abbreviate the symbol so the drop-down is not too wide. */}
         <span className="font-bold">{abbreviateString(token.symbol, 5)}</span>
+        {/* The blockchain on which the token is residing. */}
         <span className="text-xs text-neutral-500">{token.blockchain}</span>
       </div>
     </div>
   );
 }
 
+// Display a drop-down element for selecting tokens. It displays the given
+// token, and when a different token is selected in the drop-down, the given
+// lambda is called. If readOnly is true, then the arrow disappears and a
+// drop-down is no longer displayed upon clicks. The drop-down menu is
+// populated by the supplied list of tokens.
 function CurrencySelector({
   tokens,
   token,
@@ -101,6 +123,7 @@ function CurrencySelector({
   setToken: (value: string) => void;
   readOnly?: boolean;
 }) {
+  // Represents whether the drop-down is currently open or not
   const [dropdownOpen, setDropdownOpen] = useState(false);
   return (
     <div
@@ -112,6 +135,7 @@ function CurrencySelector({
         }
       }}
     >
+      {/* The currently selected item in the drop-down. */}
       <button
         type="button"
         disabled={readOnly}
@@ -121,7 +145,7 @@ function CurrencySelector({
         <LabelledTokenIcon token={token} />
         {!readOnly && <span className="text-gray-400">▼</span>}
       </button>
-
+      {/* The drop-down list populated by the supplied tokens. */}
       {dropdownOpen && (
         <div className="absolute z-10 w-full min-w-max mt-1 bg-card border border-line rounded-xl shadow-lg max-h-60 overflow-y-auto">
           {tokens.map((c: Token) => (
@@ -129,6 +153,7 @@ function CurrencySelector({
               key={c.assetId}
               type="button"
               onClick={() => {
+                // Button click sets the actively displayed token
                 setToken(c);
                 setDropdownOpen(false);
               }}
@@ -147,6 +172,7 @@ function CurrencySelector({
 }
 
 function SwapRoute() {
+  const account = useAccount();
   const wallet = useWallet();
   const shielded = useFreshAddress();
   const [fromToken, setFromToken] = useState({
@@ -176,13 +202,14 @@ function SwapRoute() {
     coingeckoId: "zcash",
   });
 
-  const [isPending, setIsPending] = useState(false);
   const [outbound, setOutbound] = useState(false);
   const [stage, setStage] = useState(Stage.Swap);
   const [amountIn, setAmountIn] = useState("0");
-  const [amountInBigInt, setAmountInBigInt] = useState(0n);
+  const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
   const [amountOut, setAmountOut] = useState("0");
-  const [depositAddress, setDepositAddress] = useState("");
+  const [depositAddress, setDepositAddress] = useState(
+    account.transparent.address,
+  );
 
   // New state variables for USD values
   const [amountInUsd, setAmountInUsd] = useState(0.0);
@@ -205,18 +232,17 @@ function SwapRoute() {
       from: "shielded",
       to: depositAddress,
       amount: amountInBigInt,
-      memo: "",
+      memo: undefined,
     },
     false,
     0n,
   );
 
   const onGetQuote = () => {
-    setIsPending(true);
-    // Placeholder for fetching quote logic
-    setTimeout(() => setIsPending(false), 1000);
-    setStage(Stage.ReviewQuote);
-    setIsLoading(true);
+    if (!sendPlan.plan.error && !error) {
+      setStage(Stage.ReviewQuote);
+      setIsLoading(true);
+    }
   };
 
   const onConfirm = () => {
@@ -265,6 +291,17 @@ function SwapRoute() {
   }, [shielded]);
 
   useEffect(() => {
+    (async () => setError(undefined))();
+  }, [
+    fromAmount,
+    fromToken,
+    toAmount,
+    toToken,
+    recipientAddress,
+    refundAddress,
+  ]);
+
+  useEffect(() => {
     (async () => {
       const totalPriceAux =
         wholeToAtomic(fromAmount, fromToken.decimals) *
@@ -284,9 +321,6 @@ function SwapRoute() {
   }, [fromAmount, fromToken, toAmount, toToken]);
 
   useEffect(() => {
-    if (stage !== Stage.Swap) {
-      return;
-    }
     fetch("https://1click.chaindefuser.com/v0/tokens")
       .then((response) => {
         if (!response.ok) {
@@ -306,7 +340,7 @@ function SwapRoute() {
         setError(error.message);
         setIsLoading(false);
       });
-  }, [stage]);
+  }, []);
 
   useEffect(() => {
     if (stage !== Stage.ReviewQuote) {
@@ -336,16 +370,10 @@ function SwapRoute() {
         Accept: "application/json",
       },
       body: JSON.stringify(body),
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Network response was not ok");
-        }
-        return response.json();
-      })
-      .then((data) => {
+    }).then(async (response) => {
+      const data = await response.json();
+      if (response.ok) {
         console.log("Review Quote post response body", data);
-        setAmountInBigInt(BigInt(data.quote.amountIn));
         setAmountIn(data.quote.amountInFormatted);
         setAmountOut(data.quote.amountOutFormatted);
 
@@ -363,21 +391,19 @@ function SwapRoute() {
             10n ** BigInt(fromToken.decimals)) /
             BigInt(Math.ceil(fromToken.price * 100)),
         );
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        setError(error.message);
-        setIsLoading(false);
-      });
+      } else {
+        setError(data.message);
+        setStage(Stage.Swap);
+      }
+      setIsLoading(false);
+    });
   }, [stage, fromAmount, fromToken, refundAddress, shielded, slippage]);
 
   if (send.data && stage == Stage.ReviewQuote) {
     setStage(Stage.SendAmount);
   }
 
-  if (error) {
-    return <PageError>{error}</PageError>;
-  } else if (isLoading) {
+  if (isLoading) {
     return (
       <div className="size-52 grid place-items-center">
         <SpinnerIcon className="size-5 text-gold" />
@@ -403,6 +429,7 @@ function SwapRoute() {
                 describedBy="send-available"
                 unit=""
                 onChange={setFromAmount}
+                error={sendPlan.plan.error?.message}
               />
               <p className="px-1 text-xs text-neutral-500">
                 ~ ${atomicToWhole(fromTotalPrice, 2)} USD
@@ -547,13 +574,15 @@ function SwapRoute() {
           </div>
         </FormCard>
 
-        <SubmitBlock
-          label="Get a quote"
-          pending={isPending}
-          pendingLabel="Getting quote..."
-          color="black"
-          stages={[]}
-        />
+        <ActionButton
+          size="md"
+          className="w-full h-12"
+          backgroundColor="black"
+          textColor="white"
+        >
+          Get a quote
+        </ActionButton>
+        {error && <FormError>{error}</FormError>}
       </FormPage>
     );
   } else if (stage == Stage.ReviewQuote) {
