@@ -57,18 +57,18 @@ The full signatures and return shapes are in [`pkg/zcore.d.ts`](pkg/zcore.d.ts).
 
 **Sending**, in the order a send runs:
 
-| Function                   | Does                                                                   |
-| -------------------------- | ---------------------------------------------------------------------- |
-| `plan_send`, `plan_shield` | Picks the notes and coins, change and fee                              |
-| `max_send`                 | The most a send can pay after fees                                     |
-| `plan_migration`           | ZIP 318's plan for moving Orchard to Ironwood with privacy             |
-| `send_pczt`, `shield_pczt` | Builds the unsigned PCZT; needs each spent pool's note commitment tree |
-| `pczt_summary`             | What a PCZT moves, to show before signing                              |
-| `sign_pczt`                | Signs with the seed: run it wherever the seed lives                    |
-| `pczt_ledger_transaction`  | The PCZT as the Ledger signer kit's `signPcztTransaction` takes it     |
-| `apply_ledger_signatures`  | Puts a Ledger's spend authorizations into the PCZT, checking each      |
-| `needs_sapling_params`     | Whether proving needs the Sapling parameters (~51 MB)                  |
-| `prove_pczt`               | Proves the signed PCZT and returns the raw transaction to broadcast    |
+| Function                                       | Does                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `plan_send`, `plan_shield`, `plan_preparation` | Picks the notes and coins, change and fee; returns the plan encoded too                           |
+| `max_send`                                     | The most a send can pay after fees                                                                |
+| `plan_migration`                               | ZIP 318's plan for moving Orchard to Ironwood with privacy                                        |
+| `proposal_pczt`                                | Builds the unsigned PCZT of an encoded plan exactly; needs each spent pool's note commitment tree |
+| `pczt_summary`                                 | What a PCZT moves, to show before signing                                                         |
+| `sign_pczt`                                    | Signs with the seed: run it wherever the seed lives                                               |
+| `pczt_ledger_transaction`                      | The PCZT as the Ledger signer kit's `signPcztTransaction` takes it                                |
+| `apply_ledger_signatures`                      | Puts a Ledger's spend authorizations into the PCZT, checking each                                 |
+| `needs_sapling_params`                         | Whether proving needs the Sapling parameters (~51 MB)                                             |
+| `prove_pczt`                                   | Proves the signed PCZT and returns the raw transaction to broadcast                               |
 
 Proving takes seconds; run `prove_pczt` in a Web Worker. The Sapling
 parameters ship in [`@zillions/sapling-params`](../sapling-params/README.md).

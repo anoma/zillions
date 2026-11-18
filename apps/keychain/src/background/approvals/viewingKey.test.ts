@@ -207,7 +207,7 @@ describe("while the Keychain is locked", () => {
 
 describe("a transaction the site asks for", () => {
   const props = {
-    kind: "shield" as const,
+    proposal: "cGxhbg==",
     signer: "t-main",
     wallet: { tip: 1, notes: [], utxos: [] },
     trees: {},

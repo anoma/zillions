@@ -35,6 +35,26 @@ use zcash_protocol::{PoolType, ShieldedPool};
 use zip32::Scope;
 
 use crate::wallet::Wallet;
+
+/// A plan as it crosses from the app to the keychain: upstream's protobuf form.
+pub(crate) fn encode_proposal<N>(proposal: &Proposal<StandardFeeRule, N>) -> Vec<u8> {
+    use prost::Message;
+    zcash_client_backend::proto::proposal::Proposal::from_standard_proposal(proposal)
+        .encode_to_vec()
+}
+
+/// The plan `bytes` encode, its notes and coins looked up in `wallet`: a plan
+/// spending anything the wallet doesn't hold is refused.
+pub(crate) fn decode_proposal(
+    wallet: &Wallet,
+    bytes: &[u8],
+) -> Result<Proposal<StandardFeeRule, u32>, String> {
+    use prost::Message;
+    zcash_client_backend::proto::proposal::Proposal::decode(bytes)
+        .map_err(|e| format!("not a plan: {e}"))?
+        .try_into_standard_proposal(&wallet.network, wallet)
+        .map_err(|e| format!("{e}"))
+}
 use crate::witness::{Node, Tip, TipBody, TreeChunkBody};
 
 const HARDENED: u32 = 0x8000_0000;
@@ -1604,5 +1624,79 @@ pub(crate) mod tests {
         let shown =
             crate::roles::payee(&network, &None, crate::roles::Receiver::Orchard(to)).unwrap();
         assert_eq!(receiver(&shown), Some(to));
+    }
+
+    /// What the app plans is what the keychain builds: a plan read back from
+    /// its encoding builds the same transaction, a crossing at the same anchor.
+    #[test]
+    fn a_plan_crosses_to_the_keychain_unchanged() {
+        let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+
+        let (wallet, trees, root) = bucketed_wallet(1_200_000);
+        let planned = crate::send::tests::plan_to_self(&wallet, 1_000_000);
+        let read = decode_proposal(&wallet, &encode_proposal(&planned)).unwrap();
+        assert_eq!(encode_proposal(&read), encode_proposal(&planned));
+        let target = BlockHeight::from(read.min_target_height());
+        assert_eq!(
+            bucket(read.steps().first(), &Network::MainNetwork, target),
+            bucket(planned.steps().first(), &Network::MainNetwork, target),
+        );
+        let unsigned = pczt(&wallet, &ufvk, fingerprint, 0, &read, &trees, None).unwrap();
+        assert_eq!(
+            unsigned.orchard().anchor(),
+            &Some(orchard::Anchor::from(root).to_bytes())
+        );
+
+        let (wallet, _, _) = wallet_and_trees("orchard", 200_000);
+        let planned = crate::send::tests::plan_migration(&wallet);
+        let read = decode_proposal(&wallet, &encode_proposal(&planned)).unwrap();
+        assert_eq!(encode_proposal(&read), encode_proposal(&planned));
+    }
+
+    /// A site sends the plan, so nothing in it is taken on trust.
+    #[test]
+    fn refuses_a_plan_that_overpays_or_spends_what_isnt_ours() {
+        use prost::Message;
+        let (wallet, trees, _) = wallet_and_trees("ironwood", 200_000);
+        let ufvk = UnifiedFullViewingKey::decode(&Network::MainNetwork, &wallet_ufvk()).unwrap();
+        let fingerprint = zip32::fingerprint::SeedFingerprint::from_seed(&SEED)
+            .unwrap()
+            .to_bytes();
+        let to =
+            crate::transparent_tx::derive(&Network::MainNetwork, &wallet_ufvk(), "external", 5, 1)
+                .unwrap()
+                .remove(0);
+        let planned = encode_proposal(&crate::send::tests::plan(&wallet, &to, 50_000));
+
+        // A higher fee, out of the change so it still balances.
+        let mut tampered =
+            zcash_client_backend::proto::proposal::Proposal::decode(&planned[..]).unwrap();
+        let balance = tampered.steps[0].balance.as_mut().unwrap();
+        balance.fee_required += 100_000;
+        balance.proposed_change[0].value -= 100_000;
+        let overpaying = decode_proposal(&wallet, &tampered.encode_to_vec()).unwrap();
+        let err = pczt(&wallet, &ufvk, fingerprint, 0, &overpaying, &trees, None).unwrap_err();
+        assert!(err.contains("ChangeRequired"), "{err}");
+
+        // More fee than the change gives up: it no longer balances.
+        tampered.steps[0].balance.as_mut().unwrap().fee_required += 1;
+        assert!(decode_proposal(&wallet, &tampered.encode_to_vec()).is_err());
+
+        // A note the wallet doesn't hold.
+        let empty = Wallet::new(
+            Network::MainNetwork,
+            &WalletData {
+                tip: TIP,
+                notes: vec![],
+                utxos: vec![],
+            },
+        )
+        .unwrap();
+        let err = decode_proposal(&empty, &planned).unwrap_err();
+        assert!(err.contains("input found"), "{err}");
+        assert!(decode_proposal(&wallet, b"not a plan").is_err());
     }
 }

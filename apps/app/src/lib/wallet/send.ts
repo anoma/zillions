@@ -1,8 +1,9 @@
 /**
  * Sending: upstream's wallet policy (in zcore) plans what to spend, and the
  * tree data the chosen notes need comes from ziziphus. The keychain, which
- * holds the viewing key, builds the transaction from them, has it approved,
- * signs and proves it. Broadcasting it is `submit.ts`'s.
+ * holds the viewing key, builds exactly that plan, has it approved, signs and
+ * proves it: one planner, so what the app shows is what gets sent.
+ * Broadcasting it is `submit.ts`'s.
  */
 
 import { queryOptions } from "@tanstack/react-query";
@@ -56,6 +57,8 @@ export type SendPlan = {
   fee: number;
   /** The bucket boundary a ZIP 318 crossing anchors to. */
   bucket?: number;
+  /** The plan itself, encoded, for the keychain to build. */
+  proposal: Uint8Array;
 };
 
 /** What zcore plans from: the unspent notes and UTXOs, and the chain tip. */
@@ -137,23 +140,27 @@ export async function planPreparation(wallet: WalletData, parts: number[]) {
  * What the keychain needs to send `signer`'s transaction: everything but who
  * signs it.
  */
-export type TxRequest = DistributiveOmit<SendTxProps, "signer" | "account">;
+export type TxRequest = Omit<SendTxProps, "signer" | "account">;
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
-  ? Omit<T, K>
-  : never;
+/** `plan` for the keychain to build, with the tree data its notes need. */
+async function txOf(
+  wallet: WalletData,
+  plan: SendPlan,
+  changeIndex?: number,
+): Promise<TxRequest> {
+  const trees = await fetchTrees(plan);
+  return {
+    proposal: bytesToBase64(plan.proposal),
+    wallet,
+    trees: wireTrees(trees),
+    changeIndex,
+  };
+}
 
 /** The preparation `planPreparation` plans, for the keychain to build, and its plan. */
 export async function preparationTx(wallet: WalletData, parts: number[]) {
   const { plan } = await planPreparation(wallet, parts);
-  const trees = await fetchTrees(plan);
-  const tx: TxRequest = {
-    kind: "preparation",
-    wallet,
-    parts,
-    trees: wireTrees(trees),
-  };
-  return { tx, plan };
+  return { tx: await txOf(wallet, plan), plan };
 }
 
 const SHIELDED: Pool[] = ["sapling", "orchard", "ironwood"];
@@ -207,7 +214,7 @@ const treeState = (height: number) =>
  * zcore rebuilds the tips at the size lightwalletd's trees there give, which
  * needs the chunk then filling if it has frozen since.
  */
-export async function fetchTrees(plan: SendPlan) {
+export async function fetchTrees(plan: Omit<SendPlan, "proposal">) {
   const bucket =
     plan.bucket === undefined ? undefined : await treeState(plan.bucket);
   if (bucket) {
@@ -276,13 +283,13 @@ export const wireTrees = (
  * after the user confirms doesn't wait on ~1 MB tips. Failures are left for
  * the build to meet.
  */
-export function prefetchTrees(plan: SendPlan) {
+export function prefetchTrees(plan: Omit<SendPlan, "proposal">) {
   fetchTrees(plan).catch(() => {});
 }
 
 /**
- * `send` for the keychain to build, and its plan. Plans first, from the same
- * wallet snapshot, to learn which notes need witnesses.
+ * `send` for the keychain to build, and its plan, from the same wallet
+ * snapshot; the tree data is for the notes the plan spends.
  */
 export async function sendTx(
   wallet: WalletData,
@@ -292,19 +299,11 @@ export async function sendTx(
   const start = performance.now();
   const plan = await planSend(wallet, send);
   const planned = performance.now();
-  const trees = await fetchTrees(plan);
+  const tx = await txOf(wallet, plan, changeIndex);
   const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
   console.log(
     `[submit] building: plan ${secs(planned - start)}, trees ${secs(performance.now() - planned)}`,
   );
-  const tx: TxRequest = {
-    kind: "send",
-    wallet,
-    // A crossing anchors where the plan drew, which the trees are for.
-    send: { ...request(send), bucket: plan.bucket },
-    trees: wireTrees(trees),
-    changeIndex,
-  };
   return { tx, plan };
 }
 
@@ -317,7 +316,5 @@ export async function planShield(wallet: WalletData) {
 /** Shielding every transparent coin, for the keychain to build, and its plan. */
 export async function shieldTx(wallet: WalletData) {
   const plan = await planShield(wallet);
-  const trees = await fetchTrees(plan);
-  const tx: TxRequest = { kind: "shield", wallet, trees: wireTrees(trees) };
-  return { tx, plan };
+  return { tx: await txOf(wallet, plan), plan };
 }

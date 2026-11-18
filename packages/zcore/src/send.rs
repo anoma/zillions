@@ -35,10 +35,6 @@ pub(crate) struct SendRequest {
     memo: Option<String>,
     /// A binary memo, hex (a payment link's), instead of a text one.
     memo_hex: Option<String>,
-    /// The bucket boundary `plan_send` drew for a crossing, so the build
-    /// anchors where the plan fetched trees for.
-    #[serde(default)]
-    bucket: Option<u32>,
     /// `"shielded"` or `"transparent"`: which balance pays. Within the
     /// shielded one, upstream picks the pools.
     from: String,
@@ -221,15 +217,9 @@ fn propose(
     };
     let canonical = match nu6_3 {
         Some(activation) if candidate && spend_policy.permits_shielded(ShieldedPool::Orchard) => {
-            match send.bucket {
-                // Built as planned: the anchor the plan drew.
-                Some(boundary) => crossing_at(BlockHeight::from(boundary))?,
-                None => {
-                    let grid = zip318.anchor_grid();
-                    let newest = grid.boundary_at_or_below(policy.anchor_height(target_height));
-                    draw_crossing(&mut crate::rng(), grid, newest, activation, crossing_at)?
-                }
-            }
+            let grid = zip318.anchor_grid();
+            let newest = grid.boundary_at_or_below(policy.anchor_height(target_height));
+            draw_crossing(&mut crate::rng(), grid, newest, activation, crossing_at)?
         }
         _ => None,
     };
@@ -424,6 +414,9 @@ pub(crate) struct PlanSummary {
     /// build needs from lightwalletd.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) bucket: Option<u32>,
+    /// The plan itself, for [`proposal_pczt`] to build exactly.
+    #[serde(with = "serde_bytes")]
+    proposal: Vec<u8>,
 }
 
 pub(crate) fn summarize<N>(proposal: &Proposal<StandardFeeRule, N>) -> PlanSummary {
@@ -488,6 +481,7 @@ pub(crate) fn summarize<N>(proposal: &Proposal<StandardFeeRule, N>) -> PlanSumma
         fee: steps.iter().map(|s| s.fee).sum(),
         steps,
         bucket: None,
+        proposal: crate::build::encode_proposal(proposal),
     }
 }
 
@@ -514,47 +508,6 @@ pub fn plan_send(network: &str, wallet: JsValue, send: JsValue) -> Result<JsValu
     serde_wasm_bindgen::to_value(&summary).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// The unsigned PCZT for `send`, planned as [`plan_send`] plans it, for the
-/// seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`. `trees` maps
-/// each pool spent from to `{ tip, chunks: { [chunk]: body } }`: ziziphus's
-/// raw tip snapshot and the frozen chunks holding the notes `plan_send` named.
-/// A plan with transparent change sends it to internal address `change_index`,
-/// which the caller keeps unused.
-#[wasm_bindgen]
-#[allow(clippy::too_many_arguments)]
-pub fn send_pczt(
-    network: &str,
-    ufvk: &str,
-    seed_fingerprint: &str,
-    hd_index: u32,
-    wallet: JsValue,
-    send: JsValue,
-    trees: JsValue,
-    change_index: Option<u32>,
-) -> Result<Vec<u8>, JsError> {
-    let (wallet, send) = inputs(network, wallet, send).map_err(|e| JsError::new(&e))?;
-    let trees: crate::build::Trees =
-        serde_wasm_bindgen::from_value(trees).map_err(|e| JsError::new(&e.to_string()))?;
-    let ufvk = zcash_keys::keys::UnifiedFullViewingKey::decode(&wallet.network, ufvk)
-        .map_err(|e| JsError::new(&e.to_string()))?;
-    let fingerprint = crate::hex_n::<32>(seed_fingerprint).map_err(|e| JsError::new(&e))?;
-    let amount =
-        Zatoshis::from_u64(send.amount).map_err(|_| JsError::new("amount out of range"))?;
-    let proposal = propose(&wallet, &send, amount).map_err(|e| JsError::new(&e))?;
-    let pczt = crate::build::pczt(
-        &wallet,
-        &ufvk,
-        fingerprint,
-        hd_index,
-        &proposal,
-        &trees,
-        change_index,
-    )
-    .map_err(|e| JsError::new(&e))?;
-    pczt.serialize()
-        .map_err(|e| JsError::new(&format!("{e:?}")))
-}
-
 /// Plans shielding every transparent coin: the same summary as [`plan_send`],
 /// with the shielded value as change.
 #[wasm_bindgen]
@@ -564,16 +517,28 @@ pub fn plan_shield(network: &str, wallet: JsValue) -> Result<JsValue, JsError> {
     serde_wasm_bindgen::to_value(&summarize(&proposal)).map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// The unsigned PCZT shielding every transparent coin, planned as
-/// [`plan_shield`] plans it; `trees` as for [`send_pczt`].
+/// The unsigned PCZT of the plan `proposal`, as [`plan_send`], [`plan_shield`]
+/// or `plan_preparation` return it, for the seed account (`seed_fingerprint`,
+/// `hd_index`) behind `ufvk`. Its notes and coins must be in `wallet`. `trees`
+/// maps each pool it touches to `{ tip, chunks: { [chunk]: body }, bucket? }`:
+/// ziziphus's raw tip snapshot, the frozen chunks holding its notes, and for a
+/// crossing lightwalletd's tree at its anchor. Transparent change goes to
+/// internal address `change_index`, which the caller keeps unused.
+///
+/// Nothing in the plan is trusted: upstream's decoding refuses one that
+/// doesn't balance, and the builder one whose fee isn't ZIP 317's for the
+/// transaction it makes. Change always goes to the account's own addresses.
 #[wasm_bindgen]
-pub fn shield_pczt(
+#[allow(clippy::too_many_arguments)]
+pub fn proposal_pczt(
     network: &str,
     ufvk: &str,
     seed_fingerprint: &str,
     hd_index: u32,
     wallet: JsValue,
+    proposal: &[u8],
     trees: JsValue,
+    change_index: Option<u32>,
 ) -> Result<Vec<u8>, JsError> {
     let wallet = shield_wallet(network, wallet).map_err(|e| JsError::new(&e))?;
     let trees: crate::build::Trees =
@@ -581,19 +546,20 @@ pub fn shield_pczt(
     let ufvk = zcash_keys::keys::UnifiedFullViewingKey::decode(&wallet.network, ufvk)
         .map_err(|e| JsError::new(&e.to_string()))?;
     let fingerprint = crate::hex_n::<32>(seed_fingerprint).map_err(|e| JsError::new(&e))?;
-    let proposal = propose_shield(&wallet).map_err(|e| JsError::new(&e))?;
-    let pczt = crate::build::pczt(
+    let proposal =
+        crate::build::decode_proposal(&wallet, proposal).map_err(|e| JsError::new(&e))?;
+    crate::build::pczt(
         &wallet,
         &ufvk,
         fingerprint,
         hd_index,
         &proposal,
         &trees,
-        None,
+        change_index,
     )
-    .map_err(|e| JsError::new(&e))?;
-    pczt.serialize()
-        .map_err(|e| JsError::new(&format!("{e:?}")))
+    .map_err(|e| JsError::new(&e))?
+    .serialize()
+    .map_err(|e| JsError::new(&format!("{e:?}")))
 }
 
 fn shield_wallet(network: &str, wallet: JsValue) -> Result<Wallet, String> {
@@ -708,7 +674,6 @@ pub(crate) mod tests {
 
     fn send(to: &str, amount: u64) -> SendRequest {
         SendRequest {
-            bucket: None,
             to: to.into(),
             amount,
             memo: None,
@@ -803,7 +768,6 @@ pub(crate) mod tests {
         };
         let wallet = Wallet::new(Network::MainNetwork, &data).unwrap();
         let request = SendRequest {
-            bucket: None,
             to: derive(5),
             amount: 0,
             memo: None,
@@ -829,7 +793,6 @@ pub(crate) mod tests {
             orchard_family_note("orchard", Scope::Internal, 50_000, TIP - 80, 3),
         ]);
         let request = SendRequest {
-            bucket: None,
             to: crate::keys::fresh(&Network::MainNetwork, &wallet_ufvk()).unwrap(),
             amount: 0,
             memo: None,
@@ -935,7 +898,6 @@ pub(crate) mod tests {
             .unwrap()
             .remove(0);
         let request = SendRequest {
-            bucket: None,
             to,
             amount: 50_000,
             memo: None,
@@ -967,7 +929,6 @@ pub(crate) mod tests {
     /// Plans moving every Orchard note to one of our own addresses: a migration.
     pub(crate) fn plan_migration(wallet: &Wallet) -> WalletProposal {
         let request = SendRequest {
-            bucket: None,
             to: crate::keys::fresh(&wallet.network, &wallet_ufvk()).unwrap(),
             amount: 0,
             memo: None,
@@ -981,7 +942,6 @@ pub(crate) mod tests {
     /// Plans `amount` from Orchard to our own address.
     pub(crate) fn plan_to_self(wallet: &Wallet, amount: u64) -> WalletProposal {
         let request = SendRequest {
-            bucket: None,
             to: crate::keys::fresh(&wallet.network, &wallet_ufvk()).unwrap(),
             amount,
             memo: None,
@@ -994,7 +954,6 @@ pub(crate) mod tests {
     /// Plans `amount` from the transparent balance to `to`.
     pub(crate) fn plan_from_transparent(wallet: &Wallet, to: &str, amount: u64) -> WalletProposal {
         let request = SendRequest {
-            bucket: None,
             to: to.into(),
             amount,
             memo: None,

@@ -133,30 +133,24 @@ export type WalletSnapshot = {
   }[];
 };
 
-/** zcore's send request; `amount` in zatoshis. */
-export type SendTxRequest = {
-  to: string;
-  amount: number;
-  memo?: string;
-  memo_hex?: string;
-  from: "shielded" | "transparent" | "orchard";
-  bucket?: number;
-};
-
-/** The transaction the Keychain builds, has the user approve, signs and proves. */
+/**
+ * The transaction the Keychain builds exactly as the site planned it, has the
+ * user approve, signs and proves. The plan isn't trusted: one that spends what
+ * `wallet` doesn't hold, doesn't balance or pays more than the standard fee
+ * is refused, and change only ever goes to the account's own addresses.
+ */
 export type SendTxProps = {
   /** The paying account's address, as for `sign`. */
   signer: string;
   /** The id of the shielded account whose notes `wallet` holds; the site's own when omitted. */
   account?: string;
+  /** zcore's plan (a send, a shield or a migration step), in zcash_client_backend's protobuf form, base64. */
+  proposal: string;
   wallet: WalletSnapshot;
   trees: TxTrees;
-} & (
-  | { kind: "send"; send: SendTxRequest; changeIndex?: number }
-  | { kind: "shield" }
-  /** A ZIP 318 migration's next preparation, for these parts (zatoshis). */
-  | { kind: "preparation"; parts: number[] }
-);
+  /** The unused internal address index transparent change goes to. */
+  changeIndex?: number;
+};
 
 /** A payment link's note, claimed into the site's account. */
 export type ClaimLinkProps = {

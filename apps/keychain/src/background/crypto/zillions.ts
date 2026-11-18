@@ -17,11 +17,9 @@ import initZcore, {
   pczt_keystone_fw_version,
   pczt_ledger_transaction,
   pczt_summary,
-  preparation_pczt,
+  proposal_pczt,
   seal_link_key,
   seed_fingerprint,
-  send_pczt,
-  shield_pczt,
   sign_pczt,
   spending_keys,
   ufvk_pools,
@@ -315,8 +313,8 @@ const zcoreTrees = (trees: TxTrees) =>
   );
 
 /**
- * The unsigned PCZT (base64) `props` asks for, from `ufvk`'s account at
- * `hdIndex` of the seed `seedFingerprint` names.
+ * The unsigned PCZT (base64) of the plan `props` carries, from `ufvk`'s
+ * account at `hdIndex` of the seed `seedFingerprint` names.
  */
 export const buildPczt = async (
   props: SendTxProps,
@@ -325,39 +323,18 @@ export const buildPczt = async (
   hdIndex: number
 ): Promise<string> => {
   await initZillionsSdk();
-  const network = getNetwork();
-  const trees = zcoreTrees(props.trees);
-  switch (props.kind) {
-    case "send":
-      return bytesToBase64(
-        send_pczt(
-          network,
-          ufvk,
-          seedFingerprint,
-          hdIndex,
-          props.wallet,
-          props.send,
-          trees,
-          props.changeIndex
-        )
-      );
-    case "shield":
-      return bytesToBase64(
-        shield_pczt(network, ufvk, seedFingerprint, hdIndex, props.wallet, trees)
-      );
-    case "preparation":
-      return bytesToBase64(
-        preparation_pczt(
-          network,
-          ufvk,
-          seedFingerprint,
-          hdIndex,
-          props.wallet,
-          BigUint64Array.from(props.parts.map(BigInt)),
-          trees
-        )
-      );
-  }
+  return bytesToBase64(
+    proposal_pczt(
+      getNetwork(),
+      ufvk,
+      seedFingerprint,
+      hdIndex,
+      props.wallet,
+      base64ToBytes(props.proposal),
+      zcoreTrees(props.trees),
+      props.changeIndex
+    )
+  );
 };
 
 /**

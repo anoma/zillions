@@ -75,7 +75,6 @@ const MAX_CHUNK_BASE64_LENGTH = 16 * 1024 * 1024;
 const MAX_TX_PROPS_LENGTH = 48 * 1024 * 1024;
 
 const POOLS: readonly unknown[] = ["sapling", "orchard", "ironwood"];
-const SEND_KINDS: readonly unknown[] = ["send", "shield", "preparation"];
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null;
@@ -437,11 +436,9 @@ export const handlers: HandlerMap = {
     if (
       typeof p.signer !== "string" ||
       !isOptionalString(p.account) ||
-      !SEND_KINDS.includes(p.kind) ||
+      typeof p.proposal !== "string" ||
       !isRecord(p.wallet) ||
-      (p.kind === "send" && !isRecord(p.send)) ||
-      (p.kind === "preparation" &&
-        (!Array.isArray(p.parts) || !p.parts.every(isIndex))) ||
+      (p.changeIndex !== undefined && !isIndex(p.changeIndex)) ||
       !isTxPayload(p)
     ) {
       throw new Error("zc.sendTransaction: invalid arguments");

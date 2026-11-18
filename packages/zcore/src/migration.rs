@@ -354,40 +354,6 @@ pub fn plan_preparation(
         .map_err(|e| JsError::new(&e.to_string()))
 }
 
-/// The unsigned PCZT of the preparation [`plan_preparation`] plans, for the
-/// seed account (`seed_fingerprint`, `hd_index`) behind `ufvk`; `trees` as
-/// `send_pczt` takes them.
-#[wasm_bindgen]
-pub fn preparation_pczt(
-    network: &str,
-    ufvk: &str,
-    seed_fingerprint: &str,
-    hd_index: u32,
-    wallet: JsValue,
-    parts: Vec<u64>,
-    trees: JsValue,
-) -> Result<Vec<u8>, JsError> {
-    let wallet = read_wallet(network, wallet).map_err(|e| JsError::new(&e))?;
-    let trees: crate::build::Trees =
-        serde_wasm_bindgen::from_value(trees).map_err(|e| JsError::new(&e.to_string()))?;
-    let ufvk = zcash_keys::keys::UnifiedFullViewingKey::decode(&wallet.network, ufvk)
-        .map_err(|e| JsError::new(&e.to_string()))?;
-    let fingerprint = crate::hex_n::<32>(seed_fingerprint).map_err(|e| JsError::new(&e))?;
-    let (proposal, _) = preparation(&wallet, &parts).map_err(|e| JsError::new(&e))?;
-    crate::build::pczt(
-        &wallet,
-        &ufvk,
-        fingerprint,
-        hd_index,
-        &proposal,
-        &trees,
-        None,
-    )
-    .map_err(|e| JsError::new(&e))?
-    .serialize()
-    .map_err(|e| JsError::new(&format!("{e:?}")))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

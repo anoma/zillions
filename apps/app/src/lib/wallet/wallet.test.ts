@@ -55,9 +55,7 @@ vi.mock("@zillions/zcore", () => ({
   max_send: vi.fn(() => 0),
   spendable: vi.fn(() => ({ now: 0, later: 0 })),
   plan_send: vi.fn(),
-  send_pczt: vi.fn(),
   plan_shield: vi.fn(),
-  shield_pczt: vi.fn(),
 }));
 
 vi.mock("../keychain/keychain", () => ({
