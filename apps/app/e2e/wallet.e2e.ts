@@ -64,7 +64,7 @@ test("send checks the amount and the recipient", async ({ page }) => {
   await expect(page.getByRole("alert")).toHaveText("Not a valid Zcash address");
 });
 
-test("shield builds the transaction and stops at a refused approval", async ({
+test("shield hands the keychain its plan and stops at a refused approval", async ({
   page,
 }) => {
   await page.goto("/shield");
@@ -74,9 +74,15 @@ test("shield builds the transaction and stops at a refused approval", async ({
   await expect(page.getByRole("alert")).toHaveText("Rejected in the keychain");
   expect(
     await page.evaluate(
-      () => (globalThis as { signRequests?: string[] }).signRequests?.length,
+      () => (globalThis as { sendRequests?: unknown[] }).sendRequests,
     ),
-  ).toBe(1);
+  ).toMatchObject([
+    // The plan the page showed, for the keychain to build as it is.
+    {
+      signer: account.transparent,
+      proposal: expect.stringMatching(/^[A-Za-z0-9+/]+=*$/),
+    },
+  ]);
 });
 
 test("unshield has nothing shielded to move", async ({ page }) => {

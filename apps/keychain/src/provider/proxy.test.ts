@@ -21,9 +21,9 @@ beforeEach(() => {
   vi.stubGlobal("navigator", { userActivation: activation });
 });
 
-const call = async (method: string) => {
+const call = async (method: string, args?: unknown) => {
   listener({
-    data: { type: ProxyRequestTypes.Request, id: method, method, args: undefined },
+    data: { type: ProxyRequestTypes.Request, id: method, method, args },
     source: window,
     origin: ORIGIN,
   });
@@ -52,5 +52,20 @@ describe("the content script relay", () => {
 
     expect((await call("connect")).error).toBeUndefined();
     expect(send).toHaveBeenCalledWith("dapp/connect", {});
+  });
+
+  it("won't start proving for a page the user never touched, but decrypts for it", async () => {
+    const send = vi.fn(async () => ({}));
+    startProxy({ send } as unknown as BackgroundClient);
+
+    expect((await call("sendTransaction", { kind: "shield" })).error).toMatch(
+      /needs the user to interact/
+    );
+    expect((await call("claimLink", {})).error).toMatch(/needs the user to interact/);
+    expect((await call("decryptCompact", { chunk: 1 })).error).toBeUndefined();
+    expect(send).toHaveBeenCalledWith("dapp/decryptCompact", { chunk: 1 });
+    expect((await call("accountInfo")).error).toBeUndefined();
+    expect(send).toHaveBeenCalledWith("dapp/accountInfo", { account: undefined });
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });

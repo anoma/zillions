@@ -7,8 +7,6 @@ import {
 import { useEffect } from "react";
 import { ceilingOf, ceilingProblem } from "../lib/amount";
 import { keychain } from "../lib/keychain/keychain";
-import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
-import { prefetchSaplingParams, warmProver } from "../lib/wallet/chain/submit";
 import {
   prefetchTrees,
   type SendPlan,
@@ -116,7 +114,7 @@ export function planProblem({
 }
 
 /**
- * Builds the PCZT, has the keychain sign it, then proves and broadcasts it.
+ * Plans the send, has the keychain build, sign and prove it, then broadcasts it.
  * `toSelf` marks a payment to one of our own addresses (an unshield), shown
  * as pending with the change until it's mined; `shown` is how history lists
  * it meanwhile. Transparent change holds the internal address it went to, so
@@ -129,7 +127,6 @@ export function useSend() {
   const account = useAccount();
   const queryClient = useQueryClient();
   const { stages, track } = useSubmitStage();
-  useEffect(warmProver, []);
 
   const mutation = useMutation({
     mutationFn: async ({
@@ -145,18 +142,20 @@ export function useSend() {
       preparation?: number[];
     }) => {
       track("building");
-      const { pczt, plan, changeTo } = preparation
-        ? await wallet.preparationPczt(preparation, account.shielded)
-        : await wallet.sendPczt(send, account.shielded, keep);
-      prefetchSaplingParams(pczt);
+      const { tx, plan, changeTo } = preparation
+        ? await wallet.preparationTx(preparation)
+        : await wallet.sendTx(send, keep);
       track("approval");
-      const signed = await keychain().sign({
-        signer:
-          send.from === "transparent"
-            ? account.transparent.address
-            : account.shielded.address,
-        pczt: bytesToBase64(pczt),
-      });
+      const proved = await keychain().sendTransaction(
+        {
+          ...tx,
+          signer:
+            send.from === "transparent"
+              ? account.transparent.address
+              : account.shielded.address,
+        },
+        track,
+      );
       const change = { shielded: 0n, transparent: 0n };
       for (const flow of plan.steps.flatMap((step) => step.change)) {
         change[flow.pool === "transparent" ? "transparent" : "shielded"] +=
@@ -169,7 +168,7 @@ export function useSend() {
       }
       const receipt = { ...shown, fee: BigInt(plan.fee) };
       const { txid, expiryHeight, timestamp } = await wallet.submit(
-        base64ToBytes(signed),
+        proved,
         change,
         receipt,
         track,

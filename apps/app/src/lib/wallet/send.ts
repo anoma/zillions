@@ -1,19 +1,23 @@
 /**
- * Sending: upstream's wallet policy (in zcore) plans what to spend, the tree
- * data the chosen notes need comes from ziziphus, and zcore builds the PCZT
- * the keychain signs. Submitting it is `submit.ts`'s.
+ * Sending: upstream's wallet policy (in zcore) plans what to spend, and the
+ * tree data the chosen notes need comes from ziziphus. The keychain, which
+ * holds the viewing key, builds exactly that plan, has it approved, signs and
+ * proves it: one planner, so what the app shows is what gets sent.
+ * Broadcasting it is `submit.ts`'s.
  */
 
 import { queryOptions } from "@tanstack/react-query";
+import {
+  bytesToBase64,
+  type SendTxProps,
+  type TxTrees,
+} from "@zillions/keychain-types";
 import initZcore, {
   max_send,
   plan_migration,
   plan_preparation,
   plan_send,
   plan_shield,
-  preparation_pczt,
-  send_pczt,
-  shield_pczt,
   spendable,
 } from "@zillions/zcore";
 import { queryClient } from "../queryClient";
@@ -53,6 +57,8 @@ export type SendPlan = {
   fee: number;
   /** The bucket boundary a ZIP 318 crossing anchors to. */
   bucket?: number;
+  /** The plan itself, encoded, for the keychain to build. */
+  proposal: Uint8Array;
 };
 
 /** What zcore plans from: the unspent notes and UTXOs, and the chain tip. */
@@ -130,25 +136,31 @@ export async function planPreparation(wallet: WalletData, parts: number[]) {
   return plan_preparation(NETWORK, wallet, parts64(parts)) as PreparationPlan;
 }
 
-/** The unsigned PCZT of the preparation `planPreparation` plans, and its plan. */
-export async function preparationPczt(
+/**
+ * What the keychain needs to send `signer`'s transaction: everything but who
+ * signs it.
+ */
+export type TxRequest = Omit<SendTxProps, "signer" | "account">;
+
+/** `plan` for the keychain to build, with the tree data its notes need. */
+async function txOf(
   wallet: WalletData,
-  parts: number[],
-  ufvk: string,
-  account: { seedFingerprint: string; hdIndex: number },
-) {
-  const { plan } = await planPreparation(wallet, parts);
+  plan: SendPlan,
+  changeIndex?: number,
+): Promise<TxRequest> {
   const trees = await fetchTrees(plan);
-  const pczt: Uint8Array = preparation_pczt(
-    NETWORK,
-    ufvk,
-    account.seedFingerprint,
-    account.hdIndex,
+  return {
+    proposal: bytesToBase64(plan.proposal),
     wallet,
-    parts64(parts),
-    trees,
-  );
-  return { pczt, plan };
+    trees: wireTrees(trees),
+    changeIndex,
+  };
+}
+
+/** The preparation `planPreparation` plans, for the keychain to build, and its plan. */
+export async function preparationTx(wallet: WalletData, parts: number[]) {
+  const { plan } = await planPreparation(wallet, parts);
+  return { tx: await txOf(wallet, plan), plan };
 }
 
 const SHIELDED: Pool[] = ["sapling", "orchard", "ironwood"];
@@ -202,7 +214,7 @@ const treeState = (height: number) =>
  * zcore rebuilds the tips at the size lightwalletd's trees there give, which
  * needs the chunk then filling if it has frozen since.
  */
-export async function fetchTrees(plan: SendPlan) {
+export async function fetchTrees(plan: Omit<SendPlan, "proposal">) {
   const bucket =
     plan.bucket === undefined ? undefined : await treeState(plan.bucket);
   if (bucket) {
@@ -251,48 +263,48 @@ export async function fetchTrees(plan: SendPlan) {
   return Object.fromEntries(trees);
 }
 
+/** Tree data as it crosses to the keychain: bytes as base64. */
+export const wireTrees = (
+  trees: Awaited<ReturnType<typeof fetchTrees>>,
+): TxTrees =>
+  Object.fromEntries(
+    Object.entries(trees).map(([pool, { tip, chunks, bucket }]) => [
+      pool,
+      {
+        tip: bytesToBase64(tip),
+        chunks: [...chunks].map(([id, body]) => [id, bytesToBase64(body)]),
+        bucket,
+      },
+    ]),
+  );
+
 /**
  * Fetches the tree data `plan` would need ahead of building it, so the build
  * after the user confirms doesn't wait on ~1 MB tips. Failures are left for
  * the build to meet.
  */
-export function prefetchTrees(plan: SendPlan) {
+export function prefetchTrees(plan: Omit<SendPlan, "proposal">) {
   fetchTrees(plan).catch(() => {});
 }
 
 /**
- * The unsigned PCZT for `send`, for the seed account behind `ufvk`, and its
- * plan. Plans first, from the same wallet snapshot, to learn which notes need
- * witnesses.
+ * `send` for the keychain to build, and its plan, from the same wallet
+ * snapshot; the tree data is for the notes the plan spends.
  */
-export async function sendPczt(
+export async function sendTx(
   wallet: WalletData,
   send: SendRequest,
-  ufvk: string,
-  account: { seedFingerprint: string; hdIndex: number },
   changeIndex?: number,
 ) {
   const start = performance.now();
   const plan = await planSend(wallet, send);
   const planned = performance.now();
-  const trees = await fetchTrees(plan);
-  const fetched = performance.now();
-  const pczt: Uint8Array = send_pczt(
-    NETWORK,
-    ufvk,
-    account.seedFingerprint,
-    account.hdIndex,
-    wallet,
-    // A crossing anchors where the plan drew, which the trees are for.
-    { ...request(send), bucket: plan.bucket },
-    trees,
-    changeIndex,
-  );
+  const tx = await txOf(wallet, plan, changeIndex);
   const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
   console.log(
-    `[submit] building: plan ${secs(planned - start)}, trees ${secs(fetched - planned)}, pczt ${secs(performance.now() - fetched)}`,
+    `[submit] building: plan ${secs(planned - start)}, trees ${secs(performance.now() - planned)}`,
   );
-  return { pczt, plan };
+  return { tx, plan };
 }
 
 /** Plans shielding every transparent coin into Ironwood. */
@@ -301,21 +313,8 @@ export async function planShield(wallet: WalletData) {
   return plan_shield(NETWORK, wallet) as SendPlan;
 }
 
-/** The unsigned PCZT shielding every transparent coin, and its plan. */
-export async function shieldPczt(
-  wallet: WalletData,
-  ufvk: string,
-  account: { seedFingerprint: string; hdIndex: number },
-) {
+/** Shielding every transparent coin, for the keychain to build, and its plan. */
+export async function shieldTx(wallet: WalletData) {
   const plan = await planShield(wallet);
-  const trees = await fetchTrees(plan);
-  const pczt: Uint8Array = shield_pczt(
-    NETWORK,
-    ufvk,
-    account.seedFingerprint,
-    account.hdIndex,
-    wallet,
-    trees,
-  );
-  return { pczt, plan };
+  return { tx: await txOf(wallet, plan), plan };
 }

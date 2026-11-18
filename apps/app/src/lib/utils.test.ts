@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { capDecimals, transactionValue } from "./utils";
+import { capDecimals, singleton, transactionValue } from "./utils";
 
 test("a typed amount keeps at most 8 decimals", () => {
   expect(capDecimals("0.0000000000000000000000000001")).toBe("0.00000000");
@@ -22,4 +22,17 @@ test("an amount is signed by who it's with, never by the fee", () => {
   for (const tx_type of ["Shielded", "Unshielded", "Migrated"] as const) {
     expect(sign({ tx_type, value: 10_000n, fee: 15_000n })).toBe("");
   }
+});
+
+test("a singleton runs once on success, and again after a failure", async () => {
+  let calls = 0;
+  const once = singleton(async () => {
+    calls++;
+    if (calls === 1) throw new Error("locked");
+    return calls;
+  });
+  await expect(once()).rejects.toThrow("locked");
+  expect(await once()).toBe(2);
+  expect(await once()).toBe(2);
+  expect(calls).toBe(2);
 });

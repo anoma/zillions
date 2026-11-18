@@ -1,15 +1,11 @@
 /**
- * Transparent balance and history: addresses derived offline from the viewing
- * key, their activity read from lightwalletd. What a sync learns is kept, so
+ * Transparent balance and history: addresses the keychain derives from the
+ * viewing key, their activity read from lightwalletd. What a sync learns is kept, so
  * the next one asks only about blocks since, and nothing at an unmoved tip.
  */
 
-import initZcore, {
-  derive_account_from_ufvk,
-  derive_transparent,
-  gap_limits,
-  parse_transaction,
-} from "@zillions/zcore";
+import initZcore, { gap_limits, parse_transaction } from "@zillions/zcore";
+import { keychain } from "../keychain/keychain";
 import { publicActivity } from "./activity";
 import {
   fetchAddressTransactions,
@@ -31,6 +27,30 @@ export const REORG_DEPTH = 600;
 const SCOPES = ["external", "internal"] as const;
 
 type Scope = (typeof SCOPES)[number];
+
+/** Most addresses the keychain gives out per call. */
+const ADDRESS_BATCH = 1000;
+
+/** Transparent addresses `from` on, `count` of them, of the shielded account with id `account`. */
+async function derive(
+  account: string,
+  scope: Scope,
+  from: number,
+  count: number,
+) {
+  const out: string[] = [];
+  for (let at = from; at < from + count; at += ADDRESS_BATCH) {
+    out.push(
+      ...(await keychain().transparentAddresses({
+        account,
+        scope,
+        from: at,
+        count: Math.min(ADDRESS_BATCH, from + count - at),
+      })),
+    );
+  }
+  return out;
+}
 
 /** A UTXO with where its address sits on the account's chains: what spending it needs. */
 export type OwnUtxo = Utxo & { scope: Scope; address_index: number };
@@ -94,7 +114,7 @@ export interface TransparentTx {
  * are asked only about blocks above `final`.
  */
 async function discover(
-  ufvk: string,
+  account: string,
   scope: Scope,
   tip: number,
   final: number,
@@ -106,7 +126,7 @@ async function discover(
   const gap = gapLimits()[scope];
   let from = 0;
   for (; from <= Math.max(lastUsed + gap, reach); from += gap) {
-    const window = derive_transparent(NETWORK, ufvk, scope, from, gap);
+    const window = await derive(account, scope, from, gap);
     const activity = await Promise.all(
       window.map((address, i) =>
         fetchAddressTransactions(
@@ -129,14 +149,16 @@ async function discover(
 export type TransparentView = Awaited<ReturnType<typeof transparentState>>;
 
 /**
- * Brings `stored` up to `tip`. The new cache carries no reserved addresses:
+ * Brings `stored` up to `tip`; `shown` is the external index of the address
+ * the account shows. The new cache carries no reserved addresses:
  * an unshield may reserve one meanwhile, so `keepReserved` merges them in
  * from whatever is stored once this lands.
  */
 export async function syncTransparent(
   stored: TransparentCache | undefined,
-  ufvk: string,
+  account: string,
   tip: number,
+  shown: number,
 ) {
   await (ready ??= initZcore());
   const cache = stored ?? emptyCache();
@@ -151,18 +173,10 @@ export async function syncTransparent(
   let { chains, utxos } = cache;
   if (moved) {
     // The address wallets show can sit past the first gap limit.
-    const account = derive_account_from_ufvk(NETWORK, ufvk);
-    // Defaulting would quietly scan only the first gap limit again.
-    if (account.transparent && account.transparent_index === undefined) {
-      throw new Error(
-        "zcore gave no transparent_index: rebuild packages/zcore",
-      );
-    }
-    const shown: number = account.transparent_index ?? 0;
     const found = await Promise.all(
       SCOPES.map((scope) =>
         discover(
-          ufvk,
+          account,
           scope,
           tip,
           cache.final,
@@ -178,7 +192,7 @@ export async function syncTransparent(
     chains = { external: found[0].chain, internal: found[1].chain };
   }
 
-  const mine = ownAddresses(ufvk, chains);
+  const mine = await ownAddresses(account, chains);
   if (moved) utxos = await fetchUtxos([...mine.keys()]);
   const state = transparentState(mine, [...parsed.values()], utxos);
 
@@ -205,29 +219,39 @@ export const keepReserved = (
   );
 
 /** The transparent side as `cache` left it, without asking the chain: what shows before a sync answers. */
-export async function cachedTransparent(cache: TransparentCache, ufvk: string) {
+export async function cachedTransparent(
+  cache: TransparentCache,
+  account: string,
+) {
   await (ready ??= initZcore());
   return transparentState(
-    ownAddresses(ufvk, cache.chains),
+    await ownAddresses(account, cache.chains),
     cache.txs,
     cache.utxos,
   );
 }
 
 /** Every address of ours checked, used or not. */
-const ownAddresses = (ufvk: string, chains: TransparentCache["chains"]) =>
+const ownAddresses = async (
+  account: string,
+  chains: TransparentCache["chains"],
+) =>
   new Map(
-    SCOPES.flatMap((scope) =>
-      derive_transparent(NETWORK, ufvk, scope, 0, chains[scope].checked).map(
-        (address, address_index) =>
-          [address, { scope, address_index }] as const,
-      ),
-    ),
+    (
+      await Promise.all(
+        SCOPES.map(async (scope) =>
+          (await derive(account, scope, 0, chains[scope].checked)).map(
+            (address, address_index) =>
+              [address, { scope, address_index }] as const,
+          ),
+        ),
+      )
+    ).flat(),
   );
 
 /** Our coins, each transaction's effect on our transparent funds, and our addresses. */
 function transparentState(
-  mine: ReturnType<typeof ownAddresses>,
+  mine: Awaited<ReturnType<typeof ownAddresses>>,
   parsed: TransparentCache["txs"],
   utxos: Utxo[],
 ): {
@@ -289,7 +313,7 @@ function transparentState(
  */
 export async function nextInternalAddress(
   cache: TransparentCache | undefined,
-  ufvk: string,
+  account: string,
 ) {
   if (!cache) return null;
   const { lastUsed } = cache.chains.internal;
@@ -301,7 +325,7 @@ export async function nextInternalAddress(
     index++
   ) {
     if (held.has(index)) continue;
-    const [address] = derive_transparent(NETWORK, ufvk, "internal", index, 1);
+    const [address] = await derive(account, "internal", index, 1);
     return { index, address };
   }
   return null;

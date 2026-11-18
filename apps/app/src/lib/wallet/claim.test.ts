@@ -25,9 +25,9 @@ vi.mock("./chain/indexer", () => ({
   ],
 }));
 vi.mock("./shielded/crawl", () => ({
-  workerChannel: () => ({
-    run: async ({ chunk, ufvk }: ChunkRequest) => {
-      expect(ufvk).toBe("uview-link");
+  chunkChannel: () => ({
+    run: async ({ chunk, key }: ChunkRequest) => {
+      expect(key).toEqual({ ufvk: "uview-link" });
       chain.read.push(chunk);
       return { chunk, hits: chain.hits.get(chunk) ?? [], sent: [] };
     },

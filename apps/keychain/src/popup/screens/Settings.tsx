@@ -9,6 +9,7 @@ import { useVault } from "../context/VaultContext";
 import { useTheme } from "../prefs";
 import routes from "../routes";
 import { Row, Section } from "../ui/Row";
+import { syncWhileLockedLabel } from "./SyncWhileLocked";
 import { ScreenHeader } from "../ui/ScreenHeader";
 import { X_URL, ZILLIONS_SITE_URL } from "../links";
 import { KEYCHAIN_VERSION, REVISION } from "../version";
@@ -26,10 +27,12 @@ export const Settings = () => {
   const { lock } = useVault();
   const theme = useTheme();
   const [autoLock, setAutoLock] = useState<number>();
+  const [syncWhileLocked, setSyncWhileLocked] = useState<boolean>();
   const [sites, setSites] = useState<number>();
 
   useEffect(() => {
     client.autoLockMinutes().then(setAutoLock).catch(console.error);
+    client.syncWhileLocked().then(setSyncWhileLocked).catch(console.error);
     client
       .connectedSites()
       .then((s) => setSites(s.length))
@@ -50,6 +53,15 @@ export const Settings = () => {
                 : `After ${autoLockLabel(autoLock)} idle`
           }
           onClick={() => navigate(routes.autoLock())}
+        />
+        <Row
+          title="Sync while locked"
+          subtitle={
+            syncWhileLocked === undefined
+              ? " "
+              : syncWhileLockedLabel(syncWhileLocked)
+          }
+          onClick={() => navigate(routes.syncWhileLocked())}
         />
         <Row
           title="Change password"

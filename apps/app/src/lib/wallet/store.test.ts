@@ -35,23 +35,25 @@ const state = (): WalletState => ({
   ]),
 });
 
-test("a sealed state opens with its viewing key's key, and nothing in it reads as text", async () => {
-  const key = await storageKey("uview1ours");
+/** A key as the keychain hands it over: 32 bytes, base64. */
+const keyOf = (byte: number) =>
+  storageKey(btoa(String.fromCharCode(...new Uint8Array(32).fill(byte))));
+
+test("a sealed state opens with its key, and nothing in it reads as text", async () => {
+  const key = await keyOf(1);
   const sealed = await seal(state(), key);
 
   expect(new TextDecoder().decode(sealed.data)).not.toContain("tx2");
   expect(await unseal(sealed, key)).toEqual(state());
 });
 
-test("another viewing key's key opens nothing", async () => {
-  const sealed = await seal(state(), await storageKey("uview1ours"));
-  expect(await unseal(sealed, await storageKey("uview1theirs"))).toBe(
-    undefined,
-  );
+test("another account's key opens nothing", async () => {
+  const sealed = await seal(state(), await keyOf(1));
+  expect(await unseal(sealed, await keyOf(2))).toBe(undefined);
 });
 
 test("a state of another version is dropped, to sync afresh", async () => {
-  const key = await storageKey("uview1ours");
+  const key = await keyOf(1);
   const old = { ...state(), version: 0 } as unknown as WalletState;
   expect(await unseal(await seal(old, key), key)).toBe(undefined);
 });

@@ -1,8 +1,8 @@
 /**
- * Each account's wallet state, encrypted as one record. The key comes from
- * the account's viewing key, which can rebuild all of it from the chain
- * anyway, so the stored copy is never less private than the key. Nothing
- * else is readable, not even which notes or heights are ours.
+ * Each account's wallet state, encrypted as one record. The keychain derives
+ * the key from the account's viewing key, which can rebuild all of it from
+ * the chain anyway, so the stored copy is never less private than the key.
+ * Nothing else is readable, not even which notes or heights are ours.
  */
 
 import Dexie, { type EntityTable } from "dexie";
@@ -27,23 +27,11 @@ const VERSION: WalletState["version"] = 5;
 
 const encoder = new TextEncoder();
 
-/** The AES-GCM key for an account's state, derived from its UFVK; it never leaves this page. */
-export async function storageKey(ufvk: string) {
-  const material = await crypto.subtle.importKey(
+/** The AES-GCM key for an account's state, from the keychain's base64; it never leaves this page. */
+export function storageKey(raw: string) {
+  return crypto.subtle.importKey(
     "raw",
-    encoder.encode(ufvk),
-    "HKDF",
-    false,
-    ["deriveKey"],
-  );
-  return crypto.subtle.deriveKey(
-    {
-      name: "HKDF",
-      hash: "SHA-256",
-      salt: new Uint8Array(32),
-      info: encoder.encode("zillions-storage"),
-    },
-    material,
+    Uint8Array.from(atob(raw), (c) => c.charCodeAt(0)),
     { name: "AES-GCM", length: 256 },
     false,
     ["encrypt", "decrypt"],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { digits } from "./gpu";
+import { digits, gpuSecrets } from "./gpu";
 import { PALLAS_Q, mod } from "./gpu.wgsl";
 
 const LAMBDA =
@@ -50,5 +50,13 @@ describe("GPU ladder digits", () => {
         d.every((x) => x === 0 || (Math.abs(x) % 2 === 1 && Math.abs(x) < 8)),
       ).toBe(true);
     }
+  });
+});
+
+describe("the GPU queue", () => {
+  it("never runs a job whose caller aborted while it queued", async () => {
+    await expect(
+      gpuSecrets("ironwood", new Uint8Array(128), AbortSignal.abort())
+    ).rejects.toMatchObject({ name: "AbortError" });
   });
 });

@@ -1,6 +1,6 @@
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { AmountDisplay } from "../components/AmountInput";
 import { FormPage } from "../components/FormPage";
@@ -19,9 +19,7 @@ import { useGetBalance } from "../hooks/useGetBalance";
 import { useSubmitStage } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
 import { keychain } from "../lib/keychain/keychain";
-import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import { zatoshiToZec } from "../lib/utils";
-import { warmProver } from "../lib/wallet/chain/submit";
 
 /** Least a shielding may move: zcore's rule, as the fee would eat the rest. */
 const SHIELDING_THRESHOLD = 100_000n;
@@ -39,19 +37,12 @@ function ShieldRoute() {
     available = 0n,
     waiting = 0n,
   } = balance.data?.transparent ?? {};
-  const { seedFingerprint, hdIndex } = account.shielded;
 
-  // The proposal is the PCZT that gets signed: its fee is the one paid.
+  // The proposal is what the keychain builds and signs: its fee is the one paid.
   const proposal = useQuery(
     queryOptions({
-      queryKey: [
-        "shield",
-        wallet.id,
-        seedFingerprint,
-        hdIndex,
-        available.toString(),
-      ],
-      queryFn: () => wallet.proposeShield({ seedFingerprint, hdIndex }),
+      queryKey: ["shield", wallet.id, available.toString()],
+      queryFn: () => wallet.proposeShield(),
       enabled: available >= SHIELDING_THRESHOLD,
       retry: false,
     }),
@@ -64,15 +55,14 @@ function ShieldRoute() {
 
   const [validationMessage, setValidationMessage] = useState("");
   const { stages, track } = useSubmitStage();
-  useEffect(warmProver, []);
   const shield = useMutation({
     mutationFn: async () => {
-      const { pczt, value, fee } = proposal.data!;
+      const { tx, value, fee } = proposal.data!;
       track("approval");
-      const signed = await keychain().sign({
-        signer: account.transparent.address,
-        pczt: bytesToBase64(pczt),
-      });
+      const proved = await keychain().sendTransaction(
+        { ...tx, signer: account.transparent.address },
+        track,
+      );
       const receipt = {
         tx_type: "Shielded" as const,
         value,
@@ -82,7 +72,7 @@ function ShieldRoute() {
       };
       // Everything shielded comes back to us, in Ironwood.
       const { txid, timestamp } = await wallet.submit(
-        base64ToBytes(signed),
+        proved,
         { shielded: value, transparent: 0n },
         receipt,
         track,

@@ -103,6 +103,14 @@ export class BackgroundClient {
     return this.send("settings/setAutoLock", { minutes });
   }
 
+  syncWhileLocked(): Promise<boolean> {
+    return this.send("settings/getSyncWhileLocked", {});
+  }
+
+  setSyncWhileLocked(on: boolean): Promise<void> {
+    return this.send("settings/setSyncWhileLocked", { on });
+  }
+
   // ---- keyring ----
 
   generateMnemonic(size: 12 | 24): Promise<string[]> {

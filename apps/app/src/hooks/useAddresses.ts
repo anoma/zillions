@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import initZcore, { address_kind, fresh_address } from "@zillions/zcore";
+import initZcore, { address_kind } from "@zillions/zcore";
 import { useEffect, useState } from "react";
+import { keychain } from "../lib/keychain/keychain";
 import { NETWORK } from "../lib/wallet/config";
 import type { Wallet } from "../lib/wallet/wallet";
 import { useAccount } from "./useAccount";
@@ -9,22 +10,24 @@ import { useWallet } from "./useWallet";
 
 /** A new shielded address per mount of the caller and per change of `round`; undefined while it's made. */
 export function useFreshAddress(round = 0) {
-  const ufvk = useAccount().shielded.viewingKey;
-  const [fresh, setFresh] = useState<{ ufvk: string; address: string }>();
+  const account = useAccount().shielded.id;
+  const [fresh, setFresh] = useState<{ account: string; address: string }>();
 
   useEffect(() => {
-    if (!ufvk) return;
     let live = true;
-    initZcore().then(() => {
-      if (live) setFresh({ ufvk, address: fresh_address(NETWORK, ufvk) });
-    });
+    keychain()
+      .freshAddress(account)
+      .then((address) => {
+        if (live) setFresh({ account, address });
+      })
+      .catch((err) => console.error("[address] no fresh address", err));
     return () => {
       live = false;
     };
-  }, [ufvk, round]);
+  }, [account, round]);
 
   // Never the previous account's address while the new one is made.
-  return fresh?.ufvk === ufvk ? fresh?.address : undefined;
+  return fresh?.account === account ? fresh?.address : undefined;
 }
 
 function addressKind(address: string | undefined) {

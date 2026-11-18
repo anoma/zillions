@@ -74,6 +74,8 @@ incrementalmerkletree = "0.9"
 nonempty = { version = "0.11", default-features = false }
 # ziziphus bodies cross from JS as byte arrays.
 serde_bytes = "0.11"
+# Plans cross from the app to the keychain in upstream's protobuf form.
+prost = { version = "0.14", default-features = false }
 # prove_pczt's stage callback.
 js-sys = "0.3"
 

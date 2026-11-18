@@ -48,18 +48,25 @@ export type Note = DecryptedNote & {
 export type Spend =
   { status: "unchecked" | "unspent" } | { status: "spent"; at: TxLocator };
 
-/** Main → worker: decrypt one chunk of one pool. */
+/**
+ * Whose key reads a chunk: the account's, named by its keychain id as only
+ * the keychain holds it, or a payment link's own, which this page does.
+ */
+export type ChunkKey = { account: string } | { ufvk: string };
+
+/** Decrypt one chunk of one pool. */
 export interface ChunkRequest {
-  ufvk: string;
+  key: ChunkKey;
   chunk: number;
   pool: Pool;
   /** Indexes in this chunk of a transaction we authored: read for its notes and payments, and nothing else. */
   sends?: number[];
   /** The notes an earlier read tried, skipped when it was this chunk and they're unchanged. */
   tried?: Tried;
-  /** Trial-decrypts on the GPU when there is one, else on the CPU. */
-  gpu?: boolean;
 }
+
+/** Main → worker: a chunk a link's key reads. */
+export type LinkChunkRequest = Omit<ChunkRequest, "key"> & { ufvk: string };
 
 /** How many of a chunk's notes a read tried, and a fingerprint of their bytes. */
 export interface Tried {
@@ -118,15 +125,8 @@ export type ChunkWorkerError = {
   error: string;
 };
 
-/** Worker → main: a chunk's key agreement, for the page's GPU to run. */
-export type GpuRequest = { pool: Pool; gpuInputs: Uint8Array };
-
-/** Main → worker: its secrets, `null` when there's no usable GPU. */
-export type GpuReply = { secrets: Uint32Array | null } | { gpuError: string };
-
-/** Worker → main: a chunk's result, the error that chunk hit, or a GPU request. */
-export type ChunkWorkerResponse =
-  ChunkWorkerSuccess | ChunkWorkerError | GpuRequest;
+/** Worker → main: a chunk's result, or the error that chunk hit. */
+export type ChunkWorkerResponse = ChunkWorkerSuccess | ChunkWorkerError;
 
 /** Chunks read newest-first: `from` to `to` are read (none when `from > to`), `floor` to `from - 1` are left. */
 export interface Segment {

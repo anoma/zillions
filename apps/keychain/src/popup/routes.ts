@@ -20,6 +20,7 @@ export default {
   changePassword: (): string => "/settings/change-password",
   connectedSites: (): string => "/settings/connected-sites",
   autoLock: (): string => "/settings/auto-lock",
+  syncWhileLocked: (): string => "/settings/sync-while-locked",
   theme: (): string => "/settings/theme",
   approvalLog: (): string => "/settings/approval-log",
 };

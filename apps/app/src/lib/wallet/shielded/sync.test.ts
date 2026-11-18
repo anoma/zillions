@@ -7,7 +7,7 @@ vi.mock("@zillions/zcore", () => ({}));
 vi.mock("./spends", () => ({ checkSpends: vi.fn() }));
 vi.mock("./crawl", () => ({
   crawlChunks: vi.fn(),
-  workerChannel: vi.fn(),
+  chunkChannel: vi.fn(),
 }));
 
 const { crawlChunks } = await import("./crawl");

@@ -1,6 +1,14 @@
 import { test as base } from "@playwright/test";
 import type { ZCashKeychainAccount } from "@zillions/keychain-types";
-import { derive_account, initSync, seed_fingerprint } from "@zillions/zcore";
+import {
+  derive_account,
+  derive_account_from_ufvk,
+  derive_transparent,
+  fresh_address,
+  initSync,
+  seed_fingerprint,
+  ufvk_pools,
+} from "@zillions/zcore";
 import { readFileSync } from "node:fs";
 
 initSync({
@@ -26,22 +34,42 @@ const shielded: ZCashKeychainAccount = {
   parentId: "e2e",
   alias: "E2E",
   address: "",
-  viewingKey: derived.ufvk,
   seedFingerprint: seed_fingerprint(seed),
   hdIndex: 0,
 };
 
-/** Stands in for the keychain extension's `window.zc`; runs in the page. It refuses every signature. */
+/** What the keychain answers from the account's viewing key, worked out here: the page gets no key. */
+const keys = {
+  info: {
+    pools: ufvk_pools("main", derived.ufvk),
+    transparentIndex: derive_account_from_ufvk("main", derived.ufvk)
+      .transparent_index,
+    storageKey: Buffer.alloc(32, 7).toString("base64"),
+  },
+  fresh: fresh_address("main", derived.ufvk),
+  transparent: {
+    external: derive_transparent("main", derived.ufvk, "external", 0, 200),
+    internal: derive_transparent("main", derived.ufvk, "internal", 0, 200),
+  },
+};
+
+/** Stands in for the keychain extension's `window.zc`; runs in the page. It refuses every transaction. */
 function stubKeychain({
   accounts,
   connected,
+  keys,
 }: {
   accounts: ZCashKeychainAccount[];
   connected: boolean;
+  keys: {
+    info: unknown;
+    fresh: string;
+    transparent: Record<"external" | "internal", string[]>;
+  };
 }) {
-  const signed: string[] = [];
+  const sent: unknown[] = [];
   Object.assign(globalThis, {
-    signRequests: signed,
+    sendRequests: sent,
     zc: {
       // Newer than any minimum the app asks for.
       version: () => "99.0.0",
@@ -51,8 +79,19 @@ function stubKeychain({
       },
       accounts: async () => accounts,
       defaultAccount: async () => accounts[0],
-      sign: async ({ pczt }: { pczt: string }) => {
-        signed.push(pczt);
+      accountInfo: async () => keys.info,
+      freshAddress: async () => keys.fresh,
+      transparentAddresses: async ({
+        scope,
+        from,
+        count,
+      }: {
+        scope: "external" | "internal";
+        from: number;
+        count: number;
+      }) => keys.transparent[scope].slice(from, from + count),
+      sendTransaction: async (request: unknown) => {
+        sent.push(request);
         throw new Error("Rejected in the keychain");
       },
     },
@@ -66,6 +105,7 @@ export const test = base.extend<{ connected: boolean; keychain: void }>({
       await page.addInitScript(stubKeychain, {
         accounts: [transparent, shielded],
         connected,
+        keys,
       });
       await use();
     },
