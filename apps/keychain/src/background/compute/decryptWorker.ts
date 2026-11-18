@@ -57,8 +57,12 @@ async function compact(task: Extract<DecryptTask, { op: "compact" }>) {
       }
       gpuOff = true;
     } catch (err) {
+      // A bad chunk throws here too; it shouldn't turn the GPU off for every
+      // site until lock. Only a chunk the CPU reads fine blames the GPU.
+      const result = try_decrypt(network, ufvk, pool, chunk, body, from, tried);
       gpuOff = true;
       console.warn(`GPU trial decryption failed, back on the CPU: ${err}`);
+      return result;
     }
   }
   return try_decrypt(network, ufvk, pool, chunk, body, from, tried);
