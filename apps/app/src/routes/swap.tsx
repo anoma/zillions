@@ -20,6 +20,7 @@ import { useSend, useSendPlan } from "../hooks/useSend";
 import { useWallet } from "../hooks/useWallet";
 import { BitcoinIcon } from "../icons/BitcoinIcon";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
+import { SwapIcon } from "../icons/SwapIcon";
 import { UnknownIcon } from "../icons/UnknownIcon";
 import { USDCoinIcon } from "../icons/USDCoinIcon";
 import { ZcashIcon } from "../icons/ZcashIcon";
@@ -357,22 +358,7 @@ function SwapForm({
           className="px-4 -my-6 cursor-pointer hover:bg-neutral-400 transition-colors focus:outline-none rounded-lg"
           onClick={reverseExchange}
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="22"
-            height="48"
-            viewBox="0 0 39 48"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {/* Path stretched to 48px to accommodate the overlap */}
-            <path d="M12 0v48M19 41l-7 7-7-7" />
-            {/* Up arrow (on the right) */}
-            <path d="M27 48V0M20 7l7-7 7 7" />
-          </svg>
+          <SwapIcon />
         </button>
 
         <div className="flex-1 h-px bg-line"></div>
