@@ -137,8 +137,15 @@ describe("the account's viewing key", () => {
     });
   });
 
+  it("names the account by its id", async () => {
+    expect(await svc.freshAddress(SITE, "Main-z")).toBe("fresh-of-uview-main");
+    await expect(svc.freshAddress(SITE, "u-main")).rejects.toThrow(
+      "No such shielded account"
+    );
+  });
+
   it("refuses another wallet's account, and a site not connected", async () => {
-    const props = { account: "u-other", pool: "orchard" as const, chunk: 0, ciphertexts: "" };
+    const props = { account: "Other-z", pool: "orchard" as const, chunk: 0, ciphertexts: "" };
     await expect(svc.decryptCompact(SITE, props)).rejects.toThrow(
       "No such shielded account"
     );

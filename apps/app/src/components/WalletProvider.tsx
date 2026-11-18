@@ -36,7 +36,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       try {
         const instance = new Wallet({
           id: account.shielded.id,
-          account: account.shielded.address,
           birthday: account.shielded.birthday,
         });
         if (cancelled) {

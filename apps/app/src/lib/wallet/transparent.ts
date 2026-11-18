@@ -31,7 +31,7 @@ type Scope = (typeof SCOPES)[number];
 /** Most addresses the keychain gives out per call. */
 const ADDRESS_BATCH = 1000;
 
-/** The shielded `account`'s transparent addresses `from` on, `count` of them. */
+/** Transparent addresses `from` on, `count` of them, of the shielded account with id `account`. */
 async function derive(
   account: string,
   scope: Scope,

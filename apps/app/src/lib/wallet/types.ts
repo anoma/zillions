@@ -49,8 +49,8 @@ export type Spend =
   { status: "unchecked" | "unspent" } | { status: "spent"; at: TxLocator };
 
 /**
- * Whose key reads a chunk: the account's, which only the keychain holds, or
- * a payment link's own, which this page does.
+ * Whose key reads a chunk: the account's, named by its keychain id as only
+ * the keychain holds it, or a payment link's own, which this page does.
  */
 export type ChunkKey = { account: string } | { ufvk: string };
 

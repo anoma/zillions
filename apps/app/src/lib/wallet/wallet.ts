@@ -92,9 +92,8 @@ const saveData = () =>
 
 /** One account's wallet: its state, kept in storage and brought up to date by `sync`, and what the app reads and sends with. */
 export class Wallet {
+  /** The shielded account's keychain id: the keychain holds its viewing key. */
   readonly id: string;
-  /** The shielded account's address: the keychain holds its viewing key. */
-  readonly #account: string;
   /** Block height below which nothing is crawled. Absent means full history. */
   readonly #birthday?: number;
   /** What the keychain tells of the account; read when storage is. */
@@ -137,9 +136,8 @@ export class Wallet {
   /** Tip checks since the last sync ended. */
   #checks = 0;
 
-  constructor(options: { id: string; account: string; birthday?: number }) {
+  constructor(options: { id: string; birthday?: number }) {
     this.id = options.id;
-    this.#account = options.account;
     this.#birthday = options.birthday;
     this.#state = emptyState(this.id);
     this.#seed();
@@ -152,13 +150,13 @@ export class Wallet {
   };
 
   #seed = singleton(async () => {
-    this.#info = await keychain().accountInfo(this.#account);
+    this.#info = await keychain().accountInfo(this.id);
     this.#key = await storageKey(this.#info.storageKey);
     const stored = await loadState(this.id, this.#key);
     if (stored) this.#state = stored;
     const { notes, sent, transparent } = this.#state;
     if (transparent) {
-      this.#transparent = await cachedTransparent(transparent, this.#account);
+      this.#transparent = await cachedTransparent(transparent, this.id);
     }
     for (const { id } of [...notes, ...sent]) this.#applied.add(id);
   });
@@ -206,7 +204,7 @@ export class Wallet {
   };
 
   #newRun = (tip: number, signal: AbortSignal): ShieldedRun => ({
-    key: { account: this.#account },
+    key: { account: this.id },
     pools: this.#info?.pools ?? [],
     // An import's 0 means none: the whole history.
     birthday: this.#birthday || undefined,
@@ -421,7 +419,7 @@ export class Wallet {
   #syncTransparent = (tip: number) =>
     syncTransparent(
       this.#state.transparent,
-      this.#account,
+      this.id,
       tip,
       this.#info?.transparentIndex ?? 0,
     )
@@ -651,7 +649,7 @@ export class Wallet {
   /** The next preparation, for the keychain to build. */
   preparationTx = async (parts: number[]) => {
     const { tx, plan } = await preparationTx(this.#walletData(false), parts);
-    return { tx: { ...tx, account: this.#account }, plan, changeTo: undefined };
+    return { tx: { ...tx, account: this.id }, plan, changeTo: undefined };
   };
 
   /**
@@ -671,7 +669,7 @@ export class Wallet {
       step.change.some((c) => c.pool === "transparent"),
     );
     return {
-      tx: { ...built.tx, account: this.#account },
+      tx: { ...built.tx, account: this.id },
       plan: built.plan,
       changeTo: transparentChange ? internal?.index : undefined,
     };
@@ -687,7 +685,7 @@ export class Wallet {
       .flatMap((s) => s.change)
       .reduce((sum, c) => sum + BigInt(c.value), 0n);
     return {
-      tx: { ...tx, account: this.#account },
+      tx: { ...tx, account: this.id },
       value: shielded,
       fee: BigInt(plan.fee),
     };
@@ -735,7 +733,7 @@ export class Wallet {
   /** The next internal address, shown nowhere; see `nextInternalAddress` for when it's null. */
   internalAddress = async () => {
     await this.#seed();
-    return nextInternalAddress(this.#state.transparent, this.#account);
+    return nextInternalAddress(this.#state.transparent, this.id);
   };
 
   /** Records a transaction paying `internalAddress()`'s `index`, so the next one goes elsewhere. */

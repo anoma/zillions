@@ -10,7 +10,7 @@ import { useWallet } from "./useWallet";
 
 /** A new shielded address per mount of the caller and per change of `round`; undefined while it's made. */
 export function useFreshAddress(round = 0) {
-  const account = useAccount().shielded.address;
+  const account = useAccount().shielded.id;
   const [fresh, setFresh] = useState<{ account: string; address: string }>();
 
   useEffect(() => {

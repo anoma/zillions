@@ -68,9 +68,12 @@ export interface Zillions {
   decryptCompact(props: DecryptCompactProps): Promise<CompactChunk>;
   /** Reads a chunk's hits in full, and what the account sent in it. */
   decryptFull(props: DecryptFullProps): Promise<FullChunk>;
-  /** The pools, shown transparent index and storage key of a shielded account. */
+  /**
+   * The pools, shown transparent index and storage key of the shielded
+   * account with id `account`, the site's own when omitted.
+   */
   accountInfo(account?: string): Promise<AccountInfo>;
-  /** A new shielded address of the account, unlinkable to its others. */
+  /** A new shielded address of the account with id `account`, unlinkable to its others. */
   freshAddress(account?: string): Promise<string>;
   transparentAddresses(props: TransparentAddressesProps): Promise<string[]>;
   /**

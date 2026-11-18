@@ -11,7 +11,7 @@ export type Pool = "sapling" | "orchard" | "ironwood";
 export type TriedNotes = { count: number; digest: string };
 
 export type DecryptCompactProps = {
-  /** The shielded account's address; the site's own when omitted. */
+  /** The shielded account's id; the site's own when omitted. */
   account?: string;
   pool: Pool;
   chunk: number;
@@ -147,7 +147,7 @@ export type SendTxRequest = {
 export type SendTxProps = {
   /** The paying account's address, as for `sign`. */
   signer: string;
-  /** The shielded account whose notes `wallet` holds; the site's own when omitted. */
+  /** The id of the shielded account whose notes `wallet` holds; the site's own when omitted. */
   account?: string;
   wallet: WalletSnapshot;
   trees: TxTrees;
@@ -160,7 +160,7 @@ export type SendTxProps = {
 
 /** A payment link's note, claimed into the site's account. */
 export type ClaimLinkProps = {
-  /** The shielded account it's claimed into; the site's own when omitted. */
+  /** The id of the shielded account it's claimed into; the site's own when omitted. */
   account?: string;
   /** The link's key, base64. */
   key: string;

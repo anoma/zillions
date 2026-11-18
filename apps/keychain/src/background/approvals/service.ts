@@ -915,11 +915,11 @@ export class ApprovalsService {
    */
   private async siteShielded(
     origin: string,
-    address?: string
+    accountId?: string
   ): Promise<KeyStoreType & { owner: string }> {
     const wallet = await this.assertConnected(origin);
-    const record = address
-      ? await this.accounts.findByAddress(address)
+    const record = accountId
+      ? await this.accounts.findById(accountId)
       : wallet.type === AccountType.ShieldedKeys
         ? wallet
         : (await this.accounts.findAll()).find(

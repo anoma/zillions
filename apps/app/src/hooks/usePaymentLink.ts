@@ -160,7 +160,7 @@ export const useLinkStatus = (link: ClaimLink) => useQuery(linkStatusOf(link));
 
 /** Claims `link` into the connected account; a failed claim looks the link up again. */
 export function useClaimLink(link: ClaimLink) {
-  const account = useAccount().shielded.address;
+  const account = useAccount().shielded.id;
   const queryClient = useQueryClient();
   const { stages, track } = useSubmitStage();
   const mutation = useMutation({

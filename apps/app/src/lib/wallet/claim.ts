@@ -60,9 +60,9 @@ export async function linkStatus(
 }
 
 /**
- * Claims `note` into a fresh address of the shielded `account`: the keychain
- * builds it, signed with the link key, and proves it; this page broadcasts
- * it. No Keychain approval: the link signs for itself.
+ * Claims `note` into a fresh address of the shielded account with id
+ * `account`: the keychain builds it, signed with the link key, and proves
+ * it; this page broadcasts it. No Keychain approval: the link signs for itself.
  */
 export async function claimLink({
   account,
