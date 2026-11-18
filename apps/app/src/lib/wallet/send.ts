@@ -6,7 +6,11 @@
  */
 
 import { queryOptions } from "@tanstack/react-query";
-import type { SendTxProps, TxTrees } from "@zillions/keychain-types";
+import {
+  bytesToBase64,
+  type SendTxProps,
+  type TxTrees,
+} from "@zillions/keychain-types";
 import initZcore, {
   max_send,
   plan_migration,
@@ -15,7 +19,6 @@ import initZcore, {
   plan_shield,
   spendable,
 } from "@zillions/zcore";
-import { bytesToBase64 } from "../keychain/utils";
 import { queryClient } from "../queryClient";
 import { CHUNK_SIZE, fetchTreeChunk, fetchTreeTip } from "./chain/indexer";
 import { fetchTreeState, treeSize } from "./chain/lightwalletd";

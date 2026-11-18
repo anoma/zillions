@@ -4,11 +4,11 @@
  * lightwalletd.
  */
 
-import type {
-  ProveStage as KeychainProveStage,
-  ProvedTx,
+import {
+  base64ToBytes,
+  type ProveStage as KeychainProveStage,
+  type ProvedTx,
 } from "@zillions/keychain-types";
-import { base64ToBytes } from "../../keychain/utils";
 import { minedBy } from "./blockTime";
 import { sendTransaction } from "./lightwalletd";
 

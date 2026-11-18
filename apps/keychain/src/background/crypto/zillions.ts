@@ -34,6 +34,7 @@ import type {
   SendTxProps,
   TxTrees,
 } from "@zillions/types";
+import { base64ToBytes, bytesToBase64 } from "@zillions/types";
 import browser from "webextension-polyfill";
 
 import { getNetwork } from "./network";
@@ -139,22 +140,6 @@ export type SpendingKeys = {
  */
 export const spendingKeys = (seed: Uint8Array, hdIndex: number): SpendingKeys =>
   spending_keys(getNetwork(), seed, hdIndex);
-
-/**
- * A PCZT crosses the IPC boundary (provider <-> background) as base64-encoded
- * bytes. Chunked conversion keeps large PCZTs off the call stack.
- */
-const bytesToBase64 = (bytes: Uint8Array): string => {
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-};
-
-const base64ToBytes = (s: string): Uint8Array =>
-  Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
 /** The address a payment link's key (base64) holds its note at. */
 export const linkAddress = (key: string): string =>

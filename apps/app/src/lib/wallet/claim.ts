@@ -1,7 +1,7 @@
 // Claiming a payment link: docs/design/payment-links.md, "Claim".
+import { bytesToBase64 } from "@zillions/keychain-types";
 import initZcore, { link_info } from "@zillions/zcore";
 import { keychain } from "../keychain/keychain";
-import { bytesToBase64 } from "../keychain/utils";
 import { CLAIM_FEE } from "../paymentLink";
 import {
   CHUNK_SIZE,

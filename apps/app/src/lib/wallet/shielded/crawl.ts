@@ -3,8 +3,8 @@
  * decrypted concurrently, but handed to `onChunk` strictly newest-first.
  */
 
+import { bytesToBase64 } from "@zillions/keychain-types";
 import { keychain } from "../../keychain/keychain";
-import { bytesToBase64 } from "../../keychain/utils";
 import { fetchChunk } from "../chain/indexer";
 import type {
   ChunkKey,

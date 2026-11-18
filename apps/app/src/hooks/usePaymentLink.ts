@@ -4,10 +4,10 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { base64ToBytes, bytesToBase64 } from "@zillions/keychain-types";
 import initZcore, { link_info, new_link_key } from "@zillions/zcore";
 import { useEffect, useState } from "react";
 import { keychain } from "../lib/keychain/keychain";
-import { base64ToBytes, bytesToBase64 } from "../lib/keychain/utils";
 import {
   CLAIM_FEE,
   type ClaimLink,

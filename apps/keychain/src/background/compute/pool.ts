@@ -4,7 +4,7 @@
  * offscreen document on Chrome, the background page on Firefox. The GPU, when
  * there is one, is opened here and shared by every decrypt worker.
  */
-import type { ProveStage } from "@zillions/types";
+import { base64ToBytes, bytesToBase64, type ProveStage } from "@zillions/types";
 
 import { gpuSecrets } from "./gpu";
 import type {
@@ -17,17 +17,6 @@ import type {
 
 const DECRYPT_WORKER = "/decrypt-worker.js";
 const PROVE_WORKER = "/prove-worker.js";
-
-const fromBase64 = (s: string): Uint8Array =>
-  Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-
-const toBase64 = (bytes: Uint8Array): string => {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
-};
 
 const fromHex = (hex: string): Uint8Array =>
   Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16));
@@ -164,7 +153,7 @@ export async function runJob(
         ufvk: job.ufvk,
         pool: job.pool,
         chunk: job.chunk,
-        body: fromBase64(job.body),
+        body: base64ToBytes(job.body),
         from: job.from,
         tried: fromHex(job.tried),
         gpu: true,
@@ -175,9 +164,9 @@ export async function runJob(
         ufvk: job.ufvk,
         pool: job.pool,
         chunk: job.chunk,
-        body: fromBase64(job.body),
-        memos: fromBase64(job.memos),
-        outgoing: fromBase64(job.outgoing),
+        body: base64ToBytes(job.body),
+        memos: base64ToBytes(job.memos),
+        outgoing: base64ToBytes(job.outgoing),
         hits: Uint32Array.from(job.hits),
         sends: Uint32Array.from(job.sends),
       });
@@ -185,10 +174,10 @@ export async function runJob(
       return prove({ op: "warm" }, onStage);
     case "prove": {
       const proved = (await prove(
-        { op: "prove", pczt: fromBase64(job.pczt) },
+        { op: "prove", pczt: base64ToBytes(job.pczt) },
         onStage
       )) as { txid: string; raw: Uint8Array; expiry_height: number };
-      return { ...proved, raw: toBase64(proved.raw) };
+      return { ...proved, raw: bytesToBase64(proved.raw) };
     }
   }
 }
