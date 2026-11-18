@@ -41,8 +41,11 @@ the trade-off is a product decision, written down here.
   that link, 2.10; the wallet holds it only for the moment it's needed and
   never saves it), nothing is signed without
   the user's explicit approval, and what the user approves is exactly what
-  gets signed. What the wallet keeps in the browser (balances, history,
-  addresses) is encrypted, and opens only while the Keychain is unlocked.
+  gets signed. The account's viewing key never reaches a site either: the
+  Keychain uses it on the site's behalf, so a site can't keep watching the
+  account after it is disconnected or pass the key on. What the wallet keeps
+  in the browser (balances, history, addresses) is encrypted, and opens only
+  while the Keychain is unlocked.
 - **The best UX possible.** Clear screens, no Zcash jargon the user has to
   understand to use the wallet (pools, notes, blocks), sensible defaults, fast
   feedback, and honest waiting states when something takes time.
@@ -427,7 +430,8 @@ Ironwood; how it's built is in [payment-links.md](design/payment-links.md).
 ## 3. Keychain (browser extension)
 
 Holds the user's secrets. Secrets never leave it; it approves and signs on the
-user's behalf.
+user's behalf. It also decrypts the chunks a site fetches, and builds and
+proves the site's transactions, so the account's viewing key stays in it too.
 
 ### 3.1 Create or import a wallet — Working
 
@@ -487,8 +491,8 @@ user's behalf.
 - A payment link (2.10) is approved in one window titled as a payment link,
   showing its amount, the fee and the claim fee. Showing a link again or
   cancelling it is a separate approval of its own. The Keychain shares a
-  link's viewing information without asking, as it does the account's, so
-  the wallet can show its status. — _Planned_
+  link's viewing information without asking, so the wallet can show its
+  status; it never shares the account's. — _Planned_
 
 ### 3.5 Works offline — Planned
 
@@ -508,9 +512,12 @@ Challenges to check, one by one:
    itself, and the signature must be invalid if a site lies about any of it.
 3. **Stale transactions.** Offline, the Keychain cannot tell whether a
    transaction it is asked to sign has already expired or double-spends.
-4. **Heavy work stays out.** Preparing shielded transactions needs large
-   downloads and minutes of computation (proofs, Sapling parameters); the
-   Keychain only signs, and the app does the rest.
+4. **Heavy work on the device, downloads in the app.** — _Built_. The
+   Keychain trial-decrypts chunks and builds, signs and proves transactions
+   on the device, as that needs the viewing key. It ships the Sapling
+   parameters (51 MB) so it still makes no network calls. The app fetches
+   the chunks and commitment trees it hands over, and broadcasts the proven
+   transaction.
 5. **No balances in the Keychain.** Showing balances or history there would
    need the network; they stay in the app.
 6. **Finding existing accounts.** Importing a recovery phrase that has funds
