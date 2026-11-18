@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { WalletContext } from "../context/wallet";
 import { useAccount } from "../hooks/useAccount";
+import { KeychainEvent } from "../lib/keychain/keychain";
 import { Wallet } from "../lib/wallet/wallet";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -57,6 +58,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setError("");
     };
   }, [account]);
+
+  // A Keychain set to stop syncing while locked refused this wallet's reads:
+  // catch up at once on unlock, rather than at the next timed sync.
+  useEffect(() => {
+    if (!wallet) return;
+    const onUnlocked = () => wallet.resync();
+    window.addEventListener(KeychainEvent.ExtensionUnlocked, onUnlocked);
+    return () =>
+      window.removeEventListener(KeychainEvent.ExtensionUnlocked, onUnlocked);
+  }, [wallet]);
 
   if (error) {
     return <PageError>{error}</PageError>;

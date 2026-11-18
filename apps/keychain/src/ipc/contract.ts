@@ -257,6 +257,15 @@ export type IpcContract = {
     req: { minutes: number };
     res: void;
   };
+  /** Whether connected sites may sync while the Keychain is locked. */
+  "settings/getSyncWhileLocked": {
+    req: Record<string, never>;
+    res: boolean;
+  };
+  "settings/setSyncWhileLocked": {
+    req: { on: boolean };
+    res: void;
+  };
 
   // --- keyring ---
   "keyring/generateMnemonic": {

@@ -68,6 +68,9 @@ import type { ActiveAccountStore } from "../vault/types";
 import type { ApprovalLog } from "./log";
 import { toPublicAccount } from "./publicAccount";
 
+/** Marks the reads sync makes: the one use of the viewing key allowed while locked. */
+const SYNC = "sync";
+
 /** What the log needs to know about a request beyond its outcome. */
 type RequestMeta = {
   origin: string;
@@ -355,7 +358,7 @@ export class ApprovalsService {
     origin: string,
     props: DecryptCompactProps
   ): Promise<CompactChunk> {
-    const { owner } = await this.siteShielded(origin, props.account);
+    const { owner } = await this.siteShielded(origin, props.account, SYNC);
     return compute({
       op: "compact",
       ufvk: owner,
@@ -369,7 +372,7 @@ export class ApprovalsService {
 
   /** Reads a chunk's hits in full, and what the account sent in it. */
   async decryptFull(origin: string, props: DecryptFullProps): Promise<FullChunk> {
-    const { owner } = await this.siteShielded(origin, props.account);
+    const { owner } = await this.siteShielded(origin, props.account, SYNC);
     return compute({
       op: "full",
       ufvk: owner,
@@ -402,7 +405,7 @@ export class ApprovalsService {
     origin: string,
     props: TransparentAddressesProps
   ): Promise<string[]> {
-    const { owner } = await this.siteShielded(origin, props.account);
+    const { owner } = await this.siteShielded(origin, props.account, SYNC);
     return transparentAddresses(owner, props.scope, props.from, props.count);
   }
 
@@ -915,9 +918,10 @@ export class ApprovalsService {
    */
   private async siteShielded(
     origin: string,
-    accountId?: string
+    accountId?: string,
+    use?: typeof SYNC
   ): Promise<KeyStoreType & { owner: string }> {
-    const wallet = await this.assertConnected(origin);
+    const wallet = await this.assertConnected(origin, use);
     const record = accountId
       ? await this.accounts.findById(accountId)
       : wallet.type === AccountType.ShieldedKeys
@@ -937,9 +941,18 @@ export class ApprovalsService {
     return record as KeyStoreType & { owner: string };
   }
 
-  /** Throws unless unlocked and connected; returns the site's wallet. */
-  private async assertConnected(origin: string): Promise<KeyStoreType> {
-    if (await this.vaultService.isLocked()) {
+  /**
+   * Throws unless unlocked and connected; returns the site's wallet. A sync
+   * read may go on while locked when the user lets it.
+   */
+  private async assertConnected(
+    origin: string,
+    use?: typeof SYNC
+  ): Promise<KeyStoreType> {
+    if (
+      (await this.vaultService.isLocked()) &&
+      !(use === SYNC && (await this.localStorage.getSyncWhileLocked()))
+    ) {
       throw new Error("Keychain is locked");
     }
     const wallet = await this.siteWallet(origin);

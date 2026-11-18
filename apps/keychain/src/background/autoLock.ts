@@ -10,6 +10,15 @@ import { getServices } from "./services";
 
 let minutes: number | undefined;
 
+/**
+ * What locking stops: the prover always, and reading chunks too unless the
+ * user lets connected sites sync while locked.
+ */
+export const stopComputeOnLock = async (): Promise<void> => {
+  const { localStorage } = await getServices();
+  await stopCompute((await localStorage.getSyncWhileLocked()) ? "proving" : "all");
+};
+
 /** Sets the idle threshold; `0` leaves the Keychain unlocked until closed. */
 export const applyAutoLock = (value: number): void => {
   minutes = value;
@@ -33,7 +42,7 @@ export const startAutoLock = (): void => {
         const { vaultService, broadcaster } = await getServices();
         if (await vaultService.isLocked()) return;
         await vaultService.lock();
-        void stopCompute();
+        void stopComputeOnLock();
         await broadcaster.locked();
       })
       .catch((e) => console.warn("Auto-lock failed", e));

@@ -42,6 +42,9 @@ export type ComputeResult = {
 /** Background → host. */
 export type ComputeRequest = { compute: ComputeJob; id: string };
 
+/** Background → host: stop the prover, leaving chunk reads running. */
+export type StopProving = { stopProving: true };
+
 /** Host → background: a job's progress, outside its reply. */
 export type ComputeStage = { computeStage: ProveStage; id: string };
 

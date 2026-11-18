@@ -23,6 +23,7 @@ import { ConnectedSites } from "./screens/ConnectedSites";
 import { DeleteAccount } from "./screens/DeleteAccount";
 import { Login } from "./screens/Login";
 import { RenameAccount } from "./screens/RenameAccount";
+import { SyncWhileLocked } from "./screens/SyncWhileLocked";
 import { Settings } from "./screens/Settings";
 import { SpendingKey } from "./screens/SpendingKey";
 import { ThemeSetting } from "./screens/ThemeSetting";
@@ -68,6 +69,7 @@ const PopupShell = () => {
             <Route path={routes.changePassword()} element={<ChangePassword />} />
             <Route path={routes.connectedSites()} element={<ConnectedSites />} />
             <Route path={routes.autoLock()} element={<AutoLock />} />
+            <Route path={routes.syncWhileLocked()} element={<SyncWhileLocked />} />
             <Route path={routes.theme()} element={<ThemeSetting />} />
             <Route path={routes.approvalLog()} element={<ApprovalLog />} />
             <Route

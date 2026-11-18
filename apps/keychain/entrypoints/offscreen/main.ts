@@ -2,19 +2,24 @@
 // so this offscreen document runs them and answers its requests.
 import { browser } from "wxt/browser";
 
-import { runJob } from "../../src/background/compute/pool";
+import { runJob, stopProving } from "../../src/background/compute/pool";
 import type {
   ComputeReply,
   ComputeRequest,
   ComputeStage,
+  StopProving,
 } from "../../src/background/compute/types";
 
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  const request = msg as Partial<ComputeRequest>;
+  const request = msg as Partial<ComputeRequest & StopProving>;
   // Content scripts reach every extension page too; only our own may ask.
-  if (!request?.compute || sender.id !== browser.runtime.id || sender.tab) {
+  if (sender.id !== browser.runtime.id || sender.tab) return undefined;
+  if (request?.stopProving) {
+    stopProving();
+    sendResponse(null);
     return undefined;
   }
+  if (!request?.compute) return undefined;
   const id = request.id!;
   const onStage = (computeStage: ComputeStage["computeStage"]) =>
     void browser.runtime.sendMessage({ computeStage, id } satisfies ComputeStage);

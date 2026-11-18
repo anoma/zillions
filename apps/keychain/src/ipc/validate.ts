@@ -158,12 +158,18 @@ export const validateResponse = <K extends IpcKind>(
     case "approvals/submitUpdateDefaultAccount":
     case "approvals/clearLog":
     case "settings/setAutoLock":
+    case "settings/setSyncWhileLocked":
       // void — accept undefined/null
       return undefined as IpcResponse<K>;
 
     case "settings/getAutoLock":
       if (typeof value !== "number")
         throw new ResponseShapeError(kind, "expected number");
+      return value as IpcResponse<K>;
+
+    case "settings/getSyncWhileLocked":
+      if (typeof value !== "boolean")
+        throw new ResponseShapeError(kind, "expected boolean");
       return value as IpcResponse<K>;
 
     case "approvals/log":

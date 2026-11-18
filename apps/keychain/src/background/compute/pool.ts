@@ -33,8 +33,6 @@ const queue: Queued[] = [];
  */
 const MAX_QUEUED = 2 * Math.max(1, navigator.hardwareConcurrency || 4);
 
-/** Bumped on every stop: work queued before it never starts after. */
-let generation = 0;
 /** Aborted on every stop: GPU work queued before it never runs with the keys. */
 let running = new AbortController();
 
@@ -104,8 +102,11 @@ let proverQueue: Promise<unknown> = Promise.resolve();
 /** Whether a warm-up is queued or running: a proof behind it waits for the keys. */
 let warming = false;
 
+/** Bumped on every stop of the prover: a proof queued before it never starts after. */
+let proveGeneration = 0;
+
 function prove(task: ProveTask, onStage: (stage: ProveStage) => void) {
-  const queuedIn = generation;
+  const queuedIn = proveGeneration;
   if (task.op === "warm") {
     if (warming || prover) return Promise.resolve(null);
     warming = true;
@@ -115,7 +116,7 @@ function prove(task: ProveTask, onStage: (stage: ProveStage) => void) {
   const run = proverQueue.then(
     () =>
       new Promise<unknown>((resolve, reject) => {
-        if (queuedIn !== generation) {
+        if (queuedIn !== proveGeneration) {
           reject(new Error("Keychain is locked"));
           return;
         }
@@ -137,7 +138,7 @@ function prove(task: ProveTask, onStage: (stage: ProveStage) => void) {
   proverQueue = run.catch(() => undefined);
   return run.finally(() => {
     proving = undefined;
-    if (task.op === "warm" && queuedIn === generation) warming = false;
+    if (task.op === "warm" && queuedIn === proveGeneration) warming = false;
   });
 }
 
@@ -182,9 +183,18 @@ export async function runJob(
   }
 }
 
+/** Stops the prover and every proof queued for it; chunk reads go on. */
+export function stopProving(): void {
+  proveGeneration++;
+  proving?.(new Error("Keychain is locked"));
+  prover?.terminate();
+  prover = undefined;
+  proverQueue = Promise.resolve();
+  warming = false;
+}
+
 /** Stops every worker: on lock, nothing keeps running with the account's key. */
 export function stopAll(): void {
-  generation++;
   running.abort();
   running = new AbortController();
   const locked = new Error("Keychain is locked");
@@ -194,9 +204,5 @@ export function stopAll(): void {
   }
   slots = [];
   for (const job of queue.splice(0)) job.reject(locked);
-  proving?.(locked);
-  prover?.terminate();
-  prover = undefined;
-  proverQueue = Promise.resolve();
-  warming = false;
+  stopProving();
 }

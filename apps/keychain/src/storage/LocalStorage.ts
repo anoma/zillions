@@ -31,12 +31,14 @@ type LocalStorageTypes = ConnectionsType | ChangeIndexesType | number | boolean;
 export type LocalStorageKeys =
   | "zillionsExtensionConnections"
   | "zillionsExtensionAutoLockMinutes"
+  | "zillionsExtensionSyncWhileLocked"
   | "zillionsExtensionVaultCreated"
   | "zillionsExtensionVaultLost"
   | "zillionsExtensionChangeIndexes";
 
 const CONNECTIONS_KEY: LocalStorageKeys = "zillionsExtensionConnections";
 const AUTO_LOCK_KEY: LocalStorageKeys = "zillionsExtensionAutoLockMinutes";
+const SYNC_WHILE_LOCKED_KEY: LocalStorageKeys = "zillionsExtensionSyncWhileLocked";
 // Kept here, not beside the vault in IndexedDB: Chrome may evict IndexedDB,
 // but not `storage.local`, so a vault that vanishes leaves this behind.
 const VAULT_CREATED_KEY: LocalStorageKeys = "zillionsExtensionVaultCreated";
@@ -144,5 +146,17 @@ export class LocalStorage extends ExtStorage {
       throw new Error(`Unsupported auto-lock value: ${minutes}`);
     }
     await this.setRaw(AUTO_LOCK_KEY, minutes);
+  }
+
+  /**
+   * Whether sites already connected may go on reading chunks with the
+   * account's viewing key while the Keychain is locked; on unless turned off.
+   */
+  async getSyncWhileLocked(): Promise<boolean> {
+    return (await this.getRaw(SYNC_WHILE_LOCKED_KEY)) !== false;
+  }
+
+  async setSyncWhileLocked(on: boolean): Promise<void> {
+    await this.setRaw(SYNC_WHILE_LOCKED_KEY, on);
   }
 }

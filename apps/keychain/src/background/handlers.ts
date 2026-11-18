@@ -13,7 +13,7 @@ import type {
   StoredAccount,
 } from "../ipc/contract";
 import type { KeyStoreType } from "../storage";
-import { applyAutoLock } from "./autoLock";
+import { applyAutoLock, stopComputeOnLock } from "./autoLock";
 import { stopCompute } from "./compute/host";
 import { deviceOf } from "./keyring/types";
 import { getServices } from "./services";
@@ -151,7 +151,7 @@ export const handlers: HandlerMap = {
   "vault/lock": async () => {
     const { vaultService, broadcaster } = await getServices();
     await vaultService.lock();
-    void stopCompute();
+    void stopComputeOnLock();
     void broadcaster.locked();
   },
 
@@ -192,6 +192,20 @@ export const handlers: HandlerMap = {
     const { localStorage } = await getServices();
     await localStorage.setAutoLockMinutes(minutes);
     applyAutoLock(minutes);
+  },
+
+  "settings/getSyncWhileLocked": async () => {
+    const { localStorage } = await getServices();
+    return localStorage.getSyncWhileLocked();
+  },
+
+  "settings/setSyncWhileLocked": async ({ on }) => {
+    if (typeof on !== "boolean") {
+      throw new Error("settings/setSyncWhileLocked: invalid arguments");
+    }
+    const { localStorage, vaultService } = await getServices();
+    await localStorage.setSyncWhileLocked(on);
+    if (!on && (await vaultService.isLocked())) await stopCompute();
   },
 
   "keyring/generateMnemonic": async ({ size }) => {

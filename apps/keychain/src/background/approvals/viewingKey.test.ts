@@ -79,6 +79,8 @@ const records = [
 ];
 
 let svc: ApprovalsService;
+let storage: LocalStorage;
+let locked = false;
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve));
 
 beforeEach(async () => {
@@ -86,7 +88,8 @@ beforeEach(async () => {
   built.length = 0;
   compute.mockReset();
   const kv = new Map<string, unknown>();
-  const storage = new LocalStorage({
+  locked = false;
+  storage = new LocalStorage({
     get: async (k: string) => kv.get(k),
     set: async (k: string, v: unknown) => void kv.set(k, v),
   } as never);
@@ -94,7 +97,7 @@ beforeEach(async () => {
   svc = new ApprovalsService(
     storage,
     {
-      isLocked: async () => false,
+      isLocked: async () => locked,
       requiresAuth: async () => false,
     } as never,
     {
@@ -161,6 +164,44 @@ describe("the account's viewing key", () => {
       transparentIndex: 3,
     });
     expect(await svc.freshAddress(SITE)).toBe("fresh-of-uview-main");
+  });
+});
+
+describe("while the Keychain is locked", () => {
+  const chunk = { pool: "orchard" as const, chunk: 0, ciphertexts: "" };
+
+  it("lets a connected site sync by default, and nothing else", async () => {
+    compute.mockResolvedValue({ hits: [] });
+    locked = true;
+    await svc.decryptCompact(SITE, chunk);
+    await svc.decryptFull(SITE, { ...chunk, memos: "", outgoing: "", hits: [] });
+    expect(compute).toHaveBeenCalledTimes(2);
+    for (const call of [
+      svc.accountInfo(SITE),
+      svc.freshAddress(SITE),
+      svc.dappAccounts(SITE),
+    ]) {
+      await expect(call).rejects.toThrow("Keychain is locked");
+    }
+  });
+
+  it("refuses sync too once the user turns it off", async () => {
+    await storage.setSyncWhileLocked(false);
+    locked = true;
+    await expect(svc.decryptCompact(SITE, chunk)).rejects.toThrow(
+      "Keychain is locked"
+    );
+    locked = false;
+    compute.mockResolvedValue({ hits: [] });
+    await svc.decryptCompact(SITE, chunk);
+    expect(compute).toHaveBeenCalledOnce();
+  });
+
+  it("never lets a site that wasn't connected sync", async () => {
+    locked = true;
+    await expect(svc.decryptCompact("https://evil.example", chunk)).rejects.toThrow(
+      "has not been approved"
+    );
   });
 });
 

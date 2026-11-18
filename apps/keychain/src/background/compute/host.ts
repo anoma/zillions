@@ -15,6 +15,7 @@ import type {
   ComputeRequest,
   ComputeResult,
   ComputeStage,
+  StopProving,
 } from "./types";
 
 const OFFSCREEN = "/offscreen.html";
@@ -63,15 +64,21 @@ const ensureOffscreen = async (): Promise<void> => {
 
 /** Bumped on every stop: a job that passed its lock check before it never runs after. */
 let generation = 0;
+/** Bumped on every stop of the prover, the whole compute host's or its own. */
+let proveGeneration = 0;
+
+const isProof = (job: ComputeJob) => job.op === "prove" || job.op === "warm";
+/** The stop count `job` must still see when it starts. */
+const fenceOf = (job: ComputeJob) => (isProof(job) ? proveGeneration : generation);
 
 async function viaOffscreen(
   job: ComputeJob,
   onStage?: (stage: ProveStage) => void
 ): Promise<unknown> {
   listenForStages();
-  const startedIn = generation;
+  const startedIn = fenceOf(job);
   await ensureOffscreen();
-  if (startedIn !== generation) throw new Error("Keychain is locked");
+  if (startedIn !== fenceOf(job)) throw new Error("Keychain is locked");
   const id = uuid();
   if (onStage) stageListeners.set(id, onStage);
   try {
@@ -100,9 +107,9 @@ export async function compute<K extends ComputeJob["op"]>(
   );
   try {
     if (import.meta.env.FIREFOX) {
-      const startedIn = generation;
+      const startedIn = fenceOf(job);
       const { runJob } = await import("./pool");
-      if (startedIn !== generation) throw new Error("Keychain is locked");
+      if (startedIn !== fenceOf(job)) throw new Error("Keychain is locked");
       return (await runJob(job, onStage ?? (() => {}))) as ComputeResult[K];
     }
     return (await viaOffscreen(job, onStage)) as ComputeResult[K];
@@ -111,16 +118,23 @@ export async function compute<K extends ComputeJob["op"]>(
   }
 }
 
-/** Stops every worker, closing Chrome's offscreen document with them. */
-export async function stopCompute(): Promise<void> {
-  generation++;
+/**
+ * Stops every worker, closing Chrome's offscreen document with them; with
+ * `"proving"`, the prover alone, and chunk reads go on.
+ */
+export async function stopCompute(what: "all" | "proving" = "all"): Promise<void> {
+  proveGeneration++;
+  if (what === "all") generation++;
   if (import.meta.env.FIREFOX) {
-    const { stopAll } = await import("./pool");
-    stopAll();
+    const { stopAll, stopProving } = await import("./pool");
+    if (what === "all") stopAll();
+    else stopProving();
     return;
   }
   const contexts = await wxtBrowser.runtime.getContexts({
     contextTypes: ["OFFSCREEN_DOCUMENT"],
   });
-  if (contexts.length) await wxtBrowser.offscreen.closeDocument();
+  if (!contexts.length) return;
+  if (what === "all") await wxtBrowser.offscreen.closeDocument();
+  else await browser.runtime.sendMessage({ stopProving: true } satisfies StopProving);
 }

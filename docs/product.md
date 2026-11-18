@@ -45,7 +45,9 @@ the trade-off is a product decision, written down here.
   Keychain uses it on the site's behalf, so a site can't keep watching the
   account after it is disconnected or pass the key on. What the wallet keeps
   in the browser (balances, history, addresses) is encrypted, and opens only
-  while the Keychain is unlocked.
+  while the Keychain is unlocked. One use of the viewing key goes on while
+  locked unless the user turns it off: a site already connected may keep
+  syncing (3.9), so a long sync isn't cut short by auto-lock.
 - **The best UX possible.** Clear screens, no Zcash jargon the user has to
   understand to use the wallet (pools, notes, blocks), sensible defaults, fast
   feedback, and honest waiting states when something takes time.
@@ -636,6 +638,12 @@ Challenges to check, one by one:
   15 (default), 30 or 60 minutes, or never, and when the screen locks.
   Closing the browser always locks it. Before this setting existed the
   Keychain stayed unlocked until the browser closed.
+- **Sync while locked**: on (default), sites already connected keep reading
+  chunks with the account's viewing key while the Keychain is locked, so a
+  first or long sync finishes while the user is away. Everything else waits
+  for unlock: sending, proving, opening the stored wallet, new addresses. Off,
+  locking stops syncing too, and the wallet catches up as soon as the user
+  unlocks. — _Built_
 - **Theme**: light, dark, or following the system (default).
 
 ## 4. Network
