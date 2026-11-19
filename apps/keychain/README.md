@@ -51,32 +51,17 @@ pnpm --filter zillions-keychain exec wxt build -b firefox
 The extension is written to `apps/keychain/.output/firefox-mv3`. No
 environment variables are needed.
 
-The WebAssembly modules ship prebuilt:
-
-- `packages/zcore/pkg` is CI's build of `packages/zcore`
-  (`.github/workflows/build-wasm.yml`); `packages/zcore/build.sh` rebuilds it
-  with the same pinned tools.
-- `src/packages/crypto/src/crypto` is built from `packages/crypto/lib` of
-  [namada-interface](https://github.com/anoma/namada-interface), which pins its
-  Rust toolchain. With no other `wasm-opt` on `PATH` (wasm-pack would prefer
-  it over its own), this reproduces `crypto_bg.wasm` byte for byte:
-
-  ```bash
-  git clone https://github.com/anoma/namada-interface
-  cd namada-interface/packages/crypto
-  git checkout 01b304cf665d16d856f88f11c6b25414c9b3c95e
-  npx wasm-pack@0.13.1 build lib --release --no-pack --target web --out-dir ../src/crypto
-  ```
+The WebAssembly ships prebuilt: `packages/zcore/pkg` is CI's build of
+`packages/zcore` (`.github/workflows/build-wasm.yml`); `packages/zcore/build.sh`
+rebuilds it with the same pinned tools.
 
 ## WASM
 
-Two WebAssembly modules run in the extension:
+`@zillions/zcore` (Zcash key/address derivation, PCZT signing and the vault's
+Argon2id) is the only WebAssembly in the extension. The rest of the vault's
+crypto is WebCrypto (AES-256-GCM) and `@scure/bip39` (seed phrases).
 
-- `src/packages/crypto` — AES/Argon2/mnemonic primitives (background only).
-- `@zillions-sdk/keys` — Zcash key/address derivation and PCZT signing,
-  consumed as a pnpm workspace dependency from `sdk/`.
-
-MV3 requires `'wasm-unsafe-eval'` in the extension CSP for these to instantiate;
+MV3 requires `'wasm-unsafe-eval'` in the extension CSP for it to instantiate;
 that is set in `wxt.config.ts`.
 
 ## Example dapp

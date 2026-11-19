@@ -21,6 +21,7 @@ import {
   mnemonicToSeed,
   PhraseSize,
   validateMnemonic,
+  wordlist,
 } from "../crypto/mnemonic";
 import {
   computeSeedFingerprint,
@@ -42,11 +43,6 @@ import {
 
 // UUID v5 namespace: ids are derived deterministically from account inputs.
 const UUID_NAMESPACE = "9bfceade-37fe-11ed-acc0-a3da3461b38c";
-
-// Structural shape of a BIP-39 English word (lowercase a–z, 3–8 chars). Used
-// only as a UX hint to highlight a likely-bad word; the authoritative validity
-// check is `validateMnemonic`.
-const LOOKS_LIKE_BIP39_WORD = /^[a-z]{3,8}$/;
 
 const toAccountStore = (a: KeyStoreType): AccountStore => ({
   id: a.id,
@@ -111,14 +107,8 @@ export class Keyring {
     const isValid = await validateMnemonic(words.join(" "));
     if (isValid) return { isValid: true };
 
-    // `Mnemonic.validate` returns a single boolean (no per-word index). The
-    // crypto package does not expose the BIP-39 wordlist, so for the UI's
-    // invalid-word highlighting we surface the first word that fails a cheap
-    // structural check. If every word passes, the failure is a checksum
-    // error, reported without an index.
-    const invalidWordIndex = words.findIndex(
-      (w) => !LOOKS_LIKE_BIP39_WORD.test(w)
-    );
+    // Every word in the list means the checksum failed: no index to show.
+    const invalidWordIndex = words.findIndex((w) => !wordlist.includes(w));
     if (invalidWordIndex !== -1) {
       return {
         isValid: false,

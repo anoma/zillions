@@ -1,40 +1,27 @@
-/**
- * BIP-39 mnemonic generation/validation, backed by the `@zillions/crypto` WASM
- * module. Thin async wrappers over `MnemonicService` that guarantee wasm init.
- */
-import { initCrypto, MnemonicService, PhraseSize as Size } from "./crypto";
+import * as bip39 from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
+
+export { wordlist };
 
 /** BIP-39 phrase sizes the UI offers. */
 export type PhraseSize = 12 | 24;
 
-const service = new MnemonicService();
-
-/**
- * Generate a fresh BIP-39 mnemonic as an array of words.
- */
 export const generateMnemonic = async (
-  size: PhraseSize = 12
-): Promise<string[]> => {
-  await initCrypto();
-  return service.generate(size === 12 ? Size.N12 : Size.N24);
-};
+  size: PhraseSize = 12,
+): Promise<string[]> =>
+  bip39.generateMnemonic(wordlist, size === 12 ? 128 : 256).split(" ");
 
-/**
- * Validate a BIP-39 mnemonic phrase (checksum + wordlist).
- */
-export const validateMnemonic = async (phrase: string): Promise<boolean> => {
-  await initCrypto();
-  return service.validate(phrase);
-};
+/** Checksum + English wordlist; words must be lowercase and single-spaced. */
+export const validateMnemonic = async (phrase: string): Promise<boolean> =>
+  bip39.validateMnemonic(phrase, wordlist);
 
-/**
- * Derive the BIP-39 seed bytes for a phrase (+ optional passphrase). Feeds the
- * PCZT signer's UnifiedSpendingKey/SeedFingerprint reconstruction.
- */
+/** Throws on an invalid phrase rather than deriving a seed from it. */
 export const mnemonicToSeed = async (
   phrase: string,
-  passphrase?: string
+  passphrase?: string,
 ): Promise<Uint8Array> => {
-  await initCrypto();
-  return service.toSeed(phrase, passphrase);
+  if (!bip39.validateMnemonic(phrase, wordlist)) {
+    throw new Error("Invalid phrase");
+  }
+  return bip39.mnemonicToSeed(phrase, passphrase);
 };
