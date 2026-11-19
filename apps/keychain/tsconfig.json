@@ -26,8 +26,6 @@
       "@vitejs/plugin-react": ["./.types-shims/vitejs-plugin-react.d.ts"],
       "@zillions/components": ["./src/packages/components/src"],
       "@zillions/components/*": ["./src/packages/components/src/*"],
-      "@zillions/crypto": ["./src/packages/crypto/src/crypto/crypto"],
-      "@zillions/crypto/*": ["./src/packages/crypto/src/*"],
       "@zillions/storage": ["./src/packages/storage/src"],
       "@zillions/storage/*": ["./src/packages/storage/src/*"],
       "@zillions/types": ["./src/packages/types/src"],

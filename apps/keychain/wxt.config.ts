@@ -49,11 +49,6 @@ const buildProcessEnv = (
 
 // `@zillions/*` -> the vendored package sources under `src/packages/*`
 // (bare package + `/src/...` subpaths).
-//
-// `crypto` is special-cased: its entry is a prebuilt
-// wasm-bindgen `.js` glue file (not an `src/index`), so the bare import must
-// point at that file — otherwise the generic rule resolves it to a DIRECTORY
-// and the bundler fails with "Is a directory".
 const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
   const generic = ["components", "storage", "types", "utils"].flatMap(
     (name) => [
@@ -68,16 +63,6 @@ const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
     ],
   );
 
-  const crypto = [
-    {
-      find: /^@zillions\/crypto\/src\/(.*)$/,
-      replacement: r(`src/packages/crypto/src/$1`),
-    },
-    {
-      find: /^@zillions\/crypto$/,
-      replacement: r(`src/packages/crypto/src/crypto/crypto.js`),
-    },
-  ];
 
   // nodePolyfills injects shim imports into every module that touches
   // `global`/`Buffer`, including workspace-linked ones like @zillions/zcore.
@@ -88,7 +73,7 @@ const zillionsAliases = (): { find: RegExp; replacement: string }[] => {
     replacement: r(`node_modules/vite-plugin-node-polyfills/shims/${shim}`),
   }));
 
-  return [...crypto, ...generic, ...polyfillShims];
+  return [...generic, ...polyfillShims];
 };
 
 export default defineConfig({
@@ -126,10 +111,6 @@ export default defineConfig({
   hooks: {
     "build:publicAssets": (_, files) => {
       files.push(
-        {
-          absoluteSrc: r("src/packages/crypto/src/crypto/crypto_bg.wasm"),
-          relativeDest: "wasm/crypto_bg.wasm",
-        },
         {
           absoluteSrc: r("../../packages/zcore/pkg/zcore_bg.wasm"),
           relativeDest: "wasm/zcore_bg.wasm",
@@ -185,7 +166,7 @@ export default defineConfig({
     action: {
       default_title: "Zillions Keychain",
     },
-    // WebAssembly (@zillions/crypto, @zillions/zcore) compiles in the
+    // WebAssembly (@zillions/zcore) compiles in the
     // service worker and extension pages, which the default MV3 CSP
     // (`script-src 'self'`) forbids. `'wasm-unsafe-eval'` is the only addition
     // Chrome MV3 allows for this and is what enables WASM instantiation.
