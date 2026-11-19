@@ -223,11 +223,21 @@ function SwapForm({
   const [zecPriceInFrom, setZecPriceInFrom] = useState(1n);
   const [tokens, setTokens] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [recipientAddressError, setRecipientAddressError] = useState();
+  const [refundAddressError, setRefundAddressError] = useState();
   const amountRef = useRef<HTMLInputElement>(null);
   const refundRef = useRef<HTMLInputElement>(null);
   const slippageRef = useRef<HTMLInputElement>(null);
   const recipientRef = useRef<HTMLInputElement>(null);
-  const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
+
+  // Attempt to convert the input amount into a big integer
+  let amountInBigInt = 0n;
+  let amountInError;
+  try {
+    amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
+  } catch {
+    amountInError = "Not a valid amount";
+  }
 
   // Compute the transaction fee that will be applied to the swap
   const sendPlan = useSendPlan(
@@ -240,6 +250,7 @@ function SwapForm({
     false,
     0n,
   );
+  amountInError ??= sendPlan.plan.error?.message;
 
   // Populate the drop-down list of tokens and updatte exchange rates
   useEffect(() => {
@@ -267,19 +278,19 @@ function SwapForm({
   // Any changes in the exchanged amounts re-triggers a currency conversion
   useEffect(() => {
     (async () => {
-      const totalPriceAux =
-        wholeToAtomic(fromAmount, fromToken.decimals) *
-        wholeToAtomic(fromToken.price, 2);
+      const fromTokenPriceAtomic = wholeToAtomic(fromToken.price, 2);
+      const toTokenPriceAtomic = wholeToAtomic(toToken.price, 2);
+      const totalPriceAux = amountInBigInt * fromTokenPriceAtomic;
       const totalPrice = totalPriceAux / 10n ** BigInt(fromToken.decimals);
       setFromTotalPrice(totalPrice);
       setToTotalPrice(totalPrice);
       const toAmount =
         (totalPriceAux * 10n ** BigInt(toToken.decimals)) /
-        (10n ** BigInt(fromToken.decimals) * wholeToAtomic(toToken.price, 2));
+        (10n ** BigInt(fromToken.decimals) * toTokenPriceAtomic);
       setToAmount(toAmount);
       setZecPriceInFrom(
-        (wholeToAtomic(toToken.price, 2) * 10n ** BigInt(fromToken.decimals)) /
-          wholeToAtomic(fromToken.price, 2),
+        (toTokenPriceAtomic * 10n ** BigInt(fromToken.decimals)) /
+          fromTokenPriceAtomic,
       );
     })();
   }, [fromAmount, fromToken, toAmount, toToken]);
@@ -316,7 +327,11 @@ function SwapForm({
     <FormPage
       title="Swap"
       onSubmit={() => {
-        if (!sendPlan.plan.error && !error) {
+        if (isOutbound && recipientAddress === "") {
+          setRecipientAddressError("Set a recipient address");
+        } else if (!isOutbound && refundAddress === "") {
+          setRefundAddressError("Set a refund address");
+        } else if (!amountInError && !error) {
           onSubmit();
         }
       }}
@@ -344,7 +359,7 @@ function SwapForm({
                 setFromAmount(v);
                 setError(undefined);
               }}
-              error={sendPlan.plan.error?.message}
+              error={amountInError}
             />
             <p className="px-1 text-xs text-neutral-500">
               ~ ${atomicToWhole(fromTotalPrice, 2)} USD
@@ -406,6 +421,7 @@ function SwapForm({
               onChange={(e) => {
                 setRefundAddress(e.target.value);
                 setError(undefined);
+                setRefundAddressError(undefined);
               }}
               autoComplete="off"
               spellCheck={false}
@@ -417,6 +433,24 @@ function SwapForm({
                 "border-black hover:border-black focus:border-black",
               )}
             />
+          </div>
+          <div
+            id="send-to-kind"
+            aria-live="polite"
+            className="mt-2.5 empty:mt-0 flex items-center gap-1.5 text-xs font-medium"
+          >
+            {refundAddressError && (
+              <span
+                key={error}
+                role="alert"
+                className={twMerge(
+                  "flex items-center gap-1.5 motion-safe:animate-fade-in",
+                  "text-red-700",
+                )}
+              >
+                {refundAddressError}
+              </span>
+            )}
           </div>
         </FormCard>
       )}
@@ -433,6 +467,7 @@ function SwapForm({
               onChange={(e) => {
                 setRecipientAddress(e.target.value);
                 setError(undefined);
+                setRecipientAddressError(undefined);
               }}
               autoComplete="off"
               spellCheck={false}
@@ -444,6 +479,24 @@ function SwapForm({
                 "border-black hover:border-black focus:border-black",
               )}
             />
+          </div>
+          <div
+            id="send-to-kind"
+            aria-live="polite"
+            className="mt-2.5 empty:mt-0 flex items-center gap-1.5 text-xs font-medium"
+          >
+            {recipientAddressError && (
+              <span
+                key={error}
+                role="alert"
+                className={twMerge(
+                  "flex items-center gap-1.5 motion-safe:animate-fade-in",
+                  "text-red-700",
+                )}
+              >
+                {recipientAddressError}
+              </span>
+            )}
           </div>
         </FormCard>
       )}
@@ -558,11 +611,11 @@ function QuoteReview({
       send.mutate({
         from: "shielded",
         to: depositAddress,
-        amount: wholeToAtomic(fromAmount, fromToken.decimals),
+        amount: amountInBigInt,
         memo: undefined,
         shown: {
           tx_type: "Sent",
-          value: -wholeToAtomic(fromAmount, fromToken.decimals),
+          value: -amountInBigInt,
           from: { pool: "shielded" },
           to: { address: depositAddress },
           memo,
@@ -582,7 +635,7 @@ function QuoteReview({
       originAsset: fromToken.assetId,
       depositType: "ORIGIN_CHAIN",
       destinationAsset: toToken.assetId,
-      amount: wholeToAtomic(fromAmount, fromToken.decimals).toString(),
+      amount: amountInBigInt.toString(),
       recipient: recipientAddress,
       recipientType: "DESTINATION_CHAIN",
       refundTo: refundAddress,
