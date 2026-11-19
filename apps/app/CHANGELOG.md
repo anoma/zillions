@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.20.0](https://github.com/anoma/zillions-frontend/compare/zillions-app-v1.19.0...zillions-app-v1.20.0) (2026-11-18)
+
+
+### Features
+
+* keep the viewing key in the keychain ([#247](https://github.com/anoma/zillions-frontend/issues/247)) ([3d3fb41](https://github.com/anoma/zillions-frontend/commit/3d3fb4114152d018b8b6d0e253497237c41c68d4))
+
+
+### Bug Fixes
+
+* payments only from authored transactions ([#240](https://github.com/anoma/zillions-frontend/issues/240)) ([d5b7668](https://github.com/anoma/zillions-frontend/commit/d5b76686084eaed5a9682227768c2d6426015532))
+* scan the shown transparent address ([#243](https://github.com/anoma/zillions-frontend/issues/243)) ([fe4366b](https://github.com/anoma/zillions-frontend/commit/fe4366b822e77f52c9f694e4c29a03510ab68548))
+* security review fixes (part 3) ([#241](https://github.com/anoma/zillions-frontend/issues/241)) ([6e6fe23](https://github.com/anoma/zillions-frontend/commit/6e6fe2327008ad3c8179f370b8ed8ddda97b60d4))
+* unshield names its own address ([#236](https://github.com/anoma/zillions-frontend/issues/236)) ([9de44b4](https://github.com/anoma/zillions-frontend/commit/9de44b493161a1c3c2c6bcc410930142dc8432fe))
+
 ## [1.19.0](https://github.com/anoma/zillions-interface/compare/zillions-app-v1.18.0...zillions-app-v1.19.0) (2026-11-10)
 
 

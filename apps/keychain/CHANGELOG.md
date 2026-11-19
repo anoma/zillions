@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.14.0](https://github.com/anoma/zillions-frontend/compare/zillions-keychain-v0.13.1...zillions-keychain-v0.14.0) (2026-11-18)
+
+
+### Features
+
+* keep the viewing key in the keychain ([#247](https://github.com/anoma/zillions-frontend/issues/247)) ([3d3fb41](https://github.com/anoma/zillions-frontend/commit/3d3fb4114152d018b8b6d0e253497237c41c68d4))
+
+
+### Bug Fixes
+
+* security review fixes (part 3) ([#241](https://github.com/anoma/zillions-frontend/issues/241)) ([6e6fe23](https://github.com/anoma/zillions-frontend/commit/6e6fe2327008ad3c8179f370b8ed8ddda97b60d4))
+* unshield names its own address ([#236](https://github.com/anoma/zillions-frontend/issues/236)) ([9de44b4](https://github.com/anoma/zillions-frontend/commit/9de44b493161a1c3c2c6bcc410930142dc8432fe))
+
 ## [0.13.1](https://github.com/anoma/zillions-interface/compare/zillions-keychain-v0.13.0...zillions-keychain-v0.13.1) (2026-11-11)
 
 
