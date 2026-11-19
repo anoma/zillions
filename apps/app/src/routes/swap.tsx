@@ -118,11 +118,13 @@ function CurrencySelector({
   token,
   setToken,
   readOnly = false,
+  onChange,
 }: {
   tokens: Token[];
   token: Token;
   setToken: (value: string) => void;
   readOnly?: boolean;
+  onChange: (token?: Token) => void;
 }) {
   // Represents whether the drop-down is currently open or not
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -154,6 +156,7 @@ function CurrencySelector({
               key={c.assetId}
               type="button"
               onClick={() => {
+                if (onChange && c !== token) onChange(c);
                 // Button click sets the actively displayed token
                 setToken(c);
                 setDropdownOpen(false);
@@ -214,6 +217,7 @@ function SwapForm({
   setRecipientAddress: (string) => void;
 }) {
   const account = useAccount();
+  const shielded = useFreshAddress();
   const [fromTotalPrice, setFromTotalPrice] = useState(0n);
   const [toTotalPrice, setToTotalPrice] = useState(0n);
   const [zecPriceInFrom, setZecPriceInFrom] = useState(1n);
@@ -224,6 +228,7 @@ function SwapForm({
   const slippageRef = useRef<HTMLInputElement>(null);
   const recipientRef = useRef<HTMLInputElement>(null);
   const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
+
   // Compute the transaction fee that will be applied to the swap
   const sendPlan = useSendPlan(
     {
@@ -258,18 +263,6 @@ function SwapForm({
       },
     );
   }, []);
-
-  // Modifying any field in the swap form clears the error
-  useEffect(() => {
-    (async () => setError(undefined))();
-  }, [
-    fromAmount,
-    fromToken,
-    toAmount,
-    toToken,
-    recipientAddress,
-    refundAddress,
-  ]);
 
   // Any changes in the exchanged amounts re-triggers a currency conversion
   useEffect(() => {
@@ -320,7 +313,14 @@ function SwapForm({
   }
 
   return (
-    <FormPage title="Swap" onSubmit={onSubmit}>
+    <FormPage
+      title="Swap"
+      onSubmit={() => {
+        if (!sendPlan.plan.error && !error) {
+          onSubmit();
+        }
+      }}
+    >
       <FormCard heading="From" htmlFor="swap-from-amount">
         <div className="flex flex-row items-start gap-4 w-full">
           <CurrencySelector
@@ -328,6 +328,9 @@ function SwapForm({
             token={fromToken}
             setToken={setFromToken}
             readOnly={isOutbound}
+            onChange={() => {
+              setError(undefined);
+            }}
           />
 
           <div className="flex flex-1 flex-col gap-1.5 min-w-0 text-right w-full">
@@ -337,7 +340,10 @@ function SwapForm({
               value={fromAmount}
               describedBy="send-available"
               unit=""
-              onChange={setFromAmount}
+              onChange={(v) => {
+                setFromAmount(v);
+                setError(undefined);
+              }}
               error={sendPlan.plan.error?.message}
             />
             <p className="px-1 text-xs text-neutral-500">
@@ -371,6 +377,9 @@ function SwapForm({
             token={toToken}
             setToken={setToToken}
             readOnly={!isOutbound}
+            onChange={() => {
+              setError(undefined);
+            }}
           />
 
           <div className="flex flex-1 flex-col gap-1.5 min-w-0">
@@ -394,7 +403,10 @@ function SwapForm({
               type="text"
               placeholder="Address to refund if swap fails"
               value={refundAddress}
-              onChange={(e) => setRefundAddress(e.target.value)}
+              onChange={(e) => {
+                setRefundAddress(e.target.value);
+                setError(undefined);
+              }}
               autoComplete="off"
               spellCheck={false}
               className={twMerge(
@@ -418,7 +430,10 @@ function SwapForm({
               type="text"
               placeholder="Address to receive swapped tokens"
               value={recipientAddress}
-              onChange={(e) => setRecipientAddress(e.target.value)}
+              onChange={(e) => {
+                setRecipientAddress(e.target.value);
+                setError(undefined);
+              }}
               autoComplete="off"
               spellCheck={false}
               className={twMerge(
@@ -449,7 +464,10 @@ function SwapForm({
               min="0.1"
               step="0.1"
               value={slippage}
-              onChange={(e) => setSlippage(e.target.value)}
+              onChange={(e) => {
+                setSlippage(e.target.value);
+                setError(undefined);
+              }}
               className="w-24 rounded-xl border border-line bg-transparent p-2 text-right text-sm focus:border-black focus:outline-none"
             />
           </div>
@@ -478,51 +496,50 @@ function SwapForm({
   );
 }
 
-function SwapRoute() {
-  const account = useAccount();
-  const wallet = useWallet();
-  const shielded = useFreshAddress();
-  const [fromToken, setFromToken] = useState({
-    assetId: "nep141:btc.omft.near",
-    symbol: "BTC",
-    blockchain: "btc",
-    price: 73978,
-    priceUpdatedAt: "2026-11-11T11:20:05.389Z",
-    coingeckoId: "bitcoin",
-    decimals: 8,
-  });
-  const [error, setError] = useState("");
-  const [fromAmount, setFromAmount] = useState("0");
-  const [refundAddress, setRefundAddress] = useState("");
-  const [recipientAddress, setRecipientAddress] = useState("");
-  const [slippage, setSlippage] = useState("0.5");
+function QuoteReview({
+  fromToken,
+  fromAmount,
+  refundAddress,
+  slippage,
+  amountIn,
+  setAmountIn,
+  amountInUsd,
+  setAmountInUsd,
+  toToken,
+  isOutbound,
+  send,
+  recipientAddress,
+  depositAddress,
+  setDepositAddress,
+  onFailure,
+  onConfirm,
+}: {
+  fromToken: Token;
+  fromAmount: string;
+  refundAddress: string;
+  slippage: string;
+  amountIn: string;
+  setAmountIn: (string) => void;
+  amountInUsd: number;
+  setAmountInUsd: (number) => void;
+  toToken: Token;
+  isOutbound: boolean;
+  recipientAddress: string;
+  depositAddress: string;
+  setDepositAddress: (string) => void;
+  onFailure: ({ message }) => void;
+  onConfirm: (boolean) => void;
+}) {
   const [isLoading, setIsLoading] = useState(true);
-  const [toAmount, setToAmount] = useState(0n);
-  const [toToken, setToToken] = useState({
-    assetId: ZEC_TOKEN_ASSET_ID,
-    decimals: 8,
-    blockchain: "zec",
-    symbol: "ZEC",
-    price: 1315.9,
-    priceUpdatedAt: "2026-11-06T13:22:31.003Z",
-    coingeckoId: "zcash",
-  });
-
-  const [outbound, setOutbound] = useState(false);
-  const [stage, setStage] = useState(Stage.Swap);
-  const [amountIn, setAmountIn] = useState("0");
-  const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
   const [amountOut, setAmountOut] = useState("0");
-  const [depositAddress, setDepositAddress] = useState(
-    account.transparent.address,
-  );
-
-  // New state variables for USD values
-  const [amountInUsd, setAmountInUsd] = useState(0.0);
   const [amountOutUsd, setAmountOutUsd] = useState(0.0);
-  const [conversionFee, setConversionFee] = useState(0);
+  const [conversionFee, setConversionFee] = useState(0n);
+  const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
 
-  const send = useSend();
+  if (isOutbound && send.data) {
+    onConfirm(isOutbound);
+  }
+
   const sendPlan = useSendPlan(
     {
       from: "shielded",
@@ -534,15 +551,8 @@ function SwapRoute() {
     0n,
   );
 
-  const onGetQuote = () => {
-    if (!sendPlan.plan.error && !error) {
-      setStage(Stage.ReviewQuote);
-      setIsLoading(true);
-    }
-  };
-
-  const onConfirm = () => {
-    if (outbound) {
+  const onConfirmAux = () => {
+    if (isOutbound) {
       const memo = "Swap";
       send.mutate({
         from: "shielded",
@@ -558,24 +568,12 @@ function SwapRoute() {
         },
       });
     } else {
-      setStage(Stage.DepositAmount);
+      onConfirm(isOutbound);
     }
   };
 
-  const onFundsSend = () => {
-    wallet.pushSwap(depositAddress);
-  };
-
   useEffect(() => {
-    (async () => setRecipientAddress(shielded))();
-  }, [shielded]);
-
-  useEffect(() => {
-    if (stage !== Stage.ReviewQuote) {
-      return;
-    }
     const deadline = new Date(Date.now() + 60 * 60 * 1000);
-    console.log(recipientAddress);
     const body = {
       dry: false,
       swapType: "EXACT_INPUT",
@@ -620,18 +618,277 @@ function SwapRoute() {
             BigInt(Math.ceil(fromToken.price * 100)),
         );
       } else {
-        setError(data.message);
-        setStage(Stage.Swap);
+        onFailure(data);
       }
       setIsLoading(false);
     });
-  }, [stage, fromAmount, fromToken, refundAddress, shielded, slippage]);
+  }, [fromAmount, fromToken, refundAddress, slippage]);
 
-  if (send.data && stage == Stage.ReviewQuote) {
-    setStage(Stage.SendAmount);
+  // If the quote data is still loading, then display a spinner instead
+  if (isLoading) {
+    return (
+      <div className="size-52 grid place-items-center">
+        <SpinnerIcon className="size-5 text-gold" />
+      </div>
+    );
   }
 
+  return (
+    <FormPage title="Review Quote" onSubmit={onConfirmAux}>
+      <FormCard heading="Swap Summary">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <TokenIcon token={fromToken} />
+            <div className="flex flex-col items-end">
+              <span className="text-lg font-medium">
+                {amountIn} {fromToken.symbol}
+              </span>
+              <span className="text-xs text-neutral-500">
+                ~ ${amountInUsd.toFixed(2)} USD
+              </span>
+            </div>
+          </div>
+          {/* Horizontal Lines with Centered, Overlapping, Transparent Down Arrow */}
+          <div className="flex items-center justify-center text-neutral-400 relative z-10">
+            <div className="flex-1 h-px bg-line"></div>
+
+            {/* Negative margin (-my-6) makes the arrow extend into the top/bottom divs */}
+            <div className="px-4 -my-6">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="48"
+                viewBox="0 0 24 48"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                {/* Path stretched to 48px to accommodate the overlap */}
+                <path d="M12 0v48M19 41l-7 7-7-7" />
+              </svg>
+            </div>
+
+            <div className="flex-1 h-px bg-line"></div>
+          </div>
+          <div className="flex items-center justify-between">
+            <TokenIcon token={toToken} />
+            <div className="flex flex-col items-end">
+              <span className="text-lg font-medium">
+                {amountOut} {toToken.symbol}
+              </span>
+              <span className="text-xs text-neutral-500">
+                ~ ${amountOutUsd.toFixed(2)} USD
+              </span>
+            </div>
+          </div>
+        </div>
+      </FormCard>
+
+      <FormCard heading="Transaction Details">
+        <div className="flex flex-col gap-4 text-sm">
+          {isOutbound && (
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-neutral-500">
+                Recipient address
+              </span>
+              <span className="font-medium">{recipientAddress}</span>
+            </div>
+          )}
+
+          {!isOutbound && (
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-neutral-500">
+                Refund address
+              </span>
+              <span className="font-medium">{refundAddress}</span>
+            </div>
+          )}
+
+          <div className="h-px w-full bg-line" />
+
+          {isOutbound && sendPlan.plan.data?.fee && (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-neutral-500">
+                  Transfer fee
+                </span>
+                <span className="font-medium">
+                  {zatoshiToZec(BigInt(sendPlan.plan.data?.fee))}{" "}
+                  {fromToken.symbol}
+                </span>
+              </div>
+
+              <div className="h-px w-full bg-line" />
+
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-neutral-500">
+                  Conversion fee
+                </span>
+                <span className="font-medium">
+                  {zatoshiToZec(BigInt(conversionFee))} {fromToken.symbol}
+                </span>
+              </div>
+
+              <div className="h-px w-full bg-line" />
+
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-neutral-500">Total fee</span>
+                <div className="flex flex-col items-end">
+                  <span className="text-lg font-bold text-black">
+                    {zatoshiToZec(
+                      conversionFee + BigInt(sendPlan.plan.data?.fee),
+                    )}{" "}
+                    {fromToken.symbol}
+                  </span>
+                  <span className="text-xs text-neutral-500">
+                    ~ $
+                    {atomicToWhole(
+                      ((conversionFee + BigInt(sendPlan.plan.data?.fee)) *
+                        BigInt(Math.ceil(fromToken.price * 100))) /
+                        10n ** BigInt(fromToken.decimals),
+                      2,
+                    )}{" "}
+                    USD
+                  </span>
+                </div>
+              </div>
+
+              <div className="h-px w-full bg-line" />
+
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-neutral-700">
+                  Total amount taken
+                </span>
+                <div className="flex flex-col items-end">
+                  <span className="text-lg font-bold text-black">
+                    {zatoshiToZec(
+                      amountInBigInt + BigInt(sendPlan.plan.data?.fee),
+                    )}{" "}
+                    {fromToken.symbol}
+                  </span>
+                  <span className="text-xs text-neutral-500">
+                    ~ $
+                    {(
+                      amountInUsd +
+                      (sendPlan.plan.data?.fee * fromToken.price) /
+                        10 ** fromToken.decimals
+                    ).toFixed(2)}{" "}
+                    USD
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {!isOutbound && (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-neutral-500">Total fee</span>
+                <span className="font-medium">
+                  {atomicToWhole(BigInt(conversionFee), fromToken.decimals)}{" "}
+                  {fromToken.symbol}
+                </span>
+              </div>
+
+              <div className="h-px w-full bg-line" />
+
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-neutral-700">
+                  Total amount taken
+                </span>
+                <div className="flex flex-col items-end">
+                  <span className="text-lg font-bold text-black">
+                    {amountIn} {fromToken.symbol}
+                  </span>
+                  <span className="text-xs text-neutral-500">
+                    ~ ${amountInUsd.toFixed(2)} USD
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </FormCard>
+
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={() => setStage(Stage.Swap)}
+          className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
+        >
+          Back
+        </button>
+        <div className="flex-1">
+          <SubmitBlock
+            label="Confirm"
+            pending={send.isPending}
+            pendingLabel={"Confirming..."}
+            color={"gold-button"}
+            stages={send.stages}
+            error={""}
+          ></SubmitBlock>
+        </div>
+      </div>
+    </FormPage>
+  );
+}
+
+function SwapRoute() {
+  const account = useAccount();
+  const wallet = useWallet();
+  const shielded = useFreshAddress();
+  const [fromToken, setFromToken] = useState({
+    assetId: "nep141:btc.omft.near",
+    symbol: "BTC",
+    blockchain: "btc",
+    price: 73978,
+    priceUpdatedAt: "2026-11-11T11:20:05.389Z",
+    coingeckoId: "bitcoin",
+    decimals: 8,
+  });
+  const [error, setError] = useState("");
+  const [fromAmount, setFromAmount] = useState("0");
+  const [refundAddress, setRefundAddress] = useState("");
+  const [recipientAddress, setRecipientAddress] = useState("");
+  const [slippage, setSlippage] = useState("0.5");
+  const [toAmount, setToAmount] = useState(0n);
+  const [toToken, setToToken] = useState({
+    assetId: ZEC_TOKEN_ASSET_ID,
+    decimals: 8,
+    blockchain: "zec",
+    symbol: "ZEC",
+    price: 1315.9,
+    priceUpdatedAt: "2026-11-06T13:22:31.003Z",
+    coingeckoId: "zcash",
+  });
+
+  const [isOutbound, setIsOutbound] = useState(false);
+  const [stage, setStage] = useState(Stage.Swap);
+  const [amountIn, setAmountIn] = useState("0");
+  const [depositAddress, setDepositAddress] = useState(
+    account.transparent.address,
+  );
+
+  // New state variables for USD values
+  const [amountInUsd, setAmountInUsd] = useState(0.0);
+
+  const send = useSend();
+
+  const onFundsSend = () => {
+    wallet.pushSwap(depositAddress);
+  };
+
+  useEffect(() => {
+    (async () => setRecipientAddress(shielded))();
+  }, [shielded]);
+
   if (stage == Stage.Swap) {
+    const onGetQuote = () => {
+      setStage(Stage.ReviewQuote);
+    };
+
     return (
       <SwapForm
         onSubmit={onGetQuote}
@@ -639,8 +896,8 @@ function SwapRoute() {
         setToToken={setToToken}
         fromToken={fromToken}
         toToken={toToken}
-        isOutbound={outbound}
-        setIsOutbound={setOutbound}
+        isOutbound={isOutbound}
+        setIsOutbound={setIsOutbound}
         fromAmount={fromAmount}
         setFromAmount={setFromAmount}
         toAmount={toAmount}
@@ -651,218 +908,43 @@ function SwapRoute() {
         setSlippage={setSlippage}
         error={error}
         setError={setError}
+        recipientAddress={recipientAddress}
+        setRecipientAddress={setRecipientAddress}
       />
     );
-  } else if (isLoading) {
-    return (
-      <div className="size-52 grid place-items-center">
-        <SpinnerIcon className="size-5 text-gold" />
-      </div>
-    );
   } else if (stage == Stage.ReviewQuote) {
+    const onFailure = (data) => {
+      setError(data.message);
+      setStage(Stage.Swap);
+    };
+
+    const onConfirm = (isOutbound) => {
+      if (isOutbound) {
+        setStage(Stage.SendAmount);
+      } else {
+        setStage(Stage.DepositAmount);
+      }
+    };
+
     return (
-      <FormPage title="Review Quote" onSubmit={onConfirm}>
-        <FormCard heading="Swap Summary">
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <TokenIcon token={fromToken} />
-              <div className="flex flex-col items-end">
-                <span className="text-lg font-medium">
-                  {amountIn} {fromToken.symbol}
-                </span>
-                <span className="text-xs text-neutral-500">
-                  ~ ${amountInUsd.toFixed(2)} USD
-                </span>
-              </div>
-            </div>
-            {/* Horizontal Lines with Centered, Overlapping, Transparent Down Arrow */}
-            <div className="flex items-center justify-center text-neutral-400 relative z-10">
-              <div className="flex-1 h-px bg-line"></div>
-
-              {/* Negative margin (-my-6) makes the arrow extend into the top/bottom divs */}
-              <div className="px-4 -my-6">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="48"
-                  viewBox="0 0 24 48"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  {/* Path stretched to 48px to accommodate the overlap */}
-                  <path d="M12 0v48M19 41l-7 7-7-7" />
-                </svg>
-              </div>
-
-              <div className="flex-1 h-px bg-line"></div>
-            </div>
-            <div className="flex items-center justify-between">
-              <TokenIcon token={toToken} />
-              <div className="flex flex-col items-end">
-                <span className="text-lg font-medium">
-                  {amountOut} {toToken.symbol}
-                </span>
-                <span className="text-xs text-neutral-500">
-                  ~ ${amountOutUsd.toFixed(2)} USD
-                </span>
-              </div>
-            </div>
-          </div>
-        </FormCard>
-
-        <FormCard heading="Transaction Details">
-          <div className="flex flex-col gap-4 text-sm">
-            {outbound && (
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-neutral-500">
-                  Recipient address
-                </span>
-                <span className="font-medium">{recipientAddress}</span>
-              </div>
-            )}
-
-            {!outbound && (
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-neutral-500">
-                  Refund address
-                </span>
-                <span className="font-medium">{refundAddress}</span>
-              </div>
-            )}
-
-            <div className="h-px w-full bg-line" />
-
-            {outbound && sendPlan.plan.data?.fee && (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-neutral-500">
-                    Transfer fee
-                  </span>
-                  <span className="font-medium">
-                    {zatoshiToZec(BigInt(sendPlan.plan.data?.fee))}{" "}
-                    {fromToken.symbol}
-                  </span>
-                </div>
-
-                <div className="h-px w-full bg-line" />
-
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-neutral-500">
-                    Conversion fee
-                  </span>
-                  <span className="font-medium">
-                    {zatoshiToZec(BigInt(conversionFee))} {fromToken.symbol}
-                  </span>
-                </div>
-
-                <div className="h-px w-full bg-line" />
-
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-neutral-500">
-                    Total fee
-                  </span>
-                  <div className="flex flex-col items-end">
-                    <span className="text-lg font-bold text-black">
-                      {zatoshiToZec(
-                        conversionFee + BigInt(sendPlan.plan.data?.fee),
-                      )}{" "}
-                      {fromToken.symbol}
-                    </span>
-                    <span className="text-xs text-neutral-500">
-                      ~ $
-                      {atomicToWhole(
-                        ((conversionFee + BigInt(sendPlan.plan.data?.fee)) *
-                          BigInt(Math.ceil(fromToken.price * 100))) /
-                          10n ** BigInt(fromToken.decimals),
-                        2,
-                      )}{" "}
-                      USD
-                    </span>
-                  </div>
-                </div>
-
-                <div className="h-px w-full bg-line" />
-
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-neutral-700">
-                    Total amount taken
-                  </span>
-                  <div className="flex flex-col items-end">
-                    <span className="text-lg font-bold text-black">
-                      {zatoshiToZec(
-                        amountInBigInt + BigInt(sendPlan.plan.data?.fee),
-                      )}{" "}
-                      {fromToken.symbol}
-                    </span>
-                    <span className="text-xs text-neutral-500">
-                      ~ $
-                      {(
-                        amountInUsd +
-                        (sendPlan.plan.data?.fee * fromToken.price) /
-                          10 ** fromToken.decimals
-                      ).toFixed(2)}{" "}
-                      USD
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {!outbound && (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-neutral-500">
-                    Total fee
-                  </span>
-                  <span className="font-medium">
-                    {atomicToWhole(BigInt(conversionFee), fromToken.decimals)}{" "}
-                    {fromToken.symbol}
-                  </span>
-                </div>
-
-                <div className="h-px w-full bg-line" />
-
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-neutral-700">
-                    Total amount taken
-                  </span>
-                  <div className="flex flex-col items-end">
-                    <span className="text-lg font-bold text-black">
-                      {amountIn} {fromToken.symbol}
-                    </span>
-                    <span className="text-xs text-neutral-500">
-                      ~ ${amountInUsd.toFixed(2)} USD
-                    </span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </FormCard>
-
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => setStage(Stage.Swap)}
-            className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
-          >
-            Back
-          </button>
-          <div className="flex-1">
-            <SubmitBlock
-              label="Confirm"
-              pending={send.isPending}
-              pendingLabel={"Confirming..."}
-              color={"gold-button"}
-              stages={send.stages}
-              error={""}
-            ></SubmitBlock>
-          </div>
-        </div>
-      </FormPage>
+      <QuoteReview
+        fromToken={fromToken}
+        amountInUsd={amountInUsd}
+        setAmountInUsd={setAmountInUsd}
+        toToken={toToken}
+        send={send}
+        recipientAddress={recipientAddress}
+        fromAmount={fromAmount}
+        slippage={slippage}
+        refundAddress={refundAddress}
+        isOutbound={isOutbound}
+        depositAddress={depositAddress}
+        setDepositAddress={setDepositAddress}
+        amountIn={amountIn}
+        setAmountIn={setAmountIn}
+        onFailure={onFailure}
+        onConfirm={onConfirm}
+      />
     );
   } else if (stage == Stage.DepositAmount) {
     return (
