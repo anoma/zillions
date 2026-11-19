@@ -19,20 +19,20 @@ Every provider call is echoed to the on-page debug log.
 
 ## Run
 
+From the repo root:
+
 ```bash
-npm run dev --workspace @zillions/test-dapp
-# or, from this directory:
-npm run dev
+pnpm keychain:dapp
 ```
 
 Vite serves on a fixed `http://localhost:5173` (`strictPort`). The extension's
 content script only injects `window.zc` into `http(s)` pages, so don't open the
-built files as `file://`.
+built files as `file://`. Stop `pnpm app:dev` first if it holds port 5173.
 
 Then:
 
-1. Load the extension (`apps/z-extension` → `npm run dev`, or load
-   `.output/chrome-mv3` via `chrome://extensions`).
+1. Load the extension (`pnpm keychain:dev`, or load
+   `apps/keychain/.output/chrome-mv3` via `chrome://extensions`).
 2. Open <http://localhost:5173>.
 3. Click **Connect** and approve in the popup.
 
