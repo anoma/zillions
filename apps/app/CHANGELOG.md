@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.0](https://github.com/anoma/zillions-frontend/compare/zillions-app-v1.20.0...zillions-app-v1.21.0) (2026-11-19)
+
+
+### Features
+
+* keychain unlock screen ([#250](https://github.com/anoma/zillions-frontend/issues/250)) ([6bbc78c](https://github.com/anoma/zillions-frontend/commit/6bbc78ca931ab06c43dd55ef4f02015b15018d7c))
+
 ## [1.20.0](https://github.com/anoma/zillions-frontend/compare/zillions-app-v1.19.0...zillions-app-v1.20.0) (2026-11-18)
 
 
