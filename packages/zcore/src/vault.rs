@@ -37,7 +37,7 @@ pub fn argon2id(
 mod tests {
     use super::*;
 
-    // What the Keychain's previous wasm (namada-interface's argon2 0.4) gave.
+    // What the Keychain's previous crypto wasm gave.
     #[test]
     fn matches_the_old_vault_hash() {
         let out = hash(b"hunter2", b"saltsaltsaltsalt", 65536, 3, 1).unwrap();

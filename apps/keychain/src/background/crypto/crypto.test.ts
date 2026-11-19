@@ -1,7 +1,6 @@
 /**
- * Pinned against the `crypto_bg.wasm` this replaced (namada-interface
- * 01b304cf): existing vaults must keep opening and phrases must keep giving
- * the same seeds.
+ * Pinned against the `crypto_bg.wasm` this replaced: existing vaults must keep
+ * opening and phrases must keep giving the same seeds.
  */
 import { readFileSync } from "node:fs";
 import { initSync } from "@zillions/zcore";
