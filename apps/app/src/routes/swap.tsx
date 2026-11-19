@@ -187,8 +187,6 @@ function SwapForm({
   setIsOutbound,
   fromAmount,
   setFromAmount,
-  toAmount,
-  setToAmount,
   refundAddress,
   setRefundAddress,
   slippage,
@@ -207,8 +205,6 @@ function SwapForm({
   setIsOutbound: (isOutbound: boolean) => void;
   fromAmount: string;
   setFromAmount: (amount: string) => void;
-  toAmount: bigint;
-  setToAmount: (amount: bigint) => void;
   refundAddress: string;
   setRefundAddress: (address: string) => void;
   slippage: string;
@@ -220,9 +216,6 @@ function SwapForm({
 }) {
   const account = useAccount();
   const shielded = useFreshAddress();
-  const [fromTotalPrice, setFromTotalPrice] = useState(0n);
-  const [toTotalPrice, setToTotalPrice] = useState(0n);
-  const [zecPriceInFrom, setZecPriceInFrom] = useState(1n);
   const [tokens, setTokens] = useState<Token[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [recipientAddressError, setRecipientAddressError] = useState<
@@ -281,25 +274,19 @@ function SwapForm({
     );
   }, []);
 
-  // Any changes in the exchanged amounts re-triggers a currency conversion
-  useEffect(() => {
-    (async () => {
-      const fromTokenPriceAtomic = wholeToAtomic(fromToken.price, 2);
-      const toTokenPriceAtomic = wholeToAtomic(toToken.price, 2);
-      const totalPriceAux = amountInBigInt * fromTokenPriceAtomic;
-      const totalPrice = totalPriceAux / 10n ** BigInt(fromToken.decimals);
-      setFromTotalPrice(totalPrice);
-      setToTotalPrice(totalPrice);
-      const toAmount =
-        (totalPriceAux * 10n ** BigInt(toToken.decimals)) /
-        (10n ** BigInt(fromToken.decimals) * toTokenPriceAtomic);
-      setToAmount(toAmount);
-      setZecPriceInFrom(
-        (toTokenPriceAtomic * 10n ** BigInt(fromToken.decimals)) /
-          fromTokenPriceAtomic,
-      );
-    })();
-  }, [fromAmount, fromToken, toToken]);
+  // Compute the currency conversions
+  const fromTokenPriceAtomic = wholeToAtomic(fromToken.price, 2);
+  const toTokenPriceAtomic = wholeToAtomic(toToken.price, 2);
+  const totalPriceAux = amountInBigInt * fromTokenPriceAtomic;
+  const totalPrice = totalPriceAux / 10n ** BigInt(fromToken.decimals);
+  const fromTotalPrice = totalPrice;
+  const toTotalPrice = totalPrice;
+  const toAmount =
+    (totalPriceAux * 10n ** BigInt(toToken.decimals)) /
+    (10n ** BigInt(fromToken.decimals) * toTokenPriceAtomic);
+  const zecPriceInFrom =
+    (toTokenPriceAtomic * 10n ** BigInt(fromToken.decimals)) /
+    fromTokenPriceAtomic;
 
   // Swap the from amount and token with the to amount and token. Additionally
   // the refund address is needed from the user for inbound swaps whereas a
@@ -1005,7 +992,6 @@ function SwapRoute() {
   const [refundAddress, setRefundAddress] = useState<string>("");
   const [recipientAddress, setRecipientAddress] = useState<string>("");
   const [slippage, setSlippage] = useState("0.5");
-  const [toAmount, setToAmount] = useState(0n);
   const [toToken, setToToken] = useState({
     assetId: ZEC_TOKEN_ASSET_ID,
     decimals: 8,
@@ -1048,8 +1034,6 @@ function SwapRoute() {
         setIsOutbound={setIsOutbound}
         fromAmount={fromAmount}
         setFromAmount={setFromAmount}
-        toAmount={toAmount}
-        setToAmount={setToAmount}
         refundAddress={refundAddress}
         setRefundAddress={setRefundAddress}
         slippage={slippage}
