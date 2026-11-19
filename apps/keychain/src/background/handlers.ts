@@ -293,6 +293,11 @@ export const handlers: HandlerMap = {
     return approvals.isConnectionApproved(requireOrigin(ctx));
   },
 
+  "dapp/isLocked": async (_payload, ctx) => {
+    const { approvals } = await getServices();
+    return approvals.isLockedFor(requireOrigin(ctx));
+  },
+
   "dapp/accounts": async (_payload, ctx) => {
     const { approvals } = await getServices();
     return approvals.dappAccounts(requireOrigin(ctx));

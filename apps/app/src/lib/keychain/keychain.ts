@@ -29,6 +29,20 @@ export function isKeychainVersionSupported(): boolean {
   return compareVersions(version, MIN_KEYCHAIN_VERSION) >= 0;
 }
 
+/** Locked, for this site; an older Keychain can't say, so false. */
+export async function isKeychainLocked(): Promise<boolean> {
+  const zc: Partial<Keychain> = keychain();
+  return (await zc.isLocked?.()) ?? false;
+}
+
+/** The Keychain refused a read because it is locked, whatever its version. */
+export const isLockedError = (err: unknown): boolean =>
+  String(err).includes("Keychain is locked");
+
+/** A locked Keychain refuses every retry too: show the unlock screen at once. */
+export const retryUnlessLocked = (failures: number, err: Error): boolean =>
+  failures < 3 && !isLockedError(err);
+
 export function waitForKeychainInjection(): Promise<Keychain | undefined> {
   return waitForWindowProp("zc");
 }

@@ -1,5 +1,5 @@
 import { queryOptions, useQuery } from "@tanstack/react-query";
-import { keychain } from "../lib/keychain/keychain";
+import { keychain, retryUnlessLocked } from "../lib/keychain/keychain";
 
 export function getKeychainAccounts() {
   return queryOptions({
@@ -8,6 +8,7 @@ export function getKeychainAccounts() {
       keychain()
         .accounts()
         .then((data) => data ?? []),
+    retry: retryUnlessLocked,
   });
 }
 

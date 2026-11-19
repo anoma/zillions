@@ -48,6 +48,8 @@ export interface Zillions {
   connect(chainId?: string): Promise<void>;
   disconnect(chainId?: string): Promise<void>;
   isConnected(chainId?: string): Promise<boolean | undefined>;
+  /** Locked, for a site the user connected; any other site hears false. */
+  isLocked(): Promise<boolean>;
   defaultAccount(): Promise<ZCashKeychainAccount | undefined>;
   updateDefaultAccount(address: string): Promise<void>;
   /**
