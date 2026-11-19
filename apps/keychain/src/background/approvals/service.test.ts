@@ -72,6 +72,7 @@ let storage: LocalStorage;
 const opened: string[] = [];
 
 let svc: TestService;
+let locked: boolean;
 
 const flush = async (): Promise<void> => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
@@ -99,10 +100,11 @@ beforeEach(() => {
   };
   storage = new LocalStorage(store as never);
   opened.length = 0;
+  locked = false;
   svc = new TestService(
     storage,
     {
-      isLocked: async () => false,
+      isLocked: async () => locked,
       passwordInitialized: async () => true,
       requiresAuth: async () => false,
       checkPassword: async (password: string) => password === "right",
@@ -121,6 +123,16 @@ beforeEach(() => {
     } as never,
     { record: async () => undefined } as never
   );
+});
+
+describe("isLocked", () => {
+  it("tells only a connected site that the Keychain is locked", async () => {
+    await storage.setConnection(A, { accounts: [wallet.id], current: wallet.id });
+    expect(await svc.isLockedFor(A)).toBe(false);
+    locked = true;
+    expect(await svc.isLockedFor(A)).toBe(true);
+    expect(await svc.isLockedFor(B)).toBe(false);
+  });
 });
 
 describe("a dismissed window makes its site wait", () => {

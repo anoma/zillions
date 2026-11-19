@@ -49,6 +49,8 @@ const relayMethod = async (
       return client.send("dapp/disconnect", {});
     case "isConnected":
       return client.send("dapp/isConnected", {});
+    case "isLocked":
+      return client.send("dapp/isLocked", {});
     case "accounts":
       return client.send("dapp/accounts", {});
     case "defaultAccount":

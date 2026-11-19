@@ -27,3 +27,12 @@ installs every package, creates the apps' `.env` files and builds zcore (see
 `pnpm dev` starts both dev servers; `pnpm lint`, `pnpm typecheck` and
 `pnpm test` run both packages. Dependencies are pinned exactly (`.npmrc`), and
 `-D` adds a dev dependency: `pnpm app:add -D vitest`.
+
+## Security audits
+
+By [Taylor Hornby](https://defuse.ca/) ([@DefuseSec](https://x.com/DefuseSec)):
+
+| Date | Scope |
+| --- | --- |
+| 2026-11-12 | App, Keychain, zcore |
+| 2026-11-06 | Keychain |

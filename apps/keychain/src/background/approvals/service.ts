@@ -242,6 +242,14 @@ export class ApprovalsService {
     return (await this.siteWallet(origin)) !== undefined;
   }
 
+  /** What `window.zc.isLocked()` reports; false to a site never connected. */
+  async isLockedFor(origin: string): Promise<boolean> {
+    return (
+      (await this.vaultService.isLocked()) &&
+      (await this.siteWallet(origin)) !== undefined
+    );
+  }
+
   /**
    * Resolve a `connect()` call: already approved and unlocked is a no-op;
    * otherwise open the approval popup (which doubles as a login gate when the

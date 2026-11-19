@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ZCashKeychainAccount } from "@zillions/keychain-types";
 import { afterEach, expect, test, vi } from "vitest";
 import { useAccount } from "../hooks/useAccount";
-import type { Keychain } from "../lib/keychain/keychain";
+import { KeychainEvent, type Keychain } from "../lib/keychain/keychain";
 import { KeychainWall } from "./KeychainWall";
 
 afterEach(() => {
@@ -89,6 +89,52 @@ test("a keychain not yet connected connects on click", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "Connect" }));
   expect(await screen.findByText("Wallet for u1test")).toBeTruthy();
   expect(zc.connect).toHaveBeenCalledOnce();
+});
+
+test("a locked keychain asks to unlock, not to connect", async () => {
+  let unlocked = false;
+  const zc = stubKeychain({
+    isConnected: async () => unlocked,
+    isLocked: async () => !unlocked,
+    connect: vi.fn(async () => {
+      unlocked = true;
+    }),
+  });
+  renderWall();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Unlock your Keychain" }),
+  );
+  expect(screen.queryByText("Connect Keychain")).toBeNull();
+  expect(await screen.findByText("Wallet for u1test")).toBeTruthy();
+  expect(zc.connect).toHaveBeenCalledOnce();
+});
+
+test("a keychain locked after load asks to unlock, then comes back on unlock", async () => {
+  let locked = true;
+  stubKeychain({
+    accounts: async () => {
+      if (locked) throw new Error("Keychain is locked");
+      return [transparent, shielded];
+    },
+  });
+  renderWall();
+  expect(
+    await screen.findByRole("button", { name: "Unlock your Keychain" }),
+  ).toBeTruthy();
+  locked = false;
+  window.dispatchEvent(new Event(KeychainEvent.ExtensionUnlocked));
+  expect(await screen.findByText("Wallet for u1test")).toBeTruthy();
+});
+
+test("unlocking from the toolbar moves on from setup", async () => {
+  // An older keychain can't say it's locked, so the wall shows setup.
+  let connected = false;
+  stubKeychain({ isConnected: async () => connected });
+  renderWall();
+  expect(await screen.findByRole("button", { name: "Connect" })).toBeTruthy();
+  connected = true;
+  window.dispatchEvent(new Event(KeychainEvent.ExtensionUnlocked));
+  expect(await screen.findByText("Wallet for u1test")).toBeTruthy();
 });
 
 test("with no accounts it asks to create one", async () => {
