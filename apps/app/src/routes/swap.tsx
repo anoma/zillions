@@ -1,3 +1,4 @@
+import type { DefaultError, UseMutateFunction } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { QRCode } from "react-qr-code";
@@ -17,6 +18,7 @@ import { inputClassName, qrClassName } from "../components/ui/utils";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useSend, useSendPlan } from "../hooks/useSend";
+import type { StageEntry } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
 import { BitcoinIcon } from "../icons/BitcoinIcon";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
@@ -122,7 +124,7 @@ function CurrencySelector({
 }: {
   tokens: Token[];
   token: Token;
-  setToken: (value: string) => void;
+  setToken: (token: Token) => void;
   readOnly?: boolean;
   onChange: (token?: Token) => void;
 }) {
@@ -197,34 +199,38 @@ function SwapForm({
   setRecipientAddress,
 }: {
   onSubmit: () => void;
-  setFromToken: (Token) => void;
-  setToToken: (Token) => void;
+  setFromToken: (token: Token) => void;
+  setToToken: (token: Token) => void;
   fromToken: Token;
   toToken: Token;
   isOutbound: boolean;
-  setIsOutbound: (boolean) => void;
+  setIsOutbound: (isOutbound: boolean) => void;
   fromAmount: string;
-  setFromAmount: (string) => void;
+  setFromAmount: (amount: string) => void;
   toAmount: bigint;
-  setToAmount: (bigint) => void;
+  setToAmount: (amount: bigint) => void;
   refundAddress: string;
-  setRefundAddress: (string) => void;
+  setRefundAddress: (address: string) => void;
   slippage: string;
-  setSlippage: (string) => void;
-  error: string;
-  setError: (string) => void;
+  setSlippage: (slippage: string) => void;
+  error: string | undefined;
+  setError: (error: string | undefined) => void;
   recipientAddress: string;
-  setRecipientAddress: (string) => void;
+  setRecipientAddress: (address: string) => void;
 }) {
   const account = useAccount();
   const shielded = useFreshAddress();
   const [fromTotalPrice, setFromTotalPrice] = useState(0n);
   const [toTotalPrice, setToTotalPrice] = useState(0n);
   const [zecPriceInFrom, setZecPriceInFrom] = useState(1n);
-  const [tokens, setTokens] = useState([]);
+  const [tokens, setTokens] = useState<Token[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [recipientAddressError, setRecipientAddressError] = useState();
-  const [refundAddressError, setRefundAddressError] = useState();
+  const [recipientAddressError, setRecipientAddressError] = useState<
+    string | undefined
+  >();
+  const [refundAddressError, setRefundAddressError] = useState<
+    string | undefined
+  >();
   const amountRef = useRef<HTMLInputElement>(null);
   const refundRef = useRef<HTMLInputElement>(null);
   const slippageRef = useRef<HTMLInputElement>(null);
@@ -293,7 +299,7 @@ function SwapForm({
           fromTokenPriceAtomic,
       );
     })();
-  }, [fromAmount, fromToken, toAmount, toToken]);
+  }, [fromAmount, fromToken, toToken]);
 
   // Swap the from amount and token with the to amount and token. Additionally
   // the refund address is needed from the user for inbound swaps whereas a
@@ -306,9 +312,9 @@ function SwapForm({
     setFromAmount(tmpAmount);
     if (!isOutbound) {
       setRecipientAddress("");
-      setRefundAddress(shielded);
+      setRefundAddress(shielded ?? "");
     } else {
-      setRecipientAddress(shielded);
+      setRecipientAddress(shielded ?? "");
       setRefundAddress("");
     }
     setIsOutbound(!isOutbound);
@@ -573,16 +579,31 @@ function QuoteReview({
   refundAddress: string;
   slippage: string;
   amountIn: string;
-  setAmountIn: (string) => void;
+  setAmountIn: (amount: string) => void;
   amountInUsd: number;
-  setAmountInUsd: (number) => void;
+  setAmountInUsd: (amount: number) => void;
   toToken: Token;
   isOutbound: boolean;
   recipientAddress: string;
   depositAddress: string;
-  setDepositAddress: (string) => void;
-  onFailure: ({ message }) => void;
-  onConfirm: (boolean) => void;
+  setDepositAddress: (address: string) => void;
+  onFailure: ({ message }: { message: string }) => void;
+  onConfirm: (isOutgoing: boolean) => void;
+  children: React.JSX.Element;
+  send: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: any;
+    stages: StageEntry[];
+    isPending: boolean;
+    mutate: UseMutateFunction<
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      any,
+      DefaultError,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      any,
+      unknown
+    >;
+  };
 }) {
   const [isLoading, setIsLoading] = useState(true);
   const [amountOut, setAmountOut] = useState("0");
@@ -590,9 +611,11 @@ function QuoteReview({
   const [conversionFee, setConversionFee] = useState(0n);
   const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
 
-  if (isOutbound && send.data) {
-    onConfirm(isOutbound);
-  }
+  useEffect(() => {
+    if (isOutbound && send.data) {
+      onConfirm(isOutbound);
+    }
+  }, [isOutbound, send.data]);
 
   const sendPlan = useSendPlan(
     {
@@ -676,7 +699,14 @@ function QuoteReview({
       }
       setIsLoading(false);
     });
-  }, [fromAmount, fromToken, refundAddress, slippage]);
+  }, [
+    fromAmount,
+    fromToken,
+    refundAddress,
+    slippage,
+    recipientAddress,
+    toToken,
+  ]);
 
   // If the quote data is still loading, then display a spinner instead
   if (isLoading) {
@@ -896,6 +926,7 @@ function AmountDeposit({
   fromToken: Token;
   depositAddress: string;
   onConfirm: () => void;
+  children: React.JSX.Element;
 }) {
   return (
     <FormPage title="Deposit Funds">
@@ -969,10 +1000,10 @@ function SwapRoute() {
     coingeckoId: "bitcoin",
     decimals: 8,
   });
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | undefined>();
   const [fromAmount, setFromAmount] = useState("0");
-  const [refundAddress, setRefundAddress] = useState("");
-  const [recipientAddress, setRecipientAddress] = useState("");
+  const [refundAddress, setRefundAddress] = useState<string>("");
+  const [recipientAddress, setRecipientAddress] = useState<string>("");
   const [slippage, setSlippage] = useState("0.5");
   const [toAmount, setToAmount] = useState(0n);
   const [toToken, setToToken] = useState({
@@ -998,7 +1029,7 @@ function SwapRoute() {
   const send = useSend();
 
   useEffect(() => {
-    (async () => setRecipientAddress(shielded))();
+    (async () => setRecipientAddress(shielded ?? ""))();
   }, [shielded]);
 
   if (stage == Stage.Swap) {
@@ -1030,12 +1061,12 @@ function SwapRoute() {
       />
     );
   } else if (stage == Stage.ReviewQuote) {
-    const onFailure = (data) => {
+    const onFailure = (data: { message: string }) => {
       setError(data.message);
       setStage(Stage.Swap);
     };
 
-    const onConfirm = (isOutbound) => {
+    const onConfirm = (isOutbound: boolean) => {
       if (isOutbound) {
         setStage(Stage.SendAmount);
       } else {
@@ -1093,7 +1124,7 @@ function SwapRoute() {
         </button>
       </AmountDeposit>
     );
-  } else if (stage == Stage.SendAmount) {
+  } else if (send.data && stage == Stage.SendAmount) {
     return <TransactionReceipt tx={{ ...send.data, status: "Pending" }} />;
   }
 }
