@@ -260,11 +260,13 @@ function SwapForm({
           setTokens(data);
           // Update the exchange rate metadata of the from token
           setFromToken(
-            data.find((token: Token) => token.assetId == fromToken.assetId),
+            data.find((token: Token) => token.assetId == fromToken.assetId) ??
+              fromToken,
           );
           // Update the exchange rate metadata of the to token
           setToToken(
-            data.find((token: Token) => token.assetId == toToken.assetId),
+            data.find((token: Token) => token.assetId == toToken.assetId) ??
+              toToken,
           );
         } else {
           setError(data.message);
@@ -641,7 +643,7 @@ function QuoteReview({
     const body = {
       dry: false,
       swapType: "EXACT_INPUT",
-      slippageTolerance: Number(slippage) * 100,
+      slippageTolerance: Number(wholeToAtomic(slippage, 2)),
       originAsset: fromToken.assetId,
       depositType: "ORIGIN_CHAIN",
       destinationAsset: toToken.assetId,
