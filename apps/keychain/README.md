@@ -12,10 +12,11 @@ src/                     extension source
   popup/ setup/ approvals/   the three UI surfaces
   provider/              the injected `window.zc` dapp provider + content-script relay
   ipc/                   typed request/response contract between UI and background
-  wallet/                offline address derivation (zillions-sdk façade)
+  hardware/              Ledger, Keystone and passkey signers
   storage/               vault schemas (io-ts) + storage adapters
   packages/              vendored @zillions/* library code (only the files used):
     components/  types/  utils/  storage/  crypto/
+  utils/                 small shared helpers (ids, origins)
 entrypoints/             WXT entrypoints (background, content, injected, popup, setup, approvals)
 examples/
   test-dapp/             a minimal dapp to exercise the approvals/connect/sign flows
@@ -28,19 +29,25 @@ external dependencies. The exception is `@zillions/keychain-types`
 
 ## Scripts
 
-Run from this directory (or with `pnpm --filter zillions-keychain` from the root):
+From the repo root:
 
-- `pnpm dev` — WXT dev server (Chrome); `pnpm firefox:dev` for Firefox
-- `pnpm build` — Chrome MV3 + Firefox builds (`.output/<browser>-mv3`)
-- `pnpm chrome:build` — Chrome only
-- `pnpm zip` — store packages in `.output/`: `*-chrome.zip` (Chrome Web
+- `pnpm keychain:dev` — WXT dev server (Chrome); `pnpm keychain:firefox:dev` for Firefox
+- `pnpm keychain:build` — Chrome MV3 + Firefox builds (`.output/<browser>-mv3`)
+- `pnpm keychain chrome:build` — Chrome only
+- `pnpm keychain:zip` — store packages in `.output/`: `*-chrome.zip` (Chrome Web
   Store), `*-firefox.zip` and `*-sources.zip` (Firefox Add-ons)
-- `pnpm compile` — `tsc --noEmit`
-- `pnpm lint` — ESLint over `src` + `entrypoints`
+- `pnpm keychain:typecheck` — `tsc --noEmit`
+- `pnpm keychain:lint` — ESLint over `src` + `entrypoints`
+- `pnpm keychain:test` — Vitest
+- `pnpm keychain:add <pkg>` / `pnpm keychain:remove <pkg>` — manage dependencies
+- `pnpm keychain:dapp` — the [example dapp](#example-dapp)
+
+`pnpm keychain <command>` runs any other script or pnpm command in this
+package, e.g. `pnpm keychain exec wxt prepare`.
 
 ## Building from the sources zip
 
-For Firefox Add-ons reviewers. Requires Node 24 and pnpm 9.12.1 (Corepack:
+For Firefox Add-ons reviewers. Requires Node 24 and pnpm 10.34.9 (Corepack:
 `corepack enable`). From the root of the unzipped sources:
 
 ```bash
@@ -73,8 +80,8 @@ The WebAssembly modules ship prebuilt:
 Two WebAssembly modules run in the extension:
 
 - `src/packages/crypto` — AES/Argon2/mnemonic primitives (background only).
-- `@zillions-sdk/keys` — Zcash key/address derivation and PCZT signing,
-  consumed as a pnpm workspace dependency from `sdk/`.
+- `@zillions/zcore` — Zcash keys, addresses, finding notes, building, signing
+  and proving; the workspace package `packages/zcore`.
 
 MV3 requires `'wasm-unsafe-eval'` in the extension CSP for these to instantiate;
 that is set in `wxt.config.ts`.
@@ -86,7 +93,5 @@ that is set in `wxt.config.ts`.
 update default account) and logs the wallet events the extension broadcasts.
 
 ```bash
-cd examples/test-dapp
-npm install
-npm run dev   # http://localhost:5173
+pnpm keychain:dapp   # http://localhost:5173
 ```
