@@ -12,9 +12,12 @@ import {
   useGetKeychainDefaultAccount,
 } from "../hooks/useGetKeychainDefaultAccount";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
+import { LockIcon } from "../icons/LockIcon";
 import {
   isKeychainAvailable,
+  isKeychainLocked,
   isKeychainVersionSupported,
+  isLockedError,
   keychain,
   KeychainEvent,
   MIN_KEYCHAIN_VERSION,
@@ -32,7 +35,7 @@ function Account({ children }: { children: ReactNode }) {
   const defaultAccount = useGetKeychainDefaultAccount();
 
   useEffect(() => {
-    const onAccountChanged = async () => {
+    const refetch = async () => {
       queryClient.invalidateQueries({
         queryKey: getKeychainAccounts().queryKey,
       });
@@ -40,13 +43,12 @@ function Account({ children }: { children: ReactNode }) {
         queryKey: getKeychainDefaultAccount().queryKey,
       });
     };
-    window.addEventListener(KeychainEvent.AccountChanged, onAccountChanged);
-    return () => {
-      window.removeEventListener(
-        KeychainEvent.AccountChanged,
-        onAccountChanged,
-      );
-    };
+    const events = [
+      KeychainEvent.AccountChanged,
+      KeychainEvent.ExtensionUnlocked,
+    ];
+    events.forEach((e) => window.addEventListener(e, refetch));
+    return () => events.forEach((e) => window.removeEventListener(e, refetch));
   }, [queryClient]);
 
   if (accounts.isPending || defaultAccount.isPending) {
@@ -54,9 +56,10 @@ function Account({ children }: { children: ReactNode }) {
   }
 
   if (accounts.error || defaultAccount.error) {
-    return (
-      <PageError>{String(accounts.error || defaultAccount.error)}</PageError>
-    );
+    const error = accounts.error || defaultAccount.error;
+    // Locked after the page loaded: the next read is refused.
+    if (isLockedError(error)) return <Unlock />;
+    return <PageError>{String(error)}</PageError>;
   }
 
   if (!accounts.data.length) {
@@ -105,53 +108,58 @@ type WallProps = {
   claiming?: boolean;
 };
 
+type Connection = "connected" | "locked" | "disconnected";
+
+// A locked Keychain says it isn't connected, even to a site it is.
+const connection = async (): Promise<Connection> =>
+  (await keychain().isConnected())
+    ? "connected"
+    : (await isKeychainLocked())
+      ? "locked"
+      : "disconnected";
+
 function Connect({ children, claiming }: WallProps) {
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isConnected, setIsConnected] = useState<boolean | undefined>(
-    undefined,
-  );
+  const [status, setStatus] = useState<Connection>();
 
   useEffect(() => {
-    (async () => {
+    const check = async () => {
       try {
-        setIsConnected(await keychain().isConnected());
+        setStatus(await connection());
       } catch (err) {
         console.error(err);
         setError(String(err));
-      } finally {
-        setLoading(false);
       }
-    })();
-  }, []);
-
-  useEffect(() => {
-    const onRevoke = () => setIsConnected(false);
+    };
+    const onRevoke = () => setStatus("disconnected");
+    check();
+    window.addEventListener(KeychainEvent.ExtensionUnlocked, check);
     window.addEventListener(KeychainEvent.ConnectionRevoked, onRevoke);
     return () => {
+      window.removeEventListener(KeychainEvent.ExtensionUnlocked, check);
       window.removeEventListener(KeychainEvent.ConnectionRevoked, onRevoke);
     };
   }, []);
-
-  if (loading) {
-    return <PageLoader />;
-  }
 
   if (error) {
     return <PageError>{error}</PageError>;
   }
 
-  if (!isConnected) {
-    return (
-      <Setup
-        installed
-        claiming={claiming}
-        onConnect={async () => {
-          await keychain().connect();
-          setIsConnected(await keychain().isConnected());
-        }}
-      />
-    );
+  if (!status) {
+    return <PageLoader />;
+  }
+
+  const connect = async () => {
+    await keychain().connect();
+    setStatus(await connection());
+  };
+
+  if (status === "locked") {
+    return <Unlock onUnlock={connect} />;
+  }
+
+  if (status === "disconnected") {
+    return <Setup installed claiming={claiming} onConnect={connect} />;
   }
 
   return <>{children}</>;
@@ -191,6 +199,20 @@ function GetExtensionButton({ children }: { children: ReactNode }) {
     >
       {children}
     </ActionButton>
+  );
+}
+
+/** Opens the Keychain's login window; the wall moves on at `ExtensionUnlocked`. */
+function Unlock({ onUnlock = () => keychain().connect() }) {
+  return (
+    <div className="absolute inset-0 overflow-auto flex px-6 py-12">
+      <div className="m-auto flex flex-col items-center gap-10 animate-fade-in">
+        <LockIcon className="w-50" aria-hidden />
+        <ActionButton size="sm" onClick={onUnlock}>
+          Unlock your Keychain
+        </ActionButton>
+      </div>
+    </div>
   );
 }
 

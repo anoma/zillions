@@ -187,6 +187,7 @@ export const validateResponse = <K extends IpcKind>(
     case "vault/lost":
     case "vault/requiresAuth":
     case "dapp/isConnected":
+    case "dapp/isLocked":
     case "approvals/isConnectionApproved":
       if (typeof value !== "boolean")
         throw new ResponseShapeError(kind, "expected boolean");

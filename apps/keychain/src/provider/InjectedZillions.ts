@@ -71,6 +71,10 @@ export class InjectedZillions implements IZillions {
     return await InjectedProxy.requestMethod<undefined, boolean>("isConnected");
   }
 
+  public async isLocked(): Promise<boolean> {
+    return await InjectedProxy.requestMethod<undefined, boolean>("isLocked");
+  }
+
   public async accounts(): Promise<ZCashKeychainAccount[]> {
     return await InjectedProxy.requestMethod<undefined, ZCashKeychainAccount[]>(
       "accounts",

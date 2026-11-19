@@ -394,6 +394,11 @@ export type IpcContract = {
     req: Record<string, never>;
     res: boolean;
   };
+  /** Whether the vault is locked; false unless this origin is approved. */
+  "dapp/isLocked": {
+    req: Record<string, never>;
+    res: boolean;
+  };
   /** Public account records (parents + shielded children); requires connection. */
   "dapp/accounts": {
     req: Record<string, never>;

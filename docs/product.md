@@ -292,6 +292,11 @@ Moves shielded funds to one of the account's own transparent addresses.
 - The app works with the Zillions Keychain browser extension; without it, the
   app explains how to get it (including a download link).
 - Checks that the Keychain version is recent enough.
+- **Locked Keychain.** — _Built_. A site already connected asks the user to
+  unlock the Keychain, never to connect again or with an error. Unlocking,
+  from the app or from the Keychain itself, brings the wallet back without a
+  reload. An older Keychain can't say it is locked, so a page opened while
+  it's locked still shows the connect steps.
 - Header shows the active account, with its shielded and transparent addresses
   (copyable). A fresh shielded one each time it's shown. — _Built_
 - **Switch account** from the header.
