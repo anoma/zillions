@@ -8,3 +8,12 @@ Monorepo for the Zillions Zcash wallet:
 - [`packages/sapling-params`](packages/sapling-params/README.md) — Sapling proving parameters
 
 What the wallet must do: [docs/product.md](docs/product.md).
+
+## Security audits
+
+By [Taylor Hornby](https://defuse.ca/) ([@DefuseSec](https://x.com/DefuseSec)):
+
+| Date | Scope |
+| --- | --- |
+| 2026-11-12 | App, Keychain, zcore |
+| 2026-11-06 | Keychain |
