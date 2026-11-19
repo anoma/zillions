@@ -830,6 +830,79 @@ function QuoteReview({
   );
 }
 
+function AmountDeposit({
+  amountIn,
+  amountInUsd,
+  fromToken,
+  depositAddress,
+  onConfirm,
+  children,
+}: {
+  amountIn: string;
+  amountInUsd: number;
+  fromToken: Token;
+  depositAddress: string;
+  onConfirm: () => void;
+}) {
+  return (
+    <FormPage title="Deposit Funds">
+      <section aria-label="Your address" className="flex flex-col gap-4">
+        <div className="flex flex-col items-center gap-6 py-4">
+          {/* Amount Display */}
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-sm font-medium text-neutral-700">
+              Deposit Amount
+            </span>
+            <span className="text-3xl font-bold text-black">
+              {amountIn} {fromToken.symbol}
+            </span>
+            <span className="text-sm font-medium text-neutral-500">
+              ~ ${amountInUsd} USD
+            </span>
+          </div>
+
+          {/* QR Code */}
+          <div className="mx-auto w-fit flex flex-col items-center gap-3 rounded-xl border border-line bg-card p-4 pb-3">
+            {depositAddress ? (
+              <QRCode
+                value={depositAddress}
+                size={200}
+                key={depositAddress}
+                bgColor="transparent"
+                fgColor="#000000"
+                level="M"
+                title={`QR code of your deposit address`}
+                className={qrClassName}
+              />
+            ) : (
+              <div className="size-52 grid place-items-center">
+                <SpinnerIcon className="size-5 text-gold" />
+              </div>
+            )}
+            {depositAddress && (
+              <CopyToClipboardControl
+                value={depositAddress}
+                className="gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors duration-300 hover:bg-gold/15"
+                iconClassName="size-3.5"
+              >
+                <span className="font-mono text-neutral-700">
+                  {shortenAddress(depositAddress, 8, 6, "…")}
+                </span>
+              </CopyToClipboardControl>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-3 justify-center">
+          {children}
+          <ActionButton color="black" onClick={onConfirm} href="/">
+            I've sent the funds
+          </ActionButton>
+        </div>
+      </section>
+    </FormPage>
+  );
+}
+
 function SwapRoute() {
   const account = useAccount();
   const wallet = useWallet();
@@ -870,10 +943,6 @@ function SwapRoute() {
   const [amountInUsd, setAmountInUsd] = useState(0.0);
 
   const send = useSend();
-
-  const onFundsSend = () => {
-    wallet.pushSwap(depositAddress);
-  };
 
   useEffect(() => {
     (async () => setRecipientAddress(shielded))();
@@ -950,68 +1019,26 @@ function SwapRoute() {
       </QuoteReview>
     );
   } else if (stage == Stage.DepositAmount) {
-    return (
-      <FormPage title="Deposit Funds">
-        <section aria-label="Your address" className="flex flex-col gap-4">
-          <div className="flex flex-col items-center gap-6 py-4">
-            {/* Amount Display */}
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-sm font-medium text-neutral-700">
-                Deposit Amount
-              </span>
-              <span className="text-3xl font-bold text-black">
-                {amountIn} {fromToken.symbol}
-              </span>
-              <span className="text-sm font-medium text-neutral-500">
-                ~ ${amountInUsd} USD
-              </span>
-            </div>
+    const onFundsSend = () => {
+      wallet.pushSwap(depositAddress);
+    };
 
-            {/* QR Code */}
-            <div className="mx-auto w-fit flex flex-col items-center gap-3 rounded-xl border border-line bg-card p-4 pb-3">
-              {depositAddress ? (
-                <QRCode
-                  value={depositAddress}
-                  size={200}
-                  key={depositAddress}
-                  bgColor="transparent"
-                  fgColor="#000000"
-                  level="M"
-                  title={`QR code of your deposit address`}
-                  className={qrClassName}
-                />
-              ) : (
-                <div className="size-52 grid place-items-center">
-                  <SpinnerIcon className="size-5 text-gold" />
-                </div>
-              )}
-              {depositAddress && (
-                <CopyToClipboardControl
-                  value={depositAddress}
-                  className="gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors duration-300 hover:bg-gold/15"
-                  iconClassName="size-3.5"
-                >
-                  <span className="font-mono text-neutral-700">
-                    {shortenAddress(depositAddress, 8, 6, "…")}
-                  </span>
-                </CopyToClipboardControl>
-              )}
-            </div>
-          </div>
-          <div className="flex gap-3 justify-center">
-            <button
-              type="button"
-              onClick={() => setStage(Stage.ReviewQuote)}
-              className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
-            >
-              Back
-            </button>
-            <ActionButton color="black" onClick={onFundsSend} href="/">
-              I've sent the funds
-            </ActionButton>
-          </div>
-        </section>
-      </FormPage>
+    return (
+      <AmountDeposit
+        amountInUsd={amountInUsd}
+        amountIn={amountIn}
+        fromToken={fromToken}
+        depositAddress={depositAddress}
+        onConfirm={onFundsSend}
+      >
+        <button
+          type="button"
+          onClick={() => setStage(Stage.ReviewQuote)}
+          className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
+        >
+          Back
+        </button>
+      </AmountDeposit>
     );
   } else if (stage == Stage.SendAmount) {
     return <TransactionReceipt tx={{ ...send.data, status: "Pending" }} />;
