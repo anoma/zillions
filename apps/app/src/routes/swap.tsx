@@ -513,6 +513,7 @@ function QuoteReview({
   setDepositAddress,
   onFailure,
   onConfirm,
+  children,
 }: {
   fromToken: Token;
   fromAmount: string;
@@ -813,13 +814,7 @@ function QuoteReview({
       </FormCard>
 
       <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={() => setStage(Stage.Swap)}
-          className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
-        >
-          Back
-        </button>
+        {children}
         <div className="flex-1">
           <SubmitBlock
             label="Confirm"
@@ -944,7 +939,15 @@ function SwapRoute() {
         setAmountIn={setAmountIn}
         onFailure={onFailure}
         onConfirm={onConfirm}
-      />
+      >
+        <button
+          type="button"
+          onClick={() => setStage(Stage.Swap)}
+          className="rounded-xl border border-line bg-card px-6 py-3 text-sm font-medium transition-colors hover:bg-neutral-50 focus:border-black focus:outline-none"
+        >
+          Back
+        </button>
+      </QuoteReview>
     );
   } else if (stage == Stage.DepositAmount) {
     return (
