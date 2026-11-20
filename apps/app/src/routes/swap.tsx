@@ -9,6 +9,7 @@ import { FormPage } from "../components/FormPage";
 import { TransactionReceipt } from "../components/TransactionReceipt";
 import {
   AmountField,
+  BalanceWithMax,
   FormCard,
   FormError,
   SubmitBlock,
@@ -17,6 +18,7 @@ import { ActionButton } from "../components/ui/ActionButton";
 import { inputClassName, qrClassName } from "../components/ui/utils";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
+import { useGetBalance } from "../hooks/useGetBalance";
 import { useSend, useSendPlan } from "../hooks/useSend";
 import type { StageEntry } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
@@ -216,6 +218,7 @@ function SwapForm({
 }) {
   const account = useAccount();
   const shielded = useFreshAddress();
+  const balance = useGetBalance();
   const [tokens, setTokens] = useState<Token[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [recipientAddressError, setRecipientAddressError] = useState<
@@ -228,6 +231,7 @@ function SwapForm({
   const refundRef = useRef<HTMLInputElement>(null);
   const slippageRef = useRef<HTMLInputElement>(null);
   const recipientRef = useRef<HTMLInputElement>(null);
+  const from = "shielded";
 
   // Attempt to convert the input amount into a big integer
   let amountInBigInt = 0n;
@@ -241,7 +245,7 @@ function SwapForm({
   // Compute the transaction fee that will be applied to the swap
   const sendPlan = useSendPlan(
     {
-      from: "shielded",
+      from,
       to: account.transparent.address,
       amount: amountInBigInt,
       memo: undefined,
@@ -249,7 +253,26 @@ function SwapForm({
     false,
     0n,
   );
-  amountInError ??= sendPlan.plan.error?.message;
+  // Also compute the maximum amount that can be spent
+  const maxSendPlan = useSendPlan(
+    {
+      from,
+      to: account.transparent.address,
+      amount: amountInBigInt,
+      memo: undefined,
+    },
+    true,
+    0n,
+  );
+  // Disable the usage of balances that are not confirmed
+  const waitingBalance = 0n;
+  // Max is the whole balance: what's spendable now, plus what's confirming.
+  const maxAmount = maxSendPlan.maxAmount.data
+    ? maxSendPlan.maxAmount.data + waitingBalance
+    : maxSendPlan.maxAmount.isError && waitingBalance
+      ? waitingBalance
+      : undefined;
+  amountInError ??= sendPlan.ceiling ? sendPlan.plan.error?.message : undefined;
 
   // Populate the drop-down list of tokens and updatte exchange rates
   useEffect(() => {
@@ -331,7 +354,27 @@ function SwapForm({
         }
       }}
     >
-      <FormCard heading="From" htmlFor="swap-from-amount">
+      <FormCard
+        heading="From"
+        htmlFor="swap-from-amount"
+        aside={
+          isOutbound && (
+            <div id="send-available">
+              <BalanceWithMax
+                balance={balance.data?.[from].balance ?? 0n}
+                waiting={waitingBalance}
+                pool={from}
+                isMax={amountInBigInt === maxAmount}
+                onToggleMax={() => {
+                  if (maxAmount !== undefined) {
+                    setFromAmount(atomicToWhole(maxAmount, toToken.decimals));
+                  }
+                }}
+              />
+            </div>
+          )
+        }
+      >
         <div className="flex flex-row items-start gap-4 w-full">
           <CurrencySelector
             tokens={tokens}
