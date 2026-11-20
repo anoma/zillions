@@ -394,9 +394,13 @@ export class Wallet {
   };
 
   /** Push the given swap to the state. */
-  pushSwap = async (depositAddress: string) => {
+  pushSwap = async (
+    depositAddress: string,
+    outbound: boolean,
+    originChainTxHashes: { hash: string; explorerUrl: string }[],
+  ) => {
     this.#state.swaps ??= [];
-    this.#state.swaps.push(depositAddress);
+    this.#state.swaps.push({ depositAddress, outbound, originChainTxHashes });
     this.#save();
   };
 
@@ -559,10 +563,46 @@ export class Wallet {
   /** Newest first, pending transactions on top until sync finds them mined. */
   async getTransactionHistory(): Promise<{
     activities: Activity[];
-    swaps: CheckSwapExecutionStatusResponse[];
+    swaps: (CheckSwapExecutionStatusResponse & { outbound: boolean })[];
   }> {
     await this.#seed();
     const { notes, sent, blocks, pending, swaps } = this.#state;
+    // Request all swap statuses
+    const swapDetails = await Promise.all(
+      (swaps ?? []).map(({ depositAddress, originChainTxHashes, outbound }) => {
+        const statusUrl = new URL("https://1click.chaindefuser.com/v0/status");
+        statusUrl.searchParams.append("depositAddress", depositAddress);
+
+        // Return the fetch promise
+        return fetch(statusUrl)
+          .then(async (response) => {
+            if (!response.ok) {
+              throw new Error("Network response was not ok");
+            }
+            const responseJson = await response.json();
+            responseJson.swapDetails.originChainTxHashes.push(
+              ...originChainTxHashes,
+            );
+            const augResponseJson = { ...responseJson, outbound: outbound };
+            return augResponseJson;
+          })
+          .catch((error) => {
+            console.log(`Failed for ${depositAddress}:`, error);
+            return null; // Return null (or a custom flag) on error
+          });
+      }),
+    );
+    // Filter out the pending transactions covered by swaps
+    const pendingFiltered = pending.filter((p) => {
+      return !swapDetails.some((swap) => {
+        if (swap == null) return false;
+        const destHashes = swap.swapDetails?.destinationChainTxHashes || [];
+        const origHashes = swap.swapDetails?.originChainTxHashes || [];
+        return destHashes
+          .concat(origHashes)
+          .some((chainTxHash: TxHashDetails) => chainTxHash.hash == p.txid);
+      });
+    });
     // Until the transparent side names our addresses, an unshield to one of
     // them would read as a payment.
     const addresses = this.#transparent?.addresses;
@@ -574,57 +614,24 @@ export class Wallet {
       addresses && this.#fullTxs(),
       addresses,
     );
-    const mined = new Set(history.map((tx) => tx.txid));
-    // Wait for all requests to finish
-    const swapPromises = await Promise.all(
-      (swaps ?? []).map((depositAddress) => {
-        const statusUrl = new URL("https://1click.chaindefuser.com/v0/status");
-        statusUrl.searchParams.append("depositAddress", depositAddress);
-
-        // Return the fetch promise
-        return fetch(statusUrl)
-          .then((response) => {
-            if (!response.ok) {
-              throw new Error("Network response was not ok");
-            }
-            return response.json();
-          })
-          .catch((error) => {
-            console.log(`Failed for ${depositAddress}:`, error);
-            return null; // Return null (or a custom flag) on error
-          });
-      }),
-    );
-
-    // then filter out the nulls and all the swapStatuses for
-    // which any of its destinationChainTxHashes are already contained in history so we don't
-    // print the same "transaction" twice.
-    const newSwaps: string[] = [];
-    const swapStatuses = swapPromises.filter((swap) => {
-      if (swap == null) return false;
-      const destHashes = swap.swapDetails?.destinationChainTxHashes || [];
-      if (
-        destHashes.some((destinationChainTxHash: TxHashDetails) =>
-          mined.has(destinationChainTxHash.hash),
-        )
-      ) {
-        return false;
-      } else {
-        newSwaps.push(swap.quoteResponse.quote.depositAddress);
-        return true;
-      }
+    // Filter out the history that's covered by swaps
+    const historyFiltered = history.filter((p) => {
+      return !swapDetails.some((swap) => {
+        if (swap == null) return false;
+        const destHashes = swap.swapDetails?.destinationChainTxHashes || [];
+        const origHashes = swap.swapDetails?.originChainTxHashes || [];
+        return destHashes
+          .concat(origHashes)
+          .some((chainTxHash: TxHashDetails) => chainTxHash.hash == p.txid);
+      });
     });
-    this.#state.swaps = newSwaps;
-    this.#save();
+    const mined = new Set(history.map((tx) => tx.txid));
 
-    // Please also filter out all the swapStatuses for which any of its destinationChainTxHashes
-    // are already contained in history. The idea is that we don't want to print the same
-    // "transaction" twice.
     return {
-      swaps: swapStatuses,
+      swaps: swapDetails,
       activities: [
-        ...pendingActivity(pending, mined),
-        ...confirmedAt(history, this.#tip),
+        ...pendingActivity(pendingFiltered, mined),
+        ...confirmedAt(historyFiltered, this.#tip),
       ],
     };
   }

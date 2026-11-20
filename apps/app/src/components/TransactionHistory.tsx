@@ -65,6 +65,8 @@ export function TransactionHistory({
 
   const allSwaps = transactionHistory.data.swaps;
   const allTxs = transactionHistory.data.activities;
+  // Unconfirmed transactions are dated in the future starting with this timestamp
+  const blockHeightSentinel = new Date().getTime() + 1;
 
   // Combine both arrays into a single array with a 'type' identifier
   // and normalize the timestamp for sorting.
@@ -72,19 +74,24 @@ export function TransactionHistory({
     ...allSwaps.map((swap) => ({
       type: "swap" as const,
       data: swap,
-      timestamp: new Date(swap.quoteResponse.timestamp).getTime(),
+      // Swaps are chronologically placed at the time which the quote was created
+      timestamp: new Date(swap.quoteResponse.timestamp),
     })),
     ...allTxs.map((tx) => ({
       type: "tx" as const,
       data: tx,
+      // Transactions are placed at their timestamp. Unconfirmed transactions follow
+      // confirmed transactions and are ordered according to their block heights.
       timestamp: new Date(
-        tx.timestamp ?? 0xffffffff + tx.block_height,
-      ).getTime(),
+        tx.timestamp
+          ? Number(tx.timestamp) * 1000
+          : blockHeightSentinel + tx.block_height,
+      ),
     })),
   ];
 
   // Sort the combined array from newest to oldest
-  all.sort((a, b) => b.timestamp - a.timestamp);
+  all.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   // Grab limit entries if limit is defined.
   const shown = limit ? all.slice(0, limit) : all;
 
@@ -157,7 +164,7 @@ function SwapRow({
   swap,
   tokens,
 }: {
-  swap: CheckSwapExecutionStatusResponse;
+  swap: CheckSwapExecutionStatusResponse & { outbound: boolean };
   tokens: Token[];
 }) {
   // Use the first intent hash for the dynamic URL
@@ -246,10 +253,17 @@ function SwapRow({
         <span className="text-sm font-medium">{destinationSymbol}</span>
       </div>
 
-      <div className="text-right text-base font-semibold">
-        +{swap.quoteResponse.quote.amountOutFormatted}
-        <span className="text-[max(0.7rem,0.5em)]"> {destinationSymbol}</span>
-      </div>
+      {swap.outbound ? (
+        <div className="text-right text-base font-semibold">
+          -{swap.quoteResponse.quote.amountInFormatted}
+          <span className="text-[max(0.7rem,0.5em)]"> {originSymbol}</span>
+        </div>
+      ) : (
+        <div className="text-right text-base font-semibold">
+          +{swap.quoteResponse.quote.amountOutFormatted}
+          <span className="text-[max(0.7rem,0.5em)]"> {destinationSymbol}</span>
+        </div>
+      )}
     </a>
   );
 }

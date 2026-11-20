@@ -1096,7 +1096,13 @@ function SwapRoute() {
     };
 
     const onConfirm = (isOutbound: boolean) => {
-      if (isOutbound) {
+      if (isOutbound && send.data) {
+        wallet.pushSwap(depositAddress, isOutbound, [
+          { hash: send.data.txid, explorerUrl: "" },
+        ]);
+        setStage(Stage.SendAmount);
+      } else if (isOutbound) {
+        wallet.pushSwap(depositAddress, isOutbound, []);
         setStage(Stage.SendAmount);
       } else {
         setStage(Stage.DepositAmount);
@@ -1133,7 +1139,7 @@ function SwapRoute() {
     );
   } else if (stage == Stage.DepositAmount) {
     const onFundsSend = () => {
-      wallet.pushSwap(depositAddress);
+      wallet.pushSwap(depositAddress, isOutbound, []);
     };
 
     return (
