@@ -180,7 +180,11 @@ export interface WalletState {
   /** A migration to Ironwood in progress (2.9). */
   migration?: Migration;
   /** All NEAR intents in progress. */
-  swaps: string[];
+  swaps: {
+    depositAddress: string;
+    outbound: boolean;
+    originChainTxHashes: { hash: string; explorerUrl: string }[];
+  }[];
 }
 
 /** One transaction as history shows it. */

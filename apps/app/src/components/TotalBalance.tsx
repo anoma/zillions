@@ -60,6 +60,14 @@ export function TotalBalance() {
             >
               Receive
             </ActionButton>
+            <ActionButton
+              href="/swap"
+              size="sm"
+              className="w-36 max-sm:flex-1"
+              outlineColor="black"
+            >
+              Swap
+            </ActionButton>
           </div>
         </div>
 
