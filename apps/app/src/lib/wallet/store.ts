@@ -98,4 +98,5 @@ export const emptyState = (id: string): WalletState => ({
   pending: [],
   blocks: new Map(),
   txs: new Map(),
+  swaps: [],
 });

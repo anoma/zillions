@@ -40,21 +40,27 @@ export function fitFontSize(chars: number, max: string) {
 }
 
 /** Convert zatoshi (bigint) → ZEC decimal string. */
-export function zatoshiToZec(zatoshi: bigint): string {
-  const negative = zatoshi < 0n;
-  const abs = negative ? -zatoshi : zatoshi;
+export function atomicToWhole(amount: bigint, decimals: number): string {
+  const negative = amount < 0n;
+  const abs = negative ? -amount : amount;
 
-  const whole = abs / ZATOSHI_PER_ZEC;
-  const frac = abs % ZATOSHI_PER_ZEC;
+  const atomicsPerWhole = 10n ** BigInt(decimals);
+  const whole = abs / atomicsPerWhole;
+  const frac = abs % atomicsPerWhole;
 
-  const fracStr = frac.toString().padStart(DECIMALS, "0").replace(/0+$/, "");
+  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
   const result = fracStr ? `${whole}.${fracStr}` : `${whole}`;
 
   return negative ? `-${result}` : result;
 }
 
+/** Convert zatoshi (bigint) → ZEC decimal string. */
+export function zatoshiToZec(zatoshi: bigint): string {
+  return atomicToWhole(zatoshi, DECIMALS);
+}
+
 /** Convert ZEC (string or number) → zatoshi (bigint). */
-export function zecToZatoshi(zec: string | number): bigint {
+export function wholeToAtomic(zec: string | number, decimals: number): bigint {
   const str = typeof zec === "number" ? zec.toString() : zec.trim();
 
   if (!/^-?\d*\.?\d*$/.test(str) || str === "" || str === "." || str === "-") {
@@ -64,14 +70,20 @@ export function zecToZatoshi(zec: string | number): bigint {
   const negative = str.startsWith("-");
   const [whole = "0", frac = ""] = str.replace(/^-/, "").split(".");
 
-  if (frac.length > DECIMALS) {
-    throw new Error(`Too many decimals: ZEC supports max ${DECIMALS}`);
+  if (frac.length > decimals) {
+    throw new Error(`Too many decimals: ZEC supports max ${decimals}`);
   }
 
-  const fracPadded = frac.padEnd(DECIMALS, "0");
-  const zatoshi = BigInt(whole) * ZATOSHI_PER_ZEC + BigInt(fracPadded);
+  const atomicsPerWhole = 10n ** BigInt(decimals);
+  const fracPadded = frac.padEnd(decimals, "0");
+  const zatoshi = BigInt(whole) * atomicsPerWhole + BigInt(fracPadded);
 
   return negative ? -zatoshi : zatoshi;
+}
+
+/** Convert ZEC (string or number) → zatoshi (bigint). */
+export function zecToZatoshi(zec: string | number): bigint {
+  return wholeToAtomic(zec, DECIMALS);
 }
 
 /** `text` with any digits past ZEC's 8 decimals cut off. */

@@ -1,7 +1,12 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
-import type { Activity } from "../lib/wallet/types";
+import type {
+  Activity,
+  CheckSwapExecutionStatusResponse,
+  Token,
+} from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -16,6 +21,17 @@ const gridClassName =
   "grid gap-x-4 grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_minmax(8rem,1fr)_minmax(0,2fr)_auto]";
 const rowClassName = "col-span-full grid grid-cols-subgrid items-center";
 const routeClassName = "max-lg:hidden";
+const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
+
+const SWAP_STATUS_DESCRIPTIONS = {
+  PENDING_DEPOSIT: "Awaiting your token deposit",
+  KNOWN_DEPOSIT_TX: "Deposit transaction detected",
+  PROCESSING: "Swap being executed",
+  SUCCESS: "Tokens delivered to destination address",
+  INCOMPLETE_DEPOSIT: "Deposit below required amount",
+  REFUNDED: "Swap failed, funds returned to refund address",
+  FAILED: "Swap encountered an error",
+};
 
 /**
  * The transaction list. As a page it's the full history under its own title;
@@ -29,6 +45,15 @@ export function TransactionHistory({
   limit?: number;
 }) {
   const transactionHistory = useGetTransactionHistory();
+  const [tokens, setTokens] = useState<Token[]>([]);
+
+  // Fetch available tokens. Required for displaying token assets un human readable form.
+  useEffect(() => {
+    fetch("https://1click.chaindefuser.com/v0/tokens")
+      .then((res) => res.json())
+      .then((data) => setTokens(data))
+      .catch((err) => console.error("Failed to fetch tokens", err));
+  }, []);
 
   if (transactionHistory.isPending) {
     return <PageLoader />;
@@ -38,7 +63,29 @@ export function TransactionHistory({
     return <PageError>{String(transactionHistory.error)}</PageError>;
   }
 
-  const all = transactionHistory.data;
+  const allSwaps = transactionHistory.data.swaps;
+  const allTxs = transactionHistory.data.activities;
+
+  // Combine both arrays into a single array with a 'type' identifier
+  // and normalize the timestamp for sorting.
+  const all = [
+    ...allSwaps.map((swap) => ({
+      type: "swap" as const,
+      data: swap,
+      timestamp: new Date(swap.quoteResponse.timestamp).getTime(),
+    })),
+    ...allTxs.map((tx) => ({
+      type: "tx" as const,
+      data: tx,
+      timestamp: new Date(
+        tx.timestamp ?? 0xffffffff + tx.block_height,
+      ).getTime(),
+    })),
+  ];
+
+  // Sort the combined array from newest to oldest
+  all.sort((a, b) => b.timestamp - a.timestamp);
+  // Grab limit entries if limit is defined.
   const shown = limit ? all.slice(0, limit) : all;
 
   return (
@@ -84,11 +131,126 @@ export function TransactionHistory({
             No transactions yet
           </p>
         )}
-        {shown.map((tx) => (
-          <Row key={tx.txid} tx={tx} />
-        ))}
+        {shown.map((item) => {
+          if (item.type === "swap") {
+            return (
+              <SwapRow
+                key={item.data.correlationId}
+                swap={item.data}
+                tokens={tokens}
+              />
+            );
+          } else {
+            return <Row key={item.data.txid} tx={item.data} />;
+          }
+        })}
       </div>
     </section>
+  );
+}
+
+/**
+ * Display a pending swap. I.e. the time at which the quotation was produced, the original
+ * asset, the destination asset, and the balance increase expected in the destination asset.
+ */
+function SwapRow({
+  swap,
+  tokens,
+}: {
+  swap: CheckSwapExecutionStatusResponse;
+  tokens: Token[];
+}) {
+  // Use the first intent hash for the dynamic URL
+  const txHash = swap.quoteResponse.quote.depositAddress;
+
+  // Look up symbols from the tokens array, fallback to the raw asset string if not found
+  const originSymbol =
+    tokens.find(
+      (t) => t.assetId === swap.quoteResponse.quoteRequest.originAsset,
+    )?.symbol || swap.quoteResponse.quoteRequest.originAsset;
+
+  const destinationSymbol =
+    tokens.find(
+      (t) => t.assetId === swap.quoteResponse.quoteRequest.destinationAsset,
+    )?.symbol || swap.quoteResponse.quoteRequest.destinationAsset;
+
+  // The same dots as the balance card's pool legend.
+  const dot = (gold: boolean) => (
+    <span
+      aria-hidden="true"
+      className={twMerge(
+        "size-2 shrink-0 rounded-full",
+        gold ? "bg-gold" : "bg-black/10 dark:bg-black/25",
+      )}
+    />
+  );
+  return (
+    <a
+      href={`https://explorer.near-intents.org/transactions/${txHash}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={twMerge(
+        rowClassName,
+        "py-4 px-4 transition-colors duration-300 hover:bg-card",
+        "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black",
+      )}
+    >
+      <span className="size-9 grid place-items-center rounded-full bg-black/5 text-gray-600">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={1.5}
+          stroke="currentColor"
+          className="size-5"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+          />
+        </svg>
+      </span>
+
+      <div>
+        <div>Swap: {SWAP_STATUS_DESCRIPTIONS[swap.status]}</div>
+        <div className="mt-0.5 text-xs text-gray-600">
+          <time>
+            {new Date(swap.quoteResponse.timestamp).toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </time>
+        </div>
+      </div>
+
+      <div
+        className={twMerge(
+          "min-w-0 flex items-center gap-3 text-gray-600",
+          routeClassName,
+        )}
+      >
+        {dot(
+          swap.quoteResponse.quoteRequest.originAsset === ZEC_TOKEN_ASSET_ID,
+        )}
+        <span className="text-sm font-medium">{originSymbol}</span>
+        <span aria-hidden="true" className="text-black/30">
+          →
+        </span>
+        {dot(
+          swap.quoteResponse.quoteRequest.destinationAsset ===
+            ZEC_TOKEN_ASSET_ID,
+        )}
+        <span className="text-sm font-medium">{destinationSymbol}</span>
+      </div>
+
+      <div className="text-right text-base font-semibold">
+        +{swap.quoteResponse.quote.amountOutFormatted}
+        <span className="text-[max(0.7rem,0.5em)]"> {destinationSymbol}</span>
+      </div>
+    </a>
   );
 }
 
