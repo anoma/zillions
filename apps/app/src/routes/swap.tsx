@@ -1,3 +1,9 @@
+import type { QuoteResponse } from "@defuse-protocol/one-click-sdk-typescript";
+import {
+  OneClickService,
+  QuoteRequest,
+  TokenResponse,
+} from "@defuse-protocol/one-click-sdk-typescript";
 import type { DefaultError, UseMutateFunction } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
@@ -34,8 +40,6 @@ import {
   wholeToAtomic,
   zatoshiToZec,
 } from "../lib/utils";
-import type { Token } from "../lib/wallet/types";
-
 const Stage = {
   Swap: "SWAP",
   ReviewQuote: "REVIEW_QUOTE",
@@ -56,8 +60,8 @@ const UNKNOWN_SYMBOL_LOGO: React.JSX.Element = <UnknownIcon />;
 const UNKNOWN_BLOCKCHAIN_LOGO: React.JSX.Element = <UnknownIcon />;
 // Map blockchains to logo paths
 const blockchainLogos = new Map<string, React.JSX.Element>([
-  ["btc", <BitcoinIcon />],
-  ["zec", <ZcashIcon />],
+  [TokenResponse.blockchain.BTC, <BitcoinIcon />],
+  [TokenResponse.blockchain.ZEC, <ZcashIcon />],
 ]);
 // Map cryptocurrency symbols to logo paths
 const symbolLogos = new Map<string, React.JSX.Element>([
@@ -74,7 +78,7 @@ export const Route = createFileRoute("/swap")({
 // a small logo representing the blockchain on which the token resides, and
 // a bigger logo representing the cryptocurrency. When a logo cannot be found
 // a default logo is displayed.
-function TokenIcon({ token }: { token: Token }) {
+function TokenIcon({ token }: { token: TokenResponse }) {
   return (
     <div className="relative inline-flex">
       {/* Main cryptocurrency logo */}
@@ -93,7 +97,7 @@ function abbreviateString(str: string, maxLength: number) {
 
 // Construct a labelled icon for the given token: an icon on the left and
 // the token's symbol above the token's blockchain on the right.
-function LabelledTokenIcon({ token }: { token: Token }) {
+function LabelledTokenIcon({ token }: { token: TokenResponse }) {
   return (
     <div
       className="flex items-center gap-3"
@@ -124,11 +128,11 @@ function CurrencySelector({
   readOnly = false,
   onChange,
 }: {
-  tokens: Token[];
-  token: Token;
-  setToken: (token: Token) => void;
+  tokens: TokenResponse[];
+  token: TokenResponse;
+  setToken: (token: TokenResponse) => void;
   readOnly?: boolean;
-  onChange: (token?: Token) => void;
+  onChange: (token?: TokenResponse) => void;
 }) {
   // Represents whether the drop-down is currently open or not
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -155,7 +159,7 @@ function CurrencySelector({
       {/* The drop-down list populated by the supplied tokens. */}
       {dropdownOpen && (
         <div className="absolute z-10 w-full min-w-max mt-1 bg-card border border-line rounded-xl shadow-lg max-h-60 overflow-y-auto">
-          {tokens.map((c: Token) => (
+          {tokens.map((c: TokenResponse) => (
             <button
               key={c.assetId}
               type="button"
@@ -199,10 +203,10 @@ function SwapForm({
   setRecipientAddress,
 }: {
   onSubmit: () => void;
-  setFromToken: (token: Token) => void;
-  setToToken: (token: Token) => void;
-  fromToken: Token;
-  toToken: Token;
+  setFromToken: (token: TokenResponse) => void;
+  setToToken: (token: TokenResponse) => void;
+  fromToken: TokenResponse;
+  toToken: TokenResponse;
   isOutbound: boolean;
   setIsOutbound: (isOutbound: boolean) => void;
   fromAmount: string;
@@ -219,7 +223,7 @@ function SwapForm({
   const account = useAccount();
   const shielded = useFreshAddress();
   const balance = useGetBalance();
-  const [tokens, setTokens] = useState<Token[]>([]);
+  const [tokens, setTokens] = useState<TokenResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [recipientAddressError, setRecipientAddressError] = useState<
     string | undefined
@@ -274,29 +278,31 @@ function SwapForm({
       : undefined;
   amountInError ??= sendPlan.ceiling ? sendPlan.plan.error?.message : undefined;
 
-  // Populate the drop-down list of tokens and updatte exchange rates
+  // Populate the drop-down list of tokens and update exchange rates
   useEffect(() => {
-    fetch("https://1click.chaindefuser.com/v0/tokens").then(
-      async (response) => {
-        const data = await response.json();
-        if (response.ok) {
-          setTokens(data);
-          // Update the exchange rate metadata of the from token
-          setFromToken(
-            data.find((token: Token) => token.assetId == fromToken.assetId) ??
-              fromToken,
-          );
-          // Update the exchange rate metadata of the to token
-          setToToken(
-            data.find((token: Token) => token.assetId == toToken.assetId) ??
-              toToken,
-          );
-        } else {
-          setError(data.message);
-        }
+    OneClickService.getTokens()
+      .then((data: TokenResponse[]) => {
+        setTokens(data);
+        // Update the exchange rate metadata of the from token
+        setFromToken(
+          data.find(
+            (token: TokenResponse) => token.assetId == fromToken.assetId,
+          ) ?? fromToken,
+        );
+        // Update the exchange rate metadata of the to token
+        setToToken(
+          data.find(
+            (token: TokenResponse) => token.assetId == toToken.assetId,
+          ) ?? toToken,
+        );
         setIsLoading(false);
-      },
-    );
+      })
+      .catch((error) => {
+        setError(
+          error.body?.message || error.message || "Failed to fetch tokens",
+        );
+        setIsLoading(false);
+      });
   }, []);
 
   // Compute the currency conversions
@@ -606,7 +612,7 @@ function QuoteReview({
   onConfirm,
   children,
 }: {
-  fromToken: Token;
+  fromToken: TokenResponse;
   fromAmount: string;
   refundAddress: string;
   slippage: string;
@@ -614,7 +620,7 @@ function QuoteReview({
   setAmountIn: (amount: string) => void;
   amountInUsd: number;
   setAmountInUsd: (amount: number) => void;
-  toToken: Token;
+  toToken: TokenResponse;
   isOutbound: boolean;
   recipientAddress: string;
   depositAddress: string;
@@ -683,37 +689,30 @@ function QuoteReview({
 
   useEffect(() => {
     const deadline = new Date(Date.now() + 60 * 60 * 1000);
-    const body = {
+    const quoteRequest = {
       dry: false,
-      swapType: "EXACT_INPUT",
+      swapType: QuoteRequest.swapType.EXACT_INPUT,
       slippageTolerance: Number(wholeToAtomic(slippage, 2)),
       originAsset: fromToken.assetId,
-      depositType: "ORIGIN_CHAIN",
+      depositType: QuoteRequest.depositType.ORIGIN_CHAIN,
       destinationAsset: toToken.assetId,
       amount: amountInBigInt.toString(),
       recipient: recipientAddress,
-      recipientType: "DESTINATION_CHAIN",
+      recipientType: QuoteRequest.recipientType.DESTINATION_CHAIN,
       refundTo: refundAddress,
-      refundType: "ORIGIN_CHAIN",
+      refundType: QuoteRequest.refundType.ORIGIN_CHAIN,
       deadline: deadline.toISOString(),
     };
-    console.log("Review Quote post request body", body);
-    fetch("https://1click.chaindefuser.com/v0/quote", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(body),
-    }).then(async (response) => {
-      const data = await response.json();
-      if (response.ok) {
+
+    console.log("Review Quote post request body", quoteRequest);
+    OneClickService.getQuote(quoteRequest)
+      .then((data: QuoteResponse) => {
         console.log("Review Quote post response body", data);
         setAmountIn(data.quote.amountInFormatted);
         setAmountOut(data.quote.amountOutFormatted);
 
         // Save the deposit address
-        setDepositAddress(data.quote.depositAddress);
+        setDepositAddress(data.quote.depositAddress!);
 
         // Populate USD equivalents
         setAmountInUsd(Number(data.quote.amountInUsd));
@@ -721,16 +720,24 @@ function QuoteReview({
 
         setConversionFee(
           (BigInt(
-            Math.ceil((data.quote.amountInUsd - data.quote.amountOutUsd) * 100),
+            Math.ceil(
+              (Number(data.quote.amountInUsd) -
+                Number(data.quote.amountOutUsd)) *
+                100,
+            ),
           ) *
             10n ** BigInt(fromToken.decimals)) /
             BigInt(Math.ceil(fromToken.price * 100)),
         );
-      } else {
-        onFailure(data);
-      }
-      setIsLoading(false);
-    });
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        onFailure({
+          message:
+            error.body?.message || error.message || "Failed to fetch quote",
+        });
+        setIsLoading(false);
+      });
   }, [
     fromAmount,
     fromToken,
@@ -955,7 +962,7 @@ function AmountDeposit({
 }: {
   amountIn: string;
   amountInUsd: number;
-  fromToken: Token;
+  fromToken: TokenResponse;
   depositAddress: string;
   onConfirm: () => void;
   children: React.JSX.Element;
@@ -1023,10 +1030,10 @@ function SwapRoute() {
   const account = useAccount();
   const wallet = useWallet();
   const shielded = useFreshAddress();
-  const [fromToken, setFromToken] = useState({
+  const [fromToken, setFromToken] = useState<TokenResponse>({
     assetId: "nep141:btc.omft.near",
     symbol: "BTC",
-    blockchain: "btc",
+    blockchain: TokenResponse.blockchain.BTC,
     price: 73978,
     priceUpdatedAt: "2026-11-11T11:20:05.389Z",
     coingeckoId: "bitcoin",
@@ -1037,10 +1044,10 @@ function SwapRoute() {
   const [refundAddress, setRefundAddress] = useState<string>("");
   const [recipientAddress, setRecipientAddress] = useState<string>("");
   const [slippage, setSlippage] = useState("0.5");
-  const [toToken, setToToken] = useState({
+  const [toToken, setToToken] = useState<TokenResponse>({
     assetId: ZEC_TOKEN_ASSET_ID,
     decimals: 8,
-    blockchain: "zec",
+    blockchain: TokenResponse.blockchain.ZEC,
     symbol: "ZEC",
     price: 1315.9,
     priceUpdatedAt: "2026-11-06T13:22:31.003Z",
