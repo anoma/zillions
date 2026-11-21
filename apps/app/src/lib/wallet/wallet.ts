@@ -22,6 +22,7 @@ import { NETWORK } from "./config";
 import {
   type Migration,
   nextStep,
+  spareNotes,
   startMigration,
   stepSent,
 } from "./migration";
@@ -643,12 +644,26 @@ export class Wallet {
     this.#save();
   };
 
+  /**
+   * What a preparation plans from: zcore spends every Orchard note it's
+   * given, so the notes made for transfers still to send are left out.
+   */
+  #preparationData = () => {
+    const { migration, notes, pending } = this.#state;
+    invariant(migration, "No migration in progress");
+    const orchard = spendable(notes, [], pending).notes.filter(
+      (n) => n.pool === "orchard",
+    );
+    const spare = new Set(spareNotes(migration, orchard));
+    return this.#walletData(false, (n) => n.pool !== "orchard" || spare.has(n));
+  };
+
   planPreparation = (parts: number[]) =>
-    planPreparation(this.#walletData(false), parts);
+    planPreparation(this.#preparationData(), parts);
 
   /** The next preparation, for the keychain to build. */
   preparationTx = async (parts: number[]) => {
-    const { tx, plan } = await preparationTx(this.#walletData(false), parts);
+    const { tx, plan } = await preparationTx(this.#preparationData(), parts);
     return { tx: { ...tx, account: this.id }, plan, changeTo: undefined };
   };
 
