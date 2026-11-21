@@ -1,4 +1,9 @@
 import type { AccountInfo, ProvedTx } from "@zillions/keychain-types";
+import type { TransactionDetails } from "@defuse-protocol/one-click-sdk-typescript";
+import {
+  GetExecutionStatusResponse,
+  OneClickService,
+} from "@defuse-protocol/one-click-sdk-typescript";
 import initZcore, { parse_transaction } from "@zillions/zcore";
 
 import { invariant } from "../invariant";
@@ -72,11 +77,9 @@ import {
 } from "./transparent";
 import type {
   Activity,
-  CheckSwapExecutionStatusResponse,
   Note,
   PendingActivity,
   SentOutput,
-  TxHashDetails,
   WalletState,
 } from "./types";
 
@@ -563,28 +566,21 @@ export class Wallet {
   /** Newest first, pending transactions on top until sync finds them mined. */
   async getTransactionHistory(): Promise<{
     activities: Activity[];
-    swaps: (CheckSwapExecutionStatusResponse & { outbound: boolean })[];
+    swaps: (GetExecutionStatusResponse & { outbound: boolean })[];
   }> {
     await this.#seed();
     const { notes, sent, blocks, pending, swaps } = this.#state;
-    // Request all swap statuses
+
+    // Request all swap statuses using the Defuse One-Click SDK
     const swapDetails = await Promise.all(
       (swaps ?? []).map(({ depositAddress, originChainTxHashes, outbound }) => {
-        const statusUrl = new URL("https://1click.chaindefuser.com/v0/status");
-        statusUrl.searchParams.append("depositAddress", depositAddress);
-
-        // Return the fetch promise
-        return fetch(statusUrl)
-          .then(async (response) => {
-            if (!response.ok) {
-              throw new Error("Network response was not ok");
-            }
-            const responseJson = await response.json();
+        return OneClickService.getExecutionStatus(depositAddress)
+          .then((responseJson) => {
+            // Append our local origin chain hashes and return the mapped object
             responseJson.swapDetails.originChainTxHashes.push(
               ...originChainTxHashes,
             );
-            const augResponseJson = { ...responseJson, outbound: outbound };
-            return augResponseJson;
+            return { ...responseJson, outbound };
           })
           .catch((error) => {
             console.log(`Failed for ${depositAddress}:`, error);
@@ -592,6 +588,7 @@ export class Wallet {
           });
       }),
     );
+
     // Filter out the pending transactions covered by swaps
     const pendingFiltered = pending.filter((p) => {
       return !swapDetails.some((swap) => {
@@ -600,9 +597,12 @@ export class Wallet {
         const origHashes = swap.swapDetails?.originChainTxHashes || [];
         return destHashes
           .concat(origHashes)
-          .some((chainTxHash: TxHashDetails) => chainTxHash.hash == p.txid);
+          .some(
+            (chainTxHash: TransactionDetails) => chainTxHash.hash == p.txid,
+          );
       });
     });
+
     // Until the transparent side names our addresses, an unshield to one of
     // them would read as a payment.
     const addresses = this.#transparent?.addresses;
@@ -614,6 +614,7 @@ export class Wallet {
       addresses && this.#fullTxs(),
       addresses,
     );
+
     // Filter out the history that's covered by swaps
     const historyFiltered = history.filter((p) => {
       return !swapDetails.some((swap) => {
@@ -622,13 +623,15 @@ export class Wallet {
         const origHashes = swap.swapDetails?.originChainTxHashes || [];
         return destHashes
           .concat(origHashes)
-          .some((chainTxHash: TxHashDetails) => chainTxHash.hash == p.txid);
+          .some(
+            (chainTxHash: TransactionDetails) => chainTxHash.hash == p.txid,
+          );
       });
     });
     const mined = new Set(history.map((tx) => tx.txid));
 
     return {
-      swaps: swapDetails,
+      swaps: swapDetails.filter((p) => p !== null),
       activities: [
         ...pendingActivity(pendingFiltered, mined),
         ...confirmedAt(historyFiltered, this.#tip),

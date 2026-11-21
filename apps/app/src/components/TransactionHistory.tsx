@@ -1,12 +1,12 @@
+import {
+  GetExecutionStatusResponse,
+  TokenResponse,
+} from "@defuse-protocol/one-click-sdk-typescript";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
-import type {
-  Activity,
-  CheckSwapExecutionStatusResponse,
-  Token,
-} from "../lib/wallet/types";
+import type { Activity } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -45,7 +45,7 @@ export function TransactionHistory({
   limit?: number;
 }) {
   const transactionHistory = useGetTransactionHistory();
-  const [tokens, setTokens] = useState<Token[]>([]);
+  const [tokens, setTokens] = useState<TokenResponse[]>([]);
 
   // Fetch available tokens. Required for displaying token assets un human readable form.
   useEffect(() => {
@@ -164,8 +164,8 @@ function SwapRow({
   swap,
   tokens,
 }: {
-  swap: CheckSwapExecutionStatusResponse & { outbound: boolean };
-  tokens: Token[];
+  swap: GetExecutionStatusResponse & { outbound: boolean };
+  tokens: TokenResponse[];
 }) {
   // Use the first intent hash for the dynamic URL
   const txHash = swap.quoteResponse.quote.depositAddress;
