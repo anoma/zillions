@@ -82,6 +82,23 @@ export function wholeToAtomic(zec: string | number, decimals: number): bigint {
 }
 
 /** Convert ZEC (string or number) → zatoshi (bigint). */
+export function wholeToScaledBigInt(zec: string | number): [bigint, number] {
+  const str = typeof zec === "number" ? zec.toString() : zec.trim();
+
+  if (!/^-?\d*\.?\d*$/.test(str) || str === "" || str === "." || str === "-") {
+    throw new Error(`Invalid ZEC amount: "${zec}"`);
+  }
+
+  const negative = str.startsWith("-");
+  const [whole = "0", frac = ""] = str.replace(/^-/, "").split(".");
+
+  const atomicsPerWhole = 10n ** BigInt(frac.length);
+  const zatoshi = BigInt(whole) * atomicsPerWhole + BigInt(frac);
+
+  return [negative ? -zatoshi : zatoshi, frac.length];
+}
+
+/** Convert ZEC (string or number) → zatoshi (bigint). */
 export function zecToZatoshi(zec: string | number): bigint {
   return wholeToAtomic(zec, DECIMALS);
 }

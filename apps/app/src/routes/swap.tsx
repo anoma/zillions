@@ -38,6 +38,7 @@ import {
   atomicToWhole,
   shortenAddress,
   wholeToAtomic,
+  wholeToScaledBigInt,
   zatoshiToZec,
 } from "../lib/utils";
 const Stage = {
@@ -306,18 +307,22 @@ function SwapForm({
   }, []);
 
   // Compute the currency conversions
-  const fromTokenPriceAtomic = wholeToAtomic(fromToken.price, 2);
-  const toTokenPriceAtomic = wholeToAtomic(toToken.price, 2);
-  const totalPriceAux = amountInBigInt * fromTokenPriceAtomic;
-  const totalPrice = totalPriceAux / 10n ** BigInt(fromToken.decimals);
+  const fromTokenPriceAtomic = wholeToScaledBigInt(fromToken.price);
+  const toTokenPriceAtomic = wholeToScaledBigInt(toToken.price);
+  const totalPriceAux = amountInBigInt * fromTokenPriceAtomic[0];
+  const totalPrice =
+    (totalPriceAux * 100n) /
+    10n ** BigInt(fromToken.decimals + fromTokenPriceAtomic[1]);
   const fromTotalPrice = totalPrice;
   const toTotalPrice = totalPrice;
   const toAmount =
-    (totalPriceAux * 10n ** BigInt(toToken.decimals)) /
-    (10n ** BigInt(fromToken.decimals) * toTokenPriceAtomic);
+    (totalPriceAux * 10n ** BigInt(toToken.decimals + toTokenPriceAtomic[1])) /
+    (10n ** BigInt(fromToken.decimals + fromTokenPriceAtomic[1]) *
+      toTokenPriceAtomic[0]);
   const zecPriceInFrom =
-    (toTokenPriceAtomic * 10n ** BigInt(fromToken.decimals)) /
-    fromTokenPriceAtomic;
+    (toTokenPriceAtomic[0] *
+      10n ** BigInt(fromToken.decimals + fromTokenPriceAtomic[1])) /
+    (fromTokenPriceAtomic[0] * 10n ** BigInt(toTokenPriceAtomic[1]));
 
   // Swap the from amount and token with the to amount and token. Additionally
   // the refund address is needed from the user for inbound swaps whereas a
