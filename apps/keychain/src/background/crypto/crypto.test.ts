@@ -7,6 +7,7 @@ import { initSync } from "@zillions/zcore";
 import { describe, expect, it, vi } from "vitest";
 
 import { decrypt, encrypt, KdfType } from "./crypto";
+import { mnemonicToSeed, validateMnemonic } from "./mnemonic";
 
 vi.mock("webextension-polyfill", () => ({
   default: { runtime: { getURL: (path: string) => path } },
@@ -18,7 +19,6 @@ initSync({
     new URL("../../../../../packages/zcore/pkg/zcore_bg.wasm", import.meta.url),
   ),
 });
-import { mnemonicToSeed, validateMnemonic } from "./mnemonic";
 
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString("hex");
 const unhex = (text: string): Uint8Array =>
