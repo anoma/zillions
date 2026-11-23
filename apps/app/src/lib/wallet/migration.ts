@@ -59,6 +59,33 @@ export type Next =
   | { kind: "done" };
 
 /**
+ * The transfers still to send, the note each one has (`funding`), and
+ * `spare`: the notes none of them waits for.
+ */
+function funded<N extends OrchardNote>(m: Migration, orchard: N[]) {
+  const unsent = m.transfers
+    .map((t, index) => ({ ...t, index }))
+    .filter((t) => !t.txid);
+  // Oldest first: a transfer takes the first of its notes to be ready.
+  const spare = [...orchard].sort((a, b) => a.height - b.height);
+  const funding = new Map<number, N>();
+  const unfunded = unsent.filter((t) => {
+    const at = spare.findIndex((n) => n.value === t.value + m.transferFee);
+    if (at < 0) return true;
+    funding.set(t.index, spare.splice(at, 1)[0]);
+    return false;
+  });
+  return { unsent, funding, unfunded, spare };
+}
+
+/**
+ * The notes a preparation may spend. A transfer still to send keeps the note
+ * made for it: spent again, no preparation would be left to remake it.
+ */
+export const spareNotes = <N extends OrchardNote>(m: Migration, orchard: N[]) =>
+  funded(m, orchard).spare;
+
+/**
  * The step to send next: a transfer whose note exists, else the preparation
  * making notes for every transfer that has none.
  */
@@ -73,20 +100,9 @@ export function nextStep(
   if (steps.some((s) => s.txid && pending.has(s.txid))) {
     return { kind: "mining" };
   }
-  const unsent = m.transfers
-    .map((t, index) => ({ ...t, index }))
-    .filter((t) => !t.txid);
+  const { unsent, funding, unfunded, spare } = funded(m, orchard);
   if (!unsent.length) return { kind: "done" };
 
-  // Oldest first: a transfer takes the first of its notes to be ready.
-  const notes = [...orchard].sort((a, b) => a.height - b.height);
-  const funding = new Map<number, OrchardNote>();
-  const unfunded = unsent.filter((t) => {
-    const at = notes.findIndex((n) => n.value === t.value + m.transferFee);
-    if (at < 0) return true;
-    funding.set(t.index, notes.splice(at, 1)[0]);
-    return false;
-  });
   if (!unfunded.length) {
     const [t] = unsent;
     return {
@@ -99,13 +115,13 @@ export function nextStep(
   }
 
   const index = m.preparations.findIndex((p) => !p.txid);
-  if (index >= 0) {
+  if (index >= 0 && spare.length) {
     return {
       kind: "preparation",
       index,
       height: m.preparations[index].height,
       parts: unfunded.map((t) => t.value),
-      readyAt: Math.min(...orchard.map((n) => readyAt(n.height))),
+      readyAt: Math.min(...spare.map((n) => readyAt(n.height))),
     };
   }
   return { kind: "replan" };
