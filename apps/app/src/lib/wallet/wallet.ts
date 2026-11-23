@@ -1,9 +1,9 @@
-import type { AccountInfo, ProvedTx } from "@zillions/keychain-types";
 import type { TransactionDetails } from "@defuse-protocol/one-click-sdk-typescript";
 import {
   GetExecutionStatusResponse,
   OneClickService,
 } from "@defuse-protocol/one-click-sdk-typescript";
+import type { AccountInfo, ProvedTx } from "@zillions/keychain-types";
 import initZcore, { parse_transaction } from "@zillions/zcore";
 
 import { invariant } from "../invariant";
