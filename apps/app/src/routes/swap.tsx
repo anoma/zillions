@@ -247,23 +247,27 @@ function SwapForm({
     amountInError = "Not a valid amount";
   }
 
-  // Compute the transaction fee that will be applied to the swap
+  // Compute the transaction fee that will be applied to the swap. This is only
+  // used for outbound transfers.
   const sendPlan = useSendPlan(
     {
       from,
       to: account.transparent.address,
-      amount: amountInBigInt,
+      // Mask the input amount for inbound transfers
+      amount: isOutbound ? amountInBigInt : 0n,
       memo: undefined,
     },
     false,
     0n,
   );
-  // Also compute the maximum amount that can be spent
+  // Also compute the maximum amount that can be spent. THis is only used for
+  // outbound transfers.
   const maxSendPlan = useSendPlan(
     {
       from,
       to: account.transparent.address,
-      amount: amountInBigInt,
+      // Mask the input amount for inbound transfers
+      amount: isOutbound ? amountInBigInt : 0n,
       memo: undefined,
     },
     true,
@@ -821,7 +825,7 @@ function QuoteReview({
               <span className="font-medium text-neutral-500">
                 Recipient address
               </span>
-              <span className="font-medium">{recipientAddress}</span>
+              <span className="font-medium break-all">{recipientAddress}</span>
             </div>
           )}
 
@@ -830,7 +834,7 @@ function QuoteReview({
               <span className="font-medium text-neutral-500">
                 Refund address
               </span>
-              <span className="font-medium">{refundAddress}</span>
+              <span className="font-medium break-all">{refundAddress}</span>
             </div>
           )}
 
