@@ -6,11 +6,11 @@ cd "$(dirname "$0")"
 
 # The wasm-bindgen CLI must match the wasm-bindgen crate in Cargo.lock.
 WASM_BINDGEN=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"$/\1/p')
-BINARYEN=version_111
+BINARYEN=version_129
 case "$(uname -s)-$(uname -m)" in
-    Linux-x86_64) platform=x86_64-linux sha=2f340545b302c706bf22d2ee2382ae53a73f32bd62cb3435fb9404303c4dc940 ;;
-    Darwin-arm64) platform=arm64-macos sha=dea7d0e6330fd9130209cd9bf0a24b9f3b934061236ce008c0031f2f0faf70eb ;;
-    Darwin-x86_64) platform=x86_64-macos sha=232cd9b948fe3009498e298ebd1b5eb777a688a04fe05dd96898823cd5ea6dec ;;
+    Linux-x86_64) platform=x86_64-linux sha=50b9fa62b9abea752da92ec57e0c555fee578760cd237c40107957715d2976ba ;;
+    Darwin-arm64) platform=arm64-macos sha=d1bb014775ca3002506712b81b4406d126ff6845e8b2f343bc2696a1a88b7117 ;;
+    Darwin-x86_64) platform=x86_64-macos sha=cc38897d3d93c968f24819fae210e04afd0146d0e2467e307207ea7e798a59b9 ;;
     *) echo "error: no pinned binaryen for $(uname -sm)" >&2; exit 1 ;;
 esac
 
@@ -47,9 +47,20 @@ fi
 # matching remap wins, so the most specific goes last.
 sysroot=$(rustc --print sysroot)
 rustc_commit=$(rustc -vV | sed -n 's/^commit-hash: //p')
-RUSTFLAGS="--remap-path-prefix=$HOME=~ --remap-path-prefix=$PWD=. --remap-path-prefix=$sysroot/lib/rustlib/src/rust=/rustc/$rustc_commit" \
-    cargo build --lib --release --locked --target wasm32-unknown-unknown
+remap="--remap-path-prefix=$HOME=~ --remap-path-prefix=$PWD=. --remap-path-prefix=$sysroot/lib/rustlib/src/rust=/rustc/$rustc_commit"
+RUSTFLAGS="$remap" cargo build --lib --release --locked --target wasm32-unknown-unknown
+# pkg/mt, the threaded prover. Shared memory needs std rebuilt with atomics
+# (-Z build-std), which RUSTC_BOOTSTRAP allows on the pinned stable toolchain.
+RUSTC_BOOTSTRAP=1 CFLAGS_wasm32_unknown_unknown="-matomics -mbulk-memory" \
+    RUSTFLAGS="$remap -C target-feature=+atomics,+bulk-memory,+mutable-globals \
+    -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=1073741824 \
+    -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size \
+    -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base" \
+    cargo build --lib --release --locked --target wasm32-unknown-unknown \
+    --features threads --target-dir target/mt -Z build-std=panic_abort,std
 rm -rf pkg
 "$tools/bin/wasm-bindgen" target/wasm32-unknown-unknown/release/zcore.wasm --out-dir pkg --target web
+"$tools/bin/wasm-bindgen" target/mt/wasm32-unknown-unknown/release/zcore.wasm --out-dir pkg/mt --target web
 "$wasm_opt" pkg/zcore_bg.wasm -o pkg/zcore_bg.wasm -O4
+"$wasm_opt" pkg/mt/zcore_bg.wasm -o pkg/mt/zcore_bg.wasm -O4
 node source-hash.mjs > pkg/.source-hash

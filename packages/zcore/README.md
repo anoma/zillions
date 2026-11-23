@@ -89,6 +89,13 @@ picks it up.
 
 This builds `pkg/`. Run it once after cloning and again after any zcore change.
 
+`pkg/mt/` is a second build with the `threads` feature: Halo2 and Groth16
+proofs on a pool of workers sharing one memory. It needs a cross-origin
+isolated page, so only the Keychain's prover on Chrome loads it; Firefox and
+the app use `pkg/`. Shared memory means rebuilding the standard library with
+atomics (`-Z build-std`), which the pinned stable toolchain does under
+`RUSTC_BOOTSTRAP=1`.
+
 Every tool is pinned: Rust in `rust-toolchain.toml`, and in `build.sh` the
 `wasm-bindgen` CLI (to `Cargo.lock`'s version) and binaryen's `wasm-opt` (with
 its SHA-256). `build.sh` installs the last two into `.tools/` on first run.
