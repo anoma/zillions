@@ -677,7 +677,7 @@ function QuoteReview({
 
   const onConfirmAux = () => {
     if (isOutbound) {
-      const memo = "Swap";
+      const memo = `Swap ${amountIn} ${fromToken.symbol} for ${toToken.symbol}.`;
       send.mutate({
         from: "shielded",
         to: depositAddress,
