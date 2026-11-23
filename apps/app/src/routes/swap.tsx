@@ -184,6 +184,9 @@ function CurrencySelector({
   );
 }
 
+// Display a form allowing a user to select the input amount and currency and also
+// the output currency of a swap. The form automatically displays what output amount
+// the user should expect to get.
 function SwapForm({
   onSubmit,
   setFromToken,
@@ -338,9 +341,13 @@ function SwapForm({
     setToToken(tmpToken);
     setFromAmount(tmpAmount);
     if (!isOutbound) {
+      // Outbound transfer refunds are automatically returned to this wallet.
+      // So only the recipient address is required from the user.
       setRecipientAddress("");
       setRefundAddress(shielded ?? "");
     } else {
+      // Inbound transfers automatically directed to this wallet. So only the
+      // refund address is required from the user.
       setRecipientAddress(shielded ?? "");
       setRefundAddress("");
     }
@@ -365,6 +372,8 @@ function SwapForm({
         } else if (!isOutbound && refundAddress === "") {
           setRefundAddressError("Set a refund address");
         } else if (!amountInError && !error) {
+          // If an error is asserted for the amount input or a global error, say,
+          // from another screen.
           onSubmit();
         }
       }}
@@ -373,6 +382,7 @@ function SwapForm({
         heading="From"
         htmlFor="swap-from-amount"
         aside={
+          // Display the maximum sendable amount and a button to effect it
           isOutbound && (
             <div id="send-available">
               <BalanceWithMax
@@ -390,6 +400,7 @@ function SwapForm({
           )
         }
       >
+        {/* Input amount and currency selector. */}
         <div className="flex flex-row items-start gap-4 w-full">
           <CurrencySelector
             tokens={tokens}
@@ -438,6 +449,7 @@ function SwapForm({
         <div className="flex-1 h-px bg-line"></div>
       </div>
 
+      {/* Output amount and currency selector. */}
       <FormCard heading="To">
         <div className="flex flex-row items-start gap-4 w-full">
           <CurrencySelector
@@ -462,6 +474,7 @@ function SwapForm({
         </div>
       </FormCard>
 
+      {/* Inbound transfers require a refund address from the user. */}
       {!isOutbound && (
         <FormCard heading="Refund Address" htmlFor="swap-refund-address">
           <div className="flex flex-col gap-1.5">
@@ -508,6 +521,7 @@ function SwapForm({
         </FormCard>
       )}
 
+      {/* Outbound transfers require a recipient addresss from the user. */}
       {isOutbound && (
         <FormCard heading="Recipient Address" htmlFor="swap-recipient-address">
           <div className="flex flex-col gap-1.5">
@@ -556,6 +570,7 @@ function SwapForm({
 
       <FormCard heading="Swap Settings">
         <div className="flex flex-col gap-4">
+          {/* Solicit the slippage tolerance from the user. */}
           <div className="flex items-center justify-between gap-4">
             <label
               htmlFor="swap-slippage"
@@ -578,6 +593,7 @@ function SwapForm({
             />
           </div>
 
+          {/* Display the value of the to cryptocurrency in terms of the from. */}
           <div className="flex items-center justify-between text-sm">
             <span className="font-medium text-neutral-700">Rate</span>
             <span className="font-medium">
@@ -602,6 +618,10 @@ function SwapForm({
   );
 }
 
+// This form requests a quote for the currency exchange specified by the user and
+// displays the response. Essentially the input and output amount and currencies are
+// displayed and the fees are broken down. The user is left to decide whether to
+// proceed.
 function QuoteReview({
   fromToken,
   fromAmount,
@@ -658,12 +678,17 @@ function QuoteReview({
   const [conversionFee, setConversionFee] = useState(0n);
   const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
 
+  // Once an outbound transfer has been successfully created, let the onConfirm
+  // handler choose what to do.
   useEffect(() => {
     if (isOutbound && send.data) {
       onConfirm(isOutbound);
     }
   }, [isOutbound, send.data]);
 
+  {
+    /* The send plan is required to compute the transaction fees. */
+  }
   const sendPlan = useSendPlan(
     {
       from: "shielded",
@@ -677,6 +702,7 @@ function QuoteReview({
 
   const onConfirmAux = () => {
     if (isOutbound) {
+      // Initiate the outbound transfer to the exchange deposit address
       const memo = `Swap ${amountIn} ${fromToken.symbol} for ${toToken.symbol}.`;
       send.mutate({
         from: "shielded",
@@ -691,12 +717,15 @@ function QuoteReview({
           memo,
         },
       });
+      // Call onConfirm later once the transaction is complete
     } else {
+      // Let the onConfirm handler choose what to do with the confirmation
       onConfirm(isOutbound);
     }
   };
 
   useEffect(() => {
+    // Ensure that the quote remains valid for at least an hour
     const deadline = new Date(Date.now() + 60 * 60 * 1000);
     const quoteRequest = {
       dry: false,
@@ -713,6 +742,8 @@ function QuoteReview({
       deadline: deadline.toISOString(),
     };
 
+    // Request a quote from One Click given the exchange amounts and currencies
+    // from the previous screen.
     console.log("Review Quote post request body", quoteRequest);
     OneClickService.getQuote(quoteRequest)
       .then((data: QuoteResponse) => {
@@ -727,6 +758,8 @@ function QuoteReview({
         setAmountInUsd(Number(data.quote.amountInUsd));
         setAmountOutUsd(Number(data.quote.amountOutUsd));
 
+        // Compute the conversion fee as the difference between the US dollar
+        // value of the input and output amounts.
         setConversionFee(
           (BigInt(
             Math.ceil(
@@ -745,6 +778,7 @@ function QuoteReview({
           message:
             error.body?.message || error.message || "Failed to fetch quote",
         });
+        // Turn off the spinner indicating that quote data is loading
         setIsLoading(false);
       });
   }, [
@@ -769,6 +803,7 @@ function QuoteReview({
     <FormPage title="Review Quote" onSubmit={onConfirmAux}>
       <FormCard heading="Swap Summary">
         <div className="flex flex-col gap-4">
+          {/* Display the chosen input amount and currency. */}
           <div className="flex items-center justify-between">
             <TokenIcon token={fromToken} />
             <div className="flex flex-col items-end">
@@ -804,6 +839,7 @@ function QuoteReview({
 
             <div className="flex-1 h-px bg-line"></div>
           </div>
+          {/* Display the chosen output amount and currency. */}
           <div className="flex items-center justify-between">
             <TokenIcon token={toToken} />
             <div className="flex flex-col items-end">
@@ -820,6 +856,8 @@ function QuoteReview({
 
       <FormCard heading="Transaction Details">
         <div className="flex flex-col gap-4 text-sm">
+          {/* Outbound transfers have their refund address fixed to this wallet.
+          So only display the recipient address that the user chose. */}
           {isOutbound && (
             <div className="flex items-center justify-between">
               <span className="font-medium text-neutral-500">
@@ -829,6 +867,8 @@ function QuoteReview({
             </div>
           )}
 
+          {/* Inbound transfers have their recipient address fixed to this wallet.
+          So only display the refund address that the user chose. */}
           {!isOutbound && (
             <div className="flex items-center justify-between">
               <span className="font-medium text-neutral-500">
@@ -840,6 +880,8 @@ function QuoteReview({
 
           <div className="h-px w-full bg-line" />
 
+          {/* Outbound transfers incur two fees: the conversion fee and the Zcash
+          transaction fee. Display these two components and their sum. */}
           {isOutbound && sendPlan.plan.data?.fee && (
             <>
               <div className="flex items-center justify-between">
@@ -914,6 +956,9 @@ function QuoteReview({
             </>
           )}
 
+          {/* Inbound transfers are simpler since this wallet only has to handle the
+          conversion fee. The originating chain is the one that has to deal with the
+          transaction fee. Therefore no breakdown is required. */}
           {!isOutbound && (
             <>
               <div className="flex items-center justify-between">
@@ -946,6 +991,7 @@ function QuoteReview({
 
       <div className="flex gap-3">
         {children}
+        {/* Display the status of the outbound transfer. */}
         <div className="flex-1">
           <SubmitBlock
             label="Confirm"
@@ -961,6 +1007,9 @@ function QuoteReview({
   );
 }
 
+// A screen that requests a user to deposit the given amount at the given
+// deposit address. Both a QR code and copyable address are displayed. This
+// This screen is only used for inbound transfers.
 function AmountDeposit({
   amountIn,
   amountInUsd,
@@ -980,7 +1029,7 @@ function AmountDeposit({
     <FormPage title="Deposit Funds">
       <section aria-label="Your address" className="flex flex-col gap-4">
         <div className="flex flex-col items-center gap-6 py-4">
-          {/* Amount Display */}
+          {/* Display the amount that needs to be deposited at the deposit address. */}
           <div className="flex flex-col items-center gap-1">
             <span className="text-sm font-medium text-neutral-700">
               Deposit Amount
@@ -993,7 +1042,7 @@ function AmountDeposit({
             </span>
           </div>
 
-          {/* QR Code */}
+          {/* Display the QR code of the deposit address. */}
           <div className="mx-auto w-fit flex flex-col items-center gap-3 rounded-xl border border-line bg-card p-4 pb-3">
             {depositAddress ? (
               <QRCode
@@ -1011,6 +1060,7 @@ function AmountDeposit({
                 <SpinnerIcon className="size-5 text-gold" />
               </div>
             )}
+            {/* Display the copyable deposit address. */}
             {depositAddress && (
               <CopyToClipboardControl
                 value={depositAddress}
@@ -1026,6 +1076,8 @@ function AmountDeposit({
         </div>
         <div className="flex gap-3 justify-center">
           {children}
+          {/* Allow the user to confirm that they have deposited and put this transaction in
+          the background. */}
           <ActionButton color="black" onClick={onConfirm} href="/">
             I've sent the funds
           </ActionButton>
@@ -1035,10 +1087,14 @@ function AmountDeposit({
   );
 }
 
+// A series of screens that allow users to specify and effect both inbound and outbound
+// cryptocurrency swaps.
 function SwapRoute() {
   const account = useAccount();
   const wallet = useWallet();
   const shielded = useFreshAddress();
+  // The default from token to use before the available tokens have been received
+  // from the One Click endpoint.
   const [fromToken, setFromToken] = useState<TokenResponse>({
     assetId: "nep141:btc.omft.near",
     symbol: "BTC",
@@ -1053,6 +1109,8 @@ function SwapRoute() {
   const [refundAddress, setRefundAddress] = useState<string>("");
   const [recipientAddress, setRecipientAddress] = useState<string>("");
   const [slippage, setSlippage] = useState("0.5");
+  // The default to token to use before the available tokens have been received
+  // from the One Click endpoint.
   const [toToken, setToToken] = useState<TokenResponse>({
     assetId: ZEC_TOKEN_ASSET_ID,
     decimals: 8,
@@ -1076,11 +1134,18 @@ function SwapRoute() {
   const send = useSend();
 
   useEffect(() => {
-    (async () => setRecipientAddress(shielded ?? ""))();
+    (async () => {
+      if (!isOutbound && shielded !== "") {
+        setRecipientAddress(shielded);
+      }
+    })();
   }, [shielded]);
 
   if (stage == Stage.Swap) {
+    // Step one: solicit the user to enter the amount and cryptocurrency they
+    // want to exchange
     const onGetQuote = () => {
+      // Move to the ReviewQuote screen
       setStage(Stage.ReviewQuote);
     };
 
@@ -1106,6 +1171,8 @@ function SwapRoute() {
       />
     );
   } else if (stage == Stage.ReviewQuote) {
+    // Step two: display the quote provided by the One Click endpoint, break down
+    // the swap fees, and get the user to confirm whether they'd like to proceed.
     const onFailure = (data: { message: string }) => {
       setError(data.message);
       setStage(Stage.Swap);
@@ -1113,14 +1180,18 @@ function SwapRoute() {
 
     const onConfirm = (isOutbound: boolean) => {
       if (isOutbound && send.data) {
+        // Record the outbound transaction ID to deduplicate entries in the
+        // transaction history.
         wallet.pushSwap(depositAddress, isOutbound, [
           { hash: send.data.txid, explorerUrl: "" },
         ]);
+        // Move to the SendAmount screen.
         setStage(Stage.SendAmount);
       } else if (isOutbound) {
         wallet.pushSwap(depositAddress, isOutbound, []);
         setStage(Stage.SendAmount);
       } else {
+        // Move to the deposit amount screen
         setStage(Stage.DepositAmount);
       }
     };
@@ -1144,6 +1215,8 @@ function SwapRoute() {
         onFailure={onFailure}
         onConfirm={onConfirm}
       >
+        {/* Provide a back button in case the user would like to modify the cryptocurrency
+        exchange. */}
         <button
           type="button"
           onClick={() => setStage(Stage.Swap)}
@@ -1154,7 +1227,11 @@ function SwapRoute() {
       </QuoteReview>
     );
   } else if (stage == Stage.DepositAmount) {
+    // Step three: display amount the user needs to deposit and the address they
+    // need to deposit at. Activated only for inbound transfers.
     const onFundsSend = () => {
+      // Record the swap address so that this wallet can monitor it in the background
+      // and provide status updates
       wallet.pushSwap(depositAddress, isOutbound, []);
     };
 
@@ -1166,6 +1243,8 @@ function SwapRoute() {
         depositAddress={depositAddress}
         onConfirm={onFundsSend}
       >
+        {/* Only a quote has been provided so far. So everything is reversible and the
+        user can return to the quote screen. */}
         <button
           type="button"
           onClick={() => setStage(Stage.ReviewQuote)}
@@ -1176,6 +1255,8 @@ function SwapRoute() {
       </AmountDeposit>
     );
   } else if (send.data && stage == Stage.SendAmount) {
+    // Step three: the outbound transfer has already been submitted, so just
+    // print the Zcash transaction rreceipt.
     return <TransactionReceipt tx={{ ...send.data, status: "Pending" }} />;
   }
 }
