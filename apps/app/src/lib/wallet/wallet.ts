@@ -1,4 +1,3 @@
-import type { TransactionDetails } from "@defuse-protocol/one-click-sdk-typescript";
 import {
   GetExecutionStatusResponse,
   OneClickService,
@@ -589,20 +588,6 @@ export class Wallet {
       }),
     );
 
-    // Filter out the pending transactions covered by swaps
-    const pendingFiltered = pending.filter((p) => {
-      return !swapDetails.some((swap) => {
-        if (swap == null) return false;
-        const destHashes = swap.swapDetails?.destinationChainTxHashes || [];
-        const origHashes = swap.swapDetails?.originChainTxHashes || [];
-        return destHashes
-          .concat(origHashes)
-          .some(
-            (chainTxHash: TransactionDetails) => chainTxHash.hash == p.txid,
-          );
-      });
-    });
-
     // Until the transparent side names our addresses, an unshield to one of
     // them would read as a payment.
     const addresses = this.#transparent?.addresses;
@@ -615,26 +600,16 @@ export class Wallet {
       addresses,
     );
 
-    // Filter out the history that's covered by swaps
-    const historyFiltered = history.filter((p) => {
-      return !swapDetails.some((swap) => {
-        if (swap == null) return false;
-        const destHashes = swap.swapDetails?.destinationChainTxHashes || [];
-        const origHashes = swap.swapDetails?.originChainTxHashes || [];
-        return destHashes
-          .concat(origHashes)
-          .some(
-            (chainTxHash: TransactionDetails) => chainTxHash.hash == p.txid,
-          );
-      });
-    });
     const mined = new Set(history.map((tx) => tx.txid));
 
+    // Every activity stays, swap legs included: the receipt, the confirming
+    // countdown and /tx/$id look them up by txid. Only the history list hides
+    // the legs a swap row stands for.
     return {
       swaps: swapDetails.filter((p) => p !== null),
       activities: [
-        ...pendingActivity(pendingFiltered, mined),
-        ...confirmedAt(historyFiltered, this.#tip),
+        ...pendingActivity(pending, mined),
+        ...confirmedAt(history, this.#tip),
       ],
     };
   }

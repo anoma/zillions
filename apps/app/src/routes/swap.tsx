@@ -392,7 +392,8 @@ function SwapForm({
                 isMax={amountInBigInt === maxAmount}
                 onToggleMax={() => {
                   if (maxAmount !== undefined) {
-                    setFromAmount(atomicToWhole(maxAmount, toToken.decimals));
+                    // maxAmount is in zatoshi: outbound, the from token is ZEC.
+                    setFromAmount(atomicToWhole(maxAmount, fromToken.decimals));
                   }
                 }}
               />
@@ -662,6 +663,7 @@ function QuoteReview({
     data: any;
     stages: StageEntry[];
     isPending: boolean;
+    error: Error | null;
     mutate: UseMutateFunction<
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       any,
@@ -999,7 +1001,7 @@ function QuoteReview({
             pendingLabel={"Confirming..."}
             color={"gold-button"}
             stages={send.stages}
-            error={""}
+            error={send.error?.message}
           ></SubmitBlock>
         </div>
       </div>

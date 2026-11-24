@@ -33,6 +33,18 @@ const SWAP_STATUS_DESCRIPTIONS = {
   FAILED: "Swap encountered an error",
 };
 
+/** The txids of the chain transactions behind `swaps`, on either side. */
+function swapTxids(swaps: GetExecutionStatusResponse[]) {
+  return new Set(
+    swaps.flatMap(({ swapDetails }) =>
+      [
+        ...(swapDetails?.originChainTxHashes ?? []),
+        ...(swapDetails?.destinationChainTxHashes ?? []),
+      ].map(({ hash }) => hash),
+    ),
+  );
+}
+
 /**
  * The transaction list. As a page it's the full history under its own title;
  * as a section (`limit`) it's the latest few with a link to the rest.
@@ -64,7 +76,11 @@ export function TransactionHistory({
   }
 
   const allSwaps = transactionHistory.data.swaps;
-  const allTxs = transactionHistory.data.activities;
+  // A swap's row stands for its chain transactions, so they aren't listed twice.
+  const covered = swapTxids(allSwaps);
+  const allTxs = transactionHistory.data.activities.filter(
+    (tx) => !covered.has(tx.txid),
+  );
   // Unconfirmed transactions are dated in the future starting with this timestamp
   const blockHeightSentinel = new Date().getTime() + 1;
 
