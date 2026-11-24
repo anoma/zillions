@@ -539,6 +539,20 @@ test("reads history only once storage is loaded", async () => {
   expect((await wallet.getTransactionHistory()).activities).toHaveLength(1);
 });
 
+test("records a swap once per deposit address, adding hashes it lacked", async () => {
+  const wallet = new Wallet({ id: "s" });
+  const t1 = { hash: "t1", explorerUrl: "" };
+  const t2 = { hash: "t2", explorerUrl: "" };
+  await wallet.pushSwap("in", false, []);
+  await wallet.pushSwap("in", false, []);
+  await wallet.pushSwap("out", true, [t1]);
+  await wallet.pushSwap("out", true, [t1, t2]);
+  expect(wallet.getSwaps()).toEqual([
+    { depositAddress: "in", outbound: false, originChainTxHashes: [] },
+    { depositAddress: "out", outbound: true, originChainTxHashes: [t1, t2] },
+  ]);
+});
+
 test("stores a recent block, and fetches it again each sync", async () => {
   chain.sizes = { sapling: 0, orchard: 2 * 16_384, ironwood: 0 };
   // Mined 50 blocks below the tip: a reorg could still replace it.

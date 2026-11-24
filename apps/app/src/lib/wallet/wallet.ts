@@ -395,14 +395,31 @@ export class Wallet {
     this.#history = undefined;
   };
 
-  /** Push the given swap to the state. */
+  /** Records a swap for history to follow; once per deposit address. */
   pushSwap = async (
     depositAddress: string,
     outbound: boolean,
     originChainTxHashes: { hash: string; explorerUrl: string }[],
   ) => {
-    this.#state.swaps ??= [];
-    this.#state.swaps.push({ depositAddress, outbound, originChainTxHashes });
+    // Stored swaps load with the rest of the state; one pushed before then
+    // would be dropped when the stored state replaces it.
+    await this.#seed();
+    const swaps = (this.#state.swaps ??= []);
+    // A deposit address is one swap: confirming its quote again (after Back,
+    // or a double click) keeps the one entry, adding any hashes it lacked.
+    const known = swaps.find((swap) => swap.depositAddress === depositAddress);
+    if (!known) {
+      swaps.push({
+        depositAddress,
+        outbound,
+        originChainTxHashes: [...originChainTxHashes],
+      });
+    } else {
+      const held = new Set(known.originChainTxHashes.map(({ hash }) => hash));
+      const fresh = originChainTxHashes.filter(({ hash }) => !held.has(hash));
+      if (!fresh.length) return;
+      known.originChainTxHashes.push(...fresh);
+    }
     this.#save();
   };
 
