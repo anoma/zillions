@@ -56,8 +56,9 @@ exactly one note.
   Outputs go to our own internal address through
   `add_orchard_change_output`, which the rule allows.
 - Each preparation is built when it's sent, from the notes the wallet holds
-  then: the largest ones that can anchor, at most 14, so there is room for an
-  amount and the change. It makes as many amounts as fit, in plan order;
+  then, less the ones made for transfers still to send: the largest ones that
+  can anchor, at most 14, so there is room for an amount and the change. It
+  makes as many amounts as fit, in plan order;
   the next preparation spends its change, so it waits until that change can
   anchor (3–6 hours). Upstream builds it from a `Proposal` whose amounts are
   Orchard change, which `build.rs` carries out like any send.

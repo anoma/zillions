@@ -56,6 +56,7 @@ vi.mock("@zillions/zcore", () => ({
   spendable: vi.fn(() => ({ now: 0, later: 0 })),
   plan_send: vi.fn(),
   plan_shield: vi.fn(),
+  plan_preparation: vi.fn(() => ({ plan: {}, made: 0 })),
 }));
 
 vi.mock("../keychain/keychain", () => ({
@@ -357,6 +358,40 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
   expect(
     (await wallet.getTransactionHistory()).some((tx) => tx.txid === "t1"),
   ).toBe(false);
+});
+
+test("plans a preparation without the notes made for transfers still to send", async () => {
+  chain.sizes = { sapling: 0, orchard: 2 * 16_384, ironwood: 0 };
+  // What the first of two preparations made: a transfer's note, and change.
+  chain.hits.set("orchard:1", [
+    { ...note("orchard", 16_387, nf("c1")), value: 5_015_000 },
+    { ...note("orchard", 16_388, nf("c2")), value: 2_000_000 },
+  ]);
+  const wallet = new Wallet({ id: "m" });
+  await wallet.sync();
+  wallet.startMigration({
+    tip: 3_000,
+    orchard: 7_015_000,
+    preparations: [3_001, 3_300],
+    transfers: [
+      { value: 5_000_000, height: 3_600 },
+      { value: 1_000_000, height: 3_700 },
+    ],
+    transferFee: 15_000,
+    preparationFee: 80_000,
+    left: 0,
+  });
+  wallet.migrationStepSent("preparation", 0, "p");
+  expect(wallet.migration()?.next).toMatchObject({
+    kind: "preparation",
+    index: 1,
+    parts: [1_000_000],
+  });
+
+  await wallet.planPreparation([1_000_000]);
+  expect(vi.mocked(zcore.plan_preparation).mock.lastCall?.[1].notes).toEqual([
+    expect.objectContaining({ position: 16_388 }),
+  ]);
 });
 
 test("places a Sapling spend from the indexer", async () => {

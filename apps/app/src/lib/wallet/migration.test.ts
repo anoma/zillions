@@ -5,6 +5,7 @@ import {
   nextStep,
   readyAt,
   sendAt,
+  spareNotes,
   stepSent,
   transfersDone,
 } from "./migration";
@@ -85,6 +86,33 @@ test("sends each transfer from its note, in order, once it can anchor", () => {
 test("asks to plan again once the notes are gone", () => {
   const m = plan({ preparations: [{ height: 101, txid: "p" }] });
   expect(nextStep(m, at(50, 5_000), new Set())).toEqual({ kind: "replan" });
+});
+
+test("a later preparation leaves the notes made for transfers still to send", () => {
+  // The first of two preparations made the 5-cent transfer's note; the
+  // second makes the other's from the change.
+  const m = plan({
+    preparations: [{ height: 101, txid: "p" }, { height: 300 }],
+  });
+  const change = at(120, 2 * CENT);
+  const notes = [...at(110, 5 * CENT + FEE), ...change];
+  expect(nextStep(m, notes, new Set())).toEqual({
+    kind: "preparation",
+    index: 1,
+    height: 300,
+    parts: [CENT],
+    readyAt: readyAt(120),
+  });
+  expect(spareNotes(m, notes)).toEqual(change);
+});
+
+test("asks to plan again when a preparation has nothing to spend", () => {
+  const m = plan({
+    preparations: [{ height: 101, txid: "p" }, { height: 300 }],
+  });
+  expect(nextStep(m, at(110, 5 * CENT + FEE), new Set())).toEqual({
+    kind: "replan",
+  });
 });
 
 test("a step sent late shifts the rest; one sent early doesn't", () => {
