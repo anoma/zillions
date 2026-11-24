@@ -8,6 +8,7 @@ import {
   TokenResponse,
 } from "@defuse-protocol/one-click-sdk-typescript";
 import type { DefaultError, UseMutateFunction } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { QRCode } from "react-qr-code";
@@ -28,6 +29,7 @@ import { inputClassName, qrClassName } from "../components/ui/utils";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
+import { getTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { useSend, useSendPlan } from "../hooks/useSend";
 import type { StageEntry } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
@@ -784,7 +786,7 @@ function QuoteReview({
     const quoteRequest = {
       dry: false,
       swapType: QuoteRequest.swapType.EXACT_INPUT,
-      slippageTolerance: Number(wholeToAtomic(slippage, 2)),
+      slippageTolerance: Number(wholeToAtomic(slippage, SLIPPAGE_DECIMALS)),
       originAsset: fromToken.assetId,
       depositType: QuoteRequest.depositType.ORIGIN_CHAIN,
       destinationAsset: toToken.assetId,
@@ -1112,7 +1114,7 @@ function AmountDeposit({
           {children}
           {/* Allow the user to confirm that they have deposited and put this transaction in
           the background. */}
-          <ActionButton color="black" onClick={onConfirm} href="/">
+          <ActionButton onClick={onConfirm} href="/">
             I've sent the funds
           </ActionButton>
         </div>
@@ -1125,6 +1127,7 @@ function AmountDeposit({
 // cryptocurrency swaps.
 function SwapRoute() {
   const wallet = useWallet();
+  const queryClient = useQueryClient();
   const shielded = useFreshAddress();
   // The default from token to use before the available tokens have been received
   // from the One Click endpoint.
@@ -1213,7 +1216,7 @@ function SwapRoute() {
       setStage(Stage.Swap);
     };
 
-    const onConfirm = (isOutbound: boolean) => {
+    const onConfirm = async (isOutbound: boolean) => {
       if (!quote?.depositAddress) {
         throw new Error(
           "onConfirm has been triggered when the quote has not yet been prepared",
@@ -1229,6 +1232,7 @@ function SwapRoute() {
           wallet.pushSwap(quote?.depositAddress, isOutbound, [
             { hash: send.data.txid, explorerUrl: "" },
           ]);
+          await queryClient.invalidateQueries(getTransactionHistory(wallet));
           // Move to the SendAmount screen.
           setStage(Stage.SendAmount);
         }
@@ -1236,6 +1240,7 @@ function SwapRoute() {
         // Record the swap address so that this wallet can monitor it in the background
         // and provide status updates
         wallet.pushSwap(quote?.depositAddress, isOutbound, []);
+        await queryClient.invalidateQueries(getTransactionHistory(wallet));
         // Move to the deposit amount screen
         setStage(Stage.DepositAmount);
       }

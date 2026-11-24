@@ -4,7 +4,7 @@ import { fitFontSize } from "../lib/utils";
 import { placeholderClassName } from "./ui/utils";
 
 /** "ZEC" after a hero amount, sized relative to it. */
-export function AmountUnit({ unit = "ZEC" }: { unit: string }) {
+export function AmountUnit({ unit = "ZEC" }: { unit?: string }) {
   return <span className="ml-[0.4em] text-[0.4em]">{unit}</span>;
 }
 
@@ -21,7 +21,7 @@ export function AmountInput({
 }: ComponentProps<"input"> & {
   value: string;
   maxFontSize?: string;
-  unit: string;
+  unit?: string;
 }) {
   return (
     <div
