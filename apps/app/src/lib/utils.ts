@@ -65,7 +65,7 @@ export function wholeToAtomic(zec: string | number, decimals: number): bigint {
     typeof zec === "number"
       ? zec.toLocaleString("en-US", {
           useGrouping: false,
-          maximumFractionDigits: 21,
+          maximumFractionDigits: 20,
         })
       : zec.trim();
 
@@ -93,7 +93,7 @@ export function wholeToScaledBigInt(zec: string | number): [bigint, number] {
     typeof zec === "number"
       ? zec.toLocaleString("en-US", {
           useGrouping: false,
-          maximumFractionDigits: 21,
+          maximumFractionDigits: 20,
         })
       : zec.trim();
 

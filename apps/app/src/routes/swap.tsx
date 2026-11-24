@@ -1216,7 +1216,7 @@ function SwapRoute() {
       setStage(Stage.Swap);
     };
 
-    const onConfirm = async (isOutbound: boolean) => {
+    const onConfirm = (isOutbound: boolean) => {
       if (!quote?.depositAddress) {
         throw new Error(
           "onConfirm has been triggered when the quote has not yet been prepared",
@@ -1232,7 +1232,7 @@ function SwapRoute() {
           wallet.pushSwap(quote?.depositAddress, isOutbound, [
             { hash: send.data.txid, explorerUrl: "" },
           ]);
-          await queryClient.invalidateQueries(getTransactionHistory(wallet));
+          queryClient.invalidateQueries(getTransactionHistory(wallet));
           // Move to the SendAmount screen.
           setStage(Stage.SendAmount);
         }
@@ -1240,7 +1240,7 @@ function SwapRoute() {
         // Record the swap address so that this wallet can monitor it in the background
         // and provide status updates
         wallet.pushSwap(quote?.depositAddress, isOutbound, []);
-        await queryClient.invalidateQueries(getTransactionHistory(wallet));
+        queryClient.invalidateQueries(getTransactionHistory(wallet));
         // Move to the deposit amount screen
         setStage(Stage.DepositAmount);
       }
