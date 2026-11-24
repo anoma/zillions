@@ -1,4 +1,7 @@
-import type { QuoteResponse } from "@defuse-protocol/one-click-sdk-typescript";
+import type {
+  Quote,
+  QuoteResponse,
+} from "@defuse-protocol/one-click-sdk-typescript";
 import {
   OneClickService,
   QuoteRequest,
@@ -619,31 +622,16 @@ function SwapForm({
   );
 }
 
-/** What the swap screens show of `quote`; placeholders while there is none. */
-function quoteFigures(quote: QuoteResponse | null) {
-  return {
-    amountIn: quote?.quote.amountInFormatted ?? "0",
-    amountOut: quote?.quote.amountOutFormatted ?? "0",
-    // Empty until quoted, which keeps the fee plan from running before then.
-    depositAddress: quote?.quote.depositAddress ?? "",
-    amountInUsd: Number(quote?.quote.amountInUsd ?? 0),
-    amountOutUsd: Number(quote?.quote.amountOutUsd ?? 0),
-  };
-}
-
 /**
  * The conversion fee in the from token's atomic units: the difference between
  * the US dollar values of the input and output amounts.
  */
-function conversionFeeOf(quote: QuoteResponse, fromToken: TokenResponse) {
+function conversionFeeOf(quote: Quote, fromToken: TokenResponse) {
   const priceCents = BigInt(Math.ceil(fromToken.price * 100));
   // Computed on render now, so a price of 0 must not throw.
   if (priceCents <= 0n) return 0n;
   const feeCents = BigInt(
-    Math.ceil(
-      (Number(quote.quote.amountInUsd) - Number(quote.quote.amountOutUsd)) *
-        100,
-    ),
+    Math.ceil((Number(quote.amountInUsd) - Number(quote.amountOutUsd)) * 100),
   );
   return (feeCents * 10n ** BigInt(fromToken.decimals)) / priceCents;
 }
@@ -700,11 +688,10 @@ function QuoteReview({
   const [deadline] = useState(() => new Date(Date.now() + 60 * 60 * 1000));
   // Everything shown comes from the quote, so a quote kept across screens
   // shows exactly as it did when it was fetched.
-  const { amountIn, amountOut, depositAddress, amountInUsd, amountOutUsd } =
-    quoteFigures(quoteResponse);
-  const conversionFee = quoteResponse
-    ? conversionFeeOf(quoteResponse, fromToken)
-    : 0n;
+  const quote = quoteResponse?.quote;
+  const amountInUsd = Number(quote?.amountInUsd ?? "0");
+  const amountOutUsd = Number(quote?.amountOutUsd ?? "0");
+  const conversionFee = quote ? conversionFeeOf(quote, fromToken) : 0n;
   const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
 
   // Once an outbound transfer has been successfully created, let the onConfirm
@@ -721,7 +708,7 @@ function QuoteReview({
   const sendPlan = useSendPlan(
     {
       from: "shielded",
-      to: depositAddress,
+      to: quote?.depositAddress ?? "",
       amount: amountInBigInt,
       memo: undefined,
     },
@@ -732,17 +719,17 @@ function QuoteReview({
   const onConfirmAux = () => {
     if (isOutbound) {
       // Initiate the outbound transfer to the exchange deposit address
-      const memo = `Swap ${amountIn} ${fromToken.symbol} for ${toToken.symbol}.`;
+      const memo = `Swap ${quote?.amountInFormatted ?? "0"} ${fromToken.symbol} for ${toToken.symbol}.`;
       send.mutate({
         from: "shielded",
-        to: depositAddress,
+        to: quote?.depositAddress ?? "",
         amount: amountInBigInt,
         memo: undefined,
         shown: {
           tx_type: "Sent",
           value: -amountInBigInt,
           from: { pool: "shielded" },
-          to: { address: depositAddress },
+          to: { address: quote?.depositAddress ?? "" },
           memo,
         },
       });
@@ -822,7 +809,7 @@ function QuoteReview({
             <TokenIcon token={fromToken} />
             <div className="flex flex-col items-end">
               <span className="text-lg font-medium">
-                {amountIn} {fromToken.symbol}
+                {quote?.amountInFormatted ?? "0"} {fromToken.symbol}
               </span>
               <span className="text-xs text-neutral-500">
                 ~ ${amountInUsd.toFixed(2)} USD
@@ -858,7 +845,7 @@ function QuoteReview({
             <TokenIcon token={toToken} />
             <div className="flex flex-col items-end">
               <span className="text-lg font-medium">
-                {amountOut} {toToken.symbol}
+                {quote?.amountOutFormatted ?? "0"} {toToken.symbol}
               </span>
               <span className="text-xs text-neutral-500">
                 ~ ${amountOutUsd.toFixed(2)} USD
@@ -991,7 +978,7 @@ function QuoteReview({
                 </span>
                 <div className="flex flex-col items-end">
                   <span className="text-lg font-bold text-black">
-                    {amountIn} {fromToken.symbol}
+                    {quote?.amountInFormatted ?? "0"} {fromToken.symbol}
                   </span>
                   <span className="text-xs text-neutral-500">
                     ~ ${amountInUsd.toFixed(2)} USD
@@ -1141,7 +1128,8 @@ function SwapRoute() {
   const [quoteResponse, setQuoteResponse] = useState<QuoteResponse | null>(
     null,
   );
-  const { amountIn, amountInUsd, depositAddress } = quoteFigures(quoteResponse);
+  const quote = quoteResponse?.quote;
+  const amountInUsd = Number(quote?.amountInUsd ?? "0");
 
   const send = useSend();
 
@@ -1193,18 +1181,28 @@ function SwapRoute() {
     };
 
     const onConfirm = (isOutbound: boolean) => {
-      if (isOutbound && send.data) {
-        // Record the outbound transaction ID to deduplicate entries in the
-        // transaction history.
-        wallet.pushSwap(depositAddress, isOutbound, [
-          { hash: send.data.txid, explorerUrl: "" },
-        ]);
-        // Move to the SendAmount screen.
-        setStage(Stage.SendAmount);
+      if (!quote?.depositAddress) {
+        throw new Error(
+          "onConfirm has been triggered when the quote has not yet been prepared",
+        );
       } else if (isOutbound) {
-        wallet.pushSwap(depositAddress, isOutbound, []);
-        setStage(Stage.SendAmount);
+        if (!send.data) {
+          throw new Error(
+            "onConfirm has been triggered when transaction data is not yet ready",
+          );
+        } else {
+          // Record the outbound transaction ID to deduplicate entries in the
+          // transaction history.
+          wallet.pushSwap(quote?.depositAddress, isOutbound, [
+            { hash: send.data.txid, explorerUrl: "" },
+          ]);
+          // Move to the SendAmount screen.
+          setStage(Stage.SendAmount);
+        }
       } else {
+        // Record the swap address so that this wallet can monitor it in the background
+        // and provide status updates
+        wallet.pushSwap(quote?.depositAddress, isOutbound, []);
         // Move to the deposit amount screen
         setStage(Stage.DepositAmount);
       }
@@ -1239,19 +1237,19 @@ function SwapRoute() {
   } else if (stage == Stage.DepositAmount) {
     // Step three: display amount the user needs to deposit and the address they
     // need to deposit at. Activated only for inbound transfers.
-    const onFundsSend = () => {
-      // Record the swap address so that this wallet can monitor it in the background
-      // and provide status updates
-      wallet.pushSwap(depositAddress, isOutbound, []);
-    };
+    if (!quote?.depositAddress) {
+      throw new Error(
+        "Deposit amount screen rendered when the quote has not yet been prepared",
+      );
+    }
 
     return (
       <AmountDeposit
         amountInUsd={amountInUsd}
-        amountIn={amountIn}
+        amountIn={quote?.amountInFormatted ?? "0"}
         fromToken={fromToken}
-        depositAddress={depositAddress}
-        onConfirm={onFundsSend}
+        depositAddress={quote?.depositAddress}
+        onConfirm={() => {}}
       >
         {/* Only a quote has been provided so far. So everything is reversible and the
         user can return to the quote screen. */}
