@@ -619,6 +619,35 @@ function SwapForm({
   );
 }
 
+/** What the swap screens show of `quote`; placeholders while there is none. */
+function quoteFigures(quote: QuoteResponse | null) {
+  return {
+    amountIn: quote?.quote.amountInFormatted ?? "0",
+    amountOut: quote?.quote.amountOutFormatted ?? "0",
+    // Empty until quoted, which keeps the fee plan from running before then.
+    depositAddress: quote?.quote.depositAddress ?? "",
+    amountInUsd: Number(quote?.quote.amountInUsd ?? 0),
+    amountOutUsd: Number(quote?.quote.amountOutUsd ?? 0),
+  };
+}
+
+/**
+ * The conversion fee in the from token's atomic units: the difference between
+ * the US dollar values of the input and output amounts.
+ */
+function conversionFeeOf(quote: QuoteResponse, fromToken: TokenResponse) {
+  const priceCents = BigInt(Math.ceil(fromToken.price * 100));
+  // Computed on render now, so a price of 0 must not throw.
+  if (priceCents <= 0n) return 0n;
+  const feeCents = BigInt(
+    Math.ceil(
+      (Number(quote.quote.amountInUsd) - Number(quote.quote.amountOutUsd)) *
+        100,
+    ),
+  );
+  return (feeCents * 10n ** BigInt(fromToken.decimals)) / priceCents;
+}
+
 // This form requests a quote for the currency exchange specified by the user and
 // displays the response. Essentially the input and output amount and currencies are
 // displayed and the fees are broken down. The user is left to decide whether to
@@ -628,16 +657,12 @@ function QuoteReview({
   fromAmount,
   refundAddress,
   slippage,
-  amountIn,
-  setAmountIn,
-  amountInUsd,
-  setAmountInUsd,
+  quoteResponse,
+  setQuoteResponse,
   toToken,
   isOutbound,
   send,
   recipientAddress,
-  depositAddress,
-  setDepositAddress,
   onFailure,
   onConfirm,
   children,
@@ -646,15 +671,12 @@ function QuoteReview({
   fromAmount: string;
   refundAddress: string;
   slippage: string;
-  amountIn: string;
-  setAmountIn: (amount: string) => void;
-  amountInUsd: number;
-  setAmountInUsd: (amount: number) => void;
+  /** The quote under review; null until one is fetched, which then lands here. */
+  quoteResponse: QuoteResponse | null;
+  setQuoteResponse: (quoteResponse: QuoteResponse) => void;
   toToken: TokenResponse;
   isOutbound: boolean;
   recipientAddress: string;
-  depositAddress: string;
-  setDepositAddress: (address: string) => void;
   onFailure: ({ message }: { message: string }) => void;
   onConfirm: (isOutgoing: boolean) => void;
   children: React.JSX.Element;
@@ -674,10 +696,15 @@ function QuoteReview({
     >;
   };
 }) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [amountOut, setAmountOut] = useState("0");
-  const [amountOutUsd, setAmountOutUsd] = useState(0.0);
-  const [conversionFee, setConversionFee] = useState(0n);
+  // Ensure that the quote remains valid for at least an hour
+  const [deadline] = useState(() => new Date(Date.now() + 60 * 60 * 1000));
+  // Everything shown comes from the quote, so a quote kept across screens
+  // shows exactly as it did when it was fetched.
+  const { amountIn, amountOut, depositAddress, amountInUsd, amountOutUsd } =
+    quoteFigures(quoteResponse);
+  const conversionFee = quoteResponse
+    ? conversionFeeOf(quoteResponse, fromToken)
+    : 0n;
   const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
 
   // Once an outbound transfer has been successfully created, let the onConfirm
@@ -726,9 +753,14 @@ function QuoteReview({
     }
   };
 
+  // Fetch a quote only when none was handed over. "Get a quote" clears it, so
+  // new inputs always get a new quote; going back to this screen keeps the old
+  // one and with it the deposit address the user may already have paid.
   useEffect(() => {
-    // Ensure that the quote remains valid for at least an hour
-    const deadline = new Date(Date.now() + 60 * 60 * 1000);
+    if (quoteResponse) return;
+    // A fetch whose screen has gone (Back, or StrictMode's dev remount) must
+    // neither save its quote nor report its failure.
+    let cancelled = false;
     const quoteRequest = {
       dry: false,
       swapType: QuoteRequest.swapType.EXACT_INPUT,
@@ -750,40 +782,20 @@ function QuoteReview({
     OneClickService.getQuote(quoteRequest)
       .then((data: QuoteResponse) => {
         console.log("Review Quote post response body", data);
-        setAmountIn(data.quote.amountInFormatted);
-        setAmountOut(data.quote.amountOutFormatted);
-
-        // Save the deposit address
-        setDepositAddress(data.quote.depositAddress!);
-
-        // Populate USD equivalents
-        setAmountInUsd(Number(data.quote.amountInUsd));
-        setAmountOutUsd(Number(data.quote.amountOutUsd));
-
-        // Compute the conversion fee as the difference between the US dollar
-        // value of the input and output amounts.
-        setConversionFee(
-          (BigInt(
-            Math.ceil(
-              (Number(data.quote.amountInUsd) -
-                Number(data.quote.amountOutUsd)) *
-                100,
-            ),
-          ) *
-            10n ** BigInt(fromToken.decimals)) /
-            BigInt(Math.ceil(fromToken.price * 100)),
-        );
-        setIsLoading(false);
+        if (!cancelled) setQuoteResponse(data);
       })
       .catch((error) => {
+        if (cancelled) return;
         onFailure({
           message:
             error.body?.message || error.message || "Failed to fetch quote",
         });
-        // Turn off the spinner indicating that quote data is loading
-        setIsLoading(false);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [
+    quoteResponse,
     fromAmount,
     fromToken,
     refundAddress,
@@ -793,7 +805,7 @@ function QuoteReview({
   ]);
 
   // If the quote data is still loading, then display a spinner instead
-  if (isLoading) {
+  if (!quoteResponse) {
     return (
       <div className="size-52 grid place-items-center">
         <SpinnerIcon className="size-5 text-gold" />
@@ -1092,7 +1104,6 @@ function AmountDeposit({
 // A series of screens that allow users to specify and effect both inbound and outbound
 // cryptocurrency swaps.
 function SwapRoute() {
-  const account = useAccount();
   const wallet = useWallet();
   const shielded = useFreshAddress();
   // The default from token to use before the available tokens have been received
@@ -1125,13 +1136,12 @@ function SwapRoute() {
 
   const [isOutbound, setIsOutbound] = useState(false);
   const [stage, setStage] = useState(Stage.Swap);
-  const [amountIn, setAmountIn] = useState("0");
-  const [depositAddress, setDepositAddress] = useState(
-    account.transparent.address,
+  // The quote being reviewed, kept here so it survives screen changes: going
+  // back from the deposit screen must show the same deposit address.
+  const [quoteResponse, setQuoteResponse] = useState<QuoteResponse | null>(
+    null,
   );
-
-  // New state variables for USD values
-  const [amountInUsd, setAmountInUsd] = useState(0.0);
+  const { amountIn, amountInUsd, depositAddress } = quoteFigures(quoteResponse);
 
   const send = useSend();
 
@@ -1141,12 +1151,14 @@ function SwapRoute() {
         setRecipientAddress(shielded);
       }
     })();
-  }, [shielded]);
+  }, [shielded, isOutbound]);
 
   if (stage == Stage.Swap) {
     // Step one: solicit the user to enter the amount and cryptocurrency they
     // want to exchange
     const onGetQuote = () => {
+      // Forget any earlier quote so ReviewQuote fetches one for these inputs.
+      setQuoteResponse(null);
       // Move to the ReviewQuote screen
       setStage(Stage.ReviewQuote);
     };
@@ -1201,8 +1213,8 @@ function SwapRoute() {
     return (
       <QuoteReview
         fromToken={fromToken}
-        amountInUsd={amountInUsd}
-        setAmountInUsd={setAmountInUsd}
+        quoteResponse={quoteResponse}
+        setQuoteResponse={setQuoteResponse}
         toToken={toToken}
         send={send}
         recipientAddress={recipientAddress}
@@ -1210,10 +1222,6 @@ function SwapRoute() {
         slippage={slippage}
         refundAddress={refundAddress}
         isOutbound={isOutbound}
-        depositAddress={depositAddress}
-        setDepositAddress={setDepositAddress}
-        amountIn={amountIn}
-        setAmountIn={setAmountIn}
         onFailure={onFailure}
         onConfirm={onConfirm}
       >
