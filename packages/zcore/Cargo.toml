@@ -91,7 +91,7 @@ incrementalmerkletree = { version = "0.9", features = ["legacy-api"] }
 zcash_keys = { version = "0.17", features = ["orchard", "sapling", "transparent-inputs"] }
 serde_json = "1"
 # Only the tests encode nullifier chunks, as the indexer does.
-postcard = { version = "1", features = ["alloc"] }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
 
 # crates.io releases with one change each, unpacked by ./patch-crates.sh;
 # see patches/README.md.
