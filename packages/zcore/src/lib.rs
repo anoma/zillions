@@ -25,6 +25,7 @@ mod send;
 #[cfg(feature = "threads")]
 mod threads;
 mod transparent_tx;
+mod vault;
 mod wallet;
 mod witness;
 

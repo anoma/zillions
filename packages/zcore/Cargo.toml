@@ -78,6 +78,8 @@ serde_bytes = "0.11"
 prost = { version = "0.14", default-features = false }
 # prove_pczt's stage callback.
 js-sys = "0.3"
+# The Keychain vault's password hash.
+argon2 = { version = "0.6", default-features = false, features = ["alloc", "zeroize"] }
 # The `threads` feature's pool (src/threads.rs).
 rayon = { version = "1", optional = true }
 

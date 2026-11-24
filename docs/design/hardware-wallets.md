@@ -145,9 +145,9 @@ same account anywhere).
   boundary). Two residuals, both inside the extension: the PRF output
   rides to the engine as base64 inside the `deviceData` string
   (unzeroizable, GC-bound), and WebCrypto's `importKey` holds a
-  non-extractable copy of the phrase bytes until GC. The wasm
-  `MnemonicService` path stays the seed authority for the phrase
-  wallets; the passkey runtime no longer touches it. The seed pin tests
+  non-extractable copy of the phrase bytes until GC. Phrase wallets
+  seed through `mnemonicToSeed` (`background/crypto/mnemonic.ts`); the
+  passkey runtime never touches it. The seed pin tests
   (`passkey-seed.test.ts`) tie the new path to the official BIP-39
   vectors, the `@scure` string path, and a fixed seed.
 - **The consensus constants live alone (`passkey-constants.ts`).** The

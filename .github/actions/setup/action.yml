@@ -1,0 +1,28 @@
+name: setup
+description: pnpm, Node from .nvmrc and the workspace's dependencies, optionally with CI's build of zcore.
+
+inputs:
+  zcore:
+    description: Name of build-wasm.yml's pkg/ artifact to put in packages/zcore/pkg; empty skips it.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - if: inputs.zcore != ''
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: ${{ inputs.zcore }}
+        path: packages/zcore/pkg
+    - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+    # No dependency runs code at install time. `wxt prepare` is the
+    # keychain's own postinstall: it writes the `.wxt/tsconfig.json` that the
+    # keychain's tsconfig extends, and the app imports keychain sources.
+    - run: pnpm install --frozen-lockfile --ignore-scripts
+      shell: bash
+    - run: pnpm --filter zillions-keychain exec wxt prepare
+      shell: bash

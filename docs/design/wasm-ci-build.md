@@ -10,8 +10,10 @@ diff, so whoever commits `pkg/` decides what runs, whatever the Rust source
 says. It also drifts: #228 changed `roles.rs` without rebuilding `pkg/`, and
 the committed wasm carried its builder's home directory in 235 panic strings.
 
-The keychain's other wasm, `crypto_bg.wasm`, has no source in the repo at all.
-It is out of scope here: [#226](https://github.com/anoma/zillions-frontend/issues/226).
+The keychain's other wasm, `crypto_bg.wasm`, had no source in the repo at all.
+[#226](https://github.com/anoma/zillions-frontend/issues/226) moved its Argon2id
+into zcore and the rest to WebCrypto and `@scure/bip39`, so zcore is the only
+wasm left.
 
 ## Decided
 
@@ -21,7 +23,6 @@ It is out of scope here: [#226](https://github.com/anoma/zillions-frontend/issue
   artifact CI built for the exact zcore source; nothing ships a local build.
 - **Netlify keeps building the site** (deploy previews, branch deploys,
   production from `production`); it only fetches the wasm instead of building it.
-- **zcore only.** `crypto_bg.wasm` waits for #226.
 - **`/zillions-keychain.zip` is dropped.** Nothing links to it; the keychain
   ships only from GitHub releases.
 
@@ -123,7 +124,6 @@ changes (rustup + a clang that targets wasm32).
 
 ## Not covered
 
-- `crypto_bg.wasm`: #226.
 - Byte-identical builds across machines: not needed, since only CI's build ships.
   Would need Docker or a pinned clang.
 - Signed provenance: GitHub attestations need Enterprise Cloud for private
