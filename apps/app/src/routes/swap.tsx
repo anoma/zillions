@@ -586,8 +586,8 @@ function SwapForm({
               id="swap-slippage"
               ref={slippageRef}
               type="number"
-              min="0.1"
-              step="0.1"
+              min="0.01"
+              step="0.01"
               value={slippage}
               onChange={(e) => {
                 setSlippage(e.target.value);

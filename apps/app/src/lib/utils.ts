@@ -61,7 +61,13 @@ export function zatoshiToZec(zatoshi: bigint): string {
 
 /** Convert ZEC (string or number) → zatoshi (bigint). */
 export function wholeToAtomic(zec: string | number, decimals: number): bigint {
-  const str = typeof zec === "number" ? zec.toString() : zec.trim();
+  const str =
+    typeof zec === "number"
+      ? zec.toLocaleString("en-US", {
+          useGrouping: false,
+          maximumFractionDigits: 21,
+        })
+      : zec.trim();
 
   if (!/^-?\d*\.?\d*$/.test(str) || str === "" || str === "." || str === "-") {
     throw new Error(`Invalid ZEC amount: "${zec}"`);
@@ -83,7 +89,13 @@ export function wholeToAtomic(zec: string | number, decimals: number): bigint {
 
 /** Convert ZEC (string or number) → zatoshi (bigint). */
 export function wholeToScaledBigInt(zec: string | number): [bigint, number] {
-  const str = typeof zec === "number" ? zec.toString() : zec.trim();
+  const str =
+    typeof zec === "number"
+      ? zec.toLocaleString("en-US", {
+          useGrouping: false,
+          maximumFractionDigits: 21,
+        })
+      : zec.trim();
 
   if (!/^-?\d*\.?\d*$/.test(str) || str === "" || str === "." || str === "-") {
     throw new Error(`Invalid ZEC amount: "${zec}"`);
