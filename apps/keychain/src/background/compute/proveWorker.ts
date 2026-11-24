@@ -62,6 +62,7 @@ async function startThreads(): Promise<Prover> {
     }),
   );
   threaded.start_threads(count);
+  console.info(`[prove] ${count} threads`);
   return threaded;
 }
 
@@ -77,7 +78,7 @@ const getProver = () =>
         console.warn("[prove] threads failed, proving on one:", e);
         return startSingle();
       })
-    : startSingle());
+    : (console.info("[prove] one thread: not cross-origin isolated"), startSingle()));
 
 /** A pool thread: joins the prover's memory, then works until terminated. */
 async function runThread({ module, memory }: ThreadStart) {
