@@ -1,6 +1,6 @@
 /**
  * Background service singletons. `getServices()` lazily constructs the
- * vault/keyring stack exactly once: wasm init → stores → VaultService
+ * vault/keyring stack exactly once: stores → VaultService
  * (initialize creates or migrates the persisted vault) → Keyring.
  *
  * The vault lives in IndexedDB (structured clone keeps the encrypted
@@ -17,7 +17,6 @@ import browser from "webextension-polyfill";
 import { LocalStorage, VaultStorage } from "../storage";
 import { ApprovalLog, ApprovalsService } from "./approvals";
 import { Broadcaster } from "./broadcaster";
-import { initCrypto } from "./crypto/crypto";
 import { Keyring } from "./keyring";
 import { AccountRepository, UtilityStore, VaultService } from "./vault";
 
@@ -46,8 +45,6 @@ let services: Promise<Services> | undefined;
 export const getServices = (): Promise<Services> => {
   if (!services) {
     services = (async () => {
-      await initCrypto();
-
       const vaultStorage = new VaultStorage(
         new IndexedDBKVStore(PREFIX_INDEXEDDB)
       );

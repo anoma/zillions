@@ -2,16 +2,12 @@ import { KVStore } from "@zillions/storage";
 import { Result } from "@zillions/utils";
 import { sha256 } from "js-sha256";
 import { VaultKeys as Keys, VaultStorage } from "../../storage";
-import { Crypto, CryptoRecord } from "../crypto/crypto";
+import { CryptoRecord, decrypt, encrypt } from "../crypto/crypto";
 import { ResetPasswordError, SessionValues, VaultStoreData } from "./types";
 
 export const VAULT_KEY = "vault";
 
 export class VaultService {
-  // PRECONDITION: @zillions/crypto wasm must be initialized (initCrypto()
-  // awaited) before any encrypt/decrypt call. services.ts guarantees this.
-  private readonly crypto = new Crypto();
-
   public constructor(
     protected vaultStorage: VaultStorage,
     protected sessionStore: KVStore<SessionValues>
@@ -103,7 +99,7 @@ export class VaultService {
     }
 
     try {
-      this.crypto.decrypt(store.password, await this.hashPassword(password));
+      await decrypt(store.password, await this.hashPassword(password));
       // Only a verified password extends the re-authentication window
       // (`requiresAuth`); a wrong one must not.
       await this.sessionStore.set("authTimestamp", Date.now());
@@ -139,7 +135,7 @@ export class VaultService {
     if (!sensitive) return;
 
     try {
-      const decryptedJson = this.crypto.decrypt(sensitive, key);
+      const decryptedJson = await decrypt(sensitive, key);
       return JSON.parse(decryptedJson) as T;
     } catch (error) {
       console.error(error);
@@ -192,7 +188,7 @@ export class VaultService {
       password ?
         await this.hashPassword(password)
       : await this.getSessionKeyOrFail();
-    return this.crypto.encrypt(JSON.stringify(sensitiveData), key);
+    return encrypt(JSON.stringify(sensitiveData), key);
   }
 
   private async getSessionKeyOrFail(): Promise<string> {
@@ -207,6 +203,6 @@ export class VaultService {
     password: string
   ): Promise<CryptoRecord> {
     const hashedPassword = await this.hashPassword(password);
-    return this.crypto.encrypt(hashedPassword, hashedPassword);
+    return encrypt(hashedPassword, hashedPassword);
   }
 }

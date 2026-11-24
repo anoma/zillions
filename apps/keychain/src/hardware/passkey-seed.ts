@@ -3,9 +3,9 @@
  * entropy, without the phrase. The mnemonic encoding is deterministic
  * bit-packing (11-bit wordlist indices over a SHA-256 checksum), so the
  * phrase is packed straight to its bytes — no string of it ever exists —
- * and the KDF is WebCrypto's audited PBKDF2-HMAC-SHA-512. The wasm
- * `MnemonicService` path stays for the phrase wallets; this is the
- * passkey runtime's only seed authority.
+ * and the KDF is WebCrypto's audited PBKDF2-HMAC-SHA-512. Phrase wallets
+ * seed through `mnemonicToSeed` in `background/crypto/mnemonic.ts`; this is
+ * the passkey runtime's only seed authority.
  */
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 
