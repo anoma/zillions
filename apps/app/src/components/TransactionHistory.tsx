@@ -1,5 +1,6 @@
 import {
   GetExecutionStatusResponse,
+  OneClickService,
   TokenResponse,
 } from "@defuse-protocol/one-click-sdk-typescript";
 import { Link } from "@tanstack/react-router";
@@ -62,9 +63,8 @@ export function TransactionHistory({
 
   // Fetch available tokens. Required for displaying token assets un human readable form.
   useEffect(() => {
-    fetch("https://1click.chaindefuser.com/v0/tokens")
-      .then((res) => res.json())
-      .then((data) => setTokens(data))
+    OneClickService.getTokens()
+      .then((data: TokenResponse[]) => setTokens(data))
       .catch((err) => console.error("Failed to fetch tokens", err));
   }, []);
 
