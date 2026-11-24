@@ -57,6 +57,7 @@ const canPaste =
   Boolean(navigator.clipboard?.readText) &&
   matchMedia("(pointer: coarse)").matches;
 
+const SLIPPAGE_DECIMALS = 2;
 const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
 // The default symbol logo displayed when proper logo is not found
 const UNKNOWN_SYMBOL_LOGO: React.JSX.Element = <UnknownIcon />;
@@ -246,11 +247,18 @@ function SwapForm({
 
   // Attempt to convert the input amount into a big integer
   let amountInBigInt = 0n;
-  let amountInError;
+  let amountInError: string | undefined;
   try {
     amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
   } catch {
     amountInError = "Not a valid amount";
+  }
+  let slippageError: string | undefined;
+  try {
+    wholeToAtomic(slippage, SLIPPAGE_DECIMALS);
+  } catch {
+    slippageError =
+      "Slippage tolerance must be positive, with up to 2 decimal places";
   }
 
   // Compute the transaction fee that will be applied to the swap. This is only
@@ -374,7 +382,7 @@ function SwapForm({
           setRecipientAddressError("Set a recipient address");
         } else if (!isOutbound && refundAddress === "") {
           setRefundAddressError("Set a refund address");
-        } else if (!amountInError && !error) {
+        } else if (!amountInError && !error && !slippageError) {
           // If an error is asserted for the amount input or a global error, say,
           // from another screen.
           onSubmit();
@@ -546,7 +554,7 @@ function SwapForm({
                 inputClassName,
                 // 16px on phones: iOS zooms into any smaller field on focus.
                 "h-11 text-base sm:text-sm text-ellipsis",
-                !refundAddress && canPaste && "pr-20",
+                !recipientAddress && canPaste && "pr-20",
                 "border-black hover:border-black focus:border-black",
               )}
             />
@@ -593,8 +601,33 @@ function SwapForm({
                 setSlippage(e.target.value);
                 setError(undefined);
               }}
-              className="w-24 rounded-xl border border-line bg-transparent p-2 text-right text-sm focus:border-black focus:outline-none"
+              className={twMerge(
+                inputClassName,
+                // 16px on phones: iOS zooms into any smaller field on focus.
+                "h-11 w-24 text-base sm:text-sm text-ellipsis",
+                !slippage && canPaste && "pr-20",
+                "border-black hover:border-black focus:border-black",
+              )}
             />
+          </div>
+
+          <div
+            id="send-to-kind"
+            aria-live="polite"
+            className="mt-2.5 empty:mt-0 flex items-center gap-1.5 text-xs font-medium"
+          >
+            {slippageError && (
+              <span
+                key={error}
+                role="alert"
+                className={twMerge(
+                  "flex items-center gap-1.5 motion-safe:animate-fade-in",
+                  "text-red-700",
+                )}
+              >
+                {slippageError}
+              </span>
+            )}
           </div>
 
           {/* Display the value of the to cryptocurrency in terms of the from. */}
