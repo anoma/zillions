@@ -51,8 +51,9 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
   const highFee = details ? isHighFee(details.summary) : false;
   const unusual = details?.summary.unusualChange;
   const stray = unusual && {
-    value: unusual.reduce((sum, o) => sum + BigInt(o.value), 0n),
-    indexes: unusual.map((o) => o.index),
+    value: formatZec(unusual.reduce((sum, o) => sum + BigInt(o.value), 0n)),
+    suspect: unusual.some((o) => o.known),
+    where: `${unusual.length === 1 ? "address" : "addresses"} ${unusual.map((o) => o.index).join(", ")}`,
   };
 
   useEffect(() => {
@@ -141,14 +142,12 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
           </label>
         </Notice>
       )}
-      {stray && (
-        <Notice tone="danger" title="Change to an address wallets may not find" className="mt-4">
-          {formatZec(stray.value)} goes to transparent{" "}
-          {stray.indexes.length === 1 ? "address" : "addresses"}{" "}
-          {stray.indexes.join(", ")} of your wallet, far past the ones it has
-          used. A wallet restoring your recovery phrase checks
-          addresses in order and stops a few past the last used, so it may
-          never find this money.
+      {stray?.suspect && (
+        <Notice tone="danger" title="Change sent to an unusual address" className="mt-4">
+          {stray.value} of change goes to {stray.where} of your wallet, far
+          past the ones you&apos;ve used. Other wallets restoring your
+          recovery phrase may not show this money. If you didn&apos;t expect
+          this, reject it.
           <label className="flex items-center gap-2 mt-2 font-bold cursor-pointer">
             <input
               type="checkbox"
@@ -156,8 +155,17 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
               checked={changeAccepted}
               onChange={(e) => setChangeAccepted(e.target.checked)}
             />
-            I understand and want to send it there
+            I understand and want to continue
           </label>
+        </Notice>
+      )}
+      {stray && !stray.suspect && (
+        <Notice title="First transaction from this wallet" className="mt-4">
+          {stray.value} of change goes to {stray.where} of your wallet.
+          Keychain hasn&apos;t signed for this wallet before, so it can&apos;t
+          check this address. That&apos;s normal for a new or restored
+          wallet. If the amount is large, make sure you trust {origin} before
+          approving.
         </Notice>
       )}
       {signError && (
@@ -176,7 +184,7 @@ export const ApproveSignTx = ({ details, setDetails }: Props) => {
         approveDisabled={
           !details ||
           (highFee && !highFeeAccepted) ||
-          (!!stray && !changeAccepted) ||
+          (!!stray?.suspect && !changeAccepted) ||
           !!signError
         }
         onApprove={handleApprove}

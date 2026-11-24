@@ -74,8 +74,10 @@ export type PcztSummary = {
   /**
    * Every transparent output of ours past the addresses wallets scan: one
    * restoring the recovery phrase may never find the money they hold.
+   * `known`: this Keychain has signed change at that scope before, so a
+   * jump past it is suspect; else it's likely a new or restored wallet.
    */
-  unusualChange?: (TransparentPath & { value: string })[];
+  unusualChange?: (TransparentPath & { value: string; known: boolean })[];
   /** The full `to_json()` structure for the raw expandable view. */
   raw: unknown;
 };
