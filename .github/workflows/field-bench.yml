@@ -48,6 +48,6 @@ jobs:
           path: packages/zcore/patches/bench/out
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
+          node-version-file: .nvmrc
       - run: node packages/zcore/patches/bench/bench.mjs | tee -a "$GITHUB_STEP_SUMMARY"
         shell: bash
