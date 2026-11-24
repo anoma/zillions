@@ -12,17 +12,18 @@ The Zillions Zcash wallet web app. What it does: [docs/product.md](../../docs/pr
 
 ## Setup
 
-You'll need `node` (18.18+), `pnpm`, and what zcore's build needs:
+You'll need Node 24 (`.nvmrc`), pnpm through Corepack (`corepack enable`, which
+picks the version in `package.json`), and what zcore's build needs:
 [rustup](https://rustup.rs) and a clang that targets wasm32 (on macOS,
 `brew install llvm`). From the repo root:
 
 ```bash
-pnpm install
-pnpm zcore:build
-cp apps/app/.env.example apps/app/.env
+pnpm bootstrap
 ```
 
-Run `pnpm zcore:build` again after pulling zcore changes.
+It installs dependencies, copies each app's `.env.example` to `.env` (keeping
+any `.env` you already have) and builds zcore if it isn't built yet. Run
+`pnpm zcore:build` again after pulling zcore changes.
 
 `.env.example` targets mainnet. For testnet, set `VITE_ZCASH_NETWORK=test`
 and point `VITE_GRPC_URL` and `VITE_INDEXER_URL` at testnet servers.

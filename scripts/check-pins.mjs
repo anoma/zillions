@@ -34,7 +34,7 @@ for (const m of catalog.matchAll(/^  (\S+): (.*)$/gm)) {
   if (!EXACT.test(m[2])) fail("pnpm-workspace.yaml", `catalog ${m[1]} is "${m[2]}"`);
 }
 
-for (const file of globSync(".github/workflows/*.yml")) {
+for (const file of globSync([".github/workflows/*.yml", ".github/actions/**/action.yml"])) {
   for (const m of readFileSync(file, "utf8").matchAll(/^\s*-?\s*uses:\s*(\S+)/gm)) {
     const action = m[1];
     if (action.startsWith("./")) continue;

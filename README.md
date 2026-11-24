@@ -9,6 +9,25 @@ Monorepo for the Zillions Zcash wallet:
 
 What the wallet must do: [docs/product.md](docs/product.md).
 
+## Commands
+
+Everything runs from the repo root. On a fresh checkout, `pnpm bootstrap`
+installs every package, creates the apps' `.env` files and builds zcore (see
+[Setup](apps/app/README.md#setup) for the tools it needs).
+
+|                           | App                                           | Keychain                                                |
+| ------------------------- | --------------------------------------------- | ------------------------------------------------------- |
+| Dev server                | `pnpm app:dev`                                | `pnpm keychain:dev` (`keychain:firefox:dev`)            |
+| Build                     | `pnpm app:build`                              | `pnpm keychain:build`                                   |
+| Test                      | `pnpm app:test` (`app:e2e`)                   | `pnpm keychain:test`                                    |
+| Lint / types              | `pnpm app:lint`, `pnpm app:typecheck`         | `pnpm keychain:lint`, `pnpm keychain:typecheck`         |
+| Add / remove a dependency | `pnpm app:add <pkg>`, `pnpm app:remove <pkg>` | `pnpm keychain:add <pkg>`, `pnpm keychain:remove <pkg>` |
+| Anything else             | `pnpm app <command>`                          | `pnpm keychain <command>`                               |
+
+`pnpm dev` starts both dev servers; `pnpm lint`, `pnpm typecheck` and
+`pnpm test` run both packages. Dependencies are pinned exactly (`.npmrc`), and
+`-D` adds a dev dependency: `pnpm app:add -D vitest`.
+
 ## Security audits
 
 By [Taylor Hornby](https://defuse.ca/) ([@DefuseSec](https://x.com/DefuseSec)):
