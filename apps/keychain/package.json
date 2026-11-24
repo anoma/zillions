@@ -62,7 +62,7 @@
     "eslint-plugin-react-hooks": "catalog:",
     "globals": "catalog:",
     "tailwindcss": "4.3.5",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "typescript-eslint": "catalog:",
     "vite": "8.3.8",
     "vite-plugin-node-polyfills": "0.28.0",
