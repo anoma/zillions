@@ -854,7 +854,7 @@ export class ApprovalsService {
     const gaps = transparentGapLimits();
     const stray = summary.transparentOutputs.flatMap(({ mine, path, value }) =>
       mine && path && path.index > (approved[path.scope] ?? -1) + (gaps[path.scope] ?? 0)
-        ? [{ ...path, value: String(value ?? "0") }]
+        ? [{ ...path, value: String(value ?? "0"), known: path.scope in approved }]
         : []
     );
     return stray.length > 0 ? stray : undefined;
@@ -863,7 +863,8 @@ export class ApprovalsService {
   /**
    * A signed transaction's own transparent outputs move the approved mark,
    * by at most one gap: an index the user accepted past it is a risk taken
-   * once, not where later change may silently go.
+   * once, not where later change may silently go. A scope with no mark yet
+   * takes the index as is: a restored wallet's change may already be far in.
    */
   private async rememberChange(pending: PendingSignTx): Promise<void> {
     const walletId = await this.walletIdOf(pending.signer);
@@ -872,11 +873,13 @@ export class ApprovalsService {
     const gaps = transparentGapLimits();
     for (const { mine, path } of pending.summary.transparentOutputs) {
       if (mine && path) {
-        const limit = (approved[path.scope] ?? -1) + (gaps[path.scope] ?? 0);
+        const mark = approved[path.scope];
         await this.localStorage.raiseChangeIndex(
           walletId,
           path.scope,
-          Math.min(path.index, limit)
+          mark === undefined
+            ? path.index
+            : Math.min(path.index, mark + (gaps[path.scope] ?? 0))
         );
       }
     }

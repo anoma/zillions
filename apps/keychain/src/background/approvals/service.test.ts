@@ -282,26 +282,38 @@ describe("transparent change", () => {
   it("is flagged past the addresses approved so far plus the gap wallets scan", async () => {
     expect((await query("a", output(1, 4))).unusualChange).toBeUndefined();
     expect((await query("b", output(1, 5))).unusualChange).toEqual([
-      { scope: 1, index: 5, value: "9000" },
+      { scope: 1, index: 5, value: "9000", known: false },
     ]);
 
     // Once address 38 has been approved, the next few are expected.
     await storage.raiseChangeIndex(wallet.id, 1, 38);
     expect((await query("c", output(1, 43))).unusualChange).toBeUndefined();
+    expect((await query("c2", output(1, 44))).unusualChange).toEqual([
+      { scope: 1, index: 44, value: "9000", known: true },
+    ]);
   });
 
   it("names every stray output, so dust can't stand in for the rest", async () => {
     const { unusualChange } = await query("d", output(1, 6, "10000"), output(1, 87, "989980000"));
     expect(unusualChange).toEqual([
-      { scope: 1, index: 6, value: "10000" },
-      { scope: 1, index: 87, value: "989980000" },
+      { scope: 1, index: 6, value: "10000", known: false },
+      { scope: 1, index: 87, value: "989980000", known: false },
     ]);
   });
 
-  it("moves the mark at most one gap, whatever index the user accepted", async () => {
-    await approve("e", output(1, 6, "10000"), output(1, 87));
-    expect(await storage.changeIndexes(wallet.id)).toEqual({ 1: 4 });
-    expect((await query("f", output(1, 87))).unusualChange).toMatchObject([{ index: 87 }]);
+  it("takes a first send's index as the mark, so a restored wallet's next send is expected", async () => {
+    await approve("e", output(1, 40));
+    expect(await storage.changeIndexes(wallet.id)).toEqual({ 1: 40 });
+    expect((await query("f", output(1, 41))).unusualChange).toBeUndefined();
+  });
+
+  it("moves a known mark at most one gap, whatever index the user accepted", async () => {
+    await storage.raiseChangeIndex(wallet.id, 1, 2);
+    await approve("e2", output(1, 6, "10000"), output(1, 87));
+    expect(await storage.changeIndexes(wallet.id)).toEqual({ 1: 7 });
+    expect((await query("f2", output(1, 87))).unusualChange).toMatchObject([
+      { index: 87, known: true },
+    ]);
   });
 
   it("shows an output of ours past the ceiling as a payment", async () => {
