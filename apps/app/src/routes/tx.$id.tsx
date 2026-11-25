@@ -27,9 +27,7 @@ function TransactionRoute() {
   const { id = "" } = useParams({ strict: false });
 
   const transactionHistory = useGetTransactionHistory();
-  const tx = (transactionHistory.data ?? { activities: [] }).activities.find(
-    (t) => t.txid === id,
-  );
+  const tx = transactionHistory.data?.find((t) => t.txid === id);
   // A link shared by someone else: only what the chain shows anyone.
   const lookup = useQuery({
     ...publicTransaction(id),

@@ -26,7 +26,7 @@ type Props = {
  */
 export function PaymentLinkCreated({ tx, url, amount, description }: Props) {
   // The history entry moves from Pending to Confirmed, or Expired, as sync runs.
-  const funding = useGetTransactionHistory().data?.activities.find(
+  const funding = useGetTransactionHistory().data?.find(
     (t) => t.txid === tx.txid,
   );
   const status = funding?.status ?? "Pending";

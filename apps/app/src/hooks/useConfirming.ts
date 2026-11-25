@@ -5,8 +5,7 @@ import { countdown, LATE, progressOf } from "./usePendingProgress";
 
 /** Ms until the slowest pending transaction is done, as its clock plans it; none while none is pending or one runs late. */
 export function useReadyIn() {
-  const history = (useGetTransactionHistory().data ?? { activities: [] })
-    .activities;
+  const history = useGetTransactionHistory().data ?? [];
   const now = useNow(1000);
   const plans = history
     .filter((tx) => tx.status === "Pending")

@@ -336,7 +336,7 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
   vi.useRealTimers();
   // Timed at the broadcast, so the proof doesn't count against the wait.
   expect(timestamp).toBe(61_000);
-  expect((await wallet.getTransactionHistory()).activities[0]).toMatchObject({
+  expect((await wallet.getTransactionHistory())[0]).toMatchObject({
     txid: "t1",
     status: "Pending",
     value: -3_000n,
@@ -359,9 +359,7 @@ test("holds what a broadcast spends until it's mined or expires", async () => {
   const released = await wallet.getBalance();
   expect(released.shielded.balance).toBe(5_000n);
   expect(
-    (await wallet.getTransactionHistory()).activities.some(
-      (tx) => tx.txid === "t1",
-    ),
+    (await wallet.getTransactionHistory()).some((tx) => tx.txid === "t1"),
   ).toBe(false);
 });
 
@@ -469,7 +467,7 @@ test("keeps a Sapling-only send with no change in history once mined", async () 
   ]);
   await wallet.sync();
 
-  const sends = (await wallet.getTransactionHistory()).activities.filter(
+  const sends = (await wallet.getTransactionHistory()).filter(
     (tx) => tx.txid === "t2",
   );
   expect(sends).toEqual([
@@ -513,17 +511,13 @@ test("shows the transparent side as last synced before any sync answers", async 
   const wallet = new Wallet({ id: "f" });
 
   await vi.waitFor(async () =>
-    expect(await wallet.getTransactionHistory()).toEqual(
+    expect(await wallet.getTransactionHistory()).toEqual([
       expect.objectContaining({
-        activities: [
-          expect.objectContaining({
-            tx_type: "Received",
-            from: { address: "t1someone" },
-            to: { pool: "transparent" },
-          }),
-        ],
+        tx_type: "Received",
+        from: { address: "t1someone" },
+        to: { pool: "transparent" },
       }),
-    ),
+    ]),
   );
 });
 
@@ -539,7 +533,7 @@ test("reads history only once storage is loaded", async () => {
     ],
   });
   const wallet = new Wallet({ id: "g" });
-  expect((await wallet.getTransactionHistory()).activities).toHaveLength(1);
+  expect(await wallet.getTransactionHistory()).toHaveLength(1);
 });
 
 test("records a swap once per deposit address, adding hashes it lacked", async () => {
@@ -583,8 +577,8 @@ test("asks 1Click about a swap only until its status is final", async () => {
   await wallet.pushSwap("done", true, [mine]);
   await wallet.pushSwap("busy", false, []);
 
-  await wallet.getTransactionHistory();
-  const { swaps } = await wallet.getTransactionHistory();
+  await wallet.getSwapStatuses();
+  const swaps = await wallet.getSwapStatuses();
 
   // "done" was asked about once, "busy" each time.
   expect(ask.mock.calls.map(([address]) => address)).toEqual([
@@ -600,6 +594,34 @@ test("asks 1Click about a swap only until its status is final", async () => {
     wallet.getSwaps()?.[0].status?.swapDetails.originChainTxHashes,
   ).toEqual([]);
   ask.mockRestore();
+});
+
+test("reads history without asking 1Click", async () => {
+  const ask = vi.spyOn(OneClickService, "getExecutionStatus");
+  const wallet = new Wallet({ id: "u" });
+  await wallet.pushSwap("busy", false, []);
+  await wallet.getTransactionHistory();
+  expect(ask).not.toHaveBeenCalled();
+  expect(wallet.hasUnfinishedSwaps()).toBe(true);
+  ask.mockRestore();
+});
+
+test("leaves out a swap 1Click doesn't answer for in time", async () => {
+  const wallet = new Wallet({ id: "v" });
+  await wallet.pushSwap("slow", false, []);
+  // A request that never settles unless it's cancelled.
+  const ask = vi
+    .spyOn(OneClickService, "getExecutionStatus")
+    .mockImplementation(
+      () => new CancelablePromise<GetExecutionStatusResponseType>(() => {}),
+    );
+  vi.useFakeTimers();
+  const statuses = wallet.getSwapStatuses();
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(await statuses).toEqual([]);
+  expect(wallet.hasUnfinishedSwaps()).toBe(true);
+  ask.mockRestore();
+  vi.useRealTimers();
 });
 
 test("stores a recent block, and fetches it again each sync", async () => {
@@ -680,7 +702,7 @@ test("names and dates what a chunk finds before the crawl ends", async () => {
   void wallet.sync();
 
   await vi.waitFor(async () =>
-    expect((await wallet.getTransactionHistory()).activities).toEqual([
+    expect(await wallet.getTransactionHistory()).toEqual([
       expect.objectContaining({ txid: "tx1", timestamp: 1_700_000_000 }),
     ]),
   );

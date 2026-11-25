@@ -6,6 +6,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
+import { useGetSwaps } from "../hooks/useGetSwaps";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowsLeftRight } from "../icons/ArrowsLeftRight";
 import type { Activity } from "../lib/wallet/types";
@@ -59,6 +60,7 @@ export function TransactionHistory({
   limit?: number;
 }) {
   const transactionHistory = useGetTransactionHistory();
+  const swaps = useGetSwaps();
   const [tokens, setTokens] = useState<TokenResponse[]>([]);
 
   // Fetch available tokens. Required for displaying token assets un human readable form.
@@ -76,12 +78,12 @@ export function TransactionHistory({
     return <PageError>{String(transactionHistory.error)}</PageError>;
   }
 
-  const allSwaps = transactionHistory.data.swaps;
+  // Swaps come from 1Click on their own clock. Until they answer, history
+  // shows without them, and a swap's own transaction is listed as it is.
+  const allSwaps = swaps.data ?? [];
   // A swap's row stands for its chain transactions, so they aren't listed twice.
   const covered = swapTxids(allSwaps);
-  const allTxs = transactionHistory.data.activities.filter(
-    (tx) => !covered.has(tx.txid),
-  );
+  const allTxs = transactionHistory.data.filter((tx) => !covered.has(tx.txid));
   // Unconfirmed transactions are dated in the future starting with this timestamp
   const blockHeightSentinel = new Date().getTime() + 1;
 

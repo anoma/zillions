@@ -29,7 +29,7 @@ import { inputClassName, qrClassName } from "../components/ui/utils";
 import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
-import { getTransactionHistory } from "../hooks/useGetTransactionHistory";
+import { getSwaps } from "../hooks/useGetSwaps";
 import { useSend, useSendPlan } from "../hooks/useSend";
 import type { StageEntry } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
@@ -1229,18 +1229,21 @@ function SwapRoute() {
         } else {
           // Record the outbound transaction ID to deduplicate entries in the
           // transaction history.
-          wallet.pushSwap(quote?.depositAddress, isOutbound, [
-            { hash: send.data.txid, explorerUrl: "" },
-          ]);
-          queryClient.invalidateQueries(getTransactionHistory(wallet));
+          // Asked about once stored, so the new swap's row appears straight away.
+          void wallet
+            .pushSwap(quote?.depositAddress, isOutbound, [
+              { hash: send.data.txid, explorerUrl: "" },
+            ])
+            .then(() => queryClient.invalidateQueries(getSwaps(wallet)));
           // Move to the SendAmount screen.
           setStage(Stage.SendAmount);
         }
       } else {
         // Record the swap address so that this wallet can monitor it in the background
         // and provide status updates
-        wallet.pushSwap(quote?.depositAddress, isOutbound, []);
-        queryClient.invalidateQueries(getTransactionHistory(wallet));
+        void wallet
+          .pushSwap(quote?.depositAddress, isOutbound, [])
+          .then(() => queryClient.invalidateQueries(getSwaps(wallet)));
         // Move to the deposit amount screen
         setStage(Stage.DepositAmount);
       }
