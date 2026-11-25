@@ -112,4 +112,4 @@ checks a live indexer's Sapling tree against the chain's.
 
 ## License
 
-MIT OR Apache-2.0
+GPL-3.0-or-later, see [LICENSE](../../LICENSE).
