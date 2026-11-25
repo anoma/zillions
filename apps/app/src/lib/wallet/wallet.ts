@@ -1,3 +1,4 @@
+import type { TransactionDetails } from "@defuse-protocol/one-click-sdk-typescript";
 import {
   GetExecutionStatusResponse,
   OneClickService,
@@ -96,6 +97,38 @@ const saveData = () =>
     ?.saveData === true;
 
 /** One account's wallet: its state, kept in storage and brought up to date by `sync`, and what the app reads and sends with. */
+/** Statuses a swap never leaves: once seen, 1Click needn't be asked again. */
+const FINAL_SWAP_STATUSES = new Set<GetExecutionStatusResponse.status>([
+  GetExecutionStatusResponse.status.SUCCESS,
+  GetExecutionStatusResponse.status.REFUNDED,
+  GetExecutionStatusResponse.status.FAILED,
+]);
+
+/**
+ * `status` as history shows it: with the origin-chain hashes this wallet
+ * recorded (its own send, before 1Click sees it) added once each. A new
+ * object, so a stored status is never changed by reading it.
+ */
+function withLocalHashes(
+  status: GetExecutionStatusResponse,
+  local: TransactionDetails[],
+  outbound: boolean,
+) {
+  const reported = status.swapDetails?.originChainTxHashes ?? [];
+  const known = new Set(reported.map(({ hash }) => hash));
+  return {
+    ...status,
+    swapDetails: {
+      ...status.swapDetails,
+      originChainTxHashes: [
+        ...reported,
+        ...local.filter(({ hash }) => !known.has(hash)),
+      ],
+    },
+    outbound,
+  };
+}
+
 export class Wallet {
   /** The shielded account's keychain id: the keychain holds its viewing key. */
   readonly id: string;
@@ -399,7 +432,7 @@ export class Wallet {
   pushSwap = async (
     depositAddress: string,
     outbound: boolean,
-    originChainTxHashes: { hash: string; explorerUrl: string }[],
+    originChainTxHashes: TransactionDetails[],
   ) => {
     // Stored swaps load with the rest of the state; one pushed before then
     // would be dropped when the stored state replaces it.
@@ -587,23 +620,29 @@ export class Wallet {
     await this.#seed();
     const { notes, sent, blocks, pending, swaps } = this.#state;
 
-    // Request all swap statuses using the Defuse One-Click SDK
+    // Ask 1Click only about swaps still under way; a final status is stored.
+    let swapsTerminated = false;
     const swapDetails = await Promise.all(
-      (swaps ?? []).map(({ depositAddress, originChainTxHashes, outbound }) => {
-        return OneClickService.getExecutionStatus(depositAddress)
-          .then((responseJson) => {
-            // Append our local origin chain hashes and return the mapped object
-            responseJson.swapDetails.originChainTxHashes.push(
-              ...originChainTxHashes,
+      (swaps ?? []).map(async (swap) => {
+        let status = swap.status;
+        if (!status) {
+          try {
+            status = await OneClickService.getExecutionStatus(
+              swap.depositAddress,
             );
-            return { ...responseJson, outbound };
-          })
-          .catch((error) => {
-            console.log(`Failed for ${depositAddress}:`, error);
-            return null; // Return null (or a custom flag) on error
-          });
+          } catch (error) {
+            console.log(`Failed for ${swap.depositAddress}:`, error);
+            return null;
+          }
+          if (FINAL_SWAP_STATUSES.has(status.status)) {
+            swap.status = status;
+            swapsTerminated = true;
+          }
+        }
+        return withLocalHashes(status, swap.originChainTxHashes, swap.outbound);
       }),
     );
+    if (swapsTerminated) this.#save();
 
     // Until the transparent side names our addresses, an unshield to one of
     // them would read as a payment.
