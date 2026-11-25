@@ -26,14 +26,23 @@ const rowClassName = "col-span-full grid grid-cols-subgrid items-center";
 const routeClassName = "max-lg:hidden";
 const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
 
-const SWAP_STATUS_DESCRIPTIONS = {
-  PENDING_DEPOSIT: "Awaiting your token deposit",
-  KNOWN_DEPOSIT_TX: "Deposit transaction detected",
-  PROCESSING: "Swap being executed",
-  SUCCESS: "Tokens delivered to destination address",
-  INCOMPLETE_DEPOSIT: "Deposit below required amount",
-  REFUNDED: "Swap failed, funds returned to refund address",
-  FAILED: "Swap encountered an error",
+const SwapState = GetExecutionStatusResponse.status;
+
+/**
+ * What each swap status means, for the row. Every status has one: a status
+ * the SDK adds fails the build until it's described here.
+ */
+const SWAP_STATUS_DESCRIPTIONS: Record<
+  GetExecutionStatusResponse.status,
+  string
+> = {
+  [SwapState.PENDING_DEPOSIT]: "Awaiting your token deposit",
+  [SwapState.KNOWN_DEPOSIT_TX]: "Deposit transaction detected",
+  [SwapState.PROCESSING]: "Swap being executed",
+  [SwapState.SUCCESS]: "Tokens delivered to destination address",
+  [SwapState.INCOMPLETE_DEPOSIT]: "Deposit below required amount",
+  [SwapState.REFUNDED]: "Swap failed, funds returned to refund address",
+  [SwapState.FAILED]: "Swap encountered an error",
 };
 
 /** The txids of the chain transactions behind `swaps`, on either side. */
@@ -186,8 +195,8 @@ function SwapRow({
   swap: GetExecutionStatusResponse & { outbound: boolean };
   tokens: TokenResponse[];
 }) {
-  // Use the first intent hash for the dynamic URL
-  const txHash = swap.quoteResponse.quote.depositAddress;
+  // The explorer finds a swap by its deposit address.
+  const depositAddress = swap.quoteResponse.quote.depositAddress;
 
   // Look up symbols from the tokens array, fallback to the raw asset string if not found
   const originSymbol =
@@ -212,7 +221,7 @@ function SwapRow({
   );
   return (
     <a
-      href={`https://explorer.near-intents.org/transactions/${txHash}`}
+      href={`https://explorer.near-intents.org/transactions/${depositAddress}`}
       target="_blank"
       rel="noopener noreferrer"
       className={twMerge(
@@ -226,7 +235,10 @@ function SwapRow({
       </span>
 
       <div>
-        <div>Swap: {SWAP_STATUS_DESCRIPTIONS[swap.status]}</div>
+        <div>
+          {/* A status newer than this build is shown as 1Click names it. */}
+          Swap: {SWAP_STATUS_DESCRIPTIONS[swap.status] ?? swap.status}
+        </div>
         <div className="mt-0.5 text-xs text-gray-600">
           <time>
             {new Date(swap.quoteResponse.timestamp).toLocaleString(undefined, {

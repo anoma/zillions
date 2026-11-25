@@ -1,6 +1,13 @@
 import { expect, test } from "vitest";
 
-import { capDecimals, singleton, transactionValue } from "./utils";
+import {
+  atomicToWhole,
+  capDecimals,
+  singleton,
+  transactionValue,
+  wholeToAtomic,
+  wholeToScaledBigInt,
+} from "./utils";
 
 test("a typed amount keeps at most 8 decimals", () => {
   expect(capDecimals("0.0000000000000000000000000001")).toBe("0.00000000");
@@ -35,4 +42,26 @@ test("a singleton runs once on success, and again after a failure", async () => 
   expect(await once()).toBe(2);
   expect(await once()).toBe(2);
   expect(calls).toBe(2);
+});
+
+test("whole and atomic amounts convert at any token's decimals", () => {
+  expect(atomicToWhole(1_234_567n, 6)).toBe("1.234567");
+  expect(atomicToWhole(1_000_000n, 6)).toBe("1");
+  expect(atomicToWhole(-5n, 2)).toBe("-0.05");
+  expect(wholeToAtomic("1.234567", 6)).toBe(1_234_567n);
+  expect(wholeToAtomic("12", 6)).toBe(12_000_000n);
+  expect(wholeToAtomic(0.5, 2)).toBe(50n);
+  // A number too small for plain `toString` is still written out in full.
+  expect(wholeToAtomic(1e-7, 8)).toBe(10n);
+  expect(() => wholeToAtomic("0.123", 2)).toThrow("at most 2");
+  for (const text of ["", ".", "-", "abc", "1e5", "1.2.3"]) {
+    expect(() => wholeToAtomic(text, 8)).toThrow("Invalid amount");
+  }
+});
+
+test("a price becomes an exact integer and its scale", () => {
+  expect(wholeToScaledBigInt(73978)).toEqual([73978n, 0]);
+  expect(wholeToScaledBigInt(1315.9)).toEqual([13159n, 1]);
+  expect(wholeToScaledBigInt("0.0001")).toEqual([1n, 4]);
+  expect(wholeToScaledBigInt("-2.50")).toEqual([-250n, 2]);
 });

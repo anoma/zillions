@@ -10,7 +10,7 @@ import {
 import type { DefaultError, UseMutateFunction } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { QRCode } from "react-qr-code";
 import { twMerge } from "tailwind-merge";
 import { AmountDisplay } from "../components/AmountInput";
@@ -52,12 +52,6 @@ const Stage = {
   DepositAmount: "DEPOSIT_AMOUNT",
   SendAmount: "SEND_AMOUNT",
 };
-
-// Touch screens only: on desktops, reading the clipboard asks for a
-// permission, and pasting into the field is already one shortcut away.
-const canPaste =
-  Boolean(navigator.clipboard?.readText) &&
-  matchMedia("(pointer: coarse)").matches;
 
 const SLIPPAGE_DECIMALS = 2;
 const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
@@ -241,10 +235,6 @@ function SwapForm({
   const [refundAddressError, setRefundAddressError] = useState<
     string | undefined
   >();
-  const amountRef = useRef<HTMLInputElement>(null);
-  const refundRef = useRef<HTMLInputElement>(null);
-  const slippageRef = useRef<HTMLInputElement>(null);
-  const recipientRef = useRef<HTMLInputElement>(null);
   const from = "shielded";
 
   // Attempt to convert the input amount into a big integer
@@ -339,7 +329,8 @@ function SwapForm({
     (totalPriceAux * 10n ** BigInt(toToken.decimals + toTokenPriceAtomic[1])) /
     (10n ** BigInt(fromToken.decimals + fromTokenPriceAtomic[1]) *
       toTokenPriceAtomic[0]);
-  const zecPriceInFrom =
+  // One `toToken` in `fromToken`'s atomic units: the rate shown below.
+  const toPriceInFrom =
     (toTokenPriceAtomic[0] *
       10n ** BigInt(fromToken.decimals + fromTokenPriceAtomic[1])) /
     (fromTokenPriceAtomic[0] * 10n ** BigInt(toTokenPriceAtomic[1]));
@@ -397,7 +388,7 @@ function SwapForm({
         aside={
           // Display the maximum sendable amount and a button to effect it
           isOutbound && (
-            <div id="send-available">
+            <div id="swap-available">
               <BalanceWithMax
                 balance={balance.data?.[from].balance ?? 0n}
                 waiting={waitingBalance}
@@ -429,9 +420,9 @@ function SwapForm({
           <div className="flex flex-1 flex-col gap-1.5 min-w-0 text-right w-full">
             <AmountField
               id="swap-from-amount"
-              ref={amountRef}
               value={fromAmount}
-              describedBy="send-available"
+              // The balance beside it shows only when sending ZEC out.
+              describedBy={isOutbound ? "swap-available" : undefined}
               unit=""
               onChange={(v) => {
                 setFromAmount(v);
@@ -494,7 +485,10 @@ function SwapForm({
           <div className="flex flex-col gap-1.5">
             <input
               id="swap-refund-address"
-              ref={refundRef}
+              aria-describedby={
+                refundAddressError ? "swap-refund-address-error" : undefined
+              }
+              aria-invalid={Boolean(refundAddressError)}
               type="text"
               placeholder="Address to refund if swap fails"
               value={refundAddress}
@@ -509,19 +503,18 @@ function SwapForm({
                 inputClassName,
                 // 16px on phones: iOS zooms into any smaller field on focus.
                 "h-11 text-base sm:text-sm text-ellipsis",
-                !refundAddress && canPaste && "pr-20",
                 "border-black hover:border-black focus:border-black",
               )}
             />
           </div>
           <div
-            id="send-to-kind"
+            id="swap-refund-address-error"
             aria-live="polite"
             className="mt-2.5 empty:mt-0 flex items-center gap-1.5 text-xs font-medium"
           >
             {refundAddressError && (
               <span
-                key={error}
+                key={refundAddressError}
                 role="alert"
                 className={twMerge(
                   "flex items-center gap-1.5 motion-safe:animate-fade-in",
@@ -541,7 +534,12 @@ function SwapForm({
           <div className="flex flex-col gap-1.5">
             <input
               id="swap-recipient-address"
-              ref={recipientRef}
+              aria-describedby={
+                recipientAddressError
+                  ? "swap-recipient-address-error"
+                  : undefined
+              }
+              aria-invalid={Boolean(recipientAddressError)}
               type="text"
               placeholder="Address to receive swapped tokens"
               value={recipientAddress}
@@ -556,19 +554,18 @@ function SwapForm({
                 inputClassName,
                 // 16px on phones: iOS zooms into any smaller field on focus.
                 "h-11 text-base sm:text-sm text-ellipsis",
-                !recipientAddress && canPaste && "pr-20",
                 "border-black hover:border-black focus:border-black",
               )}
             />
           </div>
           <div
-            id="send-to-kind"
+            id="swap-recipient-address-error"
             aria-live="polite"
             className="mt-2.5 empty:mt-0 flex items-center gap-1.5 text-xs font-medium"
           >
             {recipientAddressError && (
               <span
-                key={error}
+                key={recipientAddressError}
                 role="alert"
                 className={twMerge(
                   "flex items-center gap-1.5 motion-safe:animate-fade-in",
@@ -594,7 +591,10 @@ function SwapForm({
             </label>
             <input
               id="swap-slippage"
-              ref={slippageRef}
+              aria-describedby={
+                slippageError ? "swap-slippage-error" : undefined
+              }
+              aria-invalid={Boolean(slippageError)}
               type="number"
               min="0.01"
               step="0.01"
@@ -607,20 +607,19 @@ function SwapForm({
                 inputClassName,
                 // 16px on phones: iOS zooms into any smaller field on focus.
                 "h-11 w-24 text-base sm:text-sm text-ellipsis",
-                !slippage && canPaste && "pr-20",
                 "border-black hover:border-black focus:border-black",
               )}
             />
           </div>
 
           <div
-            id="send-to-kind"
+            id="swap-slippage-error"
             aria-live="polite"
             className="mt-2.5 empty:mt-0 flex items-center gap-1.5 text-xs font-medium"
           >
             {slippageError && (
               <span
-                key={error}
+                key={slippageError}
                 role="alert"
                 className={twMerge(
                   "flex items-center gap-1.5 motion-safe:animate-fade-in",
@@ -637,7 +636,7 @@ function SwapForm({
             <span className="font-medium text-neutral-700">Rate</span>
             <span className="font-medium">
               1 {toToken.symbol} ={" "}
-              {atomicToWhole(zecPriceInFrom, fromToken.decimals)}{" "}
+              {atomicToWhole(toPriceInFrom, fromToken.decimals)}{" "}
               {fromToken.symbol}
             </span>
           </div>
@@ -800,10 +799,8 @@ function QuoteReview({
 
     // Request a quote from One Click given the exchange amounts and currencies
     // from the previous screen.
-    console.log("Review Quote post request body", quoteRequest);
     OneClickService.getQuote(quoteRequest)
       .then((data: QuoteResponse) => {
-        console.log("Review Quote post response body", data);
         if (!cancelled) setQuoteResponse(data);
       })
       .catch((error) => {

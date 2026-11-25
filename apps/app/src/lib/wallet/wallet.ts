@@ -96,7 +96,6 @@ const saveData = () =>
   (navigator as { connection?: { saveData?: boolean } }).connection
     ?.saveData === true;
 
-/** One account's wallet: its state, kept in storage and brought up to date by `sync`, and what the app reads and sends with. */
 /** Statuses a swap never leaves: once seen, 1Click needn't be asked again. */
 const FINAL_SWAP_STATUSES = new Set<GetExecutionStatusResponse.status>([
   GetExecutionStatusResponse.status.SUCCESS,
@@ -146,6 +145,7 @@ function withLocalHashes(
   };
 }
 
+/** One account's wallet: its state, kept in storage and brought up to date by `sync`, and what the app reads and sends with. */
 export class Wallet {
   /** The shielded account's keychain id: the keychain holds its viewing key. */
   readonly id: string;

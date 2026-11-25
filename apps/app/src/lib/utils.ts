@@ -39,7 +39,10 @@ export function fitFontSize(chars: number, max: string) {
   return `min(${max}, 100cqw / ${(Math.max(chars, 1) * 0.65).toFixed(2)})`;
 }
 
-/** Convert zatoshi (bigint) → ZEC decimal string. */
+/**
+ * `amount` in atomic units (zatoshi, satoshi, …) as a decimal string in whole
+ * units, for a token with `decimals` decimals: no trailing zeros, no exponent.
+ */
 export function atomicToWhole(amount: bigint, decimals: number): string {
   const negative = amount < 0n;
   const abs = negative ? -amount : amount;
@@ -59,55 +62,62 @@ export function zatoshiToZec(zatoshi: bigint): string {
   return atomicToWhole(zatoshi, DECIMALS);
 }
 
-/** Convert ZEC (string or number) → zatoshi (bigint). */
-export function wholeToAtomic(zec: string | number, decimals: number): bigint {
+/**
+ * `amount`, typed or a number, split into its sign, whole digits and
+ * fraction digits. Numbers are written out in full first, never with an
+ * exponent. Throws if it isn't a plain decimal.
+ */
+function splitDecimal(amount: string | number) {
   const str =
-    typeof zec === "number"
-      ? zec.toLocaleString("en-US", {
+    typeof amount === "number"
+      ? amount.toLocaleString("en-US", {
           useGrouping: false,
           maximumFractionDigits: 20,
         })
-      : zec.trim();
+      : amount.trim();
 
   if (!/^-?\d*\.?\d*$/.test(str) || str === "" || str === "." || str === "-") {
-    throw new Error(`Invalid ZEC amount: "${zec}"`);
+    throw new Error(`Invalid amount: "${amount}"`);
   }
 
   const negative = str.startsWith("-");
   const [whole = "0", frac = ""] = str.replace(/^-/, "").split(".");
+  return { negative, whole, frac };
+}
+
+/**
+ * `amount` in whole units as atomic units, for a token with `decimals`
+ * decimals. Throws if it isn't a decimal or has more fraction digits.
+ */
+export function wholeToAtomic(
+  amount: string | number,
+  decimals: number,
+): bigint {
+  const { negative, whole, frac } = splitDecimal(amount);
 
   if (frac.length > decimals) {
-    throw new Error(`Too many decimals: ZEC supports max ${decimals}`);
+    throw new Error(`Too many decimals: at most ${decimals}`);
   }
 
   const atomicsPerWhole = 10n ** BigInt(decimals);
-  const fracPadded = frac.padEnd(decimals, "0");
-  const zatoshi = BigInt(whole) * atomicsPerWhole + BigInt(fracPadded);
+  const atomic =
+    BigInt(whole) * atomicsPerWhole + BigInt(frac.padEnd(decimals, "0"));
 
-  return negative ? -zatoshi : zatoshi;
+  return negative ? -atomic : atomic;
 }
 
-/** Convert ZEC (string or number) → zatoshi (bigint). */
-export function wholeToScaledBigInt(zec: string | number): [bigint, number] {
-  const str =
-    typeof zec === "number"
-      ? zec.toLocaleString("en-US", {
-          useGrouping: false,
-          maximumFractionDigits: 20,
-        })
-      : zec.trim();
+/**
+ * `amount` as an exact scaled integer: `[n, scale]`, with `amount` equal to
+ * `n / 10^scale` and `scale` however many fraction digits it has. For prices,
+ * whose precision varies.
+ */
+export function wholeToScaledBigInt(amount: string | number): [bigint, number] {
+  const { negative, whole, frac } = splitDecimal(amount);
 
-  if (!/^-?\d*\.?\d*$/.test(str) || str === "" || str === "." || str === "-") {
-    throw new Error(`Invalid ZEC amount: "${zec}"`);
-  }
+  const scaled =
+    BigInt(whole) * 10n ** BigInt(frac.length) + BigInt(frac || "0");
 
-  const negative = str.startsWith("-");
-  const [whole = "0", frac = ""] = str.replace(/^-/, "").split(".");
-
-  const atomicsPerWhole = 10n ** BigInt(frac.length);
-  const zatoshi = BigInt(whole) * atomicsPerWhole + BigInt(frac);
-
-  return [negative ? -zatoshi : zatoshi, frac.length];
+  return [negative ? -scaled : scaled, frac.length];
 }
 
 /** Convert ZEC (string or number) → zatoshi (bigint). */

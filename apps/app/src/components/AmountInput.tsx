@@ -3,7 +3,7 @@ import { twMerge } from "tailwind-merge";
 import { fitFontSize } from "../lib/utils";
 import { placeholderClassName } from "./ui/utils";
 
-/** "ZEC" after a hero amount, sized relative to it. */
+/** The unit after a hero amount, sized relative to it. */
 export function AmountUnit({ unit = "ZEC" }: { unit?: string }) {
   return <span className="ml-[0.4em] text-[0.4em]">{unit}</span>;
 }
@@ -38,8 +38,9 @@ export function AmountInput({
           "flex items-baseline leading-[normal] font-medium transition-colors duration-300 ease-out-circ",
           "has-placeholder-shown:text-black/35 has-[input:placeholder-shown:hover:not(:focus)]:text-black/60",
         )}
-        // +2 leaves room for the unit.
-        style={{ fontSize: fitFontSize(value.length + 2, maxFontSize) }}
+        style={{
+          fontSize: fitFontSize(value.length + 2, maxFontSize),
+        }}
       >
         <span className="grid">
           {/* Sizes the cell to the number, plus the input's placeholder padding; the input fills it. */}
@@ -56,7 +57,7 @@ export function AmountInput({
             name="amount"
             type="text"
             inputMode="decimal"
-            aria-label="Amount in ZEC"
+            aria-label={`Amount in ${unit}`}
             placeholder="0"
             autoComplete="off"
             // Desktop only: on touch screens it would pop the keyboard over the form.
@@ -97,7 +98,9 @@ export function AmountDisplay({
     >
       <span
         className="flex items-baseline leading-none font-medium"
-        style={{ fontSize: fitFontSize(value.length + 2, "4.5rem") }}
+        style={{
+          fontSize: fitFontSize(value.length + 2, "4.5rem"),
+        }}
       >
         {value}
         <AmountUnit unit={unit} />
