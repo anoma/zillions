@@ -11,8 +11,8 @@ export type Keychain = Zillions;
 
 export const KeychainEvent = Events;
 
-// The first that keeps the viewing key: decrypts, builds and proves for the app.
-export const MIN_KEYCHAIN_VERSION = "0.14.0";
+// The first that shares only the connected account: `account()`, `switchAccount()`.
+export const MIN_KEYCHAIN_VERSION = "0.15.0";
 
 export function keychain(): Keychain {
   invariant(window.zc, "Keychain not installed");

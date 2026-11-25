@@ -5,7 +5,11 @@
  * its shape before the UI trusts it as a typed `IpcResponse<K>`. Dependency-free
  * — each validator asserts only the fields the Setup flow consumes.
  */
-import type { PcztSummary, ZCashKeychainAccount } from "@zillions/types";
+import type {
+  PcztSummary,
+  SiteAccount,
+  ZCashKeychainAccount,
+} from "@zillions/types";
 
 import type {
   AccountStore,
@@ -93,8 +97,8 @@ const isPublicAccount = (v: unknown): v is ZCashKeychainAccount =>
   typeof v.alias === "string" &&
   typeof v.address === "string";
 
-const isPublicAccountArray = (v: unknown): v is ZCashKeychainAccount[] =>
-  Array.isArray(v) && v.every(isPublicAccount);
+const isSiteAccount = (v: unknown): v is SiteAccount =>
+  isRecord(v) && isPublicAccount(v.transparent) && isPublicAccount(v.shielded);
 
 // Outputs must say whose they are: the approval's "Sending ..." line rests on it.
 const isOutputArray = (v: unknown): boolean =>
@@ -148,14 +152,14 @@ export const validateResponse = <K extends IpcKind>(
     case "keyring/deleteAccount":
     case "dapp/connect":
     case "dapp/disconnect":
-    case "dapp/updateDefaultAccount":
+    case "dapp/switchAccount":
     case "approvals/submitOpenLinkKey":
     case "approvals/resolveConnection":
     case "approvals/resolveDisconnection":
     case "approvals/revokeConnection":
     case "approvals/submitSignTx":
     case "approvals/rejectSignTx":
-    case "approvals/submitUpdateDefaultAccount":
+    case "approvals/submitSwitchAccount":
     case "approvals/clearLog":
     case "settings/setAutoLock":
     case "settings/setSyncWhileLocked":
@@ -254,17 +258,9 @@ export const validateResponse = <K extends IpcKind>(
         throw new ResponseShapeError(kind, "expected DeviceSignTx | null");
       return value as IpcResponse<K>;
 
-    case "dapp/accounts":
-      if (!isPublicAccountArray(value))
-        throw new ResponseShapeError(kind, "expected ZCashKeychainAccount[]");
-      return value as IpcResponse<K>;
-
-    case "dapp/defaultAccount":
-      if (value !== null && !isPublicAccount(value))
-        throw new ResponseShapeError(
-          kind,
-          "expected ZCashKeychainAccount | null"
-        );
+    case "dapp/account":
+      if (value !== null && !isSiteAccount(value))
+        throw new ResponseShapeError(kind, "expected SiteAccount | null");
       return value as IpcResponse<K>;
 
     case "approvals/connectedSites":

@@ -105,6 +105,7 @@ beforeEach(async () => {
       findById: async (id: string) => records.find((r) => r.id === id),
       findByAddress: async (a: string) => records.find((r) => r.address === a),
       getActiveAccount: async () => undefined,
+      setActiveAccount: async () => undefined,
     } as never,
     {
       viewingKey: async () => "uview-main",
@@ -116,9 +117,9 @@ beforeEach(async () => {
 
 describe("the account's viewing key", () => {
   it("never reaches the site, which still gets its wallet's details", async () => {
-    const accounts = await svc.dappAccounts(SITE);
-    expect(accounts.every((a) => !("viewingKey" in a))).toBe(true);
-    expect(accounts.find((a) => a.id === "Main-z")).toMatchObject({ hdIndex: 4 });
+    const account = await svc.dappAccount(SITE);
+    expect(JSON.stringify(account)).not.toContain("uview");
+    expect(account?.shielded).toMatchObject({ id: "Main-z", hdIndex: 4 });
   });
 
   it("decrypts the site's chunks with its own account's key", async () => {
@@ -179,7 +180,7 @@ describe("while the Keychain is locked", () => {
     for (const call of [
       svc.accountInfo(SITE),
       svc.freshAddress(SITE),
-      svc.dappAccounts(SITE),
+      svc.dappAccount(SITE),
     ]) {
       await expect(call).rejects.toThrow("Keychain is locked");
     }
@@ -242,5 +243,44 @@ describe("a transaction the site asks for", () => {
     await svc.rejectSignTx(popups[0].tabId, pendingIds()[0]);
     await expect(result).rejects.toThrow("rejected");
     expect(compute).not.toHaveBeenCalledWith(expect.objectContaining({ op: "prove" }), expect.anything());
+  });
+});
+
+describe("the site's account", () => {
+  it("is only the one it is connected with", async () => {
+    const account = await svc.dappAccount(SITE);
+    expect(account).toMatchObject({
+      transparent: { id: "Main" },
+      shielded: { id: "Main-z" },
+    });
+    expect(JSON.stringify(account)).not.toContain("Other");
+  });
+
+  it("moves to the wallet the user picks in the Keychain, shared from then on", async () => {
+    const result = svc.approveSwitchAccount(SITE, TAB);
+    await flush();
+    expect(popups).toHaveLength(1);
+    await svc.submitSwitchAccount(popups[0].tabId, "Other");
+    await result;
+    expect(await svc.dappAccount(SITE)).toMatchObject({
+      transparent: { id: "Other" },
+      shielded: { id: "Other-z" },
+    });
+    expect((await storage.getConnections())[SITE].accounts).toEqual(["Main", "Other"]);
+  });
+
+  it("can't be switched to a shielded child", async () => {
+    const result = svc.approveSwitchAccount(SITE, TAB);
+    await flush();
+    await svc.submitSwitchAccount(popups[0].tabId, "Other-z");
+    await expect(result).rejects.toThrow("Choose an account");
+    expect((await svc.dappAccount(SITE))?.transparent.id).toBe("Main");
+  });
+
+  it("isn't offered to a site that wasn't connected", async () => {
+    await expect(svc.approveSwitchAccount("https://evil.example", TAB)).rejects.toThrow(
+      "has not been approved"
+    );
+    expect(popups).toHaveLength(0);
   });
 });

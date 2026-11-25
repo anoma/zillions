@@ -239,9 +239,9 @@ export class BackgroundClient {
     return this.send("approvals/clearLog", {});
   }
 
-  /** Confirm the pending default-account change owned by this popup's tab. */
-  submitUpdateDefaultAccount(address: string): Promise<void> {
-    return this.send("approvals/submitUpdateDefaultAccount", { address });
+  /** Confirm the pending account switch owned by this popup's tab. */
+  submitSwitchAccount(accountId: string): Promise<void> {
+    return this.send("approvals/submitSwitchAccount", { accountId });
   }
 }
 

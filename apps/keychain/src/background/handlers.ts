@@ -298,28 +298,14 @@ export const handlers: HandlerMap = {
     return approvals.isLockedFor(requireOrigin(ctx));
   },
 
-  "dapp/accounts": async (_payload, ctx) => {
+  "dapp/account": async (_payload, ctx) => {
     const { approvals } = await getServices();
-    return approvals.dappAccounts(requireOrigin(ctx));
+    return approvals.dappAccount(requireOrigin(ctx));
   },
 
-  "dapp/defaultAccount": async (_payload, ctx) => {
+  "dapp/switchAccount": async (_payload, ctx) => {
     const { approvals } = await getServices();
-    return approvals.dappDefaultAccount(requireOrigin(ctx));
-  },
-
-  "dapp/updateDefaultAccount": async (payload, ctx) => {
-    // Crosses from an untrusted web page — validate before trusting the shape.
-    const { address } = payload as { address?: unknown };
-    if (typeof address !== "string") {
-      throw new Error("zc.updateDefaultAccount: invalid arguments");
-    }
-    const { approvals } = await getServices();
-    await approvals.approveUpdateDefaultAccount(
-      requireOrigin(ctx),
-      address,
-      ctx.tabId
-    );
+    await approvals.approveSwitchAccount(requireOrigin(ctx), ctx.tabId);
   },
 
   "dapp/sign": async (payload, ctx) => {
@@ -545,9 +531,9 @@ export const handlers: HandlerMap = {
     await approvals.clearApprovalLog();
   },
 
-  "approvals/submitUpdateDefaultAccount": async ({ address }, ctx) => {
+  "approvals/submitSwitchAccount": async ({ accountId }, ctx) => {
     const { approvals, broadcaster } = await getServices();
-    await approvals.submitUpdateDefaultAccount(requireTabId(ctx), address);
+    await approvals.submitSwitchAccount(requireTabId(ctx), accountId);
     void broadcaster.accountChanged(await approvals.followActiveAccount());
   },
 };

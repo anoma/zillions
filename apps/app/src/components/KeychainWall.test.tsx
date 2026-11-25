@@ -28,11 +28,10 @@ const shielded: ZCashKeychainAccount = {
 
 function stubKeychain(overrides: Partial<Keychain> = {}) {
   const zc = {
-    version: () => "0.14.0",
+    version: () => "0.15.0",
     isConnected: async () => true,
     connect: vi.fn(async () => {}),
-    accounts: async () => [transparent, shielded],
-    defaultAccount: async () => transparent,
+    account: async () => ({ transparent, shielded }),
     ...overrides,
   };
   window.zc = zc as unknown as typeof window.zc;
@@ -72,7 +71,7 @@ test("only a payment link adds the claim as a third step", () => {
 });
 
 test("an outdated keychain asks for a newer one", () => {
-  stubKeychain({ version: () => "0.2.0" });
+  stubKeychain({ version: () => "0.14.0" });
   renderWall();
   expect(screen.getByText("Keychain outdated")).toBeTruthy();
 });
@@ -112,9 +111,9 @@ test("a locked keychain asks to unlock, not to connect", async () => {
 test("a keychain locked after load asks to unlock, then comes back on unlock", async () => {
   let locked = true;
   stubKeychain({
-    accounts: async () => {
+    account: async () => {
       if (locked) throw new Error("Keychain is locked");
-      return [transparent, shielded];
+      return { transparent, shielded };
     },
   });
   renderWall();
@@ -137,22 +136,18 @@ test("unlocking from the toolbar moves on from setup", async () => {
   expect(await screen.findByText("Wallet for u1test")).toBeTruthy();
 });
 
-test("with no accounts it asks to create one", async () => {
-  stubKeychain({ accounts: async () => [] });
-  renderWall();
-  expect(await screen.findByText("Create account")).toBeTruthy();
-});
-
-test("with no default account it asks to select one", async () => {
-  // The keychain answers null, though its type says undefined.
-  stubKeychain({ defaultAccount: async () => null as never });
+test("with no shielded account it asks to select one", async () => {
+  stubKeychain({ account: async () => null });
   renderWall();
   expect(await screen.findByText("Select account")).toBeTruthy();
 });
 
 test("an account the keychain didn't share is an error", async () => {
   stubKeychain({
-    accounts: async () => [transparent, { ...shielded, hdIndex: undefined }],
+    account: async () => ({
+      transparent,
+      shielded: { ...shielded, hdIndex: undefined },
+    }),
   });
   renderWall();
   expect(

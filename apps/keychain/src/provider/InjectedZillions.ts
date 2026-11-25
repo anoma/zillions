@@ -1,8 +1,8 @@
 /**
  * The provider object dapps see as `window.zc` (MAIN world). Implements the
  * full shared `Zillions` interface so dapps typed against @zillions/types work
- * unchanged: the connection lifecycle, account queries, PCZT signing,
- * default-account updates, and `getSigner` are all live. Only the
+ * unchanged: the connection lifecycle, the account query, PCZT signing,
+ * account switching, and `getSigner` are all live. Only the
  * disposable-keypair methods reject with a clear "not supported yet" error.
  *
  * `chainId` arguments are accepted for interface compatibility and ignored —
@@ -27,8 +27,8 @@ import {
   type ProvedTx,
   type SendTxProps,
   type SignProps,
+  type SiteAccount,
   type TransparentAddressesProps,
-  type ZCashKeychainAccount,
 } from "@zillions/types";
 
 import { InjectedProxy } from "./InjectedProxy";
@@ -75,23 +75,14 @@ export class InjectedZillions implements IZillions {
     return await InjectedProxy.requestMethod<undefined, boolean>("isLocked");
   }
 
-  public async accounts(): Promise<ZCashKeychainAccount[]> {
-    return await InjectedProxy.requestMethod<undefined, ZCashKeychainAccount[]>(
-      "accounts",
+  public async account(): Promise<SiteAccount | null> {
+    return await InjectedProxy.requestMethod<undefined, SiteAccount | null>(
+      "account",
     );
   }
 
-  public async defaultAccount(): Promise<ZCashKeychainAccount> {
-    return await InjectedProxy.requestMethod<undefined, ZCashKeychainAccount>(
-      "defaultAccount",
-    );
-  }
-
-  public async updateDefaultAccount(address: string): Promise<void> {
-    return await InjectedProxy.requestMethod<string, void>(
-      "updateDefaultAccount",
-      address,
-    );
+  public async switchAccount(): Promise<void> {
+    return await InjectedProxy.requestMethod<undefined, void>("switchAccount");
   }
 
   public async sign(props: SignProps): Promise<PcztBase64> {

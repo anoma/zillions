@@ -3,7 +3,7 @@
  *
  * The extension's content script injects `window.zc` (the InjectedZillions
  * provider) into every page's MAIN world. We poll for it, then drive the
- * connection lifecycle: connect -> defaultAccount/accounts -> disconnect.
+ * connection lifecycle: connect -> account -> switchAccount -> disconnect.
  *
  * Everything is logged to the on-page panel so the approvals popup can be
  * exercised and inspected without opening devtools.
@@ -18,6 +18,7 @@ const els = {
   connectBtn: document.getElementById("connectBtn"),
   disconnectBtn: document.getElementById("disconnectBtn"),
   refreshBtn: document.getElementById("refreshBtn"),
+  switchBtn: document.getElementById("switchBtn"),
   accountsCard: document.getElementById("accountsCard"),
   defaultAccount: document.getElementById("defaultAccount"),
   accountsList: document.getElementById("accountsList"),
@@ -114,6 +115,7 @@ function setConnected(connected) {
   els.connStatus.textContent = connected ? "connected" : "disconnected";
   els.disconnectBtn.disabled = !connected;
   els.refreshBtn.disabled = !connected;
+  els.switchBtn.disabled = !connected;
   els.accountsCard.style.display = connected ? "block" : "none";
   els.signCard.style.display = connected ? "block" : "none";
   els.signArbCard.style.display = connected ? "block" : "none";
@@ -138,7 +140,6 @@ function renderAccounts(accounts, defaultAccount) {
     return;
   }
   for (const a of accounts) {
-    const isDefault = defaultAccount && a.address === defaultAccount.address;
     const row = document.createElement("div");
     row.className = "account";
     row.innerHTML =
@@ -146,13 +147,6 @@ function renderAccounts(accounts, defaultAccount) {
       `<strong>${escapeHtml(a.alias || "(unnamed)")}</strong>` +
       `<span class="badge">${escapeHtml(a.type)}</span></div>` +
       `<div class="mono" style="margin-top:4px">${escapeHtml(a.address)}</div>`;
-
-    const btn = document.createElement("button");
-    btn.textContent = isDefault ? "Default" : "Set as default";
-    btn.disabled = Boolean(isDefault);
-    btn.style.cssText = "margin-top:8px;padding:4px 10px;font-size:12px";
-    btn.addEventListener("click", () => void setDefault(a.address));
-    row.appendChild(btn);
 
     els.accountsList.appendChild(row);
   }
@@ -183,11 +177,11 @@ function renderAccounts(accounts, defaultAccount) {
 // ---- actions ----------------------------------------------------------------
 
 async function loadAccounts() {
-  const [accounts, defaultAccount] = await Promise.all([
-    call("zc.accounts()", () => window.zc.accounts()),
-    call("zc.defaultAccount()", () => window.zc.defaultAccount()),
-  ]);
-  renderAccounts(accounts, defaultAccount);
+  const account = await call("zc.account()", () => window.zc.account());
+  renderAccounts(
+    account ? [account.transparent, account.shielded] : [],
+    account?.transparent
+  );
 }
 
 els.connectBtn.addEventListener("click", async () => {
@@ -213,6 +207,7 @@ els.disconnectBtn.addEventListener("click", async () => {
 });
 
 els.refreshBtn.addEventListener("click", () => loadAccounts().catch(() => {}));
+els.switchBtn.addEventListener("click", () => void switchAccount());
 
 let lastArbResult = null; // { hash, signature, publicKey } from the last sign
 
@@ -262,12 +257,10 @@ els.verifyArbBtn.addEventListener("click", async () => {
   }
 });
 
-/** Drive the updateDefaultAccount approval flow, then refresh the account view. */
-async function setDefault(address) {
+/** Drive the switchAccount picker, then refresh the account view. */
+async function switchAccount() {
   try {
-    await call(`zc.updateDefaultAccount(${address.slice(0, 16)}…)`, () =>
-      window.zc.updateDefaultAccount(address)
-    );
+    await call("zc.switchAccount()", () => window.zc.switchAccount());
     await loadAccounts();
   } catch {
     // already logged
