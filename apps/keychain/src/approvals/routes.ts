@@ -6,7 +6,7 @@
 export default {
   approveConnection: (): string => "/approve-connection",
   approveDisconnection: (): string => "/approve-disconnection",
-  approveUpdateDefaultAccount: (): string => "/approve-update-default-account",
+  approveSwitchAccount: (): string => "/approve-switch-account",
   approveOpenLinkKey: (): string => "/approve-open-link-key",
   approveSignTx: (
     msgId: string = ":msgId",

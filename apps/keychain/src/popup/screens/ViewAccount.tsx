@@ -10,6 +10,7 @@ import { shortenAddress } from "@zillions/utils";
 
 import { freshAddress } from "../../background/crypto/zillions";
 import { useAccounts } from "../context/AccountContext";
+import { useAccountSwitch } from "../useAccountSwitch";
 import routes from "../routes";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
@@ -53,8 +54,8 @@ const AddressRow = ({
 export const ViewAccount = () => {
   const navigate = useNavigate();
   const { accountId = "" } = useParams<{ accountId: string }>();
-  const { getById, accounts, activeAccountId, changeActiveAccount, status } =
-    useAccounts();
+  const { getById, accounts, activeAccountId, status } = useAccounts();
+  const use = useAccountSwitch();
 
   const parent = getById(accountId);
   const shieldedChild = accounts.find(
@@ -127,7 +128,7 @@ export const ViewAccount = () => {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => void changeActiveAccount(parent.id, parent.type)}
+            onClick={() => use(parent)}
           >
             Use this account
           </Button>

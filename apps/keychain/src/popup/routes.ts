@@ -16,6 +16,8 @@ export default {
     `/accounts/${accountId}/rename`,
   deleteAccount: (accountId: string = ":accountId"): string =>
     `/accounts/${accountId}/delete`,
+  shareAccount: (accountId: string = ":accountId"): string =>
+    `/accounts/${accountId}/share`,
   settings: (): string => "/settings",
   changePassword: (): string => "/settings/change-password",
   connectedSites: (): string => "/settings/connected-sites",

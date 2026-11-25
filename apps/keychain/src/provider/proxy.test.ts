@@ -68,4 +68,14 @@ describe("the content script relay", () => {
     expect(send).toHaveBeenCalledWith("dapp/accountInfo", { account: undefined });
     expect(send).toHaveBeenCalledTimes(2);
   });
+
+  it("won't open the account picker for a page the user never touched", async () => {
+    const send = vi.fn(async () => null);
+    startProxy({ send } as unknown as BackgroundClient);
+
+    expect((await call("switchAccount")).error).toMatch(/needs the user to interact/);
+    expect((await call("account")).error).toBeUndefined();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith("dapp/account", {});
+  });
 });

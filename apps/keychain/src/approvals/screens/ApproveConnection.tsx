@@ -80,7 +80,7 @@ export const ApproveConnection = () => {
 
       <Eyebrow>It will be able to</Eyebrow>
       <ul className="m-0 p-0 list-none">
-        <Ability allowed>See your account names and addresses</Ability>
+        <Ability allowed>See this account&apos;s name and addresses</Ability>
         <Ability allowed>
           See this account&apos;s balance and full history, past and future
         </Ability>

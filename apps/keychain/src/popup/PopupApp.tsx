@@ -23,6 +23,7 @@ import { ConnectedSites } from "./screens/ConnectedSites";
 import { DeleteAccount } from "./screens/DeleteAccount";
 import { Login } from "./screens/Login";
 import { RenameAccount } from "./screens/RenameAccount";
+import { ShareAccount } from "./screens/ShareAccount";
 import { SyncWhileLocked } from "./screens/SyncWhileLocked";
 import { Settings } from "./screens/Settings";
 import { SpendingKey } from "./screens/SpendingKey";
@@ -65,6 +66,7 @@ const PopupShell = () => {
             <Route path={routes.viewSpendingKey()} element={<SpendingKey />} />
             <Route path={routes.renameAccount()} element={<RenameAccount />} />
             <Route path={routes.deleteAccount()} element={<DeleteAccount />} />
+            <Route path={routes.shareAccount()} element={<ShareAccount />} />
             <Route path={routes.settings()} element={<Settings />} />
             <Route path={routes.changePassword()} element={<ChangePassword />} />
             <Route path={routes.connectedSites()} element={<ConnectedSites />} />

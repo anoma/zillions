@@ -15,6 +15,7 @@ import type { StoredAccount } from "../../ipc/contract";
 import { useAccounts } from "../context/AccountContext";
 import { useVault } from "../context/VaultContext";
 import { useCurrentSite } from "../currentSite";
+import { useAccountSwitch } from "../useAccountSwitch";
 import { openSetupTab } from "../openSetup";
 import { setAccountOrder, sortByOrder, useAccountOrder } from "../prefs";
 import routes from "../routes";
@@ -39,8 +40,8 @@ export const AccountList = () => {
   const navigate = useNavigate();
   const client = useMemo(() => createBackgroundClient(), []);
   const { lock } = useVault();
-  const { parentAccounts, activeAccountId, status, changeActiveAccount } =
-    useAccounts();
+  const { parentAccounts, activeAccountId, status } = useAccounts();
+  const use = useAccountSwitch();
   const order = useAccountOrder();
   const site = useCurrentSite(client);
   const [dragging, setDragging] = useState<string>();
@@ -145,7 +146,7 @@ export const AccountList = () => {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          void changeActiveAccount(account.id, account.type);
+                          use(account);
                         }}
                       >
                         Use

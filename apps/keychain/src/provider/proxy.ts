@@ -19,7 +19,7 @@ import {
 const NEEDS_USER: ReadonlySet<ProxyMethod> = new Set([
   "connect",
   "disconnect",
-  "updateDefaultAccount",
+  "switchAccount",
   "sign",
   "openLinkKey",
   "sendTransaction",
@@ -51,16 +51,10 @@ const relayMethod = async (
       return client.send("dapp/isConnected", {});
     case "isLocked":
       return client.send("dapp/isLocked", {});
-    case "accounts":
-      return client.send("dapp/accounts", {});
-    case "defaultAccount":
-      return client.send("dapp/defaultAccount", {});
-    case "updateDefaultAccount": {
-      if (typeof args !== "string") {
-        throw new Error("zc.updateDefaultAccount: invalid arguments");
-      }
-      return client.send("dapp/updateDefaultAccount", { address: args });
-    }
+    case "account":
+      return client.send("dapp/account", {});
+    case "switchAccount":
+      return client.send("dapp/switchAccount", {});
     case "sign": {
       const { pczt, signer } = (args ?? {}) as {
         pczt?: unknown;

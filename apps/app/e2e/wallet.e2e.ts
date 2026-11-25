@@ -25,6 +25,22 @@ test.describe("not connected", () => {
   });
 });
 
+test("switching account is left to the keychain", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page
+    .getByRole("dialog", { name: "Account" })
+    .getByRole("button", { name: "Switch" })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (globalThis as { switchRequests?: unknown[] }).switchRequests,
+      ),
+    )
+    .toHaveLength(1);
+});
+
 test("receive shows a shielded address, then the transparent one", async ({
   page,
 }) => {
