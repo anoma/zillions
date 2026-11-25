@@ -746,14 +746,38 @@ export class ApprovalsService {
     return this.log.clear();
   }
 
-  /** Each connected origin and the wallet it currently sees. */
+  /** Each connected origin, the wallet it currently sees, and those it was given. */
   async connectedSites(): Promise<ConnectedSite[]> {
     const sites: ConnectedSite[] = [];
-    for (const origin of Object.keys(await this.localStorage.getConnections())) {
+    for (const [origin, connection] of Object.entries(
+      await this.localStorage.getConnections()
+    )) {
       const wallet = await this.siteWallet(origin);
-      if (wallet) sites.push({ origin, accountId: wallet.id });
+      if (wallet) sites.push({ origin, accountId: wallet.id, shared: connection.accounts });
     }
     return sites;
+  }
+
+  /**
+   * The user, in the popup, gave connected `origin` the wallet `walletId`; it
+   * follows the active account to it from now on (`followActiveAccount`).
+   */
+  async shareWallet(origin: string, walletId: string): Promise<void> {
+    const connection = (await this.localStorage.getConnections())[origin];
+    const wallet = await this.accounts.findById(walletId);
+    if (!connection || !wallet || wallet.parentId) {
+      throw new Error("Choose an account to share with a connected site");
+    }
+    if (!connection.accounts.includes(walletId)) {
+      await this.localStorage.setConnection(origin, {
+        ...connection,
+        accounts: [...connection.accounts, walletId],
+      });
+    }
+    void this.record(
+      { origin, kind: "default-account", describe: async () => ({ account: wallet.alias }) },
+      "approved"
+    );
   }
 
   async revokeConnection(origin: string): Promise<void> {

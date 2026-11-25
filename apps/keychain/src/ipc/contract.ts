@@ -142,10 +142,11 @@ export type ActiveAccount = {
   type: AccountType;
 };
 
-/** A connected origin and the wallet (parent account) it currently sees. */
+/** A connected origin, the wallet (parent account) it currently sees, and every wallet it was given. */
 export type ConnectedSite = {
   origin: string;
   accountId: string;
+  shared: string[];
 };
 
 /** Vault lock snapshot the popup gates on. */
@@ -353,8 +354,9 @@ export type IpcContract = {
     req: Record<string, never>;
     res: ActiveAccount | null;
   };
+  /** `shareWith`: a connected origin the user agreed to give this wallet, so it follows. */
   "keyring/setActiveAccount": {
-    req: { id: string; type: AccountType };
+    req: { id: string; type: AccountType; shareWith?: string };
     res: void;
   };
   /** Reveal the seed phrase of a mnemonic account (vault must be unlocked). */

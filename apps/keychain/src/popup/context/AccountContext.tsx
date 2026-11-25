@@ -29,7 +29,7 @@ type AccountContextValue = {
   activeAccountId: string | undefined;
   status: LoadStatus;
   getById: (accountId: string) => StoredAccount | undefined;
-  changeActiveAccount: (id: string, type: AccountType) => Promise<void>;
+  changeActiveAccount: (id: string, type: AccountType, shareWith?: string) => Promise<void>;
   revealMnemonic: (accountId: string) => Promise<string>;
   revealSpendingKey: (accountId: string) => Promise<SpendingKeys>;
   rename: (accountId: string, alias: string) => Promise<void>;
@@ -77,9 +77,10 @@ export const AccountProvider = ({
 
   const changeActiveAccount = async (
     id: string,
-    type: AccountType
+    type: AccountType,
+    shareWith?: string
   ): Promise<void> => {
-    await client.setActiveAccount(id, type);
+    await client.setActiveAccount(id, type, shareWith);
     setActiveAccountId(id);
   };
 

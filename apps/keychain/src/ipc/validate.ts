@@ -63,7 +63,8 @@ const isConnectedSiteArray = (v: unknown): v is ConnectedSite[] =>
     (x) =>
       isRecord(x) &&
       typeof x.origin === "string" &&
-      typeof x.accountId === "string"
+      typeof x.accountId === "string" &&
+      isStringArray(x.shared)
   );
 
 const isStoredAccount = (v: unknown): v is StoredAccount =>

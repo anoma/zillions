@@ -148,8 +148,8 @@ export class BackgroundClient {
     return this.send("keyring/getActiveAccount", {});
   }
 
-  setActiveAccount(id: string, type: AccountType): Promise<void> {
-    return this.send("keyring/setActiveAccount", { id, type });
+  setActiveAccount(id: string, type: AccountType, shareWith?: string): Promise<void> {
+    return this.send("keyring/setActiveAccount", { id, type, shareWith });
   }
 
   /** Reveal the seed phrase of a mnemonic account (vault must be unlocked). */

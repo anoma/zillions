@@ -81,6 +81,7 @@ const records = [
 let svc: ApprovalsService;
 let storage: LocalStorage;
 let locked = false;
+let activeId: string | undefined;
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve));
 
 beforeEach(async () => {
@@ -89,6 +90,7 @@ beforeEach(async () => {
   compute.mockReset();
   const kv = new Map<string, unknown>();
   locked = false;
+  activeId = undefined;
   storage = new LocalStorage({
     get: async (k: string) => kv.get(k),
     set: async (k: string, v: unknown) => void kv.set(k, v),
@@ -104,8 +106,10 @@ beforeEach(async () => {
       findAll: async () => records,
       findById: async (id: string) => records.find((r) => r.id === id),
       findByAddress: async (a: string) => records.find((r) => r.address === a),
-      getActiveAccount: async () => undefined,
-      setActiveAccount: async () => undefined,
+      getActiveAccount: async () => (activeId ? { id: activeId } : undefined),
+      setActiveAccount: async (id: string) => {
+        activeId = id;
+      },
     } as never,
     {
       viewingKey: async () => "uview-main",
@@ -282,5 +286,34 @@ describe("the site's account", () => {
       "has not been approved"
     );
     expect(popups).toHaveLength(0);
+  });
+});
+
+describe("using an account from the popup", () => {
+  const use = async (id: string) => {
+    activeId = id;
+    return svc.followActiveAccount();
+  };
+
+  it("leaves a connected site where it was when it wasn't given the account", async () => {
+    expect(await use("Other")).toEqual([]);
+    expect((await svc.dappAccount(SITE))?.transparent.id).toBe("Main");
+  });
+
+  it("moves the site once the user shares the account with it", async () => {
+    await svc.shareWallet(SITE, "Other");
+    expect(await use("Other")).toEqual([SITE]);
+    expect((await svc.dappAccount(SITE))?.transparent.id).toBe("Other");
+    expect(await svc.connectedSites()).toEqual([
+      { origin: SITE, accountId: "Other", shared: ["Main", "Other"] },
+    ]);
+  });
+
+  it("shares only whole accounts, and only with a connected site", async () => {
+    await expect(svc.shareWallet(SITE, "Other-z")).rejects.toThrow("Choose an account");
+    await expect(svc.shareWallet("https://evil.example", "Other")).rejects.toThrow(
+      "Choose an account"
+    );
+    expect((await storage.getConnections())[SITE].accounts).toEqual(["Main"]);
   });
 });

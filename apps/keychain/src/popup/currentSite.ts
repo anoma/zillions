@@ -3,8 +3,13 @@ import browser from "webextension-polyfill";
 
 import type { BackgroundClient } from "../ipc/client";
 
-/** `accountId`: the wallet the site sees, when connected. */
-export type CurrentSite = { origin: string; connected: boolean; accountId?: string };
+/** `accountId`: the wallet the site sees, when connected; `shared`: every wallet it was given. */
+export type CurrentSite = {
+  origin: string;
+  connected: boolean;
+  accountId?: string;
+  shared: string[];
+};
 
 /**
  * The web origin of the browser tab the popup was opened over, and whether it
@@ -22,10 +27,17 @@ export const useCurrentSite = (
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
       if (!tab?.url || !/^https?:\/\//.test(tab.url)) return;
       const origin = new URL(tab.url).origin;
-      const accountId = (await client.connectedSites()).find(
+      const connected = (await client.connectedSites()).find(
         (s) => s.origin === origin
-      )?.accountId;
-      if (live) setSite({ origin, connected: !!accountId, accountId });
+      );
+      if (live) {
+        setSite({
+          origin,
+          connected: !!connected,
+          accountId: connected?.accountId,
+          shared: connected?.shared ?? [],
+        });
+      }
     })().catch(console.error);
     return () => {
       live = false;

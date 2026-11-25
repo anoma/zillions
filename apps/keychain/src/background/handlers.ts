@@ -244,8 +244,9 @@ export const handlers: HandlerMap = {
     return (await accounts.getActiveAccount()) ?? null;
   },
 
-  "keyring/setActiveAccount": async ({ id, type }) => {
+  "keyring/setActiveAccount": async ({ id, type, shareWith }) => {
     const { accounts, approvals, broadcaster } = await getServices();
+    if (shareWith) await approvals.shareWallet(shareWith, id);
     await accounts.setActiveAccount(id, type);
     void broadcaster.accountChanged(await approvals.followActiveAccount());
   },
