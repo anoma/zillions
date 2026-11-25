@@ -46,6 +46,7 @@ import {
   wholeToScaledBigInt,
   zatoshiToZec,
 } from "../lib/utils";
+import type { PendingTx } from "../lib/wallet/types";
 const Stage = {
   Swap: "SWAP",
   ReviewQuote: "REVIEW_QUOTE",
@@ -687,6 +688,7 @@ function QuoteReview({
   recipientAddress,
   onFailure,
   onConfirm,
+  onSubmit,
   children,
 }: {
   fromToken: TokenResponse;
@@ -701,6 +703,7 @@ function QuoteReview({
   recipientAddress: string;
   onFailure: ({ message }: { message: string }) => void;
   onConfirm: (isOutgoing: boolean) => void;
+  onSubmit: (sendData: PendingTx) => void;
   children: React.JSX.Element;
   send: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -732,7 +735,7 @@ function QuoteReview({
   // handler choose what to do.
   useEffect(() => {
     if (isOutbound && send.data) {
-      onConfirm(isOutbound);
+      onSubmit(send.data);
     }
   }, [isOutbound, send.data]);
 
@@ -751,6 +754,8 @@ function QuoteReview({
   );
 
   const onConfirmAux = () => {
+    // Let the onConfirm handler choose what to do with the confirmation
+    onConfirm(isOutbound);
     if (isOutbound) {
       // Initiate the outbound transfer to the exchange deposit address
       const memo = `Swap ${quote?.amountInFormatted ?? "0"} ${fromToken.symbol} for ${toToken.symbol}.`;
@@ -767,10 +772,6 @@ function QuoteReview({
           memo,
         },
       });
-      // Call onConfirm later once the transaction is complete
-    } else {
-      // Let the onConfirm handler choose what to do with the confirmation
-      onConfirm(isOutbound);
     }
   };
 
@@ -1213,34 +1214,36 @@ function SwapRoute() {
       setStage(Stage.Swap);
     };
 
+    const onSubmit = (sendData: PendingTx) => {
+      if (!quote?.depositAddress) {
+        throw new Error(
+          "onSubmit has been triggered when the quote has not yet been prepared",
+        );
+      }
+      // Record the outbound transaction ID to deduplicate entries in the
+      // transaction history.
+      // Asked about once stored, so the new swap's row appears straight away.
+      void wallet
+        .pushSwap(quote?.depositAddress, isOutbound, [
+          { hash: sendData.txid, explorerUrl: "" },
+        ])
+        .then(() => queryClient.invalidateQueries(getSwaps(wallet)));
+      // Move to the SendAmount screen.
+      setStage(Stage.SendAmount);
+    };
+
     const onConfirm = (isOutbound: boolean) => {
       if (!quote?.depositAddress) {
         throw new Error(
           "onConfirm has been triggered when the quote has not yet been prepared",
         );
-      } else if (isOutbound) {
-        if (!send.data) {
-          throw new Error(
-            "onConfirm has been triggered when transaction data is not yet ready",
-          );
-        } else {
-          // Record the outbound transaction ID to deduplicate entries in the
-          // transaction history.
-          // Asked about once stored, so the new swap's row appears straight away.
-          void wallet
-            .pushSwap(quote?.depositAddress, isOutbound, [
-              { hash: send.data.txid, explorerUrl: "" },
-            ])
-            .then(() => queryClient.invalidateQueries(getSwaps(wallet)));
-          // Move to the SendAmount screen.
-          setStage(Stage.SendAmount);
-        }
-      } else {
-        // Record the swap address so that this wallet can monitor it in the background
-        // and provide status updates
-        void wallet
-          .pushSwap(quote?.depositAddress, isOutbound, [])
-          .then(() => queryClient.invalidateQueries(getSwaps(wallet)));
+      }
+      // Record the swap address so that this wallet can monitor it in the background
+      // and provide status updates
+      void wallet
+        .pushSwap(quote?.depositAddress, isOutbound, [])
+        .then(() => queryClient.invalidateQueries(getSwaps(wallet)));
+      if (!isOutbound) {
         // Move to the deposit amount screen
         setStage(Stage.DepositAmount);
       }
@@ -1260,6 +1263,7 @@ function SwapRoute() {
         isOutbound={isOutbound}
         onFailure={onFailure}
         onConfirm={onConfirm}
+        onSubmit={onSubmit}
       >
         {/* Provide a back button in case the user would like to modify the cryptocurrency
         exchange. */}
