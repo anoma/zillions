@@ -3,6 +3,7 @@ name = "field-bench"
 version = "0.0.0"
 edition = "2021"
 publish = false
+license = "GPL-3.0-or-later"
 
 [lib]
 crate-type = ["cdylib"]

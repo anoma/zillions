@@ -1,5 +1,6 @@
 {
   "name": "@zillions/keychain-types",
+  "license": "GPL-3.0-or-later",
   "version": "0.1.0",
   "private": true,
   "description": "Shared types for the Zillions Keychain injected provider.",

@@ -3,7 +3,7 @@
   "private": true,
   "description": "Zcash Sapling proving parameters (2018 MPC ceremony output), loaded by the app's prover worker",
   "version": "1.0.0",
-  "license": "MIT OR Apache-2.0",
+  "license": "GPL-3.0-or-later",
   "files": [
     "sapling-spend.params",
     "sapling-output.params"

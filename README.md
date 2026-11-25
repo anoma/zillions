@@ -36,3 +36,12 @@ By [Taylor Hornby](https://defuse.ca/) ([@DefuseSec](https://x.com/DefuseSec)):
 | --- | --- |
 | 2026-11-12 | App, Keychain, zcore |
 | 2026-11-06 | Keychain |
+
+## License
+
+Copyright (C) 2026 Heliax
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [LICENSE](LICENSE).
