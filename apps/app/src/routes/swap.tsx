@@ -55,6 +55,28 @@ const Stage = {
 };
 
 const SLIPPAGE_DECIMALS = 2;
+
+const HOUR_MS = 60 * 60 * 1000;
+/**
+ * How long a quote's deposit has to be sent and mined in, by origin chain.
+ * 1Click begins refunding at the deadline, and its deposit address goes
+ * inactive, so the window must cover the user sending from their wallet,
+ * the chain mining it, and a margin. Chains with 10-minute blocks can take
+ * well over an hour to mine a deposit, or longer with a low fee.
+ */
+const DEPOSIT_WINDOW_MS: Partial<Record<string, number>> = {
+  btc: 3 * HOUR_MS,
+  bch: 3 * HOUR_MS,
+};
+/** Every other chain mines a deposit within minutes. */
+const DEFAULT_DEPOSIT_WINDOW_MS = HOUR_MS;
+
+/** When refunds begin for a quote paid on the given blockchain. */
+function depositDeadline(blockchain: TokenResponse.blockchain) {
+  const span = DEPOSIT_WINDOW_MS[blockchain] ?? DEFAULT_DEPOSIT_WINDOW_MS;
+  return new Date(Date.now() + span);
+}
+
 const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
 // The default symbol logo displayed when proper logo is not found
 const UNKNOWN_SYMBOL_LOGO: React.JSX.Element = <UnknownIcon />;
@@ -721,8 +743,8 @@ function QuoteReview({
     >;
   };
 }) {
-  // Ensure that the quote remains valid for at least an hour
-  const [deadline] = useState(() => new Date(Date.now() + 60 * 60 * 1000));
+  // Long enough for a deposit on the origin chain to be sent and mined.
+  const [deadline] = useState(() => depositDeadline(fromToken.blockchain));
   // Everything shown comes from the quote, so a quote kept across screens
   // shows exactly as it did when it was fetched.
   const quote = quoteResponse?.quote;
