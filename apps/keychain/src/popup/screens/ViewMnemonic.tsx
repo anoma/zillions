@@ -9,6 +9,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAccounts } from "../context/AccountContext";
 import routes from "../routes";
 import { Button } from "../ui/Button";
+import { CopyButton } from "../ui/CopyButton";
 import { Notice } from "../ui/Notice";
 import { PasswordGate } from "../ui/PasswordGate";
 import { ScreenHeader } from "../ui/ScreenHeader";
@@ -24,6 +25,7 @@ export const ViewMnemonic = () => {
   const { getById, revealMnemonic, status } = useAccounts();
   const [mnemonic, setMnemonic] = useState<string>();
   const [secondsLeft, setSecondsLeft] = useState(SHOWN_FOR_S);
+  const [confirmingCopy, setConfirmingCopy] = useState(false);
   const account = getById(accountId);
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export const ViewMnemonic = () => {
   }, [account, status]);
 
   useEffect(() => {
+    setConfirmingCopy(false);
     if (mnemonic === undefined) return;
     setSecondsLeft(SHOWN_FOR_S);
     const timer = setInterval(() => setSecondsLeft((s) => s - 1), 1000);
@@ -72,6 +75,29 @@ export const ViewMnemonic = () => {
             Hidden again in {formatCountdown(secondsLeft)}
           </p>
           <div className="mt-auto flex flex-col gap-2 pt-4 pb-5">
+            {confirmingCopy ? (
+              <>
+                <Notice tone="gold">
+                  Other apps and synced backups can read your clipboard. Writing
+                  the phrase on paper is safer.
+                </Notice>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="secondary" onClick={() => setConfirmingCopy(false)}>
+                    Cancel
+                  </Button>
+                  <CopyButton
+                    value={mnemonic}
+                    className="h-[38px] rounded-pill border border-line-strong text-[13px] font-semibold cursor-pointer hover:bg-black/5"
+                  >
+                    Copy anyway
+                  </CopyButton>
+                </div>
+              </>
+            ) : (
+              <Button variant="secondary" block onClick={() => setConfirmingCopy(true)}>
+                Copy to clipboard
+              </Button>
+            )}
             <Button variant="secondary" block onClick={() => setMnemonic(undefined)}>
               Hide now
             </Button>
