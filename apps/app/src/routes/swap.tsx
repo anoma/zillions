@@ -1049,14 +1049,12 @@ function AmountDeposit({
   amountInUsd,
   fromToken,
   depositAddress,
-  onConfirm,
   children,
 }: {
   amountIn: string;
   amountInUsd: number;
   fromToken: TokenResponse;
   depositAddress: string;
-  onConfirm: () => void;
   children: React.JSX.Element;
 }) {
   return (
@@ -1112,9 +1110,7 @@ function AmountDeposit({
           {children}
           {/* Allow the user to confirm that they have deposited and put this transaction in
           the background. */}
-          <ActionButton onClick={onConfirm} href="/">
-            I've sent the funds
-          </ActionButton>
+          <ActionButton href="/">I've sent the funds</ActionButton>
         </div>
       </section>
     </FormPage>
@@ -1291,7 +1287,6 @@ function SwapRoute() {
         amountIn={quote?.amountInFormatted ?? "0"}
         fromToken={fromToken}
         depositAddress={quote?.depositAddress}
-        onConfirm={() => {}}
       >
         {/* Only a quote has been provided so far. So everything is reversible and the
         user can return to the quote screen. */}
