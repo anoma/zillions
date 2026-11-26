@@ -41,6 +41,12 @@ import { USDCoinIcon } from "../icons/USDCoinIcon";
 import { ZcashIcon } from "../icons/ZcashIcon";
 import {
   atomicToWhole,
+  scaledBigIntAdd,
+  scaledBigIntDiv,
+  scaledBigIntMul,
+  scaledBigIntScale,
+  scaledBigIntSub,
+  scaledBigIntToWhole,
   shortenAddress,
   wholeToAtomic,
   wholeToScaledBigInt,
@@ -55,6 +61,7 @@ const Stage = {
 };
 
 const SLIPPAGE_DECIMALS = 2;
+const USD_DECIMALS = 2;
 
 const HOUR_MS = 60 * 60 * 1000;
 /**
@@ -342,28 +349,28 @@ function SwapForm({
   // Compute the currency conversions
   const fromTokenPriceAtomic = wholeToScaledBigInt(fromToken.price);
   const toTokenPriceAtomic = wholeToScaledBigInt(toToken.price);
-  const totalPriceAux = amountInBigInt * fromTokenPriceAtomic[0];
-  const totalPrice =
-    (totalPriceAux * 100n) /
-    10n ** BigInt(fromToken.decimals + fromTokenPriceAtomic[1]);
-  const fromTotalPrice = totalPrice;
-  const toTotalPrice = totalPrice;
-  const toAmount =
-    (totalPriceAux * 10n ** BigInt(toToken.decimals + toTokenPriceAtomic[1])) /
-    (10n ** BigInt(fromToken.decimals + fromTokenPriceAtomic[1]) *
-      toTokenPriceAtomic[0]);
+  const totalPrice = scaledBigIntMul(
+    [amountInBigInt, fromToken.decimals],
+    fromTokenPriceAtomic,
+  );
+  const toAmount = scaledBigIntDiv(
+    totalPrice,
+    toTokenPriceAtomic,
+    toToken.decimals,
+  );
   // One `toToken` in `fromToken`'s atomic units: the rate shown below.
-  const toPriceInFrom =
-    (toTokenPriceAtomic[0] *
-      10n ** BigInt(fromToken.decimals + fromTokenPriceAtomic[1])) /
-    (fromTokenPriceAtomic[0] * 10n ** BigInt(toTokenPriceAtomic[1]));
+  const toPriceInFrom = scaledBigIntDiv(
+    toTokenPriceAtomic,
+    fromTokenPriceAtomic,
+    fromToken.decimals,
+  );
 
   // Swap the from amount and token with the to amount and token. Additionally
   // the refund address is needed from the user for inbound swaps whereas a
   // recipient address is needed for outbound swaps.
   const reverseExchange = () => {
     const tmpToken = fromToken;
-    const tmpAmount = atomicToWhole(toAmount, toToken.decimals);
+    const tmpAmount = scaledBigIntToWhole(toAmount);
     setFromToken(toToken);
     setToToken(tmpToken);
     setFromAmount(tmpAmount);
@@ -454,7 +461,12 @@ function SwapForm({
               error={amountInError}
             />
             <p className="px-1 text-xs text-neutral-500">
-              ~ ${atomicToWhole(fromTotalPrice, 2)} USD
+              ~ $
+              {scaledBigIntToWhole(
+                scaledBigIntScale(totalPrice, USD_DECIMALS),
+                true,
+              )}{" "}
+              USD
             </p>
           </div>
         </div>
@@ -491,12 +503,14 @@ function SwapForm({
           />
 
           <div className="flex flex-1 flex-col gap-1.5 min-w-0">
-            <AmountDisplay
-              value={atomicToWhole(toAmount, toToken.decimals)}
-              unit=""
-            />
+            <AmountDisplay value={scaledBigIntToWhole(toAmount)} unit="" />
             <p className="px-1 text-xs text-neutral-500 text-right w-full">
-              ~ ${atomicToWhole(toTotalPrice, 2)} USD
+              ~ $
+              {scaledBigIntToWhole(
+                scaledBigIntScale(totalPrice, USD_DECIMALS),
+                true,
+              )}{" "}
+              USD
             </p>
           </div>
         </div>
@@ -658,8 +672,7 @@ function SwapForm({
           <div className="flex items-center justify-between text-sm">
             <span className="font-medium text-neutral-700">Rate</span>
             <span className="font-medium">
-              1 {toToken.symbol} ={" "}
-              {atomicToWhole(toPriceInFrom, fromToken.decimals)}{" "}
+              1 {toToken.symbol} = {scaledBigIntToWhole(toPriceInFrom)}{" "}
               {fromToken.symbol}
             </span>
           </div>
@@ -689,17 +702,9 @@ function conversionFeeOf(quote: Quote, fromToken: TokenResponse) {
   if (priceUsd[0] <= 0n) return 0n;
   const amountInUsd = wholeToScaledBigInt(quote.amountInUsd);
   const amountOutUsd = wholeToScaledBigInt(quote.amountOutUsd);
-  // Get the most decimals used in the amounts
-  const amountDecimals = Math.max(amountInUsd[1], amountOutUsd[1]);
-  // Ensure that the input and amounts have the same decimal counts
-  amountInUsd[0] *= 10n ** BigInt(amountDecimals - amountInUsd[1]);
-  amountOutUsd[0] *= 10n ** BigInt(amountDecimals - amountOutUsd[1]);
-  const feeAux = amountInUsd[0] - amountOutUsd[0];
+  const fee = scaledBigIntSub(amountInUsd, amountOutUsd);
   // Finally convert the fee into the given token
-  return (
-    (feeAux * 10n ** BigInt(fromToken.decimals + priceUsd[1])) /
-    (priceUsd[0] * 10n ** BigInt(amountDecimals))
-  );
+  return scaledBigIntDiv(fee, priceUsd, fromToken.decimals)[0];
 }
 
 // This form requests a quote for the currency exchange specified by the user and
@@ -757,8 +762,8 @@ function QuoteReview({
   // Everything shown comes from the quote, so a quote kept across screens
   // shows exactly as it did when it was fetched.
   const quote = quoteResponse?.quote;
-  const amountInUsd = Number(quote?.amountInUsd ?? "0");
-  const amountOutUsd = Number(quote?.amountOutUsd ?? "0");
+  const amountInUsd = wholeToScaledBigInt(quote?.amountInUsd ?? "0");
+  const amountOutUsd = wholeToScaledBigInt(quote?.amountOutUsd ?? "0");
   const conversionFee = quote ? conversionFeeOf(quote, fromToken) : 0n;
   const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
 
@@ -876,7 +881,12 @@ function QuoteReview({
                 {quote?.amountInFormatted ?? "0"} {fromToken.symbol}
               </span>
               <span className="text-xs text-neutral-500">
-                ~ ${amountInUsd.toFixed(2)} USD
+                ~ $
+                {scaledBigIntToWhole(
+                  scaledBigIntScale(amountInUsd, USD_DECIMALS),
+                  true,
+                )}{" "}
+                USD
               </span>
             </div>
           </div>
@@ -912,7 +922,12 @@ function QuoteReview({
                 {quote?.amountOutFormatted ?? "0"} {toToken.symbol}
               </span>
               <span className="text-xs text-neutral-500">
-                ~ ${amountOutUsd.toFixed(2)} USD
+                ~ $
+                {scaledBigIntToWhole(
+                  scaledBigIntScale(amountOutUsd, USD_DECIMALS),
+                  true,
+                )}{" "}
+                USD
               </span>
             </div>
           </div>
@@ -983,11 +998,18 @@ function QuoteReview({
                   </span>
                   <span className="text-xs text-neutral-500">
                     ~ $
-                    {atomicToWhole(
-                      ((conversionFee + BigInt(sendPlan.plan.data?.fee)) *
-                        BigInt(Math.ceil(fromToken.price * 100))) /
-                        10n ** BigInt(fromToken.decimals),
-                      2,
+                    {scaledBigIntToWhole(
+                      scaledBigIntScale(
+                        scaledBigIntMul(
+                          [
+                            conversionFee + BigInt(sendPlan.plan.data?.fee),
+                            fromToken.decimals,
+                          ],
+                          wholeToScaledBigInt(fromToken.price),
+                        ),
+                        USD_DECIMALS,
+                      ),
+                      true,
                     )}{" "}
                     USD
                   </span>
@@ -1009,11 +1031,22 @@ function QuoteReview({
                   </span>
                   <span className="text-xs text-neutral-500">
                     ~ $
-                    {(
-                      amountInUsd +
-                      (sendPlan.plan.data?.fee * fromToken.price) /
-                        10 ** fromToken.decimals
-                    ).toFixed(2)}{" "}
+                    {scaledBigIntToWhole(
+                      scaledBigIntScale(
+                        scaledBigIntAdd(
+                          amountInUsd,
+                          scaledBigIntMul(
+                            [
+                              BigInt(sendPlan.plan.data?.fee),
+                              fromToken.decimals,
+                            ],
+                            wholeToScaledBigInt(fromToken.price),
+                          ),
+                        ),
+                        USD_DECIMALS,
+                      ),
+                      true,
+                    )}{" "}
                     USD
                   </span>
                 </div>
@@ -1045,7 +1078,12 @@ function QuoteReview({
                     {quote?.amountInFormatted ?? "0"} {fromToken.symbol}
                   </span>
                   <span className="text-xs text-neutral-500">
-                    ~ ${amountInUsd.toFixed(2)} USD
+                    ~ $
+                    {scaledBigIntToWhole(
+                      scaledBigIntScale(amountInUsd, USD_DECIMALS),
+                      true,
+                    )}{" "}
+                    USD
                   </span>
                 </div>
               </div>
@@ -1083,7 +1121,7 @@ function AmountDeposit({
   children,
 }: {
   amountIn: string;
-  amountInUsd: number;
+  amountInUsd: string;
   fromToken: TokenResponse;
   depositAddress: string;
   children: React.JSX.Element;
@@ -1101,7 +1139,15 @@ function AmountDeposit({
               {amountIn} {fromToken.symbol}
             </span>
             <span className="text-sm font-medium text-neutral-500">
-              ~ ${amountInUsd} USD
+              ~ $
+              {scaledBigIntToWhole(
+                scaledBigIntScale(
+                  wholeToScaledBigInt(amountInUsd),
+                  USD_DECIMALS,
+                ),
+                true,
+              )}{" "}
+              USD
             </span>
           </div>
 
@@ -1190,7 +1236,6 @@ function SwapRoute() {
     null,
   );
   const quote = quoteResponse?.quote;
-  const amountInUsd = Number(quote?.amountInUsd ?? "0");
 
   const send = useSend();
 
@@ -1314,7 +1359,7 @@ function SwapRoute() {
 
     return (
       <AmountDeposit
-        amountInUsd={amountInUsd}
+        amountInUsd={quote?.amountInUsd ?? "0"}
         amountIn={quote?.amountInFormatted ?? "0"}
         fromToken={fromToken}
         depositAddress={quote?.depositAddress}

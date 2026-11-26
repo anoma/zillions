@@ -43,7 +43,11 @@ export function fitFontSize(chars: number, max: string) {
  * `amount` in atomic units (zatoshi, satoshi, …) as a decimal string in whole
  * units, for a token with `decimals` decimals: no trailing zeros, no exponent.
  */
-export function atomicToWhole(amount: bigint, decimals: number): string {
+export function atomicToWhole(
+  amount: bigint,
+  decimals: number,
+  fixed: boolean = false,
+): string {
   const negative = amount < 0n;
   const abs = negative ? -amount : amount;
 
@@ -51,7 +55,8 @@ export function atomicToWhole(amount: bigint, decimals: number): string {
   const whole = abs / atomicsPerWhole;
   const frac = abs % atomicsPerWhole;
 
-  const fracStr = frac.toString().padStart(decimals, "0").replace(/0+$/, "");
+  let fracStr = frac.toString().padStart(decimals, "0");
+  if (decimals === 0 || !fixed) fracStr = fracStr.replace(/0+$/, "");
   const result = fracStr ? `${whole}.${fracStr}` : `${whole}`;
 
   return negative ? `-${result}` : result;
@@ -106,18 +111,67 @@ export function wholeToAtomic(
   return negative ? -atomic : atomic;
 }
 
+// Represents a big integer divided by ten to the power of the exponent
+export type Scaled = readonly [bigint, number];
+
 /**
  * `amount` as an exact scaled integer: `[n, scale]`, with `amount` equal to
  * `n / 10^scale` and `scale` however many fraction digits it has. For prices,
  * whose precision varies.
  */
-export function wholeToScaledBigInt(amount: string | number): [bigint, number] {
+export function wholeToScaledBigInt(amount: string | number): Scaled {
   const { negative, whole, frac } = splitDecimal(amount);
 
   const scaled =
     BigInt(whole) * 10n ** BigInt(frac.length) + BigInt(frac || "0");
 
   return [negative ? -scaled : scaled, frac.length];
+}
+
+// Convert scaled bigint to whole
+export function scaledBigIntToWhole(
+  scaled: Scaled,
+  fixed: boolean = false,
+): string {
+  return atomicToWhole(scaled[0], scaled[1], fixed);
+}
+
+// Multiply two scaled bigints
+export function scaledBigIntMul(a: Scaled, b: Scaled): Scaled {
+  return [a[0] * b[0], a[1] + b[1]];
+}
+
+// Divide two scaled bigints
+export function scaledBigIntDiv(
+  a: Scaled,
+  b: Scaled,
+  precision: number,
+): Scaled {
+  return [
+    (a[0] * 10n ** BigInt(b[1] + precision)) / (b[0] * 10n ** BigInt(a[1])),
+    precision,
+  ];
+}
+
+// Scale a scaled bigint
+export function scaledBigIntScale(a: Scaled, precision: number): Scaled {
+  return [(a[0] * 10n ** BigInt(precision)) / 10n ** BigInt(a[1]), precision];
+}
+
+// Add two scaled bigints
+export function scaledBigIntAdd(a: Scaled, b: Scaled): Scaled {
+  const decimals = Math.max(a[1], b[1]);
+  const c = a[0] * 10n ** BigInt(decimals - a[1]);
+  const d = b[0] * 10n ** BigInt(decimals - b[1]);
+  return [c + d, decimals];
+}
+
+// Subtract two scaled bigints
+export function scaledBigIntSub(a: Scaled, b: Scaled): Scaled {
+  const decimals = Math.max(a[1], b[1]);
+  const c = a[0] * 10n ** BigInt(decimals - a[1]);
+  const d = b[0] * 10n ** BigInt(decimals - b[1]);
+  return [c - d, decimals];
 }
 
 /** Convert ZEC (string or number) → zatoshi (bigint). */
