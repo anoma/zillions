@@ -684,13 +684,22 @@ function SwapForm({
  * the US dollar values of the input and output amounts.
  */
 function conversionFeeOf(quote: Quote, fromToken: TokenResponse) {
-  const priceCents = BigInt(Math.ceil(fromToken.price * 100));
+  const priceUsd = wholeToScaledBigInt(fromToken.price);
   // Computed on render now, so a price of 0 must not throw.
-  if (priceCents <= 0n) return 0n;
-  const feeCents = BigInt(
-    Math.ceil((Number(quote.amountInUsd) - Number(quote.amountOutUsd)) * 100),
+  if (priceUsd[0] <= 0n) return 0n;
+  const amountInUsd = wholeToScaledBigInt(quote.amountInUsd);
+  const amountOutUsd = wholeToScaledBigInt(quote.amountOutUsd);
+  // Get the most decimals used in the amounts
+  const amountDecimals = Math.max(amountInUsd[1], amountOutUsd[1]);
+  // Ensure that the input and amounts have the same decimal counts
+  amountInUsd[0] *= 10n ** BigInt(amountDecimals - amountInUsd[1]);
+  amountOutUsd[0] *= 10n ** BigInt(amountDecimals - amountOutUsd[1]);
+  const feeAux = amountInUsd[0] - amountOutUsd[0];
+  // Finally convert the fee into the given token
+  return (
+    (feeAux * 10n ** BigInt(fromToken.decimals + priceUsd[1])) /
+    (priceUsd[0] * 10n ** BigInt(amountDecimals))
   );
-  return (feeCents * 10n ** BigInt(fromToken.decimals)) / priceCents;
 }
 
 // This form requests a quote for the currency exchange specified by the user and
