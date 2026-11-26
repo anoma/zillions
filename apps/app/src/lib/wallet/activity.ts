@@ -199,10 +199,12 @@ function receipt(
   const fee = exactFee(entry, ours);
   // Transparent coins not ours name their sender, whatever else paid.
   const from = !authored(entry) && senders(entry.tx, ours);
+  const link = entry.shielded?.sent.some((s) => s.link);
   return {
     ...activity,
     ...(fee !== undefined && { fee }),
     ...(from && { from }),
+    ...(link && { link: true as const }),
   };
 }
 
@@ -493,3 +495,8 @@ export function publicActivity(
       : BigInt(tx.value_balance) - sum(tx.outputs),
   };
 }
+
+export type Typed = Pick<Activity, "tx_type"> & Partial<Pick<Activity, "link">>;
+
+/** The type history names: a send that funds a payment link is "Payment link". */
+export const typeName = (tx: Typed) => (tx.link ? "Payment link" : tx.tx_type);

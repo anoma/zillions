@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
+import { typeName } from "../lib/wallet/activity";
 import type { Activity } from "../lib/wallet/types";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
@@ -111,7 +112,7 @@ function Row({ tx }: { tx: Activity }) {
         <TypeIcon tx={tx} />
       )}
       <div>
-        <div>{tx.tx_type}</div>
+        <div>{typeName(tx)}</div>
         <div className="mt-0.5 text-xs text-gray-600">
           <When tx={tx} />
         </div>
@@ -138,7 +139,7 @@ function Row({ tx }: { tx: Activity }) {
 function TypeIcon({ tx }: { tx: Activity }) {
   return (
     <span className="size-9 grid place-items-center rounded-full bg-black/5 text-gray-600">
-      <TransactionTypeIcon tx_type={tx.tx_type} />
+      <TransactionTypeIcon tx_type={tx.tx_type} link={tx.link} />
     </span>
   );
 }

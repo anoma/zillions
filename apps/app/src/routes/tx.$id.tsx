@@ -75,8 +75,8 @@ function TransactionRoute() {
 /** Shows the link a send funded again, behind a Keychain approval. */
 function PaymentLink({ tx }: { tx: Activity }) {
   const { isLink, description, reveal } = useShowLink(
-    tx.txid,
-    tx.tx_type === "Sent" && tx.status !== "Expired",
+    tx,
+    Boolean(tx.link) && tx.status !== "Expired",
   );
   if (!isLink) return null;
 

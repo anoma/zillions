@@ -94,7 +94,7 @@ export interface PendingTx {
 
 export type PendingActivity = Pick<
   Activity,
-  "tx_type" | "value" | "fee" | "timestamp" | "from" | "to"
+  "tx_type" | "value" | "fee" | "timestamp" | "from" | "to" | "link"
 > & { memo?: string };
 
 /** An output this wallet created, recovered with its outgoing viewing key. */
@@ -205,6 +205,8 @@ export type Activity = {
   to: Party;
   /** A payment to the account itself: it shows no sign. */
   self?: true;
+  /** Funds a payment link: an output's memo carries the link header. */
+  link?: true;
 };
 
 /** Someone else's address, with what it was paid when it's a recipient. */

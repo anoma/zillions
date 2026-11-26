@@ -6,7 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { base64ToBytes, bytesToBase64 } from "@zillions/keychain-types";
 import initZcore, { link_info, new_link_key } from "@zillions/zcore";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keychain } from "../lib/keychain/keychain";
 import {
   CLAIM_FEE,
@@ -46,12 +46,19 @@ export function useNewLink() {
   return link;
 }
 
+type LinkDraft = Omit<Parameters<typeof linkUrl>[0], "base" | "createdAt">;
+
+const appBase = () => `${window.location.origin}${import.meta.env.BASE_URL}`;
+
 /**
  * Funds `link` through `send`: the Keychain seals its key into the memo, so
- * the sender's seed alone can show it again. Resolves with the link to share.
+ * the sender's seed alone can show it again. `shared` is the link to share,
+ * there as soon as the Keychain approves the funding, while it's still proved
+ * and broadcast; the mutation settles once the funding is broadcast.
  */
 export function useCreateLink(send: ReturnType<typeof useSend>) {
-  return useMutation({
+  const [draft, setDraft] = useState<LinkDraft>();
+  const mutation = useMutation({
     mutationFn: async ({
       link,
       from,
@@ -73,7 +80,14 @@ export function useCreateLink(send: ReturnType<typeof useSend>) {
       const memoHex = linkMemo(link.nk, sealed, description);
       // Read before funding, so the note lands at or after it.
       const { ironwood } = await fetchTreeSizes();
-      const tx = await send.mutateAsync({
+      setDraft({
+        key: link.key,
+        amount,
+        treeSize: ironwood,
+        network: NETWORK,
+        description,
+      });
+      return send.mutateAsync({
         from,
         to: link.address,
         amount: amount + CLAIM_FEE,
@@ -84,19 +98,27 @@ export function useCreateLink(send: ReturnType<typeof useSend>) {
           from: { pool: from },
           to: { address: link.address },
           memo: description || undefined,
+          link: true,
         },
       });
-      const url = linkUrl({
-        base: `${window.location.origin}${import.meta.env.BASE_URL}`,
-        key: link.key,
-        amount,
-        treeSize: ironwood,
-        network: NETWORK,
-        description,
-      });
-      return { tx, url, amount, description };
     },
   });
+
+  // Any stage past the Keychain's approval means the user approved it.
+  const approved = send.stages.find(
+    ({ stage }) => stage !== "building" && stage !== "approval",
+  );
+  const shared = useMemo(() => {
+    if (!draft || !approved) return undefined;
+    const url = linkUrl({
+      ...draft,
+      base: appBase(),
+      createdAt: Math.floor((performance.timeOrigin + approved.at) / 1000),
+    });
+    return { url, amount: draft.amount, description: draft.description };
+  }, [draft, approved]);
+
+  return { ...mutation, shared };
 }
 
 /**
@@ -104,7 +126,10 @@ export function useCreateLink(send: ReturnType<typeof useSend>) {
  * Keychain to open it. The link stays in memory only: gone once the user
  * leaves the page.
  */
-export function useShowLink(txid: string, enabled: boolean) {
+export function useShowLink(
+  { txid, timestamp }: { txid: string; timestamp?: number },
+  enabled: boolean,
+) {
   const wallet = useWallet();
   const funding = useQuery(
     queryOptions({
@@ -132,12 +157,13 @@ export function useShowLink(txid: string, enabled: boolean) {
         throw new Error("This link doesn't match the payment it came from");
       }
       return linkUrl({
-        base: `${window.location.origin}${import.meta.env.BASE_URL}`,
+        base: appBase(),
         key,
         amount: BigInt(funding.value) - CLAIM_FEE,
         treeSize: funding.position,
         network: NETWORK,
         description: funding.memo ?? "",
+        createdAt: timestamp ?? Math.floor(Date.now() / 1000),
       });
     },
   });

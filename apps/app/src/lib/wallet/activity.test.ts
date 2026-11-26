@@ -368,3 +368,38 @@ test("a transaction not ours shows its transparent side, and the fee only when n
     fee: 10_000n,
   });
 });
+
+test("a send whose output carries a link header is a payment link", () => {
+  const at = { height: 3_503_939, tx_index: 2 };
+  const history = (link?: { nk: string; sealed: string }) =>
+    buildActivity(
+      [
+        {
+          ...note(1, 100_000),
+          pool: "ironwood",
+          spend: { status: "spent", at },
+        },
+        { ...note(2, 70_000), pool: "ironwood", ...at },
+      ],
+      [
+        {
+          id: "a_ironwood_3",
+          pool: "ironwood",
+          value: 20_000,
+          recipient: "u1link",
+          position: 3,
+          memo: "Lunch",
+          ...(link && { link }),
+          ...at,
+        },
+      ],
+      [],
+      new Map(),
+    )[0];
+  expect(history({ nk: "ab", sealed: "cd" })).toMatchObject({
+    tx_type: "Sent",
+    link: true,
+    memo: "Lunch",
+  });
+  expect(history()).not.toHaveProperty("link");
+});

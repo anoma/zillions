@@ -31,7 +31,7 @@ the end, to propose upstream.
 
 ## The link
 
-`<the app's URL>claim#v=1&k=<key>&a=<ZEC>&s=<size>&n=<main|test>&d=<description>`
+`<the app's URL>claim#v=1&k=<key>&a=<ZEC>&s=<size>&n=<main|test>&t=<unix seconds>&d=<description>`
 
 | Field | Meaning                                                                  |
 | ----- | ------------------------------------------------------------------------ |
@@ -40,6 +40,7 @@ the end, to propose upstream.
 | `a`   | Amount the claimer receives                                              |
 | `s`   | Ironwood tree size when the link was made: the note lands at or after it |
 | `n`   | Network                                                                  |
+| `t`   | When the funding was approved, unix seconds; optional for older links    |
 | `d`   | Optional description                                                     |
 
 Everything sits in the fragment, which browsers never send. The claim page
