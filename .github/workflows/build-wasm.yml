@@ -66,6 +66,8 @@ jobs:
             echo "\`zcore-pkg-${{ steps.hash.outputs.hash }}\`, cached build: ${{ steps.pkg.outputs.cache-hit == 'true' }}"
             echo
             echo "\`zcore_bg.wasm\`: SHA-256 \`$(shasum -a 256 pkg/zcore_bg.wasm | cut -d' ' -f1)\`, $(wc -c < pkg/zcore_bg.wasm) bytes"
+            echo
+            echo "\`mt/zcore_bg.wasm\`: SHA-256 \`$(shasum -a 256 pkg/mt/zcore_bg.wasm | cut -d' ' -f1)\`, $(wc -c < pkg/mt/zcore_bg.wasm) bytes"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

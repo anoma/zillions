@@ -109,7 +109,15 @@ export default defineConfig({
   // asset as base64; that pushed background.js past AMO's 5 MB limit. Ship
   // the wasm at fixed paths instead and load it via `runtime.getURL`.
   hooks: {
-    "build:publicAssets": (_, files) => {
+    "build:publicAssets": (wxt, files) => {
+      // Only Chrome's offscreen document is cross-origin isolated: Firefox
+      // ignores the manifest's COOP/COEP keys, so it never loads this.
+      if (wxt.config.browser !== "firefox") {
+        files.push({
+          absoluteSrc: r("../../packages/zcore/pkg/mt/zcore_bg.wasm"),
+          relativeDest: "wasm/zcore_mt_bg.wasm",
+        });
+      }
       files.push(
         {
           absoluteSrc: r("../../packages/zcore/pkg/zcore_bg.wasm"),
@@ -166,6 +174,14 @@ export default defineConfig({
     action: {
       default_title: "Zillions Keychain",
     },
+    // Cross-origin isolates the extension's pages and workers, so the
+    // prover can share memory with its threads. Firefox ignores these keys.
+    ...(browser === "firefox"
+      ? {}
+      : {
+        cross_origin_embedder_policy: { value: "require-corp" },
+        cross_origin_opener_policy: { value: "same-origin" },
+      }),
     // WebAssembly (@zillions/zcore) compiles in the
     // service worker and extension pages, which the default MV3 CSP
     // (`script-src 'self'`) forbids. `'wasm-unsafe-eval'` is the only addition
@@ -237,7 +253,7 @@ export default defineConfig({
         name: "zcore-no-default-wasm-url",
         enforce: "pre",
         transform(code: string, id: string) {
-          if (!id.endsWith("/zcore/pkg/zcore.js")) return;
+          if (!/\/zcore\/pkg\/(mt\/)?zcore\.js$/.test(id)) return;
           const fallback = "new URL('zcore_bg.wasm', import.meta.url)";
           if (!code.includes(fallback)) {
             this.error(`zcore.js no longer contains ${fallback}`);

@@ -22,6 +22,8 @@ mod migration;
 mod notes;
 mod roles;
 mod send;
+#[cfg(feature = "threads")]
+mod threads;
 mod transparent_tx;
 mod vault;
 mod wallet;

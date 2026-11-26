@@ -80,6 +80,12 @@ prost = { version = "0.14", default-features = false }
 js-sys = "0.3"
 # The Keychain vault's password hash.
 argon2 = { version = "0.6", default-features = false, features = ["alloc", "zeroize"] }
+# The `threads` feature's pool (src/threads.rs).
+rayon = { version = "1", optional = true }
+
+[features]
+# Halo2 and Groth16 proofs on a pool of workers sharing this module's memory.
+threads = ["dep:rayon", "orchard/multicore", "sapling/multicore"]
 
 [dev-dependencies]
 incrementalmerkletree = { version = "0.9", features = ["legacy-api"] }
