@@ -1,3 +1,4 @@
+import type { TransactionDetails } from "@defuse-protocol/one-click-sdk-typescript";
 import {
   GetExecutionStatusResponse,
   OneClickService,
@@ -16,6 +17,7 @@ import { PageLoader } from "./PageLoader";
 import { PendingIcon, TransactionTypeIcon } from "./TransactionTypeAndStatus";
 import { TransactionValue } from "./TransactionValue";
 import { focusRingClassName } from "./ui/utils";
+import { ZecValue } from "./ZecValue";
 
 // icon | type over time | amount; desktops add the From → To route before the
 // amount. The list owns the columns and each row subgrids into them, so every
@@ -44,6 +46,21 @@ const SWAP_STATUS_DESCRIPTIONS: Record<
   [SwapState.REFUNDED]: "Swap failed, funds returned to refund address",
   [SwapState.FAILED]: "Swap encountered an error",
 };
+
+/**
+ * The summed `value` of the transactions in `activities` whose txid is among
+ * `hashes`, in zatoshi and signed as history signs it. History holds only this
+ * wallet's Zcash transactions, so a hash on another chain, or one sync hasn't
+ * found yet, never matches.
+ */
+function totalValueOf(
+  hashes: TransactionDetails[] | undefined,
+  activities: Activity[],
+): bigint {
+  const wanted = new Set((hashes ?? []).map(({ hash }) => hash));
+  const matched = activities.filter((tx) => wanted.has(tx.txid));
+  return matched.reduce((total, tx) => total + tx.value, 0n);
+}
 
 /** The txids of the chain transactions behind `swaps`, on either side. */
 function swapTxids(swaps: GetExecutionStatusResponse[]) {
@@ -173,6 +190,9 @@ export function TransactionHistory({
                 key={item.data.correlationId}
                 swap={item.data}
                 tokens={tokens}
+                // All of history, swap legs included: the row's value is
+                // summed from the transactions it hides.
+                activities={transactionHistory.data}
               />
             );
           } else {
@@ -191,10 +211,16 @@ export function TransactionHistory({
 function SwapRow({
   swap,
   tokens,
+  activities,
 }: {
   swap: GetExecutionStatusResponse & { outbound: boolean };
   tokens: TokenResponse[];
+  activities: Activity[];
 }) {
+  // Total value of the transactions covered by the swap
+  const value =
+    totalValueOf(swap.swapDetails?.destinationChainTxHashes, activities) +
+    totalValueOf(swap.swapDetails?.originChainTxHashes, activities);
   // The explorer finds a swap by its deposit address.
   const depositAddress = swap.quoteResponse.quote.depositAddress;
 
@@ -271,17 +297,19 @@ function SwapRow({
         <span className="text-sm font-medium">{destinationSymbol}</span>
       </div>
 
-      {swap.outbound ? (
-        <div className="text-right text-base font-semibold">
-          -{swap.quoteResponse.quote.amountInFormatted}
-          <span className="text-[max(0.7rem,0.5em)]"> {originSymbol}</span>
-        </div>
-      ) : (
-        <div className="text-right text-base font-semibold">
-          +{swap.quoteResponse.quote.amountOutFormatted}
-          <span className="text-[max(0.7rem,0.5em)]"> {destinationSymbol}</span>
-        </div>
-      )}
+      <div className="text-right text-base font-semibold">
+        {value > 0n ? (
+          <>
+            +<ZecValue zat={value} />
+          </>
+        ) : value < 0n ? (
+          <>
+            −<ZecValue zat={-value} />
+          </>
+        ) : (
+          "-"
+        )}
+      </div>
     </a>
   );
 }
