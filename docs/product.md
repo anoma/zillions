@@ -469,6 +469,11 @@ proves the site's transactions, so the account's viewing key stays in it too.
 - Reveal, after re-entering the password: the **recovery phrase**, the
   **viewing key** (lets someone see, not spend), and the **spending keys**.
   The recovery phrase hides itself again after a minute. — _Built_
+- **Copy the recovery phrase**, wherever it's shown (on create and on
+  reveal), behind a warning that other apps and synced backups can read the
+  clipboard; it copies only once the user confirms. The clipboard is not
+  cleared afterwards: clipboard history and sync keep their own copies, so
+  clearing would promise more than it delivers. — _Built_
 - Change the extension password; lock/unlock.
 
 ### 3.3 Connected sites — Working

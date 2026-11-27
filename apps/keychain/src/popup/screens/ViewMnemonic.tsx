@@ -3,6 +3,7 @@
  * phrase is fetched from the background only after the password verifies,
  * and hidden again after a minute.
  */
+import { copyToClipboard } from "@zillions/utils";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -15,6 +16,8 @@ import { ScreenHeader } from "../ui/ScreenHeader";
 
 const SHOWN_FOR_S = 60;
 
+const COPY_LABEL = { idle: "Copy to clipboard", copied: "Copied", failed: "Copy failed" };
+
 const formatCountdown = (seconds: number): string =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
@@ -24,6 +27,8 @@ export const ViewMnemonic = () => {
   const { getById, revealMnemonic, status } = useAccounts();
   const [mnemonic, setMnemonic] = useState<string>();
   const [secondsLeft, setSecondsLeft] = useState(SHOWN_FOR_S);
+  const [confirmingCopy, setConfirmingCopy] = useState(false);
+  const [copyResult, setCopyResult] = useState<"copied" | "failed">();
   const account = getById(accountId);
 
   useEffect(() => {
@@ -31,6 +36,8 @@ export const ViewMnemonic = () => {
   }, [account, status]);
 
   useEffect(() => {
+    setConfirmingCopy(false);
+    setCopyResult(undefined);
     if (mnemonic === undefined) return;
     setSecondsLeft(SHOWN_FOR_S);
     const timer = setInterval(() => setSecondsLeft((s) => s - 1), 1000);
@@ -40,6 +47,21 @@ export const ViewMnemonic = () => {
   useEffect(() => {
     if (secondsLeft <= 0) setMnemonic(undefined);
   }, [secondsLeft]);
+
+  useEffect(() => {
+    if (!copyResult) return;
+    const timer = setTimeout(() => setCopyResult(undefined), 2000);
+    return () => clearTimeout(timer);
+  }, [copyResult]);
+
+  const copyAnyway = (): void => {
+    if (mnemonic === undefined) return;
+    setConfirmingCopy(false);
+    copyToClipboard(mnemonic).then(
+      () => setCopyResult("copied"),
+      () => setCopyResult("failed")
+    );
+  };
 
   if (!account) return null;
   const words = mnemonic?.split(" ") ?? [];
@@ -72,6 +94,26 @@ export const ViewMnemonic = () => {
             Hidden again in {formatCountdown(secondsLeft)}
           </p>
           <div className="mt-auto flex flex-col gap-2 pt-4 pb-5">
+            {confirmingCopy ? (
+              <>
+                <Notice tone="gold">
+                  Other apps and synced backups can read your clipboard. Writing
+                  the phrase on paper is safer.
+                </Notice>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="secondary" autoFocus onClick={() => setConfirmingCopy(false)}>
+                    Cancel
+                  </Button>
+                  <Button variant="secondary" onClick={copyAnyway}>
+                    Copy anyway
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <Button variant="secondary" block onClick={() => setConfirmingCopy(true)}>
+                {COPY_LABEL[copyResult ?? "idle"]}
+              </Button>
+            )}
             <Button variant="secondary" block onClick={() => setMnemonic(undefined)}>
               Hide now
             </Button>

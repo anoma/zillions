@@ -6,7 +6,6 @@ export * from "./Container";
 export * from "./ContentMasker";
 export * from "./CopyToClipboardControl";
 export * from "./DropdownMenu";
-export * from "./FeedbackButton";
 export * from "./Heading";
 export * from "./Input";
 export * from "./KeyListItem";
