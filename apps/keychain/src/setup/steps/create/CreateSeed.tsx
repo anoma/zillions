@@ -95,6 +95,7 @@ export const CreateSeed = () => {
                   <button
                     type="button"
                     className="text-xs font-medium cursor-pointer hover:underline"
+                    autoFocus
                     onClick={() => setConfirmingCopy(false)}
                   >
                     Cancel

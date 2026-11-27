@@ -3,18 +3,20 @@
  * phrase is fetched from the background only after the password verifies,
  * and hidden again after a minute.
  */
+import { copyToClipboard } from "@zillions/utils";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useAccounts } from "../context/AccountContext";
 import routes from "../routes";
 import { Button } from "../ui/Button";
-import { CopyButton } from "../ui/CopyButton";
 import { Notice } from "../ui/Notice";
 import { PasswordGate } from "../ui/PasswordGate";
 import { ScreenHeader } from "../ui/ScreenHeader";
 
 const SHOWN_FOR_S = 60;
+
+const COPY_LABEL = { idle: "Copy to clipboard", copied: "Copied", failed: "Copy failed" };
 
 const formatCountdown = (seconds: number): string =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -26,6 +28,7 @@ export const ViewMnemonic = () => {
   const [mnemonic, setMnemonic] = useState<string>();
   const [secondsLeft, setSecondsLeft] = useState(SHOWN_FOR_S);
   const [confirmingCopy, setConfirmingCopy] = useState(false);
+  const [copyResult, setCopyResult] = useState<"copied" | "failed">();
   const account = getById(accountId);
 
   useEffect(() => {
@@ -34,6 +37,7 @@ export const ViewMnemonic = () => {
 
   useEffect(() => {
     setConfirmingCopy(false);
+    setCopyResult(undefined);
     if (mnemonic === undefined) return;
     setSecondsLeft(SHOWN_FOR_S);
     const timer = setInterval(() => setSecondsLeft((s) => s - 1), 1000);
@@ -43,6 +47,21 @@ export const ViewMnemonic = () => {
   useEffect(() => {
     if (secondsLeft <= 0) setMnemonic(undefined);
   }, [secondsLeft]);
+
+  useEffect(() => {
+    if (!copyResult) return;
+    const timer = setTimeout(() => setCopyResult(undefined), 2000);
+    return () => clearTimeout(timer);
+  }, [copyResult]);
+
+  const copyAnyway = (): void => {
+    if (mnemonic === undefined) return;
+    setConfirmingCopy(false);
+    copyToClipboard(mnemonic).then(
+      () => setCopyResult("copied"),
+      () => setCopyResult("failed")
+    );
+  };
 
   if (!account) return null;
   const words = mnemonic?.split(" ") ?? [];
@@ -82,20 +101,17 @@ export const ViewMnemonic = () => {
                   the phrase on paper is safer.
                 </Notice>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button variant="secondary" onClick={() => setConfirmingCopy(false)}>
+                  <Button variant="secondary" autoFocus onClick={() => setConfirmingCopy(false)}>
                     Cancel
                   </Button>
-                  <CopyButton
-                    value={mnemonic}
-                    className="h-[38px] rounded-pill border border-line-strong text-[13px] font-semibold cursor-pointer hover:bg-black/5"
-                  >
+                  <Button variant="secondary" onClick={copyAnyway}>
                     Copy anyway
-                  </CopyButton>
+                  </Button>
                 </div>
               </>
             ) : (
               <Button variant="secondary" block onClick={() => setConfirmingCopy(true)}>
-                Copy to clipboard
+                {COPY_LABEL[copyResult ?? "idle"]}
               </Button>
             )}
             <Button variant="secondary" block onClick={() => setMnemonic(undefined)}>
