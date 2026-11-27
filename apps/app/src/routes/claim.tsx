@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { GoAlert } from "react-icons/go";
+import { AccountHeader } from "../components/AppHeader";
 import { AppLoader } from "../components/AppLoader";
 import { FinalStatePage } from "../components/FinalStatePage";
 import { KeychainWall } from "../components/KeychainWall";
+import { EnableNav } from "../components/MainNav";
 import { SubmitBlock } from "../components/TransferForm";
 import { ActionButton } from "../components/ui/ActionButton";
+import { WalletProvider } from "../components/WalletProvider";
 import { useNow } from "../hooks/useNow";
 import { useClaimLink, useLinkStatus } from "../hooks/usePaymentLink";
 import { LinkIcon } from "../icons/LinkIcon";
@@ -112,10 +115,14 @@ function Claim({ link }: { link: ClaimLink }) {
               This link has been claimed or cancelled; nothing is left in it.
             </Notice>
           ) : (
-            <div className="relative min-h-60">
+            <div className="relative min-h-40">
               <AppLoader>
                 <KeychainWall claiming>
-                  <ClaimForm link={link} amount={amount} />
+                  <WalletProvider>
+                    <AccountHeader />
+                    <EnableNav />
+                    <ClaimForm link={link} amount={amount} />
+                  </WalletProvider>
                 </KeychainWall>
               </AppLoader>
             </div>

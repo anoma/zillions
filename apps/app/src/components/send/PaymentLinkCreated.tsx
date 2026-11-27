@@ -41,7 +41,8 @@ export function PaymentLinkCreated({
   const funding = useGetTransactionHistory().data?.find(
     (t) => t.txid === tx?.txid,
   );
-  // Leaving before the broadcast drops the funding.
+  // Closing the tab before the broadcast drops the funding. Navigating
+  // within the app doesn't, but it leaves the only page showing the link.
   const sending = !tx && !error;
   useLeaveWarning(sending);
   const leaving = useBlocker({
@@ -49,6 +50,10 @@ export function PaymentLinkCreated({
     enableBeforeUnload: false,
     withResolver: true,
   });
+  // Sent while the dialog was open: nothing left to ask about.
+  useEffect(() => {
+    if (!sending && leaving.status === "blocked") leaving.proceed();
+  }, [sending, leaving]);
   const zec = `${zatoshiToZec(amount)} ZEC`;
 
   if (error || funding?.status === "Expired") {
@@ -78,13 +83,13 @@ export function PaymentLinkCreated({
   }
 
   const confirmed = funding?.status === "Confirmed";
-  const step = confirmed ? 3 : tx ? 2 : 1;
+  const reached = confirmed ? 3 : tx ? 2 : 1;
   return (
     <FormPage title={confirmed ? "Payment link ready" : "Payment link created"}>
       <p className="-mt-2 text-center text-3xl font-semibold tracking-tight">
         {zec}
       </p>
-      <Steps step={step} />
+      <Steps reached={reached} />
       <p role="status" className="-mt-1 mb-4 text-center text-xs text-gray-600">
         {confirmed ? (
           "In the link and ready to claim."
@@ -102,7 +107,7 @@ export function PaymentLinkCreated({
   );
 }
 
-/** Asked when the user navigates away while the funding is still being proved. */
+/** Asked when the user navigates away while the funding is still being proved: it goes on, but the link leaves the screen. */
 function LeaveDialog({
   onStay,
   onLeave,
@@ -120,12 +125,13 @@ function LeaveDialog({
         className="w-full max-w-90 flex flex-col gap-3 rounded-2xl bg-surface p-6 text-center"
       >
         <h2 id={titleId} className="text-base font-semibold">
-          Leave before it's sent?
+          Leave this page?
         </h2>
         <p className="text-sm text-gray-600">
           The Keychain is still making the proof for this payment, which can
-          take a little while. If you leave now, nothing is sent and the link
-          stays empty.
+          take a little while. The payment goes on if you leave, but the link is
+          only shown here: to see it again, open the payment in Transactions
+          once it's confirmed.
         </p>
         <div className="mt-3 flex items-center justify-center gap-3">
           <button
@@ -157,13 +163,13 @@ function Confirming({ tx }: { tx: PendingTx }) {
 
 const STEPS = ["Approved", "Sent", "Confirmed"];
 
-/** Where the funding is: approved, broadcast, then mined. `step` is how many are reached, the last one in progress. */
-function Steps({ step }: { step: number }) {
+/** Where the funding is: approved, broadcast, then mined. The first `reached` are done, the next one in progress. */
+function Steps({ reached }: { reached: number }) {
   return (
     <ol className="mx-auto w-full max-w-80 grid grid-cols-3 pt-2">
       {STEPS.map((label, i) => {
-        const done = i < step - 1 || step === STEPS.length;
-        const active = i === step - 1 && !done;
+        const done = i < reached;
+        const active = i === reached;
         return (
           <li
             key={label}
@@ -175,7 +181,7 @@ function Steps({ step }: { step: number }) {
                 aria-hidden="true"
                 className={twMerge(
                   "absolute top-2.5 right-1/2 w-full h-px bg-line",
-                  i < step && "bg-gold",
+                  i <= reached && "bg-gold",
                 )}
               />
             )}

@@ -71,6 +71,16 @@ test("only a payment link adds the claim as a third step", () => {
   expect(screen.getByText("Claim funds")).toBeTruthy();
 });
 
+test("on the claim page the setup sits in the page's flow, with no scroll box of its own", () => {
+  const scrolls = () =>
+    screen.getByText("Connect Keychain").closest(".overflow-auto");
+  renderWall();
+  expect(scrolls()).toBeTruthy();
+  cleanup();
+  renderWall(true);
+  expect(scrolls()).toBeNull();
+});
+
 test("an outdated keychain asks for a newer one", () => {
   stubKeychain({ version: () => "0.2.0" });
   renderWall();

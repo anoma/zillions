@@ -29,7 +29,17 @@ import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { ActionButton } from "./ui/ActionButton";
 
-function Account({ children }: { children: ReactNode }) {
+type WallProps = {
+  children: ReactNode;
+  /** Arrived from a payment link: the setup ends by claiming it. */
+  claiming?: boolean;
+};
+
+// The wall fills the page; on the claim page it sits in the page's flow.
+const wallClassName = (claiming?: boolean) =>
+  claiming ? "flex py-4" : "absolute inset-0 overflow-auto flex px-6 py-12";
+
+function Account({ children, claiming }: WallProps) {
   const queryClient = useQueryClient();
   const accounts = useGetKeychainAccounts();
   const defaultAccount = useGetKeychainDefaultAccount();
@@ -58,7 +68,7 @@ function Account({ children }: { children: ReactNode }) {
   if (accounts.error || defaultAccount.error) {
     const error = accounts.error || defaultAccount.error;
     // Locked after the page loaded: the next read is refused.
-    if (isLockedError(error)) return <Unlock />;
+    if (isLockedError(error)) return <Unlock claiming={claiming} />;
     return <PageError>{String(error)}</PageError>;
   }
 
@@ -101,12 +111,6 @@ function Account({ children }: { children: ReactNode }) {
     </AccountProvider>
   );
 }
-
-type WallProps = {
-  children: ReactNode;
-  /** Arrived from a payment link: the setup ends by claiming it. */
-  claiming?: boolean;
-};
 
 type Connection = "connected" | "locked" | "disconnected";
 
@@ -155,7 +159,7 @@ function Connect({ children, claiming }: WallProps) {
   };
 
   if (status === "locked") {
-    return <Unlock onUnlock={connect} />;
+    return <Unlock claiming={claiming} onUnlock={connect} />;
   }
 
   if (status === "disconnected") {
@@ -203,9 +207,15 @@ function GetExtensionButton({ children }: { children: ReactNode }) {
 }
 
 /** Opens the Keychain's login window; the wall moves on at `ExtensionUnlocked`. */
-function Unlock({ onUnlock = () => keychain().connect() }) {
+function Unlock({
+  claiming,
+  onUnlock = () => keychain().connect(),
+}: {
+  claiming?: boolean;
+  onUnlock?: () => Promise<void>;
+}) {
   return (
-    <div className="absolute inset-0 overflow-auto flex px-6 py-12">
+    <div className={wallClassName(claiming)}>
       <div className="m-auto flex flex-col items-center gap-10 animate-fade-in">
         <LockIcon className="w-50" aria-hidden />
         <ActionButton size="sm" onClick={onUnlock}>
@@ -272,7 +282,7 @@ function Setup({
   onConnect?: () => Promise<void>;
 }) {
   return (
-    <div className="absolute inset-0 overflow-auto flex px-6 py-12">
+    <div className={wallClassName(claiming)}>
       <div className="m-auto w-full max-w-md animate-fade-in">
         <h1 className="text-3xl">Connect Keychain</h1>
         <p className="mt-3 text-gray-600">
@@ -325,7 +335,7 @@ export function KeychainWall({ children, claiming }: WallProps) {
   return (
     <Download claiming={claiming}>
       <Connect claiming={claiming}>
-        <Account>{children}</Account>
+        <Account claiming={claiming}>{children}</Account>
       </Connect>
     </Download>
   );

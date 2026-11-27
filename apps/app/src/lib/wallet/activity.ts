@@ -1,3 +1,4 @@
+import { CLAIM_FEE } from "../paymentLink";
 import type { Block } from "./chain/lightwalletd";
 import type { ParsedTx, TransparentTx } from "./transparent";
 import type {
@@ -204,7 +205,8 @@ function receipt(
     ...activity,
     ...(fee !== undefined && { fee }),
     ...(from && { from }),
-    ...(link && { link: true as const }),
+    // A link's amount is what the claimer receives: the claim fee is apart.
+    ...(link && { link: true as const, value: activity.value + CLAIM_FEE }),
   };
 }
 

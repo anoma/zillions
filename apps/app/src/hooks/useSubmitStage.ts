@@ -4,7 +4,8 @@ import type { ProveStage } from "../lib/wallet/chain/submit";
 /** Where a submission is: building its PCZT, waiting on the keychain, then proving and broadcasting. */
 export type SubmitStage = "building" | "approval" | ProveStage;
 
-export type StageEntry = { stage: SubmitStage; at: number };
+/** `at` times the steps (`performance.now()`); `time` is the wall clock, ms. */
+export type StageEntry = { stage: SubmitStage; at: number; time: number };
 
 const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
@@ -37,7 +38,7 @@ export function useSubmitStage() {
       return;
     }
     console.log(`[submit] ${stage}…`);
-    const entry = { stage, at };
+    const entry = { stage, at, time: Date.now() };
     run.current = { start: current?.start ?? at, last: entry };
     setStages((stages) => (current ? [...stages, entry] : [entry]));
   }, []);

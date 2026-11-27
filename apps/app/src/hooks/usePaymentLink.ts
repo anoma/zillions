@@ -94,7 +94,7 @@ export function useCreateLink(send: ReturnType<typeof useSend>) {
         memoHex,
         shown: {
           tx_type: "Sent",
-          value: -(amount + CLAIM_FEE),
+          value: -amount,
           from: { pool: from },
           to: { address: link.address },
           memo: description || undefined,
@@ -113,7 +113,7 @@ export function useCreateLink(send: ReturnType<typeof useSend>) {
     const url = linkUrl({
       ...draft,
       base: appBase(),
-      createdAt: Math.floor((performance.timeOrigin + approved.at) / 1000),
+      createdAt: Math.floor(approved.time / 1000),
     });
     return { url, amount: draft.amount, description: draft.description };
   }, [draft, approved]);
@@ -127,13 +127,18 @@ export function useCreateLink(send: ReturnType<typeof useSend>) {
  * leaves the page.
  */
 export function useShowLink(
-  { txid, timestamp }: { txid: string; timestamp?: number },
+  {
+    txid,
+    timestamp,
+    status,
+  }: { txid: string; timestamp?: number; status?: string },
   enabled: boolean,
 ) {
   const wallet = useWallet();
   const funding = useQuery(
     queryOptions({
-      queryKey: ["linkOf", wallet.id, txid],
+      // By status: sync only knows the link once its funding is mined.
+      queryKey: ["linkOf", wallet.id, txid, status],
       queryFn: async () => (await wallet.linkOf(txid)) ?? null,
       enabled,
       staleTime: Infinity,

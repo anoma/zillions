@@ -1,4 +1,5 @@
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
+import { CLAIM_FEE } from "../lib/paymentLink";
 import { fitFontSize, transactionValue, zatoshiToZec } from "../lib/utils";
 import type { PublicActivity } from "../lib/wallet/activity";
 import type { Activity, Party } from "../lib/wallet/types";
@@ -28,6 +29,7 @@ export type TransactionReceiptCardProps = {
     | "from"
     | "to"
     | "self"
+    | "link"
   > &
     Partial<Pick<Activity, "confirmations">> & {
       memo?: string;
@@ -124,36 +126,43 @@ export function TransactionReceiptCard({ tx }: TransactionReceiptCardProps) {
   // +2 for the half-size " ZEC" suffix.
   const valueChars = zatoshiToZec(value).length + 2;
   // The last row is what the whole transaction comes to.
-  const rows = (
-    {
-      Shielded: [
-        ["Sent from Transparent", tx.value + tx.fee],
+  const rows = tx.link
+    ? ([
+        ["Link amount", -tx.value],
+        ["Claim fee", CLAIM_FEE],
         ["Transaction fee", tx.fee],
-        ["Received in Shielded", tx.value],
-      ],
-      Unshielded: [
-        ["Received in Transparent", tx.value],
-        ["Transaction fee", tx.fee],
-        ["Deducted from Shielded", tx.value + tx.fee],
-      ],
-      Sent: [
-        ["Recipient received", -tx.value],
-        ["Transaction fee", tx.fee],
-        ["Total spent", -tx.value + tx.fee],
-      ],
-      Received: [],
-      Migrated: [
-        ["Moved", tx.value],
-        ["Transaction fee", tx.fee],
-        ["Total spent", tx.value + tx.fee],
-      ],
-      Prepared: [
-        ["Split into standard amounts", tx.value],
-        ["Transaction fee", tx.fee],
-        ["Total spent", tx.value + tx.fee],
-      ],
-    } as const
-  )[tx.tx_type];
+        ["Total spent", -tx.value + CLAIM_FEE + tx.fee],
+      ] as const)
+    : (
+        {
+          Shielded: [
+            ["Sent from Transparent", tx.value + tx.fee],
+            ["Transaction fee", tx.fee],
+            ["Received in Shielded", tx.value],
+          ],
+          Unshielded: [
+            ["Received in Transparent", tx.value],
+            ["Transaction fee", tx.fee],
+            ["Deducted from Shielded", tx.value + tx.fee],
+          ],
+          Sent: [
+            ["Recipient received", -tx.value],
+            ["Transaction fee", tx.fee],
+            ["Total spent", -tx.value + tx.fee],
+          ],
+          Received: [],
+          Migrated: [
+            ["Moved", tx.value],
+            ["Transaction fee", tx.fee],
+            ["Total spent", tx.value + tx.fee],
+          ],
+          Prepared: [
+            ["Split into standard amounts", tx.value],
+            ["Transaction fee", tx.fee],
+            ["Total spent", tx.value + tx.fee],
+          ],
+        } as const
+      )[tx.tx_type];
   const total = rows.at(-1);
   // Until its block is fetched, a shielded transaction has only a placeholder id.
   const onExplorer = /^[0-9a-f]{64}$/.test(tx.txid);

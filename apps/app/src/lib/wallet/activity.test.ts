@@ -399,6 +399,9 @@ test("a send whose output carries a link header is a payment link", () => {
   expect(history({ nk: "ab", sealed: "cd" })).toMatchObject({
     tx_type: "Sent",
     link: true,
+    // 20,000 funded: 10,000 for the claimer, 10,000 claim fee.
+    value: -10_000n,
+    fee: 10_000n,
     memo: "Lunch",
   });
   expect(history()).not.toHaveProperty("link");

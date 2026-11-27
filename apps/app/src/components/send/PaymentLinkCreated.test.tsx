@@ -52,6 +52,10 @@ test("the link shows while its funding is still being sent, and leaving asks fir
   expect(screen.getByRole("status").textContent).toContain(
     "Keep this page open",
   );
+  // Approved already; sending is what's in progress.
+  expect(document.querySelector("[aria-current=step]")?.textContent).toBe(
+    "Sent",
+  );
   expect(leaveWarned()).toBe(true);
 });
 
@@ -60,6 +64,9 @@ test("once broadcast, the link shows its funding confirming and leaving is free"
   renderLink({ tx: { txid: "aa", tx_type: "Sent" } });
   expect(screen.getByText("Copy link")).toBeTruthy();
   expect(screen.getByRole("status").textContent).toContain("2m 40s left");
+  expect(document.querySelector("[aria-current=step]")?.textContent).toBe(
+    "Confirmed",
+  );
   expect(leaveWarned()).toBe(false);
 });
 
@@ -92,6 +99,7 @@ test("navigating away before the broadcast explains the proof and lets the user 
   expect(blocks?.()).toBe(true);
   const dialog = screen.getByRole("alertdialog");
   expect(dialog.textContent).toContain("making the proof");
+  expect(dialog.textContent).toContain("The payment goes on if you leave");
   screen.getByText("Stay").click();
   expect(reset).toHaveBeenCalled();
 });
@@ -101,4 +109,12 @@ test("once broadcast, navigating away isn't blocked", () => {
   renderLink({ tx: { txid: "aa", tx_type: "Sent" } });
   expect(blocks?.()).toBe(false);
   expect(screen.queryByRole("alertdialog")).toBeNull();
+});
+
+test("a broadcast landing while the dialog is open lets the navigation through", () => {
+  history = [{ txid: "aa", status: "Pending" }];
+  const proceed = vi.fn();
+  blocker = { status: "blocked", reset: vi.fn(), proceed };
+  renderLink({ tx: { txid: "aa", tx_type: "Sent" } });
+  expect(proceed).toHaveBeenCalled();
 });
