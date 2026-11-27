@@ -278,7 +278,9 @@ function SwapForm({
   }
   let slippageError: string | undefined;
   try {
-    wholeToAtomic(slippage, SLIPPAGE_DECIMALS);
+    if (wholeToAtomic(slippage, SLIPPAGE_DECIMALS) <= 0n) {
+      slippageError = "Slippage tolerance must be positive";
+    }
   } catch {
     slippageError =
       "Slippage tolerance must be positive, with up to 2 decimal places";
