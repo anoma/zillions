@@ -564,6 +564,7 @@ test("asks 1Click about a swap only until its status is final", async () => {
         new CancelablePromise((resolve, _reject, _onCancel) => {
           resolve({
             status: statuses.get(depositAddress)!,
+            quoteResponse: { timestamp: "2026-11-27T10:00:00Z" },
             swapDetails: {
               originChainTxHashes: [],
               destinationChainTxHashes: [],

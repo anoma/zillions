@@ -10,6 +10,7 @@ import { useGetTokens } from "../hooks/useGetTokens";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowsLeftRight } from "../icons/ArrowsLeftRight";
 import type { Activity } from "../lib/wallet/types";
+import type { SwapStatus } from "../lib/wallet/wallet";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
@@ -72,6 +73,33 @@ function swapTxids(swaps: GetExecutionStatusResponse[]) {
     ),
   );
 }
+/* Temporally order transactions and swaps. */
+function compareSwapToTx(
+  swap: SwapStatus | undefined,
+  tx: Activity | undefined,
+): number {
+  if (tx === undefined) {
+    // If tx is undefined, then the swap comes first
+    return -1;
+  } else if (swap === undefined) {
+    // If swap is undefined, then the tx comes first
+    return 1;
+  } else if (tx.status === "Pending" || tx.timestamp === undefined) {
+    // If the tx has no timestamp or is pending, then the tx comes first
+    return 1;
+  } else if (
+    swap.quoteResponse.timestamp === undefined ||
+    isNaN(Date.parse(swap.quoteResponse.timestamp))
+  ) {
+    // If the quote has no timestamp, then the swap goes last
+    return 1;
+  } else {
+    // Otherwise the entry with highest timestamp comes first
+    return (
+      Number(tx.timestamp) * 1000 - Date.parse(swap.quoteResponse.timestamp)
+    );
+  }
+}
 
 /**
  * The transaction list. As a page it's the full history under its own title;
@@ -105,33 +133,17 @@ export function TransactionHistory({
   // A swap's row stands for its chain transactions, so they aren't listed twice.
   const covered = swapTxids(allSwaps);
   const allTxs = transactionHistory.data.filter((tx) => !covered.has(tx.txid));
-  // Unconfirmed transactions are dated in the future starting with this timestamp
-  const blockHeightSentinel = new Date().getTime() + 1;
-
-  // Combine both arrays into a single array with a 'type' identifier
-  // and normalize the timestamp for sorting.
-  const all = [
-    ...allSwaps.map((swap) => ({
-      type: "swap" as const,
-      data: swap,
-      // Swaps are chronologically placed at the time which the quote was created
-      timestamp: new Date(swap.quoteResponse.timestamp),
-    })),
-    ...allTxs.map((tx) => ({
-      type: "tx" as const,
-      data: tx,
-      // Transactions are placed at their timestamp. Unconfirmed transactions follow
-      // confirmed transactions and are ordered according to their block heights.
-      timestamp: new Date(
-        tx.timestamp
-          ? Number(tx.timestamp) * 1000
-          : blockHeightSentinel + tx.block_height,
-      ),
-    })),
-  ];
-
-  // Sort the combined array from newest to oldest
-  all.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  // Merge the swaps and txs into one array
+  let s = 0,
+    t = 0;
+  const all = [];
+  while (s + t < allSwaps.length + allTxs.length) {
+    if (compareSwapToTx(allSwaps[s], allTxs[t]) <= 0) {
+      all.push({ type: "swap" as const, data: allSwaps[s++] });
+    } else {
+      all.push({ type: "tx" as const, data: allTxs[t++] });
+    }
+  }
   // Grab limit entries if limit is defined.
   const shown = limit ? all.slice(0, limit) : all;
 

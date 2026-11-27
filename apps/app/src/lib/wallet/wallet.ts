@@ -660,7 +660,8 @@ export class Wallet {
   /**
    * Each recorded swap's status, asking 1Click only about those still under
    * way: a final status is stored and read back. A swap 1Click doesn't answer
-   * for, in time or at all, is left out until a later call.
+   * for, in time or at all, is left out until a later call. The swaps are
+   * returned starting with the newest first.
    */
   async getSwapStatuses(): Promise<SwapStatus[]> {
     await this.#seed();
@@ -684,7 +685,13 @@ export class Wallet {
       }),
     );
     if (settled) this.#save();
-    return statuses.filter((status) => status !== null);
+    return statuses
+      .filter((status) => status !== null)
+      .sort(
+        (a, b) =>
+          (Date.parse(b.quoteResponse.timestamp) || -Infinity) -
+          (Date.parse(a.quoteResponse.timestamp) || -Infinity),
+      );
   }
 
   /** Whether any recorded swap has yet to reach a final status. */
