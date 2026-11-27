@@ -3,6 +3,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import { version } from "./package.json";
+import { voteServers, votingConfigUrls } from "./src/lib/vote";
 import {
   firstChunkFrom,
   lastChunk,
@@ -39,7 +40,8 @@ async function setupChunks(indexer: string) {
 
 /**
  * Netlify reads `_headers` from the publish directory. Written at build time
- * so the CSP's `connect-src` follows the deployment's indexer and lightwalletd.
+ * so the CSP's `connect-src` follows the deployment's indexer and lightwalletd,
+ * plus the vote chain the Vote page reads.
  */
 function netlifyHeaders(env: Record<string, string>): Plugin {
   return {
@@ -47,9 +49,12 @@ function netlifyHeaders(env: Record<string, string>): Plugin {
     apply: "build",
     generateBundle() {
       const servers = new Set(
-        [env.VITE_INDEXER_URL, env.VITE_GRPC_URL].map(
-          (url) => new URL(url).origin,
-        ),
+        [
+          env.VITE_INDEXER_URL,
+          env.VITE_GRPC_URL,
+          ...votingConfigUrls,
+          ...voteServers,
+        ].map((url) => new URL(url).origin),
       );
       const csp = [
         "default-src 'self'",

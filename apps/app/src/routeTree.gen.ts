@@ -18,7 +18,9 @@ import { Route as SendRouteImport } from './routes/send'
 import { Route as ShieldRouteImport } from './routes/shield'
 import { Route as TransactionsRouteImport } from './routes/transactions'
 import { Route as UnshieldRouteImport } from './routes/unshield'
+import { Route as VoteRouteImport } from './routes/vote'
 import { Route as TxIdRouteImport } from './routes/tx.$id'
+import { Route as VoteRoundIdProposalIdRouteImport } from './routes/vote_.$roundId.$proposalId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -65,9 +67,19 @@ const UnshieldRoute = UnshieldRouteImport.update({
   path: '/unshield',
   getParentRoute: () => rootRouteImport,
 } as any)
+const VoteRoute = VoteRouteImport.update({
+  id: '/vote',
+  path: '/vote',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TxIdRoute = TxIdRouteImport.update({
   id: '/tx/$id',
   path: '/tx/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VoteRoundIdProposalIdRoute = VoteRoundIdProposalIdRouteImport.update({
+  id: '/vote_/$roundId/$proposalId',
+  path: '/vote/$roundId/$proposalId',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -81,7 +93,9 @@ export interface FileRoutesByFullPath {
   '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
   '/unshield': typeof UnshieldRoute
+  '/vote': typeof VoteRoute
   '/tx/$id': typeof TxIdRoute
+  '/vote/$roundId/$proposalId': typeof VoteRoundIdProposalIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -93,7 +107,9 @@ export interface FileRoutesByTo {
   '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
   '/unshield': typeof UnshieldRoute
+  '/vote': typeof VoteRoute
   '/tx/$id': typeof TxIdRoute
+  '/vote/$roundId/$proposalId': typeof VoteRoundIdProposalIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -106,7 +122,9 @@ export interface FileRoutesById {
   '/shield': typeof ShieldRoute
   '/transactions': typeof TransactionsRoute
   '/unshield': typeof UnshieldRoute
+  '/vote': typeof VoteRoute
   '/tx/$id': typeof TxIdRoute
+  '/vote_/$roundId/$proposalId': typeof VoteRoundIdProposalIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -120,7 +138,9 @@ export interface FileRouteTypes {
     | '/shield'
     | '/transactions'
     | '/unshield'
+    | '/vote'
     | '/tx/$id'
+    | '/vote/$roundId/$proposalId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -132,7 +152,9 @@ export interface FileRouteTypes {
     | '/shield'
     | '/transactions'
     | '/unshield'
+    | '/vote'
     | '/tx/$id'
+    | '/vote/$roundId/$proposalId'
   id:
     | '__root__'
     | '/'
@@ -144,7 +166,9 @@ export interface FileRouteTypes {
     | '/shield'
     | '/transactions'
     | '/unshield'
+    | '/vote'
     | '/tx/$id'
+    | '/vote_/$roundId/$proposalId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -157,7 +181,9 @@ export interface RootRouteChildren {
   ShieldRoute: typeof ShieldRoute
   TransactionsRoute: typeof TransactionsRoute
   UnshieldRoute: typeof UnshieldRoute
+  VoteRoute: typeof VoteRoute
   TxIdRoute: typeof TxIdRoute
+  VoteRoundIdProposalIdRoute: typeof VoteRoundIdProposalIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -225,11 +251,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnshieldRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/vote': {
+      id: '/vote'
+      path: '/vote'
+      fullPath: '/vote'
+      preLoaderRoute: typeof VoteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tx/$id': {
       id: '/tx/$id'
       path: '/tx/$id'
       fullPath: '/tx/$id'
       preLoaderRoute: typeof TxIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vote_/$roundId/$proposalId': {
+      id: '/vote_/$roundId/$proposalId'
+      path: '/vote/$roundId/$proposalId'
+      fullPath: '/vote/$roundId/$proposalId'
+      preLoaderRoute: typeof VoteRoundIdProposalIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -245,7 +285,9 @@ const rootRouteChildren: RootRouteChildren = {
   ShieldRoute: ShieldRoute,
   TransactionsRoute: TransactionsRoute,
   UnshieldRoute: UnshieldRoute,
+  VoteRoute: VoteRoute,
   TxIdRoute: TxIdRoute,
+  VoteRoundIdProposalIdRoute: VoteRoundIdProposalIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

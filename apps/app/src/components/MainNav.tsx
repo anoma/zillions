@@ -1,6 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { useContext, useEffect } from "react";
-import { LuMoon, LuSun } from "react-icons/lu";
+import { LuMoon, LuSun, LuVote } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { SetNavEnabledContext } from "../context/nav";
 import { useDarkMode } from "../hooks/useDarkMode";
@@ -18,8 +18,17 @@ const navItems = [
   { label: "Wallet", to: "/", icon: HouseIcon },
   { label: "Send", to: "/send", icon: ArrowUpIcon },
   { label: "Receive", to: "/receive", icon: ArrowDownIcon },
+  { label: "Vote", to: "/vote", icon: LuVote },
   { label: "Transactions", to: "/transactions", icon: RotateCcwIcon },
 ] as const;
+
+/** The nav item a path sits under, so a proposal page keeps "Vote" lit. */
+const sectionOf = (pathname: string) =>
+  navItems.find(
+    (item) =>
+      pathname === item.to ||
+      (item.to !== "/" && pathname.startsWith(`${item.to}/`)),
+  )?.to;
 
 /** Enables navigation while mounted; place it where the wallet is ready. */
 export function EnableNav() {
@@ -92,7 +101,7 @@ function DarkModeToggle() {
 
 export function MainNav({ enabled }: { enabled: boolean }) {
   const pathname = useLocation().pathname;
-  const current = enabled ? pathname : undefined;
+  const current = enabled ? sectionOf(pathname) : undefined;
 
   return (
     <aside className="h-full flex flex-col justify-between border-r border-line-strong px-6 overflow-auto">
@@ -108,7 +117,13 @@ export function MainNav({ enabled }: { enabled: boolean }) {
               <Link
                 to={item.to}
                 disabled={!enabled}
-                aria-current={item.to === current ? "page" : undefined}
+                aria-current={
+                  item.to === pathname && enabled
+                    ? "page"
+                    : item.to === current
+                      ? "true"
+                      : undefined
+                }
                 className={twMerge(
                   "flex items-center gap-3 px-3 py-2.5 rounded-full text-sm transition-colors duration-300",
                   "hover:bg-card/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black",
@@ -138,10 +153,10 @@ export function MainNav({ enabled }: { enabled: boolean }) {
 
 export function BottomNav({ enabled }: { enabled: boolean }) {
   const pathname = useLocation().pathname;
-  const current = enabled ? pathname : undefined;
+  const current = enabled ? sectionOf(pathname) : undefined;
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-10 grid grid-cols-4 border-t border-line bg-surface">
+    <nav className="fixed bottom-0 inset-x-0 z-10 grid grid-cols-5 border-t border-line bg-surface">
       {navItems.map((item) => (
         <Link
           key={item.to}

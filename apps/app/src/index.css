@@ -22,6 +22,12 @@
   --color-gray-500: oklch(55.3% 0.013 58.071);
   --color-gray-600: oklch(44.4% 0.011 73.639);
 
+  /* Vote results, as muted as the gold. The stance is always named in text
+     beside the colour, so the colour never carries it alone. */
+  --color-vote-for: oklch(62% 0.1 150);
+  --color-vote-against: oklch(54% 0.13 32);
+  --color-vote-abstain: #a6a09b;
+
   --ease-out-circ: cubic-bezier(0.075, 0.82, 0.165, 1);
 
   --animate-loading-spinner: loading 1s ease infinite;
@@ -93,6 +99,10 @@
 
   --color-red-700: oklch(70.4% 0.191 22.216);
   --color-green: oklch(74% 0.1 148);
+
+  --color-vote-for: oklch(72% 0.1 150);
+  --color-vote-against: oklch(66% 0.13 32);
+  --color-vote-abstain: #76706c;
 }
 
 body {
