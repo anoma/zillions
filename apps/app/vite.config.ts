@@ -37,9 +37,13 @@ async function setupChunks(indexer: string) {
   return Object.fromEntries(pools.map((pool, i) => [pool, chunks[i]]));
 }
 
+/** The 1Click API the swap SDK calls by default (its `OpenAPI.BASE`). */
+const ONE_CLICK_URL = "https://1click.chaindefuser.com";
+
 /**
  * Netlify reads `_headers` from the publish directory. Written at build time
  * so the CSP's `connect-src` follows the deployment's indexer and lightwalletd.
+ * Swaps also reach the 1Click API, for tokens, quotes and swap status.
  */
 function netlifyHeaders(env: Record<string, string>): Plugin {
   return {
@@ -47,7 +51,7 @@ function netlifyHeaders(env: Record<string, string>): Plugin {
     apply: "build",
     generateBundle() {
       const servers = new Set(
-        [env.VITE_INDEXER_URL, env.VITE_GRPC_URL].map(
+        [env.VITE_INDEXER_URL, env.VITE_GRPC_URL, ONE_CLICK_URL].map(
           (url) => new URL(url).origin,
         ),
       );

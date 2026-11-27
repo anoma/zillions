@@ -6,6 +6,7 @@ import { SetNavEnabledContext } from "../context/nav";
 import { useDarkMode } from "../hooks/useDarkMode";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
+import { ArrowsLeftRight } from "../icons/ArrowsLeftRight";
 import { HouseIcon } from "../icons/HouseIcon";
 import { RotateCcwIcon } from "../icons/RotateCcwIcon";
 import { XIcon } from "../icons/XLogo";
@@ -18,6 +19,7 @@ const navItems = [
   { label: "Wallet", to: "/", icon: HouseIcon },
   { label: "Send", to: "/send", icon: ArrowUpIcon },
   { label: "Receive", to: "/receive", icon: ArrowDownIcon },
+  { label: "Swap", to: "/swap", icon: ArrowsLeftRight },
   { label: "Transactions", to: "/transactions", icon: RotateCcwIcon },
 ] as const;
 

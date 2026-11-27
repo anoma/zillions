@@ -1,5 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest";
 
+import { GetExecutionStatusResponse as GetExecutionStatusResponseType } from "@defuse-protocol/one-click-sdk-typescript";
 import type { Block } from "./chain/lightwalletd";
 import type {
   ChunkRequest,
@@ -143,6 +144,8 @@ vi.mock("./store", async (actual) => ({
 }));
 
 const { Wallet } = await import("./wallet");
+const { CancelablePromise, GetExecutionStatusResponse, OneClickService } =
+  await import("@defuse-protocol/one-click-sdk-typescript");
 const zcore = await import("@zillions/zcore");
 const { broadcastTransaction } = await import("./chain/submit");
 
@@ -531,6 +534,95 @@ test("reads history only once storage is loaded", async () => {
   });
   const wallet = new Wallet({ id: "g" });
   expect(await wallet.getTransactionHistory()).toHaveLength(1);
+});
+
+test("records a swap once per deposit address, adding hashes it lacked", async () => {
+  const wallet = new Wallet({ id: "s" });
+  const t1 = { hash: "t1", explorerUrl: "" };
+  const t2 = { hash: "t2", explorerUrl: "" };
+  await wallet.pushSwap("in", false, []);
+  await wallet.pushSwap("in", false, []);
+  await wallet.pushSwap("out", true, [t1]);
+  await wallet.pushSwap("out", true, [t1, t2]);
+  expect(wallet.getSwaps()).toEqual([
+    { depositAddress: "in", outbound: false, originChainTxHashes: [] },
+    { depositAddress: "out", outbound: true, originChainTxHashes: [t1, t2] },
+  ]);
+});
+
+test("asks 1Click about a swap only until its status is final", async () => {
+  const { status } = GetExecutionStatusResponse;
+  const statuses = new Map([
+    ["done", status.SUCCESS],
+    ["busy", status.PROCESSING],
+  ]);
+  const ask = vi
+    .spyOn(OneClickService, "getExecutionStatus")
+    .mockImplementation(
+      (depositAddress: string) =>
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        new CancelablePromise((resolve, _reject, _onCancel) => {
+          resolve({
+            status: statuses.get(depositAddress)!,
+            quoteResponse: { timestamp: "2026-11-27T10:00:00Z" },
+            swapDetails: {
+              originChainTxHashes: [],
+              destinationChainTxHashes: [],
+            },
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any as GetExecutionStatusResponseType);
+        }),
+    );
+  const wallet = new Wallet({ id: "t" });
+  const mine = { hash: "t1", explorerUrl: "" };
+  await wallet.pushSwap("done", true, [mine]);
+  await wallet.pushSwap("busy", false, []);
+
+  await wallet.getSwapStatuses();
+  const swaps = await wallet.getSwapStatuses();
+
+  // "done" was asked about once, "busy" each time.
+  expect(ask.mock.calls.map(([address]) => address)).toEqual([
+    "done",
+    "busy",
+    "busy",
+  ]);
+  expect(wallet.getSwaps()?.[0].status?.status).toBe(status.SUCCESS);
+  expect(wallet.getSwaps()?.[1].status).toBeUndefined();
+  // Reading the stored status twice adds our hash once, and leaves it unchanged.
+  expect(swaps[0].swapDetails.originChainTxHashes).toEqual([mine]);
+  expect(
+    wallet.getSwaps()?.[0].status?.swapDetails.originChainTxHashes,
+  ).toEqual([]);
+  ask.mockRestore();
+});
+
+test("reads history without asking 1Click", async () => {
+  const ask = vi.spyOn(OneClickService, "getExecutionStatus");
+  const wallet = new Wallet({ id: "u" });
+  await wallet.pushSwap("busy", false, []);
+  await wallet.getTransactionHistory();
+  expect(ask).not.toHaveBeenCalled();
+  expect(wallet.hasUnfinishedSwaps()).toBe(true);
+  ask.mockRestore();
+});
+
+test("leaves out a swap 1Click doesn't answer for in time", async () => {
+  const wallet = new Wallet({ id: "v" });
+  await wallet.pushSwap("slow", false, []);
+  // A request that never settles unless it's cancelled.
+  const ask = vi
+    .spyOn(OneClickService, "getExecutionStatus")
+    .mockImplementation(
+      () => new CancelablePromise<GetExecutionStatusResponseType>(() => {}),
+    );
+  vi.useFakeTimers();
+  const statuses = wallet.getSwapStatuses();
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(await statuses).toEqual([]);
+  expect(wallet.hasUnfinishedSwaps()).toBe(true);
+  ask.mockRestore();
+  vi.useRealTimers();
 });
 
 test("stores a recent block, and fetches it again each sync", async () => {

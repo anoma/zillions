@@ -1,3 +1,7 @@
+import type {
+  GetExecutionStatusResponse,
+  TransactionDetails,
+} from "@defuse-protocol/one-click-sdk-typescript";
 import type { Block } from "./chain/lightwalletd";
 import type { Migration } from "./migration";
 import type { ParsedTx, TransparentCache } from "./transparent";
@@ -179,6 +183,14 @@ export interface WalletState {
   txs: Map<string, ParsedTx>;
   /** A migration to Ironwood in progress (2.9). */
   migration?: Migration;
+  /** All NEAR intents in progress. */
+  swaps?: {
+    depositAddress: string;
+    outbound: boolean;
+    originChainTxHashes: TransactionDetails[];
+    /** The swap's last status, once final: it never changes, so 1Click isn't asked again. */
+    status?: GetExecutionStatusResponse;
+  }[];
 }
 
 /** One transaction as history shows it. */

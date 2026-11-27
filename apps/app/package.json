@@ -17,6 +17,7 @@
   "dependencies": {
     "@fontsource-variable/montserrat": "catalog:",
     "@tanstack/react-query": "5.107.1",
+    "@defuse-protocol/one-click-sdk-typescript": "0.1.26",
     "@tanstack/react-router": "1.170.46",
     "@zillions/keychain-types": "workspace:*",
     "@zillions/zcore": "workspace:*",

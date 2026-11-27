@@ -1,3 +1,8 @@
+import type { TransactionDetails } from "@defuse-protocol/one-click-sdk-typescript";
+import {
+  GetExecutionStatusResponse,
+  OneClickService,
+} from "@defuse-protocol/one-click-sdk-typescript";
 import type { AccountInfo, ProvedTx } from "@zillions/keychain-types";
 import initZcore, { parse_transaction } from "@zillions/zcore";
 
@@ -90,6 +95,55 @@ const RESYNC_MS = 60_000;
 const saveData = () =>
   (navigator as { connection?: { saveData?: boolean } }).connection
     ?.saveData === true;
+
+/** Statuses a swap never leaves: once seen, 1Click needn't be asked again. */
+const FINAL_SWAP_STATUSES = new Set<GetExecutionStatusResponse.status>([
+  GetExecutionStatusResponse.status.SUCCESS,
+  GetExecutionStatusResponse.status.REFUNDED,
+  GetExecutionStatusResponse.status.FAILED,
+]);
+
+/** A swap's status as history shows it, and which way it goes. */
+export type SwapStatus = GetExecutionStatusResponse & { outbound: boolean };
+
+/** How long 1Click gets to answer for one swap before it's asked again later. */
+const SWAP_STATUS_TIMEOUT_MS = 10_000;
+
+/** 1Click's status for the swap at `depositAddress`, cancelled if it's slow. */
+async function askSwapStatus(depositAddress: string) {
+  const request = OneClickService.getExecutionStatus(depositAddress);
+  const timer = setTimeout(() => request.cancel(), SWAP_STATUS_TIMEOUT_MS);
+  try {
+    return await request;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * `status` as history shows it: with the origin-chain hashes this wallet
+ * recorded (its own send, before 1Click sees it) added once each. A new
+ * object, so a stored status is never changed by reading it.
+ */
+function withLocalHashes(
+  status: GetExecutionStatusResponse,
+  local: TransactionDetails[],
+  outbound: boolean,
+) {
+  const reported = status.swapDetails?.originChainTxHashes ?? [];
+  const known = new Set(reported.map(({ hash }) => hash));
+  return {
+    ...status,
+    swapDetails: {
+      ...status.swapDetails,
+      originChainTxHashes: [
+        ...reported,
+        ...local.filter(({ hash }) => !known.has(hash)),
+      ],
+    },
+    outbound,
+  };
+}
 
 /** One account's wallet: its state, kept in storage and brought up to date by `sync`, and what the app reads and sends with. */
 export class Wallet {
@@ -391,6 +445,39 @@ export class Wallet {
     this.#history = undefined;
   };
 
+  /** Records a swap for history to follow; once per deposit address. */
+  pushSwap = async (
+    depositAddress: string,
+    outbound: boolean,
+    originChainTxHashes: TransactionDetails[],
+  ) => {
+    // Stored swaps load with the rest of the state; one pushed before then
+    // would be dropped when the stored state replaces it.
+    await this.#seed();
+    const swaps = (this.#state.swaps ??= []);
+    // A deposit address is one swap: confirming its quote again (after Back,
+    // or a double click) keeps the one entry, adding any hashes it lacked.
+    const known = swaps.find((swap) => swap.depositAddress === depositAddress);
+    if (!known) {
+      swaps.push({
+        depositAddress,
+        outbound,
+        originChainTxHashes: [...originChainTxHashes],
+      });
+    } else {
+      const held = new Set(known.originChainTxHashes.map(({ hash }) => hash));
+      const fresh = originChainTxHashes.filter(({ hash }) => !held.has(hash));
+      if (!fresh.length) return;
+      known.originChainTxHashes.push(...fresh);
+    }
+    this.#save();
+  };
+
+  /** Get all the swaps in the state. */
+  getSwaps = () => {
+    return this.#state.swaps;
+  };
+
   /** Runs history on every core, or back on 2, for the rest of this session. */
   setSpeedUp = (on: boolean) => {
     this.#speedUp = on;
@@ -542,7 +629,13 @@ export class Wallet {
     return balances(notes, utxos, pending, now);
   }
 
-  /** Newest first, pending transactions on top until sync finds them mined. */
+  /**
+   * Newest first, pending transactions on top until sync finds them mined.
+   * Local only: swaps are followed by `getSwapStatuses`, so nothing here waits
+   * on the network. Every activity stays, swap legs included: the receipt, the
+   * confirming countdown and /tx/$id look them up by txid. Only the history
+   * list hides the legs a swap row stands for.
+   */
   async getTransactionHistory(): Promise<Activity[]> {
     await this.#seed();
     const { notes, sent, blocks, pending } = this.#state;
@@ -563,6 +656,47 @@ export class Wallet {
       ...confirmedAt(history, this.#tip),
     ];
   }
+
+  /**
+   * Each recorded swap's status, asking 1Click only about those still under
+   * way: a final status is stored and read back. A swap 1Click doesn't answer
+   * for, in time or at all, is left out until a later call. The swaps are
+   * returned starting with the newest first.
+   */
+  async getSwapStatuses(): Promise<SwapStatus[]> {
+    await this.#seed();
+    let settled = false;
+    const statuses = await Promise.all(
+      (this.#state.swaps ?? []).map(async (swap) => {
+        let status = swap.status;
+        if (!status) {
+          try {
+            status = await askSwapStatus(swap.depositAddress);
+          } catch (error) {
+            console.warn(`[swap] no status for ${swap.depositAddress}`, error);
+            return null;
+          }
+          if (FINAL_SWAP_STATUSES.has(status.status)) {
+            swap.status = status;
+            settled = true;
+          }
+        }
+        return withLocalHashes(status, swap.originChainTxHashes, swap.outbound);
+      }),
+    );
+    if (settled) this.#save();
+    return statuses
+      .filter((status) => status !== null)
+      .sort(
+        (a, b) =>
+          (Date.parse(b.quoteResponse.timestamp) || -Infinity) -
+          (Date.parse(a.quoteResponse.timestamp) || -Infinity),
+      );
+  }
+
+  /** Whether any recorded swap has yet to reach a final status. */
+  hasUnfinishedSwaps = () =>
+    (this.#state.swaps ?? []).some((swap) => !swap.status);
 
   /**
    * What a send may spend at the chain tip. Throws before the tip is known, or

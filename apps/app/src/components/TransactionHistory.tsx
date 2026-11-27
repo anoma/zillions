@@ -1,13 +1,23 @@
+import type { TransactionDetails } from "@defuse-protocol/one-click-sdk-typescript";
+import {
+  GetExecutionStatusResponse,
+  type TokenResponse,
+} from "@defuse-protocol/one-click-sdk-typescript";
 import { Link } from "@tanstack/react-router";
 import { twMerge } from "tailwind-merge";
+import { useGetSwaps } from "../hooks/useGetSwaps";
+import { useGetTokens } from "../hooks/useGetTokens";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
+import { ArrowsLeftRight } from "../icons/ArrowsLeftRight";
 import type { Activity } from "../lib/wallet/types";
+import type { SwapStatus } from "../lib/wallet/wallet";
 import { AddressBadge } from "./AddressBadge";
 import { PageError } from "./PageError";
 import { PageLoader } from "./PageLoader";
 import { PendingIcon, TransactionTypeIcon } from "./TransactionTypeAndStatus";
 import { TransactionValue } from "./TransactionValue";
 import { focusRingClassName } from "./ui/utils";
+import { ZecValue } from "./ZecValue";
 
 // icon | type over time | amount; desktops add the From → To route before the
 // amount. The list owns the columns and each row subgrids into them, so every
@@ -16,6 +26,80 @@ const gridClassName =
   "grid gap-x-4 grid-cols-[auto_1fr_auto] lg:grid-cols-[auto_minmax(8rem,1fr)_minmax(0,2fr)_auto]";
 const rowClassName = "col-span-full grid grid-cols-subgrid items-center";
 const routeClassName = "max-lg:hidden";
+const ZEC_TOKEN_ASSET_ID = "nep141:zec.omft.near";
+
+const SwapState = GetExecutionStatusResponse.status;
+
+/**
+ * What each swap status means, for the row. Every status has one: a status
+ * the SDK adds fails the build until it's described here.
+ */
+const SWAP_STATUS_DESCRIPTIONS: Record<
+  GetExecutionStatusResponse.status,
+  string
+> = {
+  [SwapState.PENDING_DEPOSIT]: "Awaiting your token deposit",
+  [SwapState.KNOWN_DEPOSIT_TX]: "Deposit transaction detected",
+  [SwapState.PROCESSING]: "Swap being executed",
+  [SwapState.SUCCESS]: "Tokens delivered to destination address",
+  [SwapState.INCOMPLETE_DEPOSIT]: "Deposit below required amount",
+  [SwapState.REFUNDED]: "Swap failed, funds returned to refund address",
+  [SwapState.FAILED]: "Swap encountered an error",
+};
+
+/**
+ * The summed `value` of the transactions in `activities` whose txid is among
+ * `hashes`, in zatoshi and signed as history signs it. History holds only this
+ * wallet's Zcash transactions, so a hash on another chain, or one sync hasn't
+ * found yet, never matches.
+ */
+function totalValueOf(
+  hashes: TransactionDetails[] | undefined,
+  activities: Activity[],
+): bigint {
+  const wanted = new Set((hashes ?? []).map(({ hash }) => hash));
+  const matched = activities.filter((tx) => wanted.has(tx.txid));
+  return matched.reduce((total, tx) => total + tx.value, 0n);
+}
+
+/** The txids of the chain transactions behind `swaps`, on either side. */
+function swapTxids(swaps: GetExecutionStatusResponse[]) {
+  return new Set(
+    swaps.flatMap(({ swapDetails }) =>
+      [
+        ...(swapDetails?.originChainTxHashes ?? []),
+        ...(swapDetails?.destinationChainTxHashes ?? []),
+      ].map(({ hash }) => hash),
+    ),
+  );
+}
+/* Temporally order transactions and swaps. */
+function compareSwapToTx(
+  swap: SwapStatus | undefined,
+  tx: Activity | undefined,
+): number {
+  if (tx === undefined) {
+    // If tx is undefined, then the swap comes first
+    return -1;
+  } else if (swap === undefined) {
+    // If swap is undefined, then the tx comes first
+    return 1;
+  } else if (tx.status === "Pending" || tx.timestamp === undefined) {
+    // If the tx has no timestamp or is pending, then the tx comes first
+    return 1;
+  } else if (
+    swap.quoteResponse.timestamp === undefined ||
+    isNaN(Date.parse(swap.quoteResponse.timestamp))
+  ) {
+    // If the quote has no timestamp, then the swap goes last
+    return 1;
+  } else {
+    // Otherwise the entry with highest timestamp comes first
+    return (
+      Number(tx.timestamp) * 1000 - Date.parse(swap.quoteResponse.timestamp)
+    );
+  }
+}
 
 /**
  * The transaction list. As a page it's the full history under its own title;
@@ -29,6 +113,11 @@ export function TransactionHistory({
   limit?: number;
 }) {
   const transactionHistory = useGetTransactionHistory();
+  const swaps = useGetSwaps();
+  // Token symbols name a swap's assets. Asked for only once there's a swap to
+  // show: a wallet that never swapped never contacts 1Click. Until they come,
+  // a row names its assets by their ids.
+  const tokens = useGetTokens(Boolean(swaps.data?.length)).data ?? [];
 
   if (transactionHistory.isPending) {
     return <PageLoader />;
@@ -38,7 +127,24 @@ export function TransactionHistory({
     return <PageError>{String(transactionHistory.error)}</PageError>;
   }
 
-  const all = transactionHistory.data;
+  // Swaps come from 1Click on their own clock. Until they answer, history
+  // shows without them, and a swap's own transaction is listed as it is.
+  const allSwaps = swaps.data ?? [];
+  // A swap's row stands for its chain transactions, so they aren't listed twice.
+  const covered = swapTxids(allSwaps);
+  const allTxs = transactionHistory.data.filter((tx) => !covered.has(tx.txid));
+  // Merge the swaps and txs into one array
+  let s = 0,
+    t = 0;
+  const all = [];
+  while (s + t < allSwaps.length + allTxs.length) {
+    if (compareSwapToTx(allSwaps[s], allTxs[t]) <= 0) {
+      all.push({ type: "swap" as const, data: allSwaps[s++] });
+    } else {
+      all.push({ type: "tx" as const, data: allTxs[t++] });
+    }
+  }
+  // Grab limit entries if limit is defined.
   const shown = limit ? all.slice(0, limit) : all;
 
   return (
@@ -84,11 +190,134 @@ export function TransactionHistory({
             No transactions yet
           </p>
         )}
-        {shown.map((tx) => (
-          <Row key={tx.txid} tx={tx} />
-        ))}
+        {shown.map((item) => {
+          if (item.type === "swap") {
+            return (
+              <SwapRow
+                key={item.data.correlationId}
+                swap={item.data}
+                tokens={tokens}
+                // All of history, swap legs included: the row's value is
+                // summed from the transactions it hides.
+                activities={transactionHistory.data}
+              />
+            );
+          } else {
+            return <Row key={item.data.txid} tx={item.data} />;
+          }
+        })}
       </div>
     </section>
+  );
+}
+
+/**
+ * Display a pending swap. I.e. the time at which the quotation was produced, the original
+ * asset, the destination asset, and the balance increase expected in the destination asset.
+ */
+function SwapRow({
+  swap,
+  tokens,
+  activities,
+}: {
+  swap: GetExecutionStatusResponse & { outbound: boolean };
+  tokens: TokenResponse[];
+  activities: Activity[];
+}) {
+  // Total value of the transactions covered by the swap
+  const value =
+    totalValueOf(swap.swapDetails?.destinationChainTxHashes, activities) +
+    totalValueOf(swap.swapDetails?.originChainTxHashes, activities);
+  // The explorer finds a swap by its deposit address.
+  const depositAddress = swap.quoteResponse.quote.depositAddress;
+
+  // Look up symbols from the tokens array, fallback to the raw asset string if not found
+  const originSymbol =
+    tokens.find(
+      (t) => t.assetId === swap.quoteResponse.quoteRequest.originAsset,
+    )?.symbol || swap.quoteResponse.quoteRequest.originAsset;
+
+  const destinationSymbol =
+    tokens.find(
+      (t) => t.assetId === swap.quoteResponse.quoteRequest.destinationAsset,
+    )?.symbol || swap.quoteResponse.quoteRequest.destinationAsset;
+
+  // The same dots as the balance card's pool legend.
+  const dot = (gold: boolean) => (
+    <span
+      aria-hidden="true"
+      className={twMerge(
+        "size-2 shrink-0 rounded-full",
+        gold ? "bg-gold" : "bg-black/10 dark:bg-black/25",
+      )}
+    />
+  );
+  return (
+    <a
+      href={`https://explorer.near-intents.org/transactions/${depositAddress}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={twMerge(
+        rowClassName,
+        "py-4 px-4 transition-colors duration-300 hover:bg-card",
+        "focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-black",
+      )}
+    >
+      <span className="size-9 grid place-items-center rounded-full bg-black/5 text-gray-600">
+        <ArrowsLeftRight className={"size-4"} />
+      </span>
+
+      <div>
+        <div>
+          {/* A status newer than this build is shown as 1Click names it. */}
+          Swap: {SWAP_STATUS_DESCRIPTIONS[swap.status] ?? swap.status}
+        </div>
+        <div className="mt-0.5 text-xs text-gray-600">
+          <time>
+            {new Date(swap.quoteResponse.timestamp).toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </time>
+        </div>
+      </div>
+
+      <div
+        className={twMerge(
+          "min-w-0 flex items-center gap-3 text-gray-600",
+          routeClassName,
+        )}
+      >
+        {dot(
+          swap.quoteResponse.quoteRequest.originAsset === ZEC_TOKEN_ASSET_ID,
+        )}
+        <span className="text-sm font-medium">{originSymbol}</span>
+        <span aria-hidden="true" className="text-black/30">
+          →
+        </span>
+        {dot(
+          swap.quoteResponse.quoteRequest.destinationAsset ===
+            ZEC_TOKEN_ASSET_ID,
+        )}
+        <span className="text-sm font-medium">{destinationSymbol}</span>
+      </div>
+
+      <div className="text-right text-base font-semibold">
+        {value > 0n ? (
+          <>
+            +<ZecValue zat={value} />
+          </>
+        ) : value < 0n ? (
+          <>
+            −<ZecValue zat={-value} />
+          </>
+        ) : (
+          "-"
+        )}
+      </div>
+    </a>
   );
 }
 
