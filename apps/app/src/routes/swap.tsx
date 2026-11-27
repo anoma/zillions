@@ -34,11 +34,68 @@ import { useGetTokens } from "../hooks/useGetTokens";
 import { useSend, useSendPlan } from "../hooks/useSend";
 import type { StageEntry } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
+import { AaveIcon } from "../icons/AaveIcon";
+import { AbstractIcon } from "../icons/AbstractIcon";
+import { AdiIcon } from "../icons/AdiIcon";
+import { AleoIcon } from "../icons/AleoIcon";
+import { AptosIcon } from "../icons/AptosIcon";
+import { ArbitrumIcon } from "../icons/ArbitrumIcon";
+import { AuroraIcon } from "../icons/AuroraIcon";
+import { AvalancheIcon } from "../icons/AvalancheIcon";
+import { BaseIcon } from "../icons/BaseIcon";
+import { BerachainIcon } from "../icons/BerachainIcon";
+import { BitcoinCashIcon } from "../icons/BitcoinCashIcon";
 import { BitcoinIcon } from "../icons/BitcoinIcon";
+import { BnbIcon } from "../icons/BnbIcon";
+import { CardanoIcon } from "../icons/CardanoIcon";
+import { ChainlinkIcon } from "../icons/ChainlinkIcon";
+import { CoinbaseWrappedBitcoinIcon } from "../icons/CoinbaseWrappedBitcoinIcon";
+import { CowProtocolIcon } from "../icons/CowProtocolIcon";
+import { DaiIcon } from "../icons/DaiIcon";
+import { DashIcon } from "../icons/DashIcon";
+import { DogecoinIcon } from "../icons/DogecoinIcon";
+import { EthenaUSDeIcon } from "../icons/EthenaUSDeIcon";
+import { EthereumIcon } from "../icons/EthereumIcon";
+import { FogoIcon } from "../icons/FogoIcon";
+import { FraxIcon } from "../icons/FraxIcon";
+import { GmxIcon } from "../icons/GmxIcon";
+import { GnosisIcon } from "../icons/GnosisIcon";
+import { HapiIcon } from "../icons/HapiIcon";
+import { HyperliquidIcon } from "../icons/HyperliquidIcon";
+import { KyberNetworkIcon } from "../icons/KyberNetworkIcon";
+import { LitecoinIcon } from "../icons/LitecoinIcon";
+import { MogCoinIcon } from "../icons/MogCoinIcon";
+import { MonadIcon } from "../icons/MonadIcon";
+import { MoneriumEURIcon } from "../icons/MoneriumEURIcon";
+import { MovementIcon } from "../icons/MovementIcon";
+import { NearIcon } from "../icons/NearIcon";
+import { NproIcon } from "../icons/NproIcon";
+import { OkxIcon } from "../icons/OkxIcon";
+import { OptimismIcon } from "../icons/OptimismIcon";
+import { PepeIcon } from "../icons/PepeIcon";
+import { PlasmaIcon } from "../icons/PlasmaIcon";
+import { PolygonIcon } from "../icons/PolygonIcon";
+import { RobinhoodChainIcon } from "../icons/RobinhoodChainIcon";
+import { SafeIcon } from "../icons/SafeIcon";
+import { ScrollIcon } from "../icons/ScrollIcon";
+import { ShibaInuIcon } from "../icons/ShibaInuIcon";
+import { SolanaIcon } from "../icons/SolanaIcon";
 import { SpinnerIcon } from "../icons/SpinnerIcon";
+import { Spx6900Icon } from "../icons/Spx6900Icon";
+import { StarknetIcon } from "../icons/StarknetIcon";
+import { StellarIcon } from "../icons/StellarIcon";
+import { SuiIcon } from "../icons/SuiIcon";
 import { SwapIcon } from "../icons/SwapIcon";
+import { SweatIcon } from "../icons/SweatIcon";
+import { TetherGoldIcon } from "../icons/TetherGoldIcon";
+import { TetherIcon } from "../icons/TetherIcon";
+import { ToncoinIcon } from "../icons/ToncoinIcon";
+import { TronIcon } from "../icons/TronIcon";
+import { UniswapIcon } from "../icons/UniswapIcon";
 import { UnknownIcon } from "../icons/UnknownIcon";
 import { USDCoinIcon } from "../icons/USDCoinIcon";
+import { WrappedBitcoinIcon } from "../icons/WrappedBitcoinIcon";
+import { XrpIcon } from "../icons/XrpIcon";
 import { ZcashIcon } from "../icons/ZcashIcon";
 import {
   atomicToWhole,
@@ -92,15 +149,115 @@ const UNKNOWN_SYMBOL_LOGO: React.JSX.Element = <UnknownIcon />;
 const UNKNOWN_BLOCKCHAIN_LOGO: React.JSX.Element = <UnknownIcon />;
 // Map blockchains to logo paths
 const blockchainLogos = new Map<string, React.JSX.Element>([
+  [TokenResponse.blockchain.ADI, <AdiIcon />],
+  [TokenResponse.blockchain.ALEO, <AleoIcon />],
+  [TokenResponse.blockchain.APTOS, <AptosIcon />],
+  [TokenResponse.blockchain.ARB, <ArbitrumIcon />],
+  [TokenResponse.blockchain.AVAX, <AvalancheIcon />],
+  [TokenResponse.blockchain.BASE, <BaseIcon />],
+  [TokenResponse.blockchain.BCH, <BitcoinCashIcon />],
+  [TokenResponse.blockchain.BERA, <BerachainIcon />],
+  [TokenResponse.blockchain.BSC, <BnbIcon />],
   [TokenResponse.blockchain.BTC, <BitcoinIcon />],
+  [TokenResponse.blockchain.CARDANO, <CardanoIcon />],
+  [TokenResponse.blockchain.DASH, <DashIcon />],
+  [TokenResponse.blockchain.DOGE, <DogecoinIcon />],
+  [TokenResponse.blockchain.ETH, <EthereumIcon />],
+  [TokenResponse.blockchain.GNOSIS, <GnosisIcon />],
+  [TokenResponse.blockchain.HYPERCORE, <HyperliquidIcon />],
+  [TokenResponse.blockchain.LTC, <LitecoinIcon />],
+  [TokenResponse.blockchain.MONAD, <MonadIcon />],
+  [TokenResponse.blockchain.MOVEMENT, <MovementIcon />],
+  [TokenResponse.blockchain.NEAR, <NearIcon />],
+  [TokenResponse.blockchain.OP, <OptimismIcon />],
+  [TokenResponse.blockchain.PLASMA, <PlasmaIcon />],
+  [TokenResponse.blockchain.POL, <PolygonIcon />],
+  [TokenResponse.blockchain.SCROLL, <ScrollIcon />],
+  [TokenResponse.blockchain.SOL, <SolanaIcon />],
+  [TokenResponse.blockchain.STARKNET, <StarknetIcon />],
+  [TokenResponse.blockchain.STELLAR, <StellarIcon />],
+  [TokenResponse.blockchain.SUI, <SuiIcon />],
+  [TokenResponse.blockchain.TON, <ToncoinIcon />],
+  [TokenResponse.blockchain.TRON, <TronIcon />],
+  [TokenResponse.blockchain.XLAYER, <OkxIcon />],
+  [TokenResponse.blockchain.XRP, <XrpIcon />],
   [TokenResponse.blockchain.ZEC, <ZcashIcon />],
+  // Chains the SDK's TokenResponse.blockchain enum doesn't list yet.
+  ["abs", <AbstractIcon />],
+  ["fogo", <FogoIcon />],
+  ["hood", <RobinhoodChainIcon />],
 ]);
-// Map cryptocurrency symbols to logo paths
+// Map cryptocurrency symbols to logo paths. Wrapped and bridged tokens share
+// the logo of the asset they represent.
 const symbolLogos = new Map<string, React.JSX.Element>([
+  ["AAVE", <AaveIcon />],
+  ["ADA", <CardanoIcon />],
+  ["ADI", <AdiIcon />],
+  ["ALEO", <AleoIcon />],
+  ["APT", <AptosIcon />],
+  ["ARB", <ArbitrumIcon />],
+  ["AURORA", <AuroraIcon />],
+  ["AVAX", <AvalancheIcon />],
+  ["BCH", <BitcoinCashIcon />],
+  ["BERA", <BerachainIcon />],
+  ["BNB", <BnbIcon />],
   ["BTC", <BitcoinIcon />],
-  ["ZEC", <ZcashIcon />],
+  ["cbBTC", <CoinbaseWrappedBitcoinIcon />],
+  ["COW", <CowProtocolIcon />],
+  ["DAI", <DaiIcon />],
+  ["DASH", <DashIcon />],
+  ["DOGE", <DogecoinIcon />],
+  ["ETH", <EthereumIcon />],
+  ["EURe", <MoneriumEURIcon />],
+  ["FOGO", <FogoIcon />],
+  ["FRAX", <FraxIcon />],
+  ["GMX", <GmxIcon />],
+  ["GNO", <GnosisIcon />],
+  ["GRAM", <ToncoinIcon />],
+  ["HAPI", <HapiIcon />],
+  ["KNC", <KyberNetworkIcon />],
+  ["LINK", <ChainlinkIcon />],
+  ["LTC", <LitecoinIcon />],
+  ["MOG", <MogCoinIcon />],
+  ["MON", <MonadIcon />],
+  ["MOVE", <MovementIcon />],
+  ["NEAR", <NearIcon />],
+  ["NPRO", <NproIcon />],
+  ["OKB", <OkxIcon />],
+  ["OP", <OptimismIcon />],
+  ["PEPE", <PepeIcon />],
+  ["POL", <PolygonIcon />],
+  ["SAFE", <SafeIcon />],
+  ["SHIB", <ShibaInuIcon />],
+  ["SOL", <SolanaIcon />],
+  ["SPX", <Spx6900Icon />],
+  ["STRK", <StarknetIcon />],
+  ["SUI", <SuiIcon />],
+  ["SWEAT", <SweatIcon />],
+  ["TRX", <TronIcon />],
+  ["UNI", <UniswapIcon />],
   ["USDC", <USDCoinIcon width={64} height={64} />],
+  ["USDe", <EthenaUSDeIcon />],
+  ["USDT", <TetherIcon />],
+  ["wBTC", <WrappedBitcoinIcon />],
+  ["WBTC", <WrappedBitcoinIcon />],
+  ["WETH", <EthereumIcon />],
+  ["wNEAR", <NearIcon />],
+  ["XAUT", <TetherGoldIcon />],
+  ["XLM", <StellarIcon />],
+  ["XPL", <PlasmaIcon />],
+  ["XRP", <XrpIcon />],
+  ["ZEC", <ZcashIcon />],
 ]);
+// 1Click marks some tokens with a parenthesised suffix, as in "BNB(DEPRECATED)",
+// "XPL_(DEPRECATED)" or "BTC(OMNI)". They take the logo of the bare symbol.
+function symbolLogo(symbol: string) {
+  return (
+    symbolLogos.get(symbol) ??
+    symbolLogos.get(symbol.replace(/_?\(\w+\)$/, "")) ??
+    UNKNOWN_SYMBOL_LOGO
+  );
+}
 
 export const Route = createFileRoute("/swap")({
   component: SwapRoute,
@@ -114,7 +271,7 @@ function TokenIcon({ token }: { token: TokenResponse }) {
   return (
     <div className="relative inline-flex">
       {/* Main cryptocurrency logo */}
-      {symbolLogos.get(token.symbol) ?? UNKNOWN_SYMBOL_LOGO}
+      {symbolLogo(token.symbol)}
       {/* Blockchain logo overlaid on bottom right */}
       <div className="absolute -bottom-1 -right-1 flex items-center justify-center w-1/2 h-1/2 bg-white rounded-full border border-gray-100 shadow-sm overflow-hidden">
         {blockchainLogos.get(token.blockchain) ?? UNKNOWN_BLOCKCHAIN_LOGO}
