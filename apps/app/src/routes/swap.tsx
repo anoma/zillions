@@ -30,6 +30,7 @@ import { useAccount } from "../hooks/useAccount";
 import { useFreshAddress } from "../hooks/useAddresses";
 import { useGetBalance } from "../hooks/useGetBalance";
 import { getSwaps } from "../hooks/useGetSwaps";
+import { useGetTokens } from "../hooks/useGetTokens";
 import { useSend, useSendPlan } from "../hooks/useSend";
 import type { StageEntry } from "../hooks/useSubmitStage";
 import { useWallet } from "../hooks/useWallet";
@@ -257,8 +258,8 @@ function SwapForm({
   const account = useAccount();
   const shielded = useFreshAddress();
   const balance = useGetBalance();
-  const [tokens, setTokens] = useState<TokenResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const tokensQuery = useGetTokens();
+  const tokens = tokensQuery.data ?? [];
   const [recipientAddressError, setRecipientAddressError] = useState<
     string | undefined
   >();
@@ -319,32 +320,29 @@ function SwapForm({
       : undefined;
   amountInError ??= sendPlan.ceiling ? sendPlan.plan.error?.message : undefined;
 
-  // Populate the drop-down list of tokens and update exchange rates
+  // Refresh the chosen tokens' prices from the list, cached or just fetched.
   useEffect(() => {
-    OneClickService.getTokens()
-      .then((data: TokenResponse[]) => {
-        setTokens(data);
-        // Update the exchange rate metadata of the from token
-        setFromToken(
-          data.find(
-            (token: TokenResponse) => token.assetId == fromToken.assetId,
-          ) ?? fromToken,
-        );
-        // Update the exchange rate metadata of the to token
-        setToToken(
-          data.find(
-            (token: TokenResponse) => token.assetId == toToken.assetId,
-          ) ?? toToken,
-        );
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        setError(
-          error.body?.message || error.message || "Failed to fetch tokens",
-        );
-        setIsLoading(false);
-      });
-  }, []);
+    if (!tokensQuery.data) return;
+    setFromToken(
+      tokensQuery.data.find((token) => token.assetId === fromToken.assetId) ??
+        fromToken,
+    );
+    setToToken(
+      tokensQuery.data.find((token) => token.assetId === toToken.assetId) ??
+        toToken,
+    );
+  }, [tokensQuery.data]);
+
+  // Report a list that couldn't be fetched, once per failure.
+  useEffect(() => {
+    const error = tokensQuery.error;
+    if (!error) return;
+    setError(
+      (error as { body?: { message?: string } }).body?.message ||
+        error.message ||
+        "Failed to fetch tokens",
+    );
+  }, [tokensQuery.error]);
 
   // Compute the currency conversions
   const fromTokenPriceAtomic = wholeToScaledBigInt(fromToken.price);
@@ -389,7 +387,7 @@ function SwapForm({
   };
 
   // If the token data is still loading, then display a spinner instead
-  if (isLoading) {
+  if (tokensQuery.isPending) {
     return (
       <div className="size-52 grid place-items-center">
         <SpinnerIcon className="size-5 text-gold" />

@@ -1,13 +1,12 @@
 import type { TransactionDetails } from "@defuse-protocol/one-click-sdk-typescript";
 import {
   GetExecutionStatusResponse,
-  OneClickService,
-  TokenResponse,
+  type TokenResponse,
 } from "@defuse-protocol/one-click-sdk-typescript";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useGetSwaps } from "../hooks/useGetSwaps";
+import { useGetTokens } from "../hooks/useGetTokens";
 import { useGetTransactionHistory } from "../hooks/useGetTransactionHistory";
 import { ArrowsLeftRight } from "../icons/ArrowsLeftRight";
 import type { Activity } from "../lib/wallet/types";
@@ -87,14 +86,10 @@ export function TransactionHistory({
 }) {
   const transactionHistory = useGetTransactionHistory();
   const swaps = useGetSwaps();
-  const [tokens, setTokens] = useState<TokenResponse[]>([]);
-
-  // Fetch available tokens. Required for displaying token assets un human readable form.
-  useEffect(() => {
-    OneClickService.getTokens()
-      .then((data: TokenResponse[]) => setTokens(data))
-      .catch((err) => console.error("Failed to fetch tokens", err));
-  }, []);
+  // Token symbols name a swap's assets. Asked for only once there's a swap to
+  // show: a wallet that never swapped never contacts 1Click. Until they come,
+  // a row names its assets by their ids.
+  const tokens = useGetTokens(Boolean(swaps.data?.length)).data ?? [];
 
   if (transactionHistory.isPending) {
     return <PageLoader />;
