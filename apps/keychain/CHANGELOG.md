@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.15.0](https://github.com/anoma/zillions/compare/zillions-keychain-v0.14.0...zillions-keychain-v0.15.0) (2026-11-27)
+
+
+### Features
+
+* first-send change warning ([#270](https://github.com/anoma/zillions/issues/270)) ([37cf2b7](https://github.com/anoma/zillions/commit/37cf2b70e11829396dc8ac1ee0018a84314153aa))
+* keychain unlock screen ([#250](https://github.com/anoma/zillions/issues/250)) ([6bbc78c](https://github.com/anoma/zillions/commit/6bbc78ca931ab06c43dd55ef4f02015b15018d7c))
+* restore seed phrase copy behind a clipboard warning ([#274](https://github.com/anoma/zillions/issues/274)) ([8ad310c](https://github.com/anoma/zillions/commit/8ad310ca01985661e0621ba9f8aaa4f7565bae9c))
+* share only the connected account with sites ([#271](https://github.com/anoma/zillions/issues/271)) ([9f91770](https://github.com/anoma/zillions/commit/9f917703940f7910a704c5539e826cbf86036625))
+
+
+### Bug Fixes
+
+* keychain crypto from source ([#253](https://github.com/anoma/zillions/issues/253)) ([d0b003e](https://github.com/anoma/zillions/commit/d0b003e0bdb988d1c7615440acbb0fcc5098b91a))
+
+
+### Performance Improvements
+
+* threaded proving in Chrome ([#267](https://github.com/anoma/zillions/issues/267)) ([972a212](https://github.com/anoma/zillions/commit/972a2121513ef319fa86229b7d841939363f97fa))
+
 ## [0.14.0](https://github.com/anoma/zillions-frontend/compare/zillions-keychain-v0.13.1...zillions-keychain-v0.14.0) (2026-11-18)
 
 

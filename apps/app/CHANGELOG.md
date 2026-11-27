@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.21.0](https://github.com/anoma/zillions/compare/zillions-app-v1.20.0...zillions-app-v1.21.0) (2026-11-27)
+
+
+### Features
+
+* keychain unlock screen ([#250](https://github.com/anoma/zillions/issues/250)) ([6bbc78c](https://github.com/anoma/zillions/commit/6bbc78ca931ab06c43dd55ef4f02015b15018d7c))
+* share only the connected account with sites ([#271](https://github.com/anoma/zillions/issues/271)) ([9f91770](https://github.com/anoma/zillions/commit/9f917703940f7910a704c5539e826cbf86036625))
+* show payment links before the funding is mined ([#273](https://github.com/anoma/zillions/issues/273)) ([cbb0c04](https://github.com/anoma/zillions/commit/cbb0c043f641cdf77d7afbf341ced1f2a469fcf9))
+
+
+### Bug Fixes
+
+* preparations leave the notes made for transfers ([#264](https://github.com/anoma/zillions/issues/264)) ([1e742cd](https://github.com/anoma/zillions/commit/1e742cd0026bf72720a38da5109b487fa8070fd8))
+
 ## [1.20.0](https://github.com/anoma/zillions-frontend/compare/zillions-app-v1.19.0...zillions-app-v1.20.0) (2026-11-18)
 
 
