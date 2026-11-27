@@ -53,7 +53,12 @@ export type ClaimLink = {
   treeSize: number;
   network: string;
   description: string;
+  /** When the funding was approved, unix seconds; absent from older links. */
+  createdAt?: number;
 };
+
+/** How long a funding may take to show on-chain before the claim page gives up on it. */
+export const FUNDING_GRACE_MS = 5 * 60_000;
 
 /** A link's fragment (`#v=1&k=…`) read back, or undefined if it isn't one. */
 export function parseLink(fragment: string): ClaimLink | undefined {
@@ -63,13 +68,19 @@ export function parseLink(fragment: string): ClaimLink | undefined {
   try {
     const key = fromBase64Url(k);
     const treeSize = Number(s);
+    const t = fields.get("t");
+    const createdAt = t === null ? undefined : Number(t);
     if (key.length !== 32 || !Number.isSafeInteger(treeSize)) return undefined;
+    if (createdAt !== undefined && !Number.isSafeInteger(createdAt)) {
+      return undefined;
+    }
     return {
       key,
       amount: zecToZatoshi(a),
       treeSize,
       network: n,
       description: fields.get("d") ?? "",
+      ...(createdAt !== undefined && { createdAt }),
     };
   } catch {
     return undefined;
@@ -87,6 +98,7 @@ export function linkUrl({
   treeSize,
   network,
   description,
+  createdAt,
 }: {
   /** The app's own URL, ending in "/". */
   base: string;
@@ -97,6 +109,7 @@ export function linkUrl({
   treeSize: number;
   network: string;
   description: string;
+  createdAt: number;
 }) {
   const fields = new URLSearchParams({
     v: String(VERSION),
@@ -104,6 +117,7 @@ export function linkUrl({
     a: zatoshiToZec(amount),
     s: String(treeSize),
     n: network,
+    t: String(createdAt),
   });
   if (description) fields.set("d", description);
   return `${base}claim#${fields}`;

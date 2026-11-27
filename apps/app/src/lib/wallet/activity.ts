@@ -1,3 +1,4 @@
+import { CLAIM_FEE } from "../paymentLink";
 import type { Block } from "./chain/lightwalletd";
 import type { ParsedTx, TransparentTx } from "./transparent";
 import type {
@@ -199,10 +200,13 @@ function receipt(
   const fee = exactFee(entry, ours);
   // Transparent coins not ours name their sender, whatever else paid.
   const from = !authored(entry) && senders(entry.tx, ours);
+  const link = entry.shielded?.sent.some((s) => s.link);
   return {
     ...activity,
     ...(fee !== undefined && { fee }),
     ...(from && { from }),
+    // A link's amount is what the claimer receives: the claim fee is apart.
+    ...(link && { link: true as const, value: activity.value + CLAIM_FEE }),
   };
 }
 
@@ -493,3 +497,8 @@ export function publicActivity(
       : BigInt(tx.value_balance) - sum(tx.outputs),
   };
 }
+
+export type Typed = Pick<Activity, "tx_type"> & Partial<Pick<Activity, "link">>;
+
+/** The type history names: a send that funds a payment link is "Payment link". */
+export const typeName = (tx: Typed) => (tx.link ? "Payment link" : tx.tx_type);

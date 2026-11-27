@@ -30,6 +30,7 @@ test("the link keeps everything in its fragment", () => {
     treeSize: 81_920,
     network: "main",
     description: "Lunch & coffee",
+    createdAt: 1_790_000_000,
   });
   const { origin, pathname, search, hash } = new URL(url);
   expect([origin, pathname, search]).toEqual([
@@ -44,6 +45,7 @@ test("the link keeps everything in its fragment", () => {
   expect(fields.get("s")).toBe("81920");
   expect(fields.get("n")).toBe("main");
   expect(fields.get("d")).toBe("Lunch & coffee");
+  expect(fields.get("t")).toBe("1790000000");
 });
 
 test("a link without a description has no d", () => {
@@ -54,6 +56,7 @@ test("a link without a description has no d", () => {
     treeSize: 0,
     network: "test",
     description: "",
+    createdAt: 0,
   });
   expect(new URLSearchParams(new URL(url).hash.slice(1)).has("d")).toBe(false);
 });
@@ -67,6 +70,7 @@ test("a link reads back as it was made", () => {
     treeSize: 81_920,
     network: "main",
     description: "Lunch & coffee",
+    createdAt: 1_790_000_000,
   });
   expect(parseLink(new URL(url).hash)).toEqual({
     key,
@@ -74,6 +78,7 @@ test("a link reads back as it was made", () => {
     treeSize: 81_920,
     network: "main",
     description: "Lunch & coffee",
+    createdAt: 1_790_000_000,
   });
 });
 
@@ -85,6 +90,7 @@ test("reads a link the app made", () => {
   expect(link?.amount).toBe(1_000n);
   expect(link?.treeSize).toBe(836_343);
   expect(link?.description).toBe("");
+  expect(link).not.toHaveProperty("createdAt");
 });
 
 test("anything else isn't a link", () => {
@@ -94,6 +100,7 @@ test("anything else isn't a link", () => {
     "#v=1&k=AAAA&a=1&s=0&n=main",
     "#v=1&k=GZiAff9TvbWF5B_CJVkWE9ypZd93lrvVte-EnRAfFjY&a=1&s=x&n=main",
     "#v=1&k=***&a=1&s=0&n=main",
+    "#v=1&k=GZiAff9TvbWF5B_CJVkWE9ypZd93lrvVte-EnRAfFjY&a=1&s=0&n=main&t=soon",
   ]) {
     expect(parseLink(fragment)).toBeUndefined();
   }

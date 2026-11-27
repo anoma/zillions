@@ -393,7 +393,9 @@ Ironwood; how it's built is in [payment-links.md](design/payment-links.md).
     funds of their own;
   - the Keychain approves the payment and the link in one window (3.4);
   - the result shows the link, a QR code, Copy and Share, and the warning
-    above.
+    above, as soon as the Keychain approves: proving, broadcasting and
+    mining go on in the background. Until the payment is broadcast,
+    closing the page asks first, since closing it then drops the payment.
 - **Where the money comes from** follows Send: the user doesn't pick a
   pool. Money already in Ironwood stays private; money from Sapling or
   Orchard shows its amount on-chain on the way in, as any payment from there
@@ -418,6 +420,9 @@ Ironwood; how it's built is in [payment-links.md](design/payment-links.md).
   - signed in: one **Claim** button; no Keychain approval, as the link signs
     for itself; the money arrives at a fresh address of the connected
     account;
+  - a link whose money isn't on-chain yet says it's being processed for
+    five minutes from when it was made, then that the payment wasn't
+    found (the page keeps checking, so a late payment still shows up);
   - a link already claimed or cancelled says so, without asking anyone to
     sign in;
   - claiming doesn't wait for the claimer's wallet to finish syncing.

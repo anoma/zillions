@@ -145,8 +145,14 @@ function SendRoute() {
     });
   };
 
-  if (createLink.data) {
-    return <PaymentLinkCreated {...createLink.data} />;
+  if (createLink.shared) {
+    return (
+      <PaymentLinkCreated
+        {...createLink.shared}
+        tx={createLink.data}
+        error={createLink.error}
+      />
+    );
   }
   if (send.data && !isPaymentLink) {
     return <TransactionReceipt tx={{ ...send.data, status: "Pending" }} />;

@@ -59,3 +59,27 @@ test("a receipt opened once it's mined has no banner", () => {
   );
   expect(screen.queryByRole("status")).toBeNull();
 });
+
+test("a payment link's receipt lists the claim fee apart from what the claimer receives", () => {
+  render(
+    <TransactionReceipt
+      tx={{
+        txid: "t3",
+        tx_type: "Sent",
+        link: true,
+        status: "Confirmed",
+        value: -20_000n,
+        fee: 10_000n,
+        timestamp: 1,
+        from: { pool: "shielded" },
+        to: { address: "u1link" },
+      }}
+    />,
+    { wrapper },
+  );
+  const text = document.body.textContent;
+  expect(text).toContain("Link amount0.0002");
+  expect(text).toContain("Claim fee0.0001");
+  expect(text).toContain("Transaction fee0.0001");
+  expect(text).toContain("Total spent0.0004");
+});

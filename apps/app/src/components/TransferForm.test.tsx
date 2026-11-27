@@ -90,13 +90,15 @@ test("a countdown reads in seconds, then minutes and seconds", () => {
 
 test("progress asks for approval, then says it's processing", () => {
   const { rerender } = render(
-    <SubmitProgress stages={[{ stage: "building", at: 0 }]} />,
+    <SubmitProgress stages={[{ stage: "building", at: 0, time: 0 }]} />,
   );
   const status = screen.getByRole("status");
   expect(status.textContent).toBe("Approve in your Keychain");
-  rerender(<SubmitProgress stages={[{ stage: "approval", at: 0 }]} />);
+  rerender(<SubmitProgress stages={[{ stage: "approval", at: 0, time: 0 }]} />);
   expect(status.textContent).toBe("Approve in your Keychain");
-  rerender(<SubmitProgress stages={[{ stage: "ironwood-proof", at: 0 }]} />);
+  rerender(
+    <SubmitProgress stages={[{ stage: "ironwood-proof", at: 0, time: 0 }]} />,
+  );
   expect(status.textContent).toBe(
     "Processing your transactionKeep this page open until it's done.",
   );

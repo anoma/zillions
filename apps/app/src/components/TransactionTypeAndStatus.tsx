@@ -1,15 +1,17 @@
 import type { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 import {
-  type PendingTx,
   usePendingProgress,
+  type PendingTx,
 } from "../hooks/usePendingProgress";
 import { ArrowDownIcon } from "../icons/ArrowDownIcon";
 import { ArrowUpIcon } from "../icons/ArrowUpIcon";
 import { ClockIcon } from "../icons/ClockIcon";
 import { DatabaseArrowIcon } from "../icons/DatabaseArrowIcon";
+import { LinkIcon } from "../icons/LinkIcon";
 import { ShieldCheckIcon } from "../icons/ShieldCheckIcon";
 import { ShieldSlashIcon } from "../icons/ShieldSlashIcon";
+import { typeName, type Typed } from "../lib/wallet/activity";
 import type { Activity } from "../lib/wallet/types";
 import { Tooltip } from "./Tooltip";
 
@@ -49,10 +51,12 @@ export function PendingIcon({
 
 export function TransactionTypeIcon({
   tx_type,
+  link,
   className,
-}: Pick<Activity, "tx_type"> & { className?: string }) {
-  const Icon =
-    tx_type === "Sent"
+}: Typed & { className?: string }) {
+  const Icon = link
+    ? LinkIcon
+    : tx_type === "Sent"
       ? ArrowUpIcon
       : tx_type === "Received"
         ? ArrowDownIcon
@@ -70,13 +74,17 @@ export function TransactionTypeAndStatus({
   tx,
   iconClassName,
 }: {
-  tx: Pick<Activity, "tx_type"> & Partial<Pick<Activity, "status">>;
+  tx: Typed & Partial<Pick<Activity, "status">>;
   iconClassName?: string;
 }) {
   return (
     <div className="flex items-center gap-2">
-      <TransactionTypeIcon tx_type={tx.tx_type} className={iconClassName} />
-      {tx.tx_type}
+      <TransactionTypeIcon
+        tx_type={tx.tx_type}
+        link={tx.link}
+        className={iconClassName}
+      />
+      {typeName(tx)}
       {tx.status === "Expired" && " (Expired)"}
     </div>
   );

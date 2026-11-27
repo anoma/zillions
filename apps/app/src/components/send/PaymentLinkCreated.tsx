@@ -1,6 +1,8 @@
-import { useEffect, type ReactNode } from "react";
-import { GoAlert } from "react-icons/go";
+import { useBlocker } from "@tanstack/react-router";
+import { useEffect, useId, type ReactNode } from "react";
+import { GoAlert, GoCheck } from "react-icons/go";
 import QRCode from "react-qr-code";
+import { twMerge } from "tailwind-merge";
 import { useGetTransactionHistory } from "../../hooks/useGetTransactionHistory";
 import {
   usePendingProgress,
@@ -14,27 +16,47 @@ import { ActionButton } from "../ui/ActionButton";
 import { qrClassName } from "../ui/utils";
 
 type Props = {
-  tx: PendingTx;
   url: string;
   amount: bigint;
   description: string;
+  /** The funding, once broadcast. */
+  tx?: PendingTx;
+  /** Why the funding failed before it was broadcast. */
+  error?: Error | null;
 };
 
 /**
- * The link just funded, shown only once its funding is confirmed, so whoever
- * gets it can claim at once. Until then this page is its only copy.
+ * The link, shown as soon as the Keychain approves its funding, while that
+ * funding is still proved, broadcast and mined. Whoever opens it early sees
+ * the money on its way.
  */
-export function PaymentLinkCreated({ tx, url, amount, description }: Props) {
+export function PaymentLinkCreated({
+  tx,
+  url,
+  amount,
+  description,
+  error,
+}: Props) {
   // The history entry moves from Pending to Confirmed, or Expired, as sync runs.
   const funding = useGetTransactionHistory().data?.find(
-    (t) => t.txid === tx.txid,
+    (t) => t.txid === tx?.txid,
   );
-  const status = funding?.status ?? "Pending";
-  // Until "show again" exists, this page is the link's only copy.
-  useLeaveWarning(status !== "Expired");
+  // Closing the tab before the broadcast drops the funding. Navigating
+  // within the app doesn't, but it leaves the only page showing the link.
+  const sending = !tx && !error;
+  useLeaveWarning(sending);
+  const leaving = useBlocker({
+    shouldBlockFn: () => sending,
+    enableBeforeUnload: false,
+    withResolver: true,
+  });
+  // Sent while the dialog was open: nothing left to ask about.
+  useEffect(() => {
+    if (!sending && leaving.status === "blocked") leaving.proceed();
+  }, [sending, leaving]);
   const zec = `${zatoshiToZec(amount)} ZEC`;
 
-  if (status === "Expired") {
+  if (error || funding?.status === "Expired") {
     return (
       <FormPage title="Link not created">
         <div
@@ -45,72 +67,149 @@ export function PaymentLinkCreated({ tx, url, amount, description }: Props) {
             aria-hidden="true"
             className="size-4 shrink-0 mt-0.5 text-red-700"
           />
-          <p className="text-sm">
-            The network didn't take the transaction in time, so the link holds
-            nothing and the {zec} stayed in your wallet. Create a new link.
-          </p>
+          <div className="flex flex-col gap-1">
+            <p className="text-sm">
+              {error
+                ? "The payment into the link failed"
+                : "The network didn't take the payment into the link in time"}
+              , so the link holds nothing and the {zec} stayed in your wallet.
+              Don't share it; create a new link.
+            </p>
+            {error && <p className="text-xs text-gray-600">{error.message}</p>}
+          </div>
         </div>
       </FormPage>
     );
   }
-  if (status === "Pending") {
-    return <Funding tx={funding ?? tx} zec={zec} />;
-  }
-  return <Created url={url} zec={zec} description={description} />;
-}
 
-function Funding({ tx, zec }: { tx: PendingTx; zec: string }) {
-  const { percent, detail } = usePendingProgress(tx);
-
+  const confirmed = funding?.status === "Confirmed";
+  const reached = confirmed ? 3 : tx ? 2 : 1;
   return (
-    <FormPage title="Creating payment link">
-      <section
-        role="status"
-        aria-label="Creating the payment link"
-        className="flex flex-col items-center gap-5 py-10 text-center"
-      >
-        <SpinnerIcon aria-hidden="true" className="size-6 text-gold" />
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-semibold">Moving {zec} into the link</p>
-          <p className="text-xs text-gray-600">{detail}</p>
-        </div>
-        <div
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={percent}
-          className="w-48 h-1 rounded-full bg-line overflow-hidden"
-        >
-          <div
-            className="h-full bg-gold transition-[width] duration-1000 ease-linear"
-            style={{ width: `${percent ?? 0}%` }}
-          />
-        </div>
-      </section>
-      <Note>
-        Keep this page open: the link appears here once the money is in it, and
-        this is the only place it's shown.
-      </Note>
+    <FormPage title={confirmed ? "Payment link ready" : "Payment link created"}>
+      <p className="-mt-2 text-center text-3xl font-semibold tracking-tight">
+        {zec}
+      </p>
+      <Steps reached={reached} />
+      <p role="status" className="-mt-1 mb-4 text-center text-xs text-gray-600">
+        {confirmed ? (
+          "In the link and ready to claim."
+        ) : tx ? (
+          <Confirming tx={funding ?? tx} />
+        ) : (
+          "The Keychain is making this payment's proof. Keep this page open until it's sent."
+        )}
+      </p>
+      <LinkShare url={url} description={description} />
+      {leaving.status === "blocked" && (
+        <LeaveDialog onStay={leaving.reset} onLeave={leaving.proceed} />
+      )}
     </FormPage>
   );
 }
 
-function Created({
-  url,
-  zec,
-  description,
+/** Asked when the user navigates away while the funding is still being proved: it goes on, but the link leaves the screen. */
+function LeaveDialog({
+  onStay,
+  onLeave,
 }: {
-  url: string;
-  zec: string;
-  description: string;
+  onStay: () => void;
+  onLeave: () => void;
 }) {
+  const titleId = useId();
   return (
-    <FormPage title="Payment link ready">
-      <p className="text-center text-sm text-gray-600 -mt-2">
-        {zec}, ready to claim
-      </p>
-      <LinkShare url={url} description={description} />
-    </FormPage>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-6">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-90 flex flex-col gap-3 rounded-2xl bg-surface p-6 text-center"
+      >
+        <h2 id={titleId} className="text-base font-semibold">
+          Leave this page?
+        </h2>
+        <p className="text-sm text-gray-600">
+          The Keychain is still making the proof for this payment, which can
+          take a little while. The payment goes on if you leave, but the link is
+          only shown here: to see it again, open the payment in Transactions
+          once it's confirmed.
+        </p>
+        <div className="mt-3 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={onLeave}
+            className="px-4 py-2 rounded-full text-sm font-medium text-gray-600 transition-colors duration-300 hover:bg-black/5"
+          >
+            Leave anyway
+          </button>
+          <ActionButton
+            type="button"
+            size="sm"
+            outlineColor="black"
+            autoFocus
+            onClick={onStay}
+          >
+            Stay
+          </ActionButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Confirming({ tx }: { tx: PendingTx }) {
+  const { detail } = usePendingProgress(tx);
+  return <>Sent. Waiting for the network to confirm it · {detail}</>;
+}
+
+const STEPS = ["Approved", "Sent", "Confirmed"];
+
+/** Where the funding is: approved, broadcast, then mined. The first `reached` are done, the next one in progress. */
+function Steps({ reached }: { reached: number }) {
+  return (
+    <ol className="mx-auto w-full max-w-80 grid grid-cols-3 pt-2">
+      {STEPS.map((label, i) => {
+        const done = i < reached;
+        const active = i === reached;
+        return (
+          <li
+            key={label}
+            aria-current={active ? "step" : undefined}
+            className="relative flex flex-col items-center gap-2"
+          >
+            {i > 0 && (
+              <span
+                aria-hidden="true"
+                className={twMerge(
+                  "absolute top-2.5 right-1/2 w-full h-px bg-line",
+                  i <= reached && "bg-gold",
+                )}
+              />
+            )}
+            <span
+              className={twMerge(
+                "relative z-10 size-5 grid place-items-center rounded-full bg-surface",
+                done && "bg-gold text-white",
+                !done && !active && "border border-line",
+              )}
+            >
+              {done ? (
+                <GoCheck aria-hidden="true" className="size-3" />
+              ) : active ? (
+                <SpinnerIcon aria-hidden="true" className="size-5 text-gold" />
+              ) : null}
+            </span>
+            <span
+              className={twMerge(
+                "text-xs",
+                done || active ? "font-medium" : "text-gray-600",
+              )}
+            >
+              {label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -130,7 +229,7 @@ export function LinkShare({
         aria-label="Your payment link"
         className="flex flex-col items-center gap-4"
       >
-        <div className="w-fit flex flex-col items-center gap-3 rounded-xl border border-line bg-card p-4 pb-3">
+        <div className="w-fit flex flex-col items-center gap-3 rounded-2xl bg-card p-5 pb-4">
           <QRCode
             size={208}
             value={url}
@@ -188,7 +287,7 @@ function Note({ children }: { children: ReactNode }) {
   );
 }
 
-/** Asks before closing the tab while `active`. */
+/** Asks before closing the tab while `active`; browsers show only their own text there. */
 function useLeaveWarning(active: boolean) {
   useEffect(() => {
     if (!active) return;
