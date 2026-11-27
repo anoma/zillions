@@ -1,6 +1,6 @@
 /**
  * ApprovalsService: the background side of dapp requests (connection lifecycle,
- * PCZT signing, default-account changes). Chain ids are ignored — Zcash only.
+ * PCZT signing, account switches). Chain ids are ignored — Zcash only.
  *
  * Flow: a `dapp/*` request launches an `approvals.html` popup window and
  * parks its promise in `resolverMap` keyed by the popup's tab id. The popup UI
@@ -33,8 +33,8 @@ import {
   type ProveStage,
   type ProvedTx,
   type SendTxProps,
+  type SiteAccount,
   type TransparentAddressesProps,
-  type ZCashKeychainAccount,
 } from "@zillions/types";
 import { paramsToUrl } from "@zillions/utils";
 
@@ -286,30 +286,20 @@ export class ApprovalsService {
   }
 
   /**
-   * Every account for a connected dapp (so it can offer a switcher), with key
-   * material only on the site's current wallet and its children.
+   * The site's current wallet and its shielded child; null when the wallet
+   * has none. No other account reaches the site: switching happens in the
+   * Keychain (`approveSwitchAccount`).
    */
-  async dappAccounts(origin: string): Promise<ZCashKeychainAccount[]> {
+  async dappAccount(origin: string): Promise<SiteAccount | null> {
     const wallet = await this.assertConnected(origin);
-    return (await this.accounts.findAll()).map((record) =>
-      toPublicAccount(record, isInWallet(record, wallet.id))
+    const shielded = (await this.accounts.findAll()).find(
+      (r) => r.parentId === wallet.id && r.type === AccountType.ShieldedKeys
     );
-  }
-
-  /**
-   * The site's current wallet; its shielded child instead when that is the
-   * globally active account (a site may have switched to it by address).
-   */
-  async dappDefaultAccount(
-    origin: string
-  ): Promise<ZCashKeychainAccount | null> {
-    const wallet = await this.assertConnected(origin);
-    const activeId = (await this.accounts.getActiveAccount())?.id;
-    const active = activeId && (await this.accounts.findById(activeId));
-    return toPublicAccount(
-      active && active.parentId === wallet.id ? active : wallet,
-      true
-    );
+    if (!shielded) return null;
+    return {
+      transparent: toPublicAccount(wallet),
+      shielded: toPublicAccount(shielded),
+    };
   }
 
   /**
@@ -530,32 +520,17 @@ export class ApprovalsService {
   }
 
   /**
-   * Resolve an `updateDefaultAccount(address)` call: require a connected,
-   * unlocked origin and an existing account, then open the approval popup,
-   * which says when the switch shares a wallet the site hasn't seen. The popup
-   * confirms via `submitUpdateDefaultAccount`.
+   * Resolve a `switchAccount()` call: for a connected, unlocked origin, open
+   * the popup where the user picks the site's wallet, told when it is one the
+   * site hasn't seen. The popup confirms via `submitSwitchAccount`.
    */
-  async approveUpdateDefaultAccount(
-    origin: string,
-    address: string,
-    tabId?: number
-  ): Promise<void> {
-    await this.assertConnected(origin);
-    const record = await this.accounts.findByAddress(address);
-    if (!record) {
-      throw new Error(`Account for ${address} not found!`);
-    }
-    const connection = (await this.localStorage.getConnections())[origin];
-    const shared = connection.accounts.includes(record.parentId ?? record.id);
+  async approveSwitchAccount(origin: string, tabId?: number): Promise<void> {
+    const wallet = await this.assertConnected(origin);
+    const { accounts } = (await this.localStorage.getConnections())[origin];
     return this.launchApprovalPopup(
-      {
-        origin,
-        kind: "default-account",
-        describe: async () => ({ account: record.alias }),
-        tabId,
-      },
-      approvalRoutes.approveUpdateDefaultAccount(),
-      { address, alias: record.alias, origin, shared: String(shared) }
+      { origin, kind: "default-account", tabId },
+      approvalRoutes.approveSwitchAccount(),
+      { origin, current: wallet.id, shared: accounts.join(",") }
     );
   }
 
@@ -665,27 +640,27 @@ export class ApprovalsService {
   }
 
   /**
-   * The approval popup confirmed the default-account change: share the wallet
-   * of `address` with the site, make it the site's current one and the active
-   * account, and settle the dapp's promise.
+   * The approval popup confirmed the switch: share wallet `accountId` with
+   * the site, make it the site's current one and the active account, and
+   * settle the dapp's promise.
    */
-  async submitUpdateDefaultAccount(
+  async submitSwitchAccount(
     popupTabId: number,
-    address: string
+    accountId: string
   ): Promise<void> {
     const resolvers = this.getResolver(popupTabId);
     const { origin } = resolvers.meta;
     try {
       await this.assertConnected(origin);
-      const record = await this.accounts.findByAddress(address);
-      if (!record) {
-        throw new Error(`Account for ${address} not found!`);
+      const record = await this.accounts.findById(accountId);
+      if (!record || record.parentId) {
+        throw new Error("Choose an account to switch to");
       }
-      const walletId = record.parentId ?? record.id;
+      resolvers.meta.describe = async () => ({ account: record.alias });
       const { accounts } = (await this.localStorage.getConnections())[origin];
       await this.localStorage.setConnection(origin, {
-        accounts: accounts.includes(walletId) ? accounts : [...accounts, walletId],
-        current: walletId,
+        accounts: accounts.includes(record.id) ? accounts : [...accounts, record.id],
+        current: record.id,
       });
       await this.accounts.setActiveAccount(
         record.id,
@@ -771,14 +746,38 @@ export class ApprovalsService {
     return this.log.clear();
   }
 
-  /** Each connected origin and the wallet it currently sees. */
+  /** Each connected origin, the wallet it currently sees, and those it was given. */
   async connectedSites(): Promise<ConnectedSite[]> {
     const sites: ConnectedSite[] = [];
-    for (const origin of Object.keys(await this.localStorage.getConnections())) {
+    for (const [origin, connection] of Object.entries(
+      await this.localStorage.getConnections()
+    )) {
       const wallet = await this.siteWallet(origin);
-      if (wallet) sites.push({ origin, accountId: wallet.id });
+      if (wallet) sites.push({ origin, accountId: wallet.id, shared: connection.accounts });
     }
     return sites;
+  }
+
+  /**
+   * The user, in the popup, gave connected `origin` the wallet `walletId`; it
+   * follows the active account to it from now on (`followActiveAccount`).
+   */
+  async shareWallet(origin: string, walletId: string): Promise<void> {
+    const connection = (await this.localStorage.getConnections())[origin];
+    const wallet = await this.accounts.findById(walletId);
+    if (!connection || !wallet || wallet.parentId) {
+      throw new Error("Choose an account to share with a connected site");
+    }
+    if (!connection.accounts.includes(walletId)) {
+      await this.localStorage.setConnection(origin, {
+        ...connection,
+        accounts: [...connection.accounts, walletId],
+      });
+    }
+    void this.record(
+      { origin, kind: "default-account", describe: async () => ({ account: wallet.alias }) },
+      "approved"
+    );
   }
 
   async revokeConnection(origin: string): Promise<void> {
@@ -855,7 +854,7 @@ export class ApprovalsService {
     const gaps = transparentGapLimits();
     const stray = summary.transparentOutputs.flatMap(({ mine, path, value }) =>
       mine && path && path.index > (approved[path.scope] ?? -1) + (gaps[path.scope] ?? 0)
-        ? [{ ...path, value: String(value ?? "0") }]
+        ? [{ ...path, value: String(value ?? "0"), known: path.scope in approved }]
         : []
     );
     return stray.length > 0 ? stray : undefined;
@@ -864,7 +863,8 @@ export class ApprovalsService {
   /**
    * A signed transaction's own transparent outputs move the approved mark,
    * by at most one gap: an index the user accepted past it is a risk taken
-   * once, not where later change may silently go.
+   * once, not where later change may silently go. A scope with no mark yet
+   * takes the index as is: a restored wallet's change may already be far in.
    */
   private async rememberChange(pending: PendingSignTx): Promise<void> {
     const walletId = await this.walletIdOf(pending.signer);
@@ -873,11 +873,13 @@ export class ApprovalsService {
     const gaps = transparentGapLimits();
     for (const { mine, path } of pending.summary.transparentOutputs) {
       if (mine && path) {
-        const limit = (approved[path.scope] ?? -1) + (gaps[path.scope] ?? 0);
+        const mark = approved[path.scope];
         await this.localStorage.raiseChangeIndex(
           walletId,
           path.scope,
-          Math.min(path.index, limit)
+          mark === undefined
+            ? path.index
+            : Math.min(path.index, mark + (gaps[path.scope] ?? 0))
         );
       }
     }

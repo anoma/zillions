@@ -1,5 +1,7 @@
 import { expect, it, vi } from "vitest";
 
+// Not cross-origin isolated, so the worker proves on one thread.
+vi.mock("@zillions/zcore/pkg/mt/zcore.js", () => ({ default: vi.fn() }));
 vi.mock("@zillions/zcore", () => ({
   default: vi.fn(async () => {}),
   needs_sapling_params: vi.fn(() => false),

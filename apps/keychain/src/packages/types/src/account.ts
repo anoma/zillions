@@ -50,10 +50,9 @@ export type DerivedAccount = {
 };
 
 /**
- * A dapp-facing account. `hdIndex`, `seedFingerprint` and `birthday` are
- * only set on the account the site is connected with and its derived
- * children; every other account carries just its identity. None carries its
- * viewing key, which the Keychain uses on the site's behalf.
+ * A dapp-facing account: only ever the one the site is connected with, or
+ * its derived children. None carries its viewing key, which the Keychain
+ * uses on the site's behalf.
  * It never says how the keys are held or came to be (phrase, Ledger,
  * passkey; generated or imported): a hijacked site would use that to
  * pick its targets.
@@ -69,6 +68,12 @@ export type ZCashKeychainAccount = {
   seedFingerprint?: string;
   /** Block height at which this account was created/imported. Used to skip scanning earlier blocks. */
   birthday?: number;
+};
+
+/** The account a site is connected with: its wallet and that wallet's shielded child. */
+export type SiteAccount = {
+  transparent: ZCashKeychainAccount;
+  shielded: ZCashKeychainAccount;
 };
 
 /**

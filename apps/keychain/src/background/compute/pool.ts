@@ -102,6 +102,12 @@ let proverQueue: Promise<unknown> = Promise.resolve();
 /** Whether a warm-up is queued or running: a proof behind it waits for the keys. */
 let warming = false;
 
+/**
+ * A panic on one of the threaded prover's threads hangs it instead of
+ * erroring, so a threaded job that outlasts this is dropped with its worker.
+ */
+const THREADED_PROOF_TIMEOUT_MS = 180_000;
+
 /** Bumped on every stop of the prover: a proof queued before it never starts after. */
 let proveGeneration = 0;
 
@@ -122,15 +128,24 @@ function prove(task: ProveTask, onStage: (stage: ProveStage) => void) {
         }
         proving = reject;
         const worker = (prover ??= new Worker(PROVE_WORKER));
+        const drop = (error: Error) => {
+          worker.terminate();
+          // A stop may have replaced it meanwhile.
+          if (prover === worker) prover = undefined;
+          reject(error);
+        };
+        const timeout = globalThis.crossOriginIsolated
+          ? setTimeout(() => drop(new Error("The prover stopped answering")), THREADED_PROOF_TIMEOUT_MS)
+          : undefined;
         worker.onmessage = ({ data }: MessageEvent<ProveWorkerMessage>) => {
-          if ("stage" in data) onStage(data.stage);
-          else if ("error" in data) reject(new Error(data.error));
+          if ("stage" in data) return onStage(data.stage);
+          clearTimeout(timeout);
+          if ("error" in data) reject(new Error(data.error));
           else resolve(data.ok);
         };
         worker.onerror = (e) => {
-          prover?.terminate();
-          prover = undefined;
-          reject(new Error(e.message || "prover error"));
+          clearTimeout(timeout);
+          drop(new Error(e.message || "prover error"));
         };
         worker.postMessage(task, task.op === "prove" ? [task.pczt.buffer] : []);
       })

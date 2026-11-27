@@ -75,8 +75,9 @@ that is set in `wxt.config.ts`.
 ## Example dapp
 
 `examples/test-dapp` is a standalone Vite app that talks to the extension via
-`window.zc` (connect, accounts, sign PCZT, sign arbitrary message, verify,
-update default account) and logs the wallet events the extension broadcasts.
+`window.zc` (connect, the connected account, sign PCZT, sign arbitrary
+message, verify, switch account) and logs the wallet events the extension
+broadcasts.
 
 ```bash
 pnpm keychain:dapp   # http://localhost:5173

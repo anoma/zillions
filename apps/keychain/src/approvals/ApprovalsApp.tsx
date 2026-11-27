@@ -29,7 +29,7 @@ import { ApproveConnection } from "./screens/ApproveConnection";
 import { ApproveDisconnection } from "./screens/ApproveDisconnection";
 import { ApproveOpenLinkKey } from "./screens/ApproveOpenLinkKey";
 import { ApproveSignTx } from "./screens/ApproveSignTx";
-import { ApproveUpdateDefaultAccount } from "./screens/ApproveUpdateDefaultAccount";
+import { ApproveSwitchAccount } from "./screens/ApproveSwitchAccount";
 import { ConfirmSignTx } from "./screens/ConfirmSignTx";
 import { WithAuth } from "./WithAuth";
 
@@ -114,10 +114,10 @@ export const ApprovalsApp = () => {
                     }
                   />
                   <Route
-                    path={routes.approveUpdateDefaultAccount()}
+                    path={routes.approveSwitchAccount()}
                     element={
                       <WithAuth>
-                        <ApproveUpdateDefaultAccount />
+                        <ApproveSwitchAccount />
                       </WithAuth>
                     }
                   />

@@ -55,3 +55,26 @@ it("stops chunk reads too on a full stop", async () => {
   pool.stopAll();
   await expect(read).rejects.toThrow("Keychain is locked");
 });
+
+it("drops a threaded proof that stops answering, and its worker", async () => {
+  vi.stubGlobal("crossOriginIsolated", true);
+  vi.useFakeTimers();
+  try {
+    const proof = pool.runJob({ op: "prove", pczt: "" }, () => {});
+    await vi.waitFor(() => expect(busy("/prove-worker.js")).toBeDefined());
+    const hung = busy("/prove-worker.js");
+    vi.advanceTimersByTime(180_000);
+    await expect(proof).rejects.toThrow("The prover stopped answering");
+    expect(hung.terminated).toBe(true);
+
+    const next = pool.runJob({ op: "prove", pczt: "" }, () => {});
+    await vi.waitFor(() => expect(busy("/prove-worker.js")).not.toBe(hung));
+    busy("/prove-worker.js").reply({
+      ok: { txid: "ab", raw: new Uint8Array(), expiry_height: 1 },
+    });
+    expect(await next).toMatchObject({ txid: "ab" });
+  } finally {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
+});

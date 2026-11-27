@@ -4,13 +4,9 @@ import { GoCheck } from "react-icons/go";
 import { twMerge } from "tailwind-merge";
 import { isShared, type Account } from "../context/account";
 import {
-  getKeychainAccounts,
-  useGetKeychainAccounts,
-} from "../hooks/useGetKeychainAccounts";
-import {
-  getKeychainDefaultAccount,
-  useGetKeychainDefaultAccount,
-} from "../hooks/useGetKeychainDefaultAccount";
+  getKeychainAccount,
+  useGetKeychainAccount,
+} from "../hooks/useGetKeychainAccount";
 import { ExternalLinkIcon } from "../icons/ExternalLinkIcon";
 import { LockIcon } from "../icons/LockIcon";
 import {
@@ -41,16 +37,12 @@ const wallClassName = (claiming?: boolean) =>
 
 function Account({ children, claiming }: WallProps) {
   const queryClient = useQueryClient();
-  const accounts = useGetKeychainAccounts();
-  const defaultAccount = useGetKeychainDefaultAccount();
+  const account = useGetKeychainAccount();
 
   useEffect(() => {
     const refetch = async () => {
       queryClient.invalidateQueries({
-        queryKey: getKeychainAccounts().queryKey,
-      });
-      queryClient.invalidateQueries({
-        queryKey: getKeychainDefaultAccount().queryKey,
+        queryKey: getKeychainAccount().queryKey,
       });
     };
     const events = [
@@ -61,31 +53,17 @@ function Account({ children, claiming }: WallProps) {
     return () => events.forEach((e) => window.removeEventListener(e, refetch));
   }, [queryClient]);
 
-  if (accounts.isPending || defaultAccount.isPending) {
+  if (account.isPending) {
     return <PageLoader />;
   }
 
-  if (accounts.error || defaultAccount.error) {
-    const error = accounts.error || defaultAccount.error;
+  if (account.error) {
     // Locked after the page loaded: the next read is refused.
-    if (isLockedError(error)) return <Unlock claiming={claiming} />;
-    return <PageError>{String(error)}</PageError>;
+    if (isLockedError(account.error)) return <Unlock claiming={claiming} />;
+    return <PageError>{String(account.error)}</PageError>;
   }
 
-  if (!accounts.data.length) {
-    return (
-      <FinalStatePage title="Create account">
-        Open the keychain and create a new account.
-      </FinalStatePage>
-    );
-  }
-
-  const transparentAccount = defaultAccount.data;
-  const shieldedAccount = accounts.data?.find(
-    (a) => a.parentId === transparentAccount?.id,
-  );
-
-  if (!transparentAccount || !shieldedAccount) {
+  if (!account.data) {
     return (
       <FinalStatePage title="Select account">
         Open the keychain and select one account.
@@ -93,19 +71,15 @@ function Account({ children, claiming }: WallProps) {
     );
   }
 
-  if (!isShared(shieldedAccount)) {
-    // After a switch the two queries refetch separately, and an account list
-    // from before the switch shares nothing of the new account.
-    if (accounts.isFetching || defaultAccount.isFetching) {
-      return <PageLoader />;
-    }
+  const { transparent, shielded } = account.data;
+  if (!isShared(shielded)) {
     return <PageError>The keychain did not share this account</PageError>;
   }
 
   return (
     <AccountProvider
-      transparentAccount={transparentAccount}
-      shieldedAccount={shieldedAccount}
+      transparentAccount={transparent}
+      shieldedAccount={shielded}
     >
       {children}
     </AccountProvider>

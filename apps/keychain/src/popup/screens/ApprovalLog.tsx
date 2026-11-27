@@ -20,7 +20,7 @@ const KIND_LABEL: Record<ApprovalLogEntry["kind"], string> = {
   connect: "Connect",
   disconnect: "Disconnect",
   sign: "Sign transaction",
-  "default-account": "Change active account",
+  "default-account": "Switch account",
   "open-link": "Show payment link",
 };
 

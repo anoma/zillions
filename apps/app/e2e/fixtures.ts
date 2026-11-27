@@ -55,11 +55,11 @@ const keys = {
 
 /** Stands in for the keychain extension's `window.zc`; runs in the page. It refuses every transaction. */
 function stubKeychain({
-  accounts,
+  account,
   connected,
   keys,
 }: {
-  accounts: ZCashKeychainAccount[];
+  account: Record<"transparent" | "shielded", ZCashKeychainAccount>;
   connected: boolean;
   keys: {
     info: unknown;
@@ -68,8 +68,10 @@ function stubKeychain({
   };
 }) {
   const sent: unknown[] = [];
+  const switches: unknown[] = [];
   Object.assign(globalThis, {
     sendRequests: sent,
+    switchRequests: switches,
     zc: {
       // Newer than any minimum the app asks for.
       version: () => "99.0.0",
@@ -77,8 +79,11 @@ function stubKeychain({
       connect: async () => {
         connected = true;
       },
-      accounts: async () => accounts,
-      defaultAccount: async () => accounts[0],
+      account: async () => account,
+      // The picker is the keychain's; the site only learns that it was asked.
+      switchAccount: async () => {
+        switches.push(true);
+      },
       accountInfo: async () => keys.info,
       freshAddress: async () => keys.fresh,
       transparentAddresses: async ({
@@ -103,7 +108,7 @@ export const test = base.extend<{ connected: boolean; keychain: void }>({
   keychain: [
     async ({ page, connected }, use) => {
       await page.addInitScript(stubKeychain, {
-        accounts: [transparent, shielded],
+        account: { transparent, shielded },
         connected,
         keys,
       });

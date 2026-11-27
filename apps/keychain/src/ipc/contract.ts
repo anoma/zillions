@@ -31,7 +31,7 @@ import type {
   ProvedTx,
   SendTxProps,
   TransparentAddressesProps,
-  ZCashKeychainAccount,
+  SiteAccount,
 } from "@zillions/types";
 
 // ---------------------------------------------------------------------------
@@ -142,10 +142,11 @@ export type ActiveAccount = {
   type: AccountType;
 };
 
-/** A connected origin and the wallet (parent account) it currently sees. */
+/** A connected origin, the wallet (parent account) it currently sees, and every wallet it was given. */
 export type ConnectedSite = {
   origin: string;
   accountId: string;
+  shared: string[];
 };
 
 /** Vault lock snapshot the popup gates on. */
@@ -353,8 +354,9 @@ export type IpcContract = {
     req: Record<string, never>;
     res: ActiveAccount | null;
   };
+  /** `shareWith`: a connected origin the user agreed to give this wallet, so it follows. */
   "keyring/setActiveAccount": {
-    req: { id: string; type: AccountType };
+    req: { id: string; type: AccountType; shareWith?: string };
     res: void;
   };
   /** Reveal the seed phrase of a mnemonic account (vault must be unlocked). */
@@ -399,22 +401,17 @@ export type IpcContract = {
     req: Record<string, never>;
     res: boolean;
   };
-  /** Public account records (parents + shielded children); requires connection. */
-  "dapp/accounts": {
+  /** The wallet this origin is connected with and its shielded child; requires connection. */
+  "dapp/account": {
     req: Record<string, never>;
-    res: ZCashKeychainAccount[];
-  };
-  /** The account this origin is connected with; requires connection. */
-  "dapp/defaultAccount": {
-    req: Record<string, never>;
-    res: ZCashKeychainAccount | null;
+    res: SiteAccount | null;
   };
   /**
-   * Ask to make `address` the active/default account. Resolves once the user
-   * approves in the popup; requires connection and an unlocked vault.
+   * Have the user pick the site's wallet in the popup. Resolves once they
+   * confirm; requires connection and an unlocked vault.
    */
-  "dapp/updateDefaultAccount": {
-    req: { address: string };
+  "dapp/switchAccount": {
+    req: Record<string, never>;
     res: void;
   };
   /**
@@ -541,10 +538,6 @@ export type IpcContract = {
     res: void;
   };
   /**
-   * Confirm the pending default-account change owned by the calling popup's
-   * tab: sets `address` active and settles the dapp's request.
-   */
-  /**
    * Confirm the pending "show a payment link again" request `msgId`, owned by
    * the calling popup's tab: opens the key and settles the dapp's request.
    */
@@ -552,8 +545,12 @@ export type IpcContract = {
     req: { msgId: string; password: string };
     res: void;
   };
-  "approvals/submitUpdateDefaultAccount": {
-    req: { address: string };
+  /**
+   * Confirm the pending account switch owned by the calling popup's tab: the
+   * site moves to wallet `accountId` and the dapp's request settles.
+   */
+  "approvals/submitSwitchAccount": {
+    req: { accountId: string };
     res: void;
   };
   /** Approval decisions, newest first (vault must be unlocked). */

@@ -1,4 +1,4 @@
-import type { ZCashKeychainAccount } from "./account";
+import type { SiteAccount } from "./account";
 import type { PcztBase64 } from "./pczt";
 import type { GenDisposableSignerResponse, Signer } from "./signer";
 import type {
@@ -44,14 +44,18 @@ export type ClearDisposableSignerProps = {
 };
 
 export interface Zillions {
-  accounts(): Promise<readonly ZCashKeychainAccount[] | undefined>;
   connect(chainId?: string): Promise<void>;
   disconnect(chainId?: string): Promise<void>;
   isConnected(chainId?: string): Promise<boolean | undefined>;
   /** Locked, for a site the user connected; any other site hears false. */
   isLocked(): Promise<boolean>;
-  defaultAccount(): Promise<ZCashKeychainAccount | undefined>;
-  updateDefaultAccount(address: string): Promise<void>;
+  /** The account this site is connected with; null when it has no shielded account. */
+  account(): Promise<SiteAccount | null>;
+  /**
+   * Has the user pick, in the Keychain, the account this site uses. Resolves
+   * once they confirm; the site hears `AccountChanged` and reads `account()`.
+   */
+  switchAccount(): Promise<void>;
   /**
    * Sign a PCZT. Returns the signed PCZT as base64 (postcard bytes).
    */
