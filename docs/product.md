@@ -434,6 +434,55 @@ Ironwood; how it's built is in [payment-links.md](design/payment-links.md).
 
 [ZIP 324]: https://zips.z.cash/zip-0324
 
+### 2.11 Vote — Built (read-only)
+
+Zcash coinholder voting: polls on network upgrades and the coinholder grant
+rounds, where votes count by the ZEC held at a snapshot block. Polls run on
+the shielded vote chain, operated by Project Tachyon, Shielded Labs, Valar
+Group, the Zcash Foundation and ZODL. Results don't bind anyone: a proposal
+takes effect only through a network upgrade or the grant program.
+
+- **Polls and proposals.** Each vote is a **poll** (the vote chain's
+  "round", e.g. "NU7.1 Poll" or a quarter's grant round) on one or more
+  **proposals**. "Vote" in the sidebar lists the polls, newest first, each
+  in its own box: status ("Open · ends in 3 days", "Counting votes",
+  "Closed Nov 30, 2026") beside how many proposals it has, title,
+  description, then its proposals, numbered.
+- **Filters** at the top: status (All, Open, Closed; a poll being counted
+  counts as open, as its results aren't out), a single poll, and a search
+  over proposal titles and descriptions. They live in the URL, so a filtered
+  list can be shared.
+- **Each proposal** shows its number, title and one line of summary. Once
+  its poll is closed it shows the result beside them: the leading answer, its
+  share, and a bar filled to that share. A for/against ballot is summed by
+  answer there (both kinds of reject count as Reject); the proposal page has
+  each option and the ZEC voted. Until then the poll
+  says once, above its proposals, that votes stay encrypted until voting ends
+  and when that is.
+- **Long polls** (a quarter's grants can be 37) show their first 5 proposals
+  and "Show all 37 proposals"; a search shows every match.
+- **Results** are shares of the ZEC voted, one bar an option: green for, red
+  for against, grey for abstain; a ballot of choices rather than for/against
+  has no such lean, so its bars are plain ink.
+- **A proposal page** (`/vote/<poll>/<proposal>`), under a "Vote / <poll>"
+  breadcrumb, is one box like a poll's: status and "Proposal 2 of 5", then
+  the title. Below, the full description with a link to the full proposal
+  when there is one; beside it (on a narrow screen: above it once the votes
+  are counted, below it until then) every option with its description, share,
+  ZEC and bar, the leading option set apart. Under the description, in a
+  row: when voting ends, who can vote, and which coordinators approved the
+  poll.
+- **Only real polls:** anyone can create a poll on the vote chain, so the
+  wallet shows only polls in the coordinators' signed list whose signature
+  checks out, and hides test polls. A server can hide a poll, never fake
+  one.
+- **Privacy:** the list is public data, read from the vote chain's servers
+  (the Zcash Foundation's first); nothing about the account is sent.
+- Needs a ready Keychain like every other page (2.8).
+- _Planned_: casting a vote from the wallet, with the Keychain approving it
+  (3.4). _To confirm_: whether ZEC held in Ironwood counts, as the vote
+  chain's snapshot counts Orchard notes.
+
 ## 3. Keychain (browser extension)
 
 Holds the user's secrets. Secrets never leave it; it approves and signs on the
