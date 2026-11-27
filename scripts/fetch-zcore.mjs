@@ -75,12 +75,18 @@ async function find() {
 
 let found = await find();
 for (const start = Date.now(); !found; found = await find()) {
-  const { workflow_runs } = await (
-    await gh(`/actions/runs?head_sha=${commit}&per_page=100`)
-  ).json();
-  const building = workflow_runs.some(
-    (r) => r.path === ".github/workflows/ci.yml" && r.status !== "completed",
+  // A branch with no CI of its own (release-please's) needs main's build.
+  const runs = await Promise.all(
+    [`head_sha=${commit}`, "branch=main&event=push"].map(async (q) => {
+      const res = await gh(`/actions/runs?${q}&per_page=100`);
+      return (await res.json()).workflow_runs;
+    }),
   );
+  const building = runs
+    .flat()
+    .some(
+      (r) => r.path === ".github/workflows/ci.yml" && r.status !== "completed",
+    );
   const waited = Date.now() - start;
   // A fresh push's run can take a minute to show up.
   if (!building && waited > 2 * 60_000) {
