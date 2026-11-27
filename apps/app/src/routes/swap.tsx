@@ -763,7 +763,7 @@ function QuoteReview({
   const amountInUsd = wholeToScaledBigInt(quote?.amountInUsd ?? "0");
   const amountOutUsd = wholeToScaledBigInt(quote?.amountOutUsd ?? "0");
   const conversionFee = quote ? conversionFeeOf(quote, fromToken) : 0n;
-  const amountInBigInt = wholeToAtomic(fromAmount, fromToken.decimals);
+  const amountInBigInt = BigInt(quote?.amountIn ?? "0");
 
   // Once an outbound transfer has been successfully created, let the onConfirm
   // handler choose what to do.
@@ -824,7 +824,7 @@ function QuoteReview({
       originAsset: fromToken.assetId,
       depositType: QuoteRequest.depositType.ORIGIN_CHAIN,
       destinationAsset: toToken.assetId,
-      amount: amountInBigInt.toString(),
+      amount: wholeToAtomic(fromAmount, fromToken.decimals).toString(),
       recipient: recipientAddress,
       recipientType: QuoteRequest.recipientType.DESTINATION_CHAIN,
       refundTo: refundAddress,
