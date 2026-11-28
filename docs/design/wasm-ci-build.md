@@ -85,7 +85,8 @@ keychain build and `/zillions-keychain.zip` are gone.
      merge (~15 s when zcore didn't change).
    - **Previews and other branch deploys**: from any run in this repo.
 3. If there is none yet, polls every 20 s while `ci.yml` runs for
-   `COMMIT_REF`; fails with a clear message if no run shows up within two
+   `COMMIT_REF` or for a push to `main` (release-please's PR has no CI of its
+   own and opens while `main`'s merge build is still running); fails with a clear message if no run shows up within two
    minutes or the build takes over 20.
 4. Downloads it, checks the zip against the artifact's SHA-256 digest and
    `pkg/.source-hash` against the hash, swaps it into `packages/zcore/pkg`, and
